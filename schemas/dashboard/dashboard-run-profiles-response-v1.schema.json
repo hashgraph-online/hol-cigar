@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-run-profiles-response-v1.schema.json",
+  "title": "CIGAR dashboard reviewed run profiles response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "control_enabled", "registry_digest", "source_revision", "profiles"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-run-profiles.v1"},
+    "control_enabled": {"type": "boolean"},
+    "registry_digest": {
+      "oneOf": [
+        {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+        {"type": "null"}
+      ]
+    },
+    "source_revision": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "profiles": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "dashboard-run-profile-v1.schema.json#/$defs/Profile"}
+    }
+  }
+}

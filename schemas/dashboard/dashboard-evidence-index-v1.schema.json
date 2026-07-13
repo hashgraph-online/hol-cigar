@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-evidence-index-v1.schema.json",
+  "title": "CIGAR dashboard evidence index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence", "next_cursor"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-evidence-index.v1"},
+    "evidence": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "dashboard-evidence-descriptor-v1.schema.json"}
+    },
+    "next_cursor": {
+      "oneOf": [
+        {"$ref": "common-v1.schema.json#/$defs/OpaqueValue"},
+        {"type": "null"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-run-v1.schema.json",
+  "title": "CIGAR dashboard run v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "profile_id", "state", "created_at", "profile_digest", "registry_digest", "source_revision", "events"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-run.v1"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "profile_id": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+    "state": {"enum": ["queued", "preparing", "running", "cancelling", "cancelled", "passed", "failed", "timed_out", "lost"]},
+    "created_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "started_at": {"oneOf": [{"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"}, {"type": "null"}]},
+    "finished_at": {"oneOf": [{"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"}, {"type": "null"}]},
+    "profile_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "registry_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "source_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+    "executable_digest": {"oneOf": [{"$ref": "common-v1.schema.json#/$defs/Sha256"}, {"type": "null"}]},
+    "receipt_id": {"oneOf": [{"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"}, {"type": "null"}]},
+    "failure_code": {"type": ["string", "null"], "maxLength": 128},
+    "events": {"type": "array", "maxItems": 10000, "items": {"$ref": "dashboard-safe-event-v1.schema.json"}}
+  }
+}

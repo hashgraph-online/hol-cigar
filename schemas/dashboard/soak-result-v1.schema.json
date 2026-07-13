@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/soak-result-v1.schema.json",
+  "title": "CIGAR deterministic soak result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "result_id", "plan_id", "plan_digest", "profile_id", "status", "started_at", "finished_at", "duration_seconds", "source_revision", "daemon_digest", "soak_binary_digest", "completed_phases", "operation_counts", "session_operation_counts", "fault_counts", "sample_count", "warmup_sample_count", "invariants", "samples_digest"],
+  "properties": {
+    "schema_version": {"const": "cigar.soak-result.v1"},
+    "result_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "plan_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "plan_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "profile_id": {"enum": ["soak-smoke", "soak-developer", "soak-extended", "soak-rc-24h"]},
+    "status": {"enum": ["passed", "failed", "cancelled", "timed_out", "infrastructure_failed"]},
+    "started_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "finished_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "duration_seconds": {"type": "integer", "minimum": 0, "maximum": 604800},
+    "source_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+    "daemon_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "soak_binary_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "completed_phases": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "uniqueItems": true,
+      "items": {"enum": ["discovery_ingestion", "compile", "delta", "context_switch", "space_checkpoint_event", "handoff", "effect", "reconcile_compensate", "replay", "backup_verify", "gc_plan_execute", "fault_recovery", "ordered_shutdown", "post_run_verify"]}
+    },
+    "operation_counts": {"$ref": "#/$defs/Counts"},
+    "session_operation_counts": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 7,
+      "propertyNames": {"enum": ["1", "2", "4", "8", "16", "32", "64"]},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "fault_counts": {"$ref": "#/$defs/Counts"},
+    "sample_count": {"type": "integer", "minimum": 3, "maximum": 1000000},
+    "warmup_sample_count": {"type": "integer", "minimum": 1, "maximum": 999999},
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "observed", "threshold"],
+        "properties": {
+          "id": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+          "status": {"enum": ["passed", "failed", "unsupported"]},
+          "observed": {"type": "string", "maxLength": 256},
+          "threshold": {"type": "string", "maxLength": 256}
+        }
+      }
+    },
+    "samples_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "failure_codes": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"}}
+  },
+  "$defs": {
+    "Counts": {
+      "type": "object",
+      "maxProperties": 128,
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

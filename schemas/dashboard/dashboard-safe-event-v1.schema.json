@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-safe-event-v1.schema.json",
+  "title": "CIGAR dashboard safe event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "sequence", "observed_at", "kind", "code", "attributes"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-safe-event.v1"},
+    "event_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "sequence": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "kind": {"enum": ["status", "protocol", "run", "evidence", "session"]},
+    "code": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "attributes": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "boolean"},
+          {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+          {"type": "string", "pattern": "^[ -~]{1,256}$"}
+        ]
+      }
+    }
+  }
+}

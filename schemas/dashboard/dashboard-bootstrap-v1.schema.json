@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-bootstrap-v1.schema.json",
+  "title": "CIGAR dashboard bootstrap response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sidecar_version", "target_alias", "control_enabled", "asset_count", "max_request_bytes"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-bootstrap.v1"},
+    "sidecar_version": {"type": "string", "minLength": 1, "maxLength": 256},
+    "target_alias": {"type": "string", "minLength": 1, "maxLength": 64},
+    "control_enabled": {"type": "boolean"},
+    "asset_count": {"type": "integer", "minimum": 1, "maximum": 1024},
+    "max_request_bytes": {"type": "integer", "minimum": 1024, "maximum": 16777216}
+  }
+}

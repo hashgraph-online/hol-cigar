@@ -1,0 +1,42 @@
+[package]
+name = "cigar-dashboard"
+description = "Optional local CIGAR protocol dashboard sidecar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+axum.workspace = true
+base64.workspace = true
+cigar-sdk = { path = "../../sdk/rust", default-features = false }
+futures-core.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+reqwest.workspace = true
+rusqlite.workspace = true
+rustix.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
+time.workspace = true
+toml.workspace = true
+tower-http.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "cigar-dashboard"
+path = "src/main.rs"

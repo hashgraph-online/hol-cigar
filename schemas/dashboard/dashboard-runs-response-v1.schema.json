@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-runs-response-v1.schema.json",
+  "title": "CIGAR dashboard runs response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runs", "next_cursor"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-runs.v1"},
+    "runs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "dashboard-run-v1.schema.json"}
+    },
+    "next_cursor": {
+      "oneOf": [
+        {"$ref": "common-v1.schema.json#/$defs/OpaqueValue"},
+        {"type": "null"}
+      ]
+    }
+  }
+}

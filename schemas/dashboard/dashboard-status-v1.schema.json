@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-status-v1.schema.json",
+  "title": "CIGAR dashboard aggregate status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "aggregate", "target_alias", "observed_at", "freshness_ms", "consecutive_failures", "control_enabled", "version", "configuration", "diagnostics", "components"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-status.v1"},
+    "aggregate": {"enum": ["starting", "healthy", "degraded", "unhealthy", "unreachable", "incompatible"]},
+    "target_alias": {"type": "string", "minLength": 1, "maxLength": 64},
+    "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "freshness_ms": {"type": "integer", "minimum": 0, "maximum": 86400000},
+    "consecutive_failures": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "control_enabled": {"type": "boolean"},
+    "version": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["package", "source_revision", "protocol_min", "protocol_max", "api_version"],
+      "properties": {
+        "package": {"type": "string", "minLength": 1, "maxLength": 256},
+        "source_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+        "protocol_min": {"type": "string", "minLength": 1, "maxLength": 256},
+        "protocol_max": {"type": "string", "minLength": 1, "maxLength": 256},
+        "api_version": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "configuration": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["mode", "local_ipc", "http_enabled", "grpc_enabled", "max_request_bytes", "max_timeout_ms", "observed_at", "latency_ms"],
+      "properties": {
+        "mode": {"enum": ["local", "shared"]},
+        "local_ipc": {"type": "boolean"},
+        "http_enabled": {"type": "boolean"},
+        "grpc_enabled": {"type": "boolean"},
+        "max_request_bytes": {"type": "integer", "minimum": 1, "maximum": 4294967295},
+        "max_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+        "latency_ms": {"type": "integer", "minimum": 0, "maximum": 300000}
+      }
+    },
+    "diagnostics": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["ready", "workers", "metrics", "observed_at", "latency_ms", "stale"],
+      "properties": {
+        "ready": {"type": "boolean"},
+        "workers": {
+          "type": "array",
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["worker", "healthy"],
+            "properties": {
+              "worker": {"enum": ["ingestion", "indexing", "invalidation", "compilation", "outbox", "reconciliation", "lease_cleanup", "backup", "garbage_collection"]},
+              "healthy": {"type": "boolean"}
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authorized_requests_total", "rejected_requests_total", "listener_failures_total", "graceful_shutdowns_total", "queues", "series_count"],
+          "properties": {
+            "authorized_requests_total": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+            "rejected_requests_total": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+            "listener_failures_total": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+            "graceful_shutdowns_total": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+            "series_count": {"type": "integer", "minimum": 4, "maximum": 40},
+            "queues": {
+              "type": "array",
+              "maxItems": 9,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["worker", "depth", "capacity", "rejections_total", "oldest_age_seconds"],
+                "properties": {
+                  "worker": {"enum": ["ingestion", "indexing", "invalidation", "compilation", "outbox", "reconciliation", "lease_cleanup", "backup", "garbage_collection"]},
+                  "depth": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+                  "capacity": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+                  "rejections_total": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+                  "oldest_age_seconds": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615}
+                }
+              }
+            }
+          }
+        },
+        "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+        "latency_ms": {"type": "integer", "minimum": 0, "maximum": 300000},
+        "stale": {"type": "boolean"}
+      }
+    },
+    "components": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "observed_at", "latency_ms", "stale"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+          "status": {"enum": ["healthy", "degraded", "unhealthy", "unreachable", "unsupported"]},
+          "reason": {"type": ["string", "null"], "maxLength": 128},
+          "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+          "latency_ms": {"type": "integer", "minimum": 0, "maximum": 300000},
+          "stale": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

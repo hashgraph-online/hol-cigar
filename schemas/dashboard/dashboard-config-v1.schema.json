@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-config-v1.schema.json",
+  "title": "CIGAR dashboard configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "server", "target", "control", "history", "display"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-config.v1"},
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listen", "runtime_directory", "asset_directory", "request_timeout_ms", "shutdown_deadline_ms", "max_request_bytes", "max_event_bytes", "max_sse_subscribers"],
+      "properties": {
+        "listen": {"type": "string", "minLength": 3, "maxLength": 128},
+        "runtime_directory": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "asset_directory": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "request_timeout_ms": {"type": "integer", "minimum": 100, "maximum": 300000},
+        "shutdown_deadline_ms": {"type": "integer", "minimum": 100, "maximum": 300000},
+        "max_request_bytes": {"type": "integer", "minimum": 1024, "maximum": 16777216},
+        "max_event_bytes": {"type": "integer", "minimum": 256, "maximum": 1048576},
+        "max_sse_subscribers": {"type": "integer", "minimum": 1, "maximum": 128}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url", "bearer_token_file", "connect_timeout_ms", "request_timeout_ms", "status_interval_ms", "diagnostics_interval_ms", "identity_interval_ms"],
+      "properties": {
+        "base_url": {"type": "string", "format": "uri", "minLength": 1, "maxLength": 2048},
+        "bearer_token_file": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "connect_timeout_ms": {"type": "integer", "minimum": 100, "maximum": 30000},
+        "request_timeout_ms": {"type": "integer", "minimum": 100, "maximum": 300000},
+        "status_interval_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+        "diagnostics_interval_ms": {"type": "integer", "minimum": 1000, "maximum": 300000},
+        "identity_interval_ms": {"type": "integer", "minimum": 10000, "maximum": 3600000}
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "max_concurrent_runs"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "workspace_root": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "profile_registry": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "evidence_directory": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sandbox_directory": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "max_concurrent_runs": {"type": "integer", "minimum": 1, "maximum": 8}
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_file", "max_runs", "max_events_per_run", "max_age_days", "max_bytes"],
+      "properties": {
+        "database_file": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "max_runs": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "max_events_per_run": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "max_age_days": {"type": "integer", "minimum": 1, "maximum": 3650},
+        "max_bytes": {"type": "integer", "minimum": 1048576, "maximum": 107374182400}
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_alias"],
+      "properties": {
+        "target_alias": {"type": "string", "pattern": "^[A-Za-z0-9._ -]+$", "minLength": 1, "maxLength": 64}
+      }
+    }
+  }
+}

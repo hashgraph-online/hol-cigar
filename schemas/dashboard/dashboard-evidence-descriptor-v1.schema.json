@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-evidence-descriptor-v1.schema.json",
+  "title": "CIGAR dashboard evidence descriptor v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_id", "run_id", "schema_id", "category", "status", "observed_at", "receipt_digest", "source_revision"],
+  "properties": {
+    "schema_version": {"const": "cigar.dashboard-evidence-descriptor.v1"},
+    "evidence_id": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/UuidV7"},
+    "schema_id": {"$ref": "common-v1.schema.json#/$defs/BoundedIdentifier"},
+    "category": {"enum": ["sample", "development", "candidate-bound", "installed-artifact", "release-qualifying"]},
+    "status": {"enum": ["valid", "invalid", "partial"]},
+    "observed_at": {"$ref": "common-v1.schema.json#/$defs/UtcTimestamp"},
+    "receipt_digest": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "source_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+    "artifact_digest": {
+      "oneOf": [
+        {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+        {"type": "null"}
+      ]
+    }
+  }
+}

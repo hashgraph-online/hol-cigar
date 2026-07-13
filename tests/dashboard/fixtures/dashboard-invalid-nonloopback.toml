@@ -1,0 +1,34 @@
+schema_version = "cigar.dashboard-config.v1"
+
+[server]
+listen = "0.0.0.0:7460"
+runtime_directory = "/tmp/cigar-dashboard/runtime"
+asset_directory = "/tmp/cigar-dashboard/assets"
+request_timeout_ms = 30000
+shutdown_deadline_ms = 30000
+max_request_bytes = 1048576
+max_event_bytes = 262144
+max_sse_subscribers = 16
+
+[target]
+base_url = "https://cigar.example.invalid/"
+bearer_token_file = "/tmp/cigar-dashboard/cigard.token"
+connect_timeout_ms = 2000
+request_timeout_ms = 10000
+status_interval_ms = 2000
+diagnostics_interval_ms = 5000
+identity_interval_ms = 60000
+
+[control]
+enabled = false
+max_concurrent_runs = 1
+
+[history]
+database_file = "/tmp/cigar-dashboard/history.sqlite3"
+max_runs = 1000
+max_events_per_run = 10000
+max_age_days = 30
+max_bytes = 1073741824
+
+[display]
+target_alias = "Unsafe target"

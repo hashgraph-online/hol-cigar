@@ -1,0 +1,13 @@
+{
+  "name": "@cigar/dashboard",
+  "version": "0.0.0-development",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.10.0 <25"
+  },
+  "scripts": {
+    "test:status": "node --test src/*.test.ts"
+  }
+}

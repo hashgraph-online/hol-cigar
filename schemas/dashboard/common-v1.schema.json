@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/common-v1.schema.json",
+  "title": "CIGAR dashboard common definitions",
+  "$defs": {
+    "UuidV7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "UtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 64
+    },
+    "BoundedIdentifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "OpaqueValue": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._~-]+$",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "ProblemCode": {
+      "type": "string",
+      "enum": [
+        "DASHBOARD_AUTH_REQUIRED",
+        "DASHBOARD_CSRF_REJECTED",
+        "DASHBOARD_INVALID_ARGUMENT",
+        "DASHBOARD_LIMIT_EXCEEDED",
+        "DASHBOARD_UPSTREAM_UNAVAILABLE",
+        "DASHBOARD_UPSTREAM_INCOMPATIBLE",
+        "DASHBOARD_CONTROL_DISABLED",
+        "DASHBOARD_PROFILE_UNAVAILABLE",
+        "DASHBOARD_RUN_CONFLICT",
+        "DASHBOARD_EVIDENCE_INVALID",
+        "DASHBOARD_INTERNAL"
+      ]
+    },
+    "Problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title", "status", "code", "correlation_id"],
+      "properties": {
+        "type": {"type": "string", "format": "uri", "maxLength": 256},
+        "title": {"type": "string", "minLength": 1, "maxLength": 256},
+        "status": {"type": "integer", "minimum": 400, "maximum": 599},
+        "code": {"$ref": "#/$defs/ProblemCode"},
+        "correlation_id": {"$ref": "#/$defs/UuidV7"},
+        "detail": {"type": "string", "maxLength": 4096}
+      }
+    }
+  }
+}

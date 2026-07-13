@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Local CIGAR protocol observability and test dashboard">
+    <title>CIGAR Protocol Console</title>
+    <link rel="stylesheet" href="/app.20260713.css">
+    <script src="/app.20260713.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to dashboard</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <span><strong>CIGAR</strong><small>Protocol console</small></span>
+        </div>
+        <nav>
+          <a class="nav-item active" href="#overview" aria-current="page"><span aria-hidden="true">◫</span> Overview</a>
+          <a class="nav-item" href="#protocol"><span aria-hidden="true">⌘</span> Protocol map</a>
+          <a class="nav-item" href="#tests"><span aria-hidden="true">✓</span> Test center</a>
+          <a class="nav-item" href="#soak"><span aria-hidden="true">◌</span> Soak monitor</a>
+          <a class="nav-item" href="#evidence"><span aria-hidden="true">◇</span> Evidence</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="eyebrow">Observer mode</span>
+          <p>Local sidecar. No daemon credentials reach this browser.</p>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">Target</span>
+            <strong id="target-alias">Local CIGAR</strong>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-pill starting" id="global-status"><i aria-hidden="true"></i><span>Connecting</span></span>
+            <button class="icon-button" id="live-updates-toggle" type="button" aria-label="Pause live updates" aria-pressed="false" title="Pause live updates">Ⅱ</button>
+            <details class="display-menu" id="display-menu">
+              <summary class="icon-button" aria-label="Display preferences" title="Display preferences">Aa</summary>
+              <div class="display-menu-panel" role="group" aria-label="Display preferences">
+                <div><span>Theme</span><button class="preference-button" id="theme-toggle" type="button" aria-label="Color theme: System. Activate to change theme." title="Color theme: System">◐ System</button></div>
+                <div><span>Density</span><button class="preference-button" id="density-toggle" type="button" aria-label="Layout density: Comfortable. Activate to change density." title="Layout density: Comfortable">▦ Comfortable</button></div>
+                <div><span>Motion</span><button class="preference-button" id="motion-toggle" type="button" aria-label="Motion preference: System. Activate to change motion." title="Motion preference: System">◌ System</button></div>
+              </div>
+            </details>
+            <button class="icon-button" id="refresh" type="button" aria-label="Refresh dashboard status">↻</button>
+          </div>
+        </header>
+
+        <main id="main">
+          <section class="hero" id="overview" aria-labelledby="overview-title">
+            <div>
+              <span class="eyebrow">Live protocol posture</span>
+              <h1 id="overview-title">Clarity across every CIGAR state.</h1>
+              <p>Observe health, inspect protocol flows, and run reviewed verification profiles from one local, content-safe surface.</p>
+            </div>
+            <div class="hero-orbit" aria-hidden="true"><span></span><span></span><span></span><b>CIGAR</b></div>
+          </section>
+
+          <section class="status-rail" aria-label="Independent status signals">
+            <article>
+              <span class="rail-icon operational" aria-hidden="true">●</span>
+              <div><span class="eyebrow">Operational</span><strong id="operational-state">Starting</strong><small id="operational-detail">Waiting for sidecar bootstrap</small></div>
+            </article>
+            <article>
+              <span class="rail-icon verification" aria-hidden="true">✓</span>
+              <div><span class="eyebrow">Verification</span><strong id="verification-state">Not run</strong><small id="verification-detail">No persisted dashboard run</small></div>
+            </article>
+            <article>
+              <span class="rail-icon release" aria-hidden="true">◇</span>
+              <div><span class="eyebrow">Release evidence</span><strong id="release-state">Not qualified</strong><small id="release-detail">No release-qualifying descriptor</small></div>
+            </article>
+          </section>
+
+          <details class="panel health-details" id="health-details">
+            <summary>
+              <span><span class="eyebrow">Observation</span><strong>Health details</strong></span>
+              <span class="mini-badge neutral" id="freshness-badge">Awaiting observation</span>
+            </summary>
+            <div class="health-details-body">
+              <dl class="health-facts">
+                <div><dt>Redacted target</dt><dd id="health-target">Local CIGAR</dd></div>
+                <div><dt>Aggregate</dt><dd id="health-aggregate">Starting</dd></div>
+                <div><dt>Observed exactly</dt><dd><time id="health-observed-at">Unavailable</time></dd></div>
+                <div><dt>Freshness</dt><dd id="health-age">Awaiting observation</dd></div>
+                <div><dt>Consecutive failures</dt><dd id="health-failures">0</dd></div>
+                <div><dt>Deployment mode</dt><dd id="health-mode">Unavailable</dd></div>
+                <div><dt>Public transports</dt><dd id="health-transports">Awaiting typed configuration</dd></div>
+                <div><dt>Reviewed limits</dt><dd id="health-limits">Unavailable</dd></div>
+                <div><dt>Configuration observed</dt><dd><time id="configuration-observed-at">Unavailable</time></dd></div>
+                <div><dt>Diagnostics</dt><dd id="diagnostics-state">Awaiting observation</dd></div>
+                <div><dt>Diagnostics observed</dt><dd><time id="diagnostics-observed-at">Unavailable</time></dd></div>
+                <div><dt>Diagnostics latency</dt><dd id="diagnostics-latency">Unavailable</dd></div>
+                <div class="wide"><dt>Stale sources</dt><dd id="stale-sources">None</dd></div>
+              </dl>
+              <div class="health-components-head">
+                <div><span class="eyebrow">Readiness</span><h2>Component observations</h2></div>
+                <button class="preference-button" id="health-reconnect" type="button">Reconnect now</button>
+              </div>
+              <div class="health-components" id="health-components" role="list">
+                <p class="empty-copy">No readiness component observation is available.</p>
+              </div>
+            </div>
+          </details>
+
+          <section class="section-grid" aria-label="Protocol overview">
+            <article class="panel metric-panel">
+              <div class="panel-head"><span><span class="eyebrow">Sidecar</span><h2>Connection</h2></span><span class="mini-badge" id="sidecar-badge">Starting</span></div>
+              <div class="metric-value" id="sidecar-version">—</div>
+              <p id="sidecar-detail">Secure browser session not established.</p>
+              <div class="sparkline" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </article>
+            <article class="panel metric-panel">
+              <div class="panel-head"><span><span class="eyebrow">Daemon</span><h2>Readiness</h2></span><span class="mini-badge neutral" id="readiness-badge">Awaiting observation</span></div>
+              <div class="metric-value"><span id="readiness-count">—</span> <small>components</small></div>
+              <p id="readiness-detail">Health remains unknown until a typed daemon observation is available.</p>
+              <div class="component-dots" id="component-dots" aria-label="Readiness components awaiting observation"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </article>
+            <article class="panel metric-panel">
+              <div class="panel-head"><span><span class="eyebrow">Workers</span><h2>Queue utilization</h2></span><span class="mini-badge neutral" id="queue-badge">Awaiting observation</span></div>
+              <div class="metric-value"><span id="queue-utilization">—</span> <small>capacity used</small></div>
+              <p id="queue-detail">Typed diagnostics and closed metrics have not been observed.</p>
+              <div class="component-dots" id="queue-dots" aria-label="Worker queues awaiting observation"></div>
+            </article>
+            <article class="panel metric-panel">
+              <div class="panel-head"><span><span class="eyebrow">Control plane</span><h2>Reviewed runs</h2></span><span class="mini-badge neutral" id="control-badge">Disabled</span></div>
+              <div class="metric-value">9 <small>profiles</small></div>
+              <p>Profiles are visible but fail closed until the isolated supervisor is complete.</p>
+              <a class="text-link" href="#tests">Inspect availability <span aria-hidden="true">→</span></a>
+            </article>
+          </section>
+
+          <section class="panel flow-panel" id="protocol" aria-labelledby="flow-title">
+            <div class="panel-head">
+              <div><span class="eyebrow">Protocol map</span><h2 id="flow-title">Context lifecycle</h2></div>
+              <span class="mini-badge neutral">Fixture topology</span>
+            </div>
+            <div class="flow" role="img" aria-label="Discover flows to ingest, compile, bundle, and delta">
+              <div><span>01</span><strong>Discover</strong><small>Sources</small></div><b>→</b>
+              <div><span>02</span><strong>Ingest</strong><small>Atoms</small></div><b>→</b>
+              <div><span>03</span><strong>Compile</strong><small>Plan</small></div><b>→</b>
+              <div><span>04</span><strong>Bundle</strong><small>Manifest</small></div><b>→</b>
+              <div><span>05</span><strong>Delta</strong><small>Revalidate</small></div>
+            </div>
+            <div class="flow-table" aria-label="Context lifecycle text alternative">
+              <span>Discover sources</span><span>Ingest atoms</span><span>Compile plan</span><span>Build bundle</span><span>Verify delta</span>
+            </div>
+          </section>
+
+          <section id="tests" aria-labelledby="tests-title">
+            <div class="section-heading">
+              <div><span class="eyebrow">Test center</span><h2 id="tests-title">Reviewed verification profiles</h2></div>
+              <p>Exact commands, bounded resources, structured receipts. No terminal surface.</p>
+            </div>
+            <div class="profile-grid" id="profile-grid">
+              <article class="profile-card"><div><span class="profile-kind">Check</span><span class="mini-badge neutral">Unavailable</span></div><h3>Conformance smoke</h3><p>Frozen contracts and bounded runner behavior.</p><dl><div><dt>Expected</dt><dd>5 min</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Supervisor not implemented</button></article>
+              <article class="profile-card"><div><span class="profile-kind">Matrix</span><span class="mini-badge neutral">Unavailable</span></div><h3>Security matrix</h3><p>Fail-closed authorization, storage, replay, and transport gates.</p><dl><div><dt>Expected</dt><dd>40 min</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Supervisor not implemented</button></article>
+              <article class="profile-card accent" id="soak"><div><span class="profile-kind">Soak</span><span class="mini-badge neutral">Unavailable</span></div><h3>Two-minute soak smoke</h3><p>Isolated lifecycle, evidence, and dashboard integration smoke.</p><dl><div><dt>Sessions</dt><dd>1 → 2</dd></div><div><dt>Claim</dt><dd>None</dd></div></dl><button disabled type="button">Driver not implemented</button></article>
+            </div>
+          </section>
+
+          <section class="panel evidence-panel" id="evidence" aria-labelledby="evidence-title">
+            <div><span class="eyebrow">Evidence boundary</span><h2 id="evidence-title">Healthy is not the same as qualified.</h2><p>Operational status, latest verification, and artifact-bound release evidence remain independent signals.</p></div>
+            <div class="evidence-key"><span><i class="good"></i> Operational</span><span><i class="waiting"></i> Verification</span><span><i class="blocked"></i> Release</span></div>
+          </section>
+        </main>
+        <footer><span>CIGAR dashboard · optional local sidecar</span><span id="session-state">No browser session</span></footer>
+      </div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
