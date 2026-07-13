@@ -54,6 +54,11 @@ canonical campaign duration plus a fixed 900-second cold instrumented-build
 allowance. The bound is recorded in every process receipt and `verify-smoke`
 requires the exact reviewed value; it does not weaken the independently parsed
 libFuzzer-duration threshold.
+Checked-in and externally minimized corpora retain the canonical 4,096-file,
+16-MiB per-target ceiling. Smoke runs use disposable private copies with a
+separate 8,192-file, 32-MiB ceiling and the same 1-MiB per-input maximum. The
+runner enforces those worker bounds before writing evidence, and `verify-smoke`
+rejects malformed or out-of-policy worker measurements.
 `corpus_manager.py` inventories, externally minimizes, and safely reconciles
 libFuzzer corpus growth. See `fuzz/README.md` and `fuzz/corpus-policy.v1.json`;
 neither tool is allowed to silently mutate or discard the checked-in corpus.

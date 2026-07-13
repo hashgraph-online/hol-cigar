@@ -70,6 +70,13 @@ DEFAULT_SMOKE_SEED = 190000
 # are added separately and are still verified from libFuzzer's own final stats.
 SMOKE_COLD_BUILD_ALLOWANCE_SECONDS = 15 * 60
 RUN_COUNT_FUZZ_WALL_TIMEOUT_SECONDS = 10 * 60
+CORPUS_LIMIT_FIELDS = frozenset(
+    {
+        "maximum_files_per_target",
+        "maximum_input_bytes",
+        "maximum_total_bytes_per_target",
+    }
+)
 MUTATION_VERIFICATION_UNAVAILABLE = (
     "combined smoke/mutation verification is unavailable: retained mutation "
     "evidence cannot yet independently recompute cargo-mutants outcomes; use "
@@ -192,6 +199,21 @@ def corpus_state(path: Path) -> dict[str, Any]:
         "file_count": len(files),
         "total_bytes": total_bytes,
     }
+
+
+def private_worker_corpus_measurement(
+    path: Path, limits: dict[str, int], *, target: str
+) -> tuple[dict[str, Any], int]:
+    state = corpus_state(path)
+    maximum_observed_input_bytes = max(
+        (candidate.stat(follow_symlinks=False).st_size for candidate in path.iterdir()),
+        default=0,
+    )
+    if not private_worker_state_is_within_limits(
+        state, maximum_observed_input_bytes, limits
+    ):
+        raise GateFailure(f"{target}: private worker corpus exceeds its policy limits")
+    return state, maximum_observed_input_bytes
 
 
 def artifact_state(path: Path) -> dict[str, Any]:
@@ -852,17 +874,29 @@ def load_corpus_policy(targets: list[str]) -> dict[str, Any]:
     target_policy = policy.get("targets")
     if not isinstance(target_policy, dict) or set(target_policy) != set(targets):
         raise GateFailure("corpus policy target set does not match the campaign")
-    limits = policy.get("limits")
-    if not isinstance(limits, dict):
-        raise GateFailure("corpus policy limits are missing")
-    for name in (
-        "maximum_files_per_target",
-        "maximum_input_bytes",
-        "maximum_total_bytes_per_target",
+    limit_sections: dict[str, dict[str, int]] = {}
+    for section in ("limits", "private_worker_limits"):
+        raw_limits = policy.get(section)
+        if not isinstance(raw_limits, dict) or set(raw_limits) != CORPUS_LIMIT_FIELDS:
+            raise GateFailure(f"corpus policy {section} are missing or malformed")
+        for name in CORPUS_LIMIT_FIELDS:
+            value = raw_limits.get(name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise GateFailure(f"invalid corpus policy {section} limit: {name}")
+        limit_sections[section] = raw_limits
+    checked_in_limits = limit_sections["limits"]
+    worker_limits = limit_sections["private_worker_limits"]
+    if (
+        worker_limits["maximum_files_per_target"]
+        < checked_in_limits["maximum_files_per_target"]
+        or worker_limits["maximum_total_bytes_per_target"]
+        < checked_in_limits["maximum_total_bytes_per_target"]
+        or worker_limits["maximum_input_bytes"]
+        != checked_in_limits["maximum_input_bytes"]
     ):
-        value = limits.get(name)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-            raise GateFailure(f"invalid corpus policy limit: {name}")
+        raise GateFailure(
+            "private worker limits must contain the checked-in corpus and retain its input ceiling"
+        )
     seed_base = policy.get("deterministic_minimization_seed_base")
     if not isinstance(seed_base, int) or isinstance(seed_base, bool) or seed_base < 1:
         raise GateFailure("invalid deterministic minimization seed base")
@@ -962,9 +996,11 @@ def external_corpus_descriptor(
 
 
 def seed_corpus_root(
-    args: argparse.Namespace, targets: list[str]
+    args: argparse.Namespace,
+    targets: list[str],
+    policy: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
-    policy = load_corpus_policy(targets)
+    policy = policy if policy is not None else load_corpus_policy(targets)
     if not args.corpus_dir:
         return checked_in_corpus_descriptor(targets, policy)
     return external_corpus_descriptor(
@@ -1061,6 +1097,7 @@ FUZZ_PROCESS_FIELDS = BASE_PROCESS_FIELDS | {
     "source_corpus",
     "corpus_before",
     "corpus_after",
+    "maximum_observed_input_bytes",
     "corpus_is_private_worker_copy",
     "source_corpus_unchanged",
     "crash_artifacts_before",
@@ -1242,6 +1279,19 @@ def corpus_state_record_is_valid(state: object) -> bool:
     )
 
 
+def private_worker_state_is_within_limits(
+    state: object, maximum_observed_input_bytes: object, limits: dict[str, int]
+) -> bool:
+    return (
+        corpus_state_record_is_valid(state)
+        and type(maximum_observed_input_bytes) is int
+        and 0 <= maximum_observed_input_bytes <= state["total_bytes"]
+        and state["file_count"] <= limits["maximum_files_per_target"]
+        and state["total_bytes"] <= limits["maximum_total_bytes_per_target"]
+        and maximum_observed_input_bytes <= limits["maximum_input_bytes"]
+    )
+
+
 def validate_campaign(campaign: dict[str, Any]) -> list[str]:
     targets = campaign.get("targets")
     if not isinstance(targets, list) or len(targets) != 14 or len(set(targets)) != 14:
@@ -1303,7 +1353,13 @@ def smoke(args: argparse.Namespace) -> None:
     smoke_evidence = output_directory / SMOKE_EVIDENCE_NAME
     campaign = json.loads(CAMPAIGN.read_text())
     targets = validate_campaign(campaign)
-    seed_root, seed_descriptor = seed_corpus_root(args, targets)
+    policy = load_corpus_policy(targets)
+    private_worker_limits = policy["private_worker_limits"]
+    if campaign["maximum_input_bytes"] != private_worker_limits["maximum_input_bytes"]:
+        raise GateFailure(
+            "campaign maximum input does not match the private worker policy"
+        )
+    seed_root, seed_descriptor = seed_corpus_root(args, targets, policy)
     started_at = utc_now()
     source_binding = source_binding_identity()
     build_root = external_private_tempdir(output_directory, "wp19-smoke-build-")
@@ -1490,7 +1546,11 @@ def smoke(args: argparse.Namespace) -> None:
                 raise GateFailure(
                     f"ASan fuzz target {target} replaced its artifact directory"
                 )
-            after_corpus = corpus_state(corpus)
+            after_corpus, maximum_observed_input_bytes = (
+                private_worker_corpus_measurement(
+                    corpus, private_worker_limits, target=target
+                )
+            )
             source_corpus_after = corpus_state(source_corpus)
             if source_corpus_after != source_corpus_before:
                 raise GateFailure(
@@ -1533,6 +1593,7 @@ def smoke(args: argparse.Namespace) -> None:
                 source_corpus=source_corpus_before,
                 corpus_before=before_corpus,
                 corpus_after=after_corpus,
+                maximum_observed_input_bytes=maximum_observed_input_bytes,
                 corpus_is_private_worker_copy=True,
                 source_corpus_unchanged=True,
                 crash_artifacts_before=before_artifacts["file_count"],
@@ -1963,6 +2024,11 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
     campaign = json.loads(CAMPAIGN.read_text())
     targets = validate_campaign(campaign)
     policy = load_corpus_policy(targets)
+    private_worker_limits = policy["private_worker_limits"]
+    expect(
+        campaign["maximum_input_bytes"] == private_worker_limits["maximum_input_bytes"],
+        "campaign maximum input does not match the private worker policy",
+    )
     evidence_campaign = smoke_document.get("campaign")
     expect(
         isinstance(evidence_campaign, dict)
@@ -2114,14 +2180,14 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
             )
             corpus_after = item.get("corpus_after")
             expect(
-                corpus_state_record_is_valid(corpus_after)
+                private_worker_state_is_within_limits(
+                    corpus_after,
+                    item.get("maximum_observed_input_bytes"),
+                    private_worker_limits,
+                )
                 and isinstance(expected_state, dict)
                 and corpus_after["file_count"] >= expected_state["file_count"]
-                and corpus_after["total_bytes"] >= expected_state["total_bytes"]
-                and corpus_after["file_count"]
-                <= policy["limits"]["maximum_files_per_target"]
-                and corpus_after["total_bytes"]
-                <= policy["limits"]["maximum_total_bytes_per_target"],
+                and corpus_after["total_bytes"] >= expected_state["total_bytes"],
                 f"{target}: private worker corpus-after state is invalid",
             )
             expect(

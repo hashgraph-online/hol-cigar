@@ -23,6 +23,22 @@ class CorpusManagerTests(unittest.TestCase):
     def test_campaign_policy_is_complete_and_regression_is_pinned(self) -> None:
         policy, targets = corpus_manager.load_policy()
         self.assertEqual(len(targets), 14)
+        self.assertEqual(
+            policy["limits"],
+            {
+                "maximum_files_per_target": 4096,
+                "maximum_input_bytes": 1048576,
+                "maximum_total_bytes_per_target": 16777216,
+            },
+        )
+        self.assertEqual(
+            policy["private_worker_limits"],
+            {
+                "maximum_files_per_target": 8192,
+                "maximum_input_bytes": 1048576,
+                "maximum_total_bytes_per_target": 33554432,
+            },
+        )
         fixtures = policy["targets"]["mcp_messages"]["named_fixtures"]
         regression = next(
             fixture
@@ -35,6 +51,42 @@ class CorpusManagerTests(unittest.TestCase):
         actual = next(entry for entry in entries if entry["name"] == regression["name"])
         self.assertEqual(actual["classification"], "minimized-regression")
         self.assertEqual(actual["sha256"], regression["sha256"])
+
+    def test_private_worker_policy_validation_fails_closed(self) -> None:
+        policy, _ = corpus_manager.load_policy()
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw).resolve() / "policy.json"
+
+            def rejected(changed: dict[str, object]) -> None:
+                path.write_text(json.dumps(changed), encoding="utf-8")
+                with (
+                    mock.patch.object(corpus_manager, "POLICY_PATH", path),
+                    self.assertRaises(corpus_manager.CorpusFailure),
+                ):
+                    corpus_manager.load_policy()
+
+            missing = json.loads(json.dumps(policy))
+            missing.pop("private_worker_limits")
+            rejected(missing)
+            extra = json.loads(json.dumps(policy))
+            extra["private_worker_limits"]["unexpected"] = 1
+            rejected(extra)
+            too_small = json.loads(json.dumps(policy))
+            too_small["private_worker_limits"]["maximum_total_bytes_per_target"] = (
+                16777215
+            )
+            rejected(too_small)
+            campaign = json.loads(corpus_manager.CAMPAIGN_PATH.read_text())
+            campaign["maximum_input_bytes"] = 1048575
+            campaign_path = Path(raw).resolve() / "campaign.json"
+            campaign_path.write_text(json.dumps(campaign), encoding="utf-8")
+            path.write_text(json.dumps(policy), encoding="utf-8")
+            with (
+                mock.patch.object(corpus_manager, "POLICY_PATH", path),
+                mock.patch.object(corpus_manager, "CAMPAIGN_PATH", campaign_path),
+                self.assertRaises(corpus_manager.CorpusFailure),
+            ):
+                corpus_manager.load_policy()
 
     def test_output_inside_repository_is_rejected(self) -> None:
         with self.assertRaises(corpus_manager.CorpusFailure):

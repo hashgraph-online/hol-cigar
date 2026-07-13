@@ -15,6 +15,11 @@
     "maximum_input_bytes": 1048576,
     "maximum_total_bytes_per_target": 16777216
   },
+  "private_worker_limits": {
+    "maximum_files_per_target": 8192,
+    "maximum_input_bytes": 1048576,
+    "maximum_total_bytes_per_target": 33554432
+  },
   "targets": {
     "builtin_source_parsers": {
       "named_fixtures": [

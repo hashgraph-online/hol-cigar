@@ -344,6 +344,85 @@ class FuzzEvidenceTests(unittest.TestCase):
                         argparse.Namespace(corpus_dir=str(corpus_root)), targets
                     )
 
+    def test_private_worker_policy_is_distinct_and_fail_closed(self) -> None:
+        campaign = json.loads(fuzz_and_mutation.CAMPAIGN.read_text())
+        targets = campaign["targets"]
+        policy = json.loads(fuzz_and_mutation.POLICY.read_text())
+        self.assertEqual(
+            policy["limits"],
+            {
+                "maximum_files_per_target": 4096,
+                "maximum_input_bytes": 1048576,
+                "maximum_total_bytes_per_target": 16777216,
+            },
+        )
+        self.assertEqual(
+            policy["private_worker_limits"],
+            {
+                "maximum_files_per_target": 8192,
+                "maximum_input_bytes": 1048576,
+                "maximum_total_bytes_per_target": 33554432,
+            },
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw).resolve()
+            policy_path = base / "policy.json"
+
+            def rejected(changed: dict[str, Any]) -> None:
+                policy_path.write_text(json.dumps(changed), encoding="utf-8")
+                with (
+                    mock.patch.object(fuzz_and_mutation, "POLICY", policy_path),
+                    self.assertRaises(fuzz_and_mutation.GateFailure),
+                ):
+                    fuzz_and_mutation.load_corpus_policy(targets)
+
+            missing = copy.deepcopy(policy)
+            missing.pop("private_worker_limits")
+            rejected(missing)
+            boolean = copy.deepcopy(policy)
+            boolean["private_worker_limits"]["maximum_files_per_target"] = True
+            rejected(boolean)
+            too_small = copy.deepcopy(policy)
+            too_small["private_worker_limits"]["maximum_files_per_target"] = 4095
+            rejected(too_small)
+            mismatched_input = copy.deepcopy(policy)
+            mismatched_input["private_worker_limits"]["maximum_input_bytes"] = 1048577
+            rejected(mismatched_input)
+
+    def test_private_worker_measurement_enforces_all_bounds(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            worker = Path(raw).resolve() / "worker"
+            worker.mkdir()
+            (worker / "one").write_bytes(b"seed")
+            limits = {
+                "maximum_files_per_target": 1,
+                "maximum_input_bytes": 4,
+                "maximum_total_bytes_per_target": 4,
+            }
+            state, maximum = fuzz_and_mutation.private_worker_corpus_measurement(
+                worker, limits, target="example"
+            )
+            self.assertEqual(state["file_count"], 1)
+            self.assertEqual(maximum, 4)
+            (worker / "two").write_bytes(b"")
+            with self.assertRaises(fuzz_and_mutation.GateFailure):
+                fuzz_and_mutation.private_worker_corpus_measurement(
+                    worker, limits, target="example"
+                )
+            (worker / "two").unlink()
+            with self.assertRaises(fuzz_and_mutation.GateFailure):
+                fuzz_and_mutation.private_worker_corpus_measurement(
+                    worker,
+                    {**limits, "maximum_input_bytes": 3},
+                    target="example",
+                )
+            with self.assertRaises(fuzz_and_mutation.GateFailure):
+                fuzz_and_mutation.private_worker_corpus_measurement(
+                    worker,
+                    {**limits, "maximum_total_bytes_per_target": 3},
+                    target="example",
+                )
+
     def build_valid_smoke_evidence(
         self, base: Path
     ) -> tuple[Path, dict[str, Any], dict[str, Any]]:
@@ -387,8 +466,8 @@ class FuzzEvidenceTests(unittest.TestCase):
             target: {
                 "algorithm": "sha256-path-and-content-v1",
                 "digest": fuzz_and_mutation.sha256_bytes(target.encode()),
-                "file_count": 1,
-                "total_bytes": 1,
+                "file_count": 2517 if target == "policy_parse_evaluate" else 1,
+                "total_bytes": 2517 if target == "policy_parse_evaluate" else 1,
             }
             for target in targets
         }
@@ -477,6 +556,9 @@ class FuzzEvidenceTests(unittest.TestCase):
             fuzz_body = (
                 b"Done 123 runs in 60 seconds\nstat::number_of_executed_units: 123\n"
             )
+            corpus_after = dict(seed_states[target])
+            if target == "policy_parse_evaluate":
+                corpus_after.update(file_count=4775, total_bytes=4775)
             fuzz_results.append(
                 {
                     **process_record(
@@ -504,7 +586,8 @@ class FuzzEvidenceTests(unittest.TestCase):
                     "observed_executed_units": 123,
                     "source_corpus": seed_states[target],
                     "corpus_before": seed_states[target],
-                    "corpus_after": seed_states[target],
+                    "corpus_after": corpus_after,
+                    "maximum_observed_input_bytes": 1,
                     "corpus_is_private_worker_copy": True,
                     "source_corpus_unchanged": True,
                     "crash_artifacts_before": 0,
@@ -679,6 +762,26 @@ class FuzzEvidenceTests(unittest.TestCase):
         )
         path.chmod(0o600)
 
+    def test_smoke_verifier_accepts_bounded_private_worker_growth(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            output, document, context = self.build_valid_smoke_evidence(
+                Path(raw).resolve()
+            )
+            result = next(
+                item
+                for item in document["gates"]["asan_libfuzzer"]
+                if item["target"] == "policy_parse_evaluate"
+            )
+            self.assertEqual(result["corpus_before"]["file_count"], 2517)
+            self.assertEqual(result["corpus_after"]["file_count"], 4775)
+            self.assertGreater(
+                result["corpus_after"]["file_count"],
+                json.loads(fuzz_and_mutation.POLICY.read_text())["limits"][
+                    "maximum_files_per_target"
+                ],
+            )
+            self.verify_smoke_fixture(output, context)
+
     def test_smoke_verifier_rejects_receipt_and_log_substitution(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             output, original, context = self.build_valid_smoke_evidence(
@@ -741,6 +844,26 @@ class FuzzEvidenceTests(unittest.TestCase):
                     "digest": "forged"
                 }
 
+            def worker_file_ceiling(document: dict[str, Any]) -> None:
+                document["gates"]["asan_libfuzzer"][0]["corpus_after"]["file_count"] = (
+                    8193
+                )
+
+            def worker_byte_ceiling(document: dict[str, Any]) -> None:
+                document["gates"]["asan_libfuzzer"][0]["corpus_after"][
+                    "total_bytes"
+                ] = 33554433
+
+            def worker_input_ceiling(document: dict[str, Any]) -> None:
+                document["gates"]["asan_libfuzzer"][0][
+                    "maximum_observed_input_bytes"
+                ] = 1048577
+
+            def worker_input_float(document: dict[str, Any]) -> None:
+                document["gates"]["asan_libfuzzer"][0][
+                    "maximum_observed_input_bytes"
+                ] = 1.0
+
             def fuzz_metric(document: dict[str, Any]) -> None:
                 document["gates"]["asan_libfuzzer"][0]["observed_executed_units"] = 124
 
@@ -796,6 +919,10 @@ class FuzzEvidenceTests(unittest.TestCase):
                 ("fuzz wall timeout", fuzz_wall_timeout),
                 ("fuzz missing field", fuzz_missing_field),
                 ("fuzz corpus after", fuzz_corpus_after),
+                ("private worker file ceiling", worker_file_ceiling),
+                ("private worker byte ceiling", worker_byte_ceiling),
+                ("private worker input ceiling", worker_input_ceiling),
+                ("private worker input float", worker_input_float),
                 ("fuzz log metric", fuzz_metric),
                 ("campaign count", campaign_count),
                 ("campaign count float", campaign_count_float),

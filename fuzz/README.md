@@ -26,9 +26,13 @@ workers and deterministic seed 190000. `verify-smoke` accepts only that exact ca
 seed sequence, command set, current source/seed-corpus state, receipt schema, scratch-cleanup proof,
 and private log set; pass counts and libFuzzer run/time metrics are recomputed from the bound logs.
 The deleted private worker corpus means its recorded post-run digest is self-asserted: the verifier
-checks its exact schema, integer counts, monotonic growth, and policy ceilings, but cannot reconstruct
-that digest after successful scratch cleanup. Use a fresh, otherwise-empty evidence directory for
-each smoke attempt. `--runs N` is available for local
+checks its exact schema, integer counts, maximum observed input size, monotonic growth, and the
+separate private-worker policy ceilings, but cannot reconstruct those measurements after successful
+scratch cleanup. The checked-in/minimized corpus remains bounded at 4,096 files and 16 MiB per
+target. A disposable smoke worker may grow to 8,192 files and 32 MiB while retaining the same 1 MiB
+per-input ceiling; exceeding any worker bound fails before a receipt is written and preserves the
+failed scratch. Use a fresh, otherwise-empty evidence directory for each smoke attempt. `--runs N`
+is available for local
 harness viability checks, but evidence from run-count mode is explicitly non-qualifying. Every
 fuzzer gets a private temporary copy of its seed corpus, and all compilation runs from a
 Git-index-derived external source mirror. Fault/build scratch is preserved on failure and deleted
@@ -55,7 +59,8 @@ group/world-writable, and existing receipt destinations. It never overwrites a r
 ## Corpus inventory and minimization
 
 `corpus-policy.v1.json` pins all hand-authored seeds and the minimized MCP numeric-ID regression,
-sets per-target byte/count ceilings, and defines crash-artifact names. Capture a content-free
+sets distinct checked-in/minimized and disposable-worker byte/count ceilings, and defines
+crash-artifact names. Capture a content-free
 inventory outside the checkout before curating corpus growth:
 
 ```sh

@@ -47,6 +47,13 @@ CAMPAIGN_PATH = FUZZ_ROOT / "campaign-v1.json"
 POLICY_PATH = FUZZ_ROOT / "corpus-policy.v1.json"
 HEX_SHA1 = re.compile(r"^[0-9a-f]{40}$")
 SAFE_TARGET = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+CORPUS_LIMIT_FIELDS = frozenset(
+    {
+        "maximum_files_per_target",
+        "maximum_input_bytes",
+        "maximum_total_bytes_per_target",
+    }
+)
 EXCLUDED_SOURCE_DIRECTORIES = {"target", "artifacts", ".work", "__pycache__"}
 SOURCE_STATUS_SCOPE = (
     "Cargo.toml",
@@ -946,17 +953,35 @@ def load_policy() -> tuple[dict[str, Any], list[str]]:
     target_policy = policy.get("targets")
     if not isinstance(target_policy, dict) or set(target_policy) != set(targets):
         raise CorpusFailure("corpus policy targets must exactly match the campaign")
-    limits = policy.get("limits")
-    if not isinstance(limits, dict):
-        raise CorpusFailure("corpus policy limits are missing")
-    for name in (
-        "maximum_files_per_target",
-        "maximum_input_bytes",
-        "maximum_total_bytes_per_target",
+    limit_sections: dict[str, dict[str, int]] = {}
+    for section in ("limits", "private_worker_limits"):
+        raw_limits = policy.get(section)
+        if not isinstance(raw_limits, dict) or set(raw_limits) != CORPUS_LIMIT_FIELDS:
+            raise CorpusFailure(f"corpus policy {section} are missing or malformed")
+        for name in CORPUS_LIMIT_FIELDS:
+            value = raw_limits.get(name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise CorpusFailure(f"invalid positive {section} limit: {name}")
+        limit_sections[section] = raw_limits
+    limits = limit_sections["limits"]
+    worker_limits = limit_sections["private_worker_limits"]
+    if (
+        worker_limits["maximum_files_per_target"] < limits["maximum_files_per_target"]
+        or worker_limits["maximum_total_bytes_per_target"]
+        < limits["maximum_total_bytes_per_target"]
+        or worker_limits["maximum_input_bytes"] != limits["maximum_input_bytes"]
     ):
-        value = limits.get(name)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-            raise CorpusFailure(f"invalid positive corpus limit: {name}")
+        raise CorpusFailure(
+            "private worker limits must contain the checked-in corpus and retain its input ceiling"
+        )
+    campaign_maximum_input_bytes = campaign.get("maximum_input_bytes")
+    if (
+        type(campaign_maximum_input_bytes) is not int
+        or campaign_maximum_input_bytes != worker_limits["maximum_input_bytes"]
+    ):
+        raise CorpusFailure(
+            "campaign maximum input must match the private worker input ceiling"
+        )
     prefixes = policy.get("artifact_prefixes")
     if (
         not isinstance(prefixes, list)
