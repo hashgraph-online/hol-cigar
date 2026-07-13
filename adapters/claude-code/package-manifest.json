@@ -258,13 +258,13 @@
     },
     {
       "path": "tests/generate-package-manifest.py",
-      "sha256": "6caef52326fb36bbf3a43d00cbd13954cdb0493b6d97a9ef3f09ccec03cd4424",
-      "bytes": 1235
+      "sha256": "1bc27c7c3f8c2ebe34dcfe6caa7ea094f026a5458a5c51f805e5b4863336c47c",
+      "bytes": 1263
     },
     {
       "path": "tests/measure_prompt.py",
-      "sha256": "8fa8bcbb82b8d6379b4e3c707d9058e88cae587ed8390d18961b2a33871bac73",
-      "bytes": 2573
+      "sha256": "e7654f967b74c07aadb69fdf0e55da9507e5abeae032d558e09d2f2f979170a7",
+      "bytes": 2548
     },
     {
       "path": "tests/public-surface-smoke.ps1",
@@ -298,8 +298,8 @@
     },
     {
       "path": "tests/static_private_path_scan.py",
-      "sha256": "92f9576b83caa1d5e29920330fe75454ea59a60a514b222c7f5c50e3e3e47793",
-      "bytes": 2451
+      "sha256": "e73d725ec58c32025462c129c889b1925fc9f06b84d5a65b2f7e075b4c8a19f2",
+      "bytes": 2533
     },
     {
       "path": "tests/validate-package.ps1",
@@ -313,8 +313,8 @@
     },
     {
       "path": "tests/validate_package.py",
-      "sha256": "6424d2edc5023f6f79fc78d13751119c0e6a16cd8e104730c11a40ee13a848ca",
-      "bytes": 8967
+      "sha256": "0813a74c209ac698df40bcbfdd424e2f714477a757fa7ac48261e31798d07c81",
+      "bytes": 9496
     }
   ]
 }
