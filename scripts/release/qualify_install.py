@@ -16,7 +16,17 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from release_lib import ReleaseError, load_json_bytes, process_failure_summary, require_distinct_output, run_bounded, safe_relative_path, sha256_bytes, sha256_file, write_json
+from release_lib import (
+    ReleaseError,
+    load_json_bytes,
+    process_failure_summary,
+    require_distinct_output,
+    run_bounded,
+    safe_relative_path,
+    sha256_bytes,
+    sha256_file,
+    write_json,
+)
 from verify_package import verify as verify_package
 
 
@@ -38,7 +48,10 @@ def _destination(root: Path, relative: str) -> Path:
     destination = root.joinpath(*relative.split("/"))
     resolved_parent = destination.parent.resolve()
     root_resolved = root.resolve()
-    if resolved_parent != root_resolved and root_resolved not in resolved_parent.parents:
+    if (
+        resolved_parent != root_resolved
+        and root_resolved not in resolved_parent.parents
+    ):
         raise ReleaseError(f"archive extraction escapes install root: {relative}")
     return destination
 
@@ -74,8 +87,17 @@ def _extract(archive_path: Path, destination: Path) -> None:
             os.chmod(output, (mode & 0o777) or 0o644)
 
 
-def _run(command: list[str], cwd: Path, environment: dict[str, str], expected: int = 0) -> subprocess.CompletedProcess[bytes]:
-    result = run_bounded(command, cwd=cwd, env=environment, timeout=300, max_stdout=8 * 1024 * 1024, max_stderr=8 * 1024 * 1024)
+def _run(
+    command: list[str], cwd: Path, environment: dict[str, str], expected: int = 0
+) -> subprocess.CompletedProcess[bytes]:
+    result = run_bounded(
+        command,
+        cwd=cwd,
+        env=environment,
+        timeout=300,
+        max_stdout=8 * 1024 * 1024,
+        max_stderr=8 * 1024 * 1024,
+    )
     if result.returncode != expected:
         raise ReleaseError(process_failure_summary(result, "installed command"))
     return result
@@ -92,11 +114,15 @@ def _is_administrator() -> bool:
 def _host_target() -> str:
     system = platform.system().lower()
     machine = platform.machine().lower()
-    architecture = {"amd64": "x86_64", "x64": "x86_64", "arm64": "aarch64"}.get(machine, machine)
+    architecture = {"amd64": "x86_64", "x64": "x86_64", "arm64": "aarch64"}.get(
+        machine, machine
+    )
     if system == "linux":
         libc_name = platform.libc_ver()[0].lower()
         if libc_name not in {"glibc", "gnu libc"}:
-            raise ReleaseError(f"the binary matrix requires GNU libc, found {libc_name or 'unknown libc'}")
+            raise ReleaseError(
+                f"the binary matrix requires GNU libc, found {libc_name or 'unknown libc'}"
+            )
         return f"{architecture}-unknown-linux-gnu"
     if system == "darwin":
         return f"{architecture}-apple-darwin"
@@ -113,9 +139,19 @@ def _validate_driver_receipt(
     context_abi: str,
 ) -> tuple[dict[str, object], list[str]]:
     receipt = load_json_bytes(payload, "installed qualification driver")
-    required_keys = {"schema_version", "status", "artifact_id", "artifact_sha256", "product_version", "context_abi", "checks"}
+    required_keys = {
+        "schema_version",
+        "status",
+        "artifact_id",
+        "artifact_sha256",
+        "product_version",
+        "context_abi",
+        "checks",
+    }
     if not isinstance(receipt, dict) or set(receipt) != required_keys:
-        raise ReleaseError("installed qualification driver returned an unexpected receipt shape")
+        raise ReleaseError(
+            "installed qualification driver returned an unexpected receipt shape"
+        )
     if (
         receipt.get("schema_version") != "cigar.installed-driver.v1"
         or receipt.get("status") != "passed"
@@ -124,33 +160,57 @@ def _validate_driver_receipt(
         or receipt.get("product_version") != product_version
         or receipt.get("context_abi") != context_abi
     ):
-        raise ReleaseError("installed qualification driver receipt is stale or bound to another artifact")
+        raise ReleaseError(
+            "installed qualification driver receipt is stale or bound to another artifact"
+        )
     checks = receipt.get("checks")
     if not isinstance(checks, list) or not checks:
         raise ReleaseError("installed qualification driver returned no checks")
     check_ids: list[str] = []
     for check in checks:
-        if not isinstance(check, dict) or set(check) != {"id", "status"} or check.get("status") != "passed":
-            raise ReleaseError("installed qualification driver returned a malformed or non-passing check")
+        if (
+            not isinstance(check, dict)
+            or set(check) != {"id", "status"}
+            or check.get("status") != "passed"
+        ):
+            raise ReleaseError(
+                "installed qualification driver returned a malformed or non-passing check"
+            )
         identifier = check.get("id")
         if (
             not isinstance(identifier, str)
             or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", identifier) is None
             or len(identifier.encode("utf-8")) > 128
         ):
-            raise ReleaseError("installed qualification driver returned an invalid check id")
+            raise ReleaseError(
+                "installed qualification driver returned an invalid check id"
+            )
         check_ids.append(identifier)
     if len(set(check_ids)) != len(check_ids):
-        raise ReleaseError("installed qualification driver returned duplicate check ids")
+        raise ReleaseError(
+            "installed qualification driver returned duplicate check ids"
+        )
     required_checks = {
-        "doctor", "init", "source-add", "ingest", "compile", "explain", "handoff",
-        "effect-recovery", "replay", "daemon-lifecycle", "offline-restart", "upgrade",
+        "doctor",
+        "init",
+        "source-add",
+        "ingest",
+        "compile",
+        "explain",
+        "handoff",
+        "effect-recovery",
+        "replay",
+        "daemon-lifecycle",
+        "offline-restart",
+        "upgrade",
     }
     if os.name == "nt":
         required_checks.add("read-only-parent")
     missing = required_checks - set(check_ids)
     if missing:
-        raise ReleaseError(f"installed qualification driver omitted checks: {sorted(missing)}")
+        raise ReleaseError(
+            f"installed qualification driver omitted checks: {sorted(missing)}"
+        )
     return receipt, check_ids
 
 
@@ -163,21 +223,36 @@ def main() -> int:
         raise ReleaseError("expected artifact id is invalid")
     if re.fullmatch(r"[a-z0-9_]+-[a-z0-9_.-]+", arguments.expected_target) is None:
         raise ReleaseError("expected target triple is invalid")
-    if re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", arguments.expected_version) is None:
+    if (
+        re.fullmatch(
+            r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", arguments.expected_version
+        )
+        is None
+    ):
         raise ReleaseError("expected product version is invalid")
     if arguments.expected_abi != "cigar.context.v1":
         raise ReleaseError("expected Context ABI is invalid")
     if arguments.report is not None:
-        require_distinct_output(arguments.report.resolve(), [archive, contract, driver], "install qualification")
+        require_distinct_output(
+            arguments.report.resolve(),
+            [archive, contract, driver],
+            "install qualification",
+        )
     if _is_administrator():
         raise ReleaseError("install qualification must run as an unprivileged user")
     if not driver.is_file() or driver.is_symlink() or not os.access(driver, os.X_OK):
-        raise ReleaseError("qualification driver must be an explicit regular executable")
+        raise ReleaseError(
+            "qualification driver must be an explicit regular executable"
+        )
     if os.environ.get("CIGAR_NO_EGRESS_ENFORCED") != "1":
-        raise ReleaseError("the runner must enforce no egress and set CIGAR_NO_EGRESS_ENFORCED=1")
+        raise ReleaseError(
+            "the runner must enforce no egress and set CIGAR_NO_EGRESS_ENFORCED=1"
+        )
     target = _host_target()
     if target != arguments.expected_target:
-        raise ReleaseError(f"qualification host target {target} does not match expected target {arguments.expected_target}")
+        raise ReleaseError(
+            f"qualification host target {target} does not match expected target {arguments.expected_target}"
+        )
     original_digest = sha256_file(archive)
     original_size = archive.stat().st_size
     driver_digest = sha256_file(driver)
@@ -198,8 +273,12 @@ def main() -> int:
             or archive.stat().st_size != original_size
             or sha256_file(staged_driver) != driver_digest
         ):
-            raise ReleaseError("candidate archive or qualification driver changed while it was staged")
-        verification = verify_package(staged_archive, contract, arguments.expected_version, arguments.expected_abi)
+            raise ReleaseError(
+                "candidate archive or qualification driver changed while it was staged"
+            )
+        verification = verify_package(
+            staged_archive, contract, arguments.expected_version, arguments.expected_abi
+        )
         metadata = verification.get("metadata")
         source = metadata.get("source") if isinstance(metadata, dict) else None
         if (
@@ -211,10 +290,19 @@ def main() -> int:
             or source.get("committed") is not True
             or source.get("clean") is not True
             or not isinstance(source.get("revision"), str)
-            or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", source["revision"]) is None
+            or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", source["revision"])
+            is None
         ):
-            raise ReleaseError("binary archive metadata is not bound to the expected committed, clean candidate")
-        long_path = base / "path with spaces" / "δοκιμή" / ("long-segment-" * 10) / ("nested-segment-" * 10)
+            raise ReleaseError(
+                "binary archive metadata is not bound to the expected committed, clean candidate"
+            )
+        long_path = (
+            base
+            / "path with spaces"
+            / "δοκιμή"
+            / ("long-segment-" * 10)
+            / ("nested-segment-" * 10)
+        )
         install = long_path / "prefix"
         workspace = long_path / "retained project state"
         install.mkdir(parents=True)
@@ -248,11 +336,22 @@ def main() -> int:
                     environment[key] = value
         Path(environment["HOME"]).mkdir()
         Path(environment["TMPDIR"]).mkdir()
-        if shutil.which("cargo", path=environment["PATH"]) or shutil.which("rustc", path=environment["PATH"]) or shutil.which("cc", path=environment["PATH"]):
+        if (
+            shutil.which("cargo", path=environment["PATH"])
+            or shutil.which("rustc", path=environment["PATH"])
+            or shutil.which("cc", path=environment["PATH"])
+        ):
             raise ReleaseError("compiler is visible in qualification PATH")
-        version_result = _run([str(cigar), "--output", "json", "version"], workspace, environment)
-        version_output = load_json_bytes(version_result.stdout, "installed cigar version")
-        if not isinstance(version_output, dict) or version_output.get("version") != arguments.expected_version:
+        version_result = _run(
+            [str(cigar), "--output", "json", "version"], workspace, environment
+        )
+        version_output = load_json_bytes(
+            version_result.stdout, "installed cigar version"
+        )
+        if (
+            not isinstance(version_output, dict)
+            or version_output.get("version") != arguments.expected_version
+        ):
             raise ReleaseError("installed cigar reports the wrong semantic version")
         _run([str(cigar), "help"], workspace, environment)
 
@@ -266,10 +365,21 @@ def main() -> int:
 
         driver_result = _run(
             [
-                str(staged_driver), "--cigar", str(cigar), "--cigard", str(cigard),
-                "--workspace", str(workspace), "--artifact-id", arguments.expected_artifact_id,
-                "--artifact-sha256", original_digest, "--product-version", arguments.expected_version,
-                "--context-abi", arguments.expected_abi,
+                str(staged_driver),
+                "--cigar",
+                str(cigar),
+                "--cigard",
+                str(cigard),
+                "--workspace",
+                str(workspace),
+                "--artifact-id",
+                arguments.expected_artifact_id,
+                "--artifact-sha256",
+                original_digest,
+                "--product-version",
+                arguments.expected_version,
+                "--context-abi",
+                arguments.expected_abi,
             ],
             workspace,
             environment,
@@ -287,13 +397,17 @@ def main() -> int:
             or sha256_file(cigar) != binary_digests["cigar"]
             or sha256_file(cigard) != binary_digests["cigard"]
         ):
-            raise ReleaseError("candidate archive, qualification driver, or installed binary changed during qualification")
+            raise ReleaseError(
+                "candidate archive, qualification driver, or installed binary changed during qualification"
+            )
 
         shutil.rmtree(install)
         uninstalled = not install.exists()
         retained = marker.read_text(encoding="utf-8") == "retain\n"
         if not uninstalled or not retained:
-            raise ReleaseError("uninstall removed retained state or left installed files")
+            raise ReleaseError(
+                "uninstall removed retained state or left installed files"
+            )
         report = {
             "schema_version": "cigar.install-qualification.v1",
             "status": "passed",
@@ -310,7 +424,13 @@ def main() -> int:
             "unprivileged": True,
             "no_compiler_path": True,
             "no_egress": True,
-            "path_cases": ["spaces", "unicode", "long", "read-only-parent", "non-admin"],
+            "path_cases": [
+                "spaces",
+                "unicode",
+                "long",
+                "read-only-parent",
+                "non-admin",
+            ],
             "checks": sorted({"version", "help", *driver_checks}),
             "uninstalled": uninstalled,
             "state_retained": retained,

@@ -12,7 +12,16 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from release_lib import ReleaseError, expand_files, load_json, repo_root, resolve_beneath, safe_relative_path, write_bytes, write_json
+from release_lib import (
+    ReleaseError,
+    expand_files,
+    load_json,
+    repo_root,
+    resolve_beneath,
+    safe_relative_path,
+    write_bytes,
+    write_json,
+)
 
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
@@ -36,9 +45,15 @@ def _slug(text: str) -> str:
 
 def _published(root: Path, manifest: dict[str, Any]) -> list[tuple[str, Path]]:
     includes = manifest.get("include")
-    if not isinstance(includes, list) or not all(isinstance(value, str) for value in includes):
+    if not isinstance(includes, list) or not all(
+        isinstance(value, str) for value in includes
+    ):
         raise ReleaseError("documentation include manifest is invalid")
-    files = [(relative, path) for relative, path in expand_files(root, includes, []) if relative.endswith(".md")]
+    files = [
+        (relative, path)
+        for relative, path in expand_files(root, includes, [])
+        if relative.endswith(".md")
+    ]
     if not files:
         raise ReleaseError("documentation manifest contains no Markdown")
     return files
@@ -59,7 +74,7 @@ def _inline(
     output: list[str] = []
     position = 0
     for match in _LINK.finditer(value):
-        output.append(html.escape(value[position:match.start()]))
+        output.append(html.escape(value[position : match.start()]))
         label = html.escape(match.group(1))
         target = match.group(2).strip("<>")
         if target.startswith(("http://", "https://", "mailto:", "data:")):
@@ -74,11 +89,15 @@ def _inline(
                 normalized = source_relative
             resolve_beneath(root, normalized)
             if normalized in published:
-                rewritten = Path(path_part).with_suffix(".html").as_posix() if path_part else ""
+                rewritten = (
+                    Path(path_part).with_suffix(".html").as_posix() if path_part else ""
+                )
                 href = rewritten + (f"#{fragment}" if separator else "")
             else:
                 if normalized not in allowed_assets:
-                    raise ReleaseError(f"documentation link is not a published page or allowlisted asset: {normalized}")
+                    raise ReleaseError(
+                        f"documentation link is not a published page or allowlisted asset: {normalized}"
+                    )
                 href = target
                 if path_part:
                     linked_assets.add(normalized)
@@ -86,7 +105,11 @@ def _inline(
         position = match.end()
     output.append(html.escape(value[position:]))
     rendered = "".join(output)
-    rendered = re.sub(r"`([^`]+)`", lambda match: f"<code>{html.escape(html.unescape(match.group(1)))}</code>", rendered)
+    rendered = re.sub(
+        r"`([^`]+)`",
+        lambda match: f"<code>{html.escape(html.unescape(match.group(1)))}</code>",
+        rendered,
+    )
     rendered = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", rendered)
     return rendered
 
@@ -134,7 +157,9 @@ def _render_markdown(
                 index += 1
             if index == len(lines):
                 raise ReleaseError(f"unclosed code fence in {source_relative}")
-            body.append(f'<pre><code class="language-{html.escape(language, quote=True)}">{html.escape(chr(10).join(code))}</code></pre>')
+            body.append(
+                f'<pre><code class="language-{html.escape(language, quote=True)}">{html.escape(chr(10).join(code))}</code></pre>'
+            )
             index += 1
             continue
         heading = _HEADING.match(line)
@@ -179,10 +204,18 @@ def _render_markdown(
 
 
 def _page(title: str, body: str, current: Path, output: Path, version: str) -> bytes:
-    style = os.path.relpath(output / "assets/style.css", current.parent).replace(os.sep, "/")
-    home = os.path.relpath(output / "docs/site/index.html", current.parent).replace(os.sep, "/")
-    quickstart = os.path.relpath(output / "docs/guides/quickstart.html", current.parent).replace(os.sep, "/")
-    operations = os.path.relpath(output / "docs/operations/index.html", current.parent).replace(os.sep, "/")
+    style = os.path.relpath(output / "assets/style.css", current.parent).replace(
+        os.sep, "/"
+    )
+    home = os.path.relpath(output / "docs/site/index.html", current.parent).replace(
+        os.sep, "/"
+    )
+    quickstart = os.path.relpath(
+        output / "docs/guides/quickstart.html", current.parent
+    ).replace(os.sep, "/")
+    operations = os.path.relpath(
+        output / "docs/operations/index.html", current.parent
+    ).replace(os.sep, "/")
     content = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="generator" content="cigar-docs-v1"><title>{html.escape(title)} · CIGAR</title>
@@ -196,10 +229,19 @@ def _page(title: str, body: str, current: Path, output: Path, version: str) -> b
 def build(root: Path, output: Path) -> dict[str, Any]:
     manifest = load_json(root / "docs/site-manifest.v1.json")
     expected_manifest_keys = {
-        "schema_version", "product_version", "context_abi", "version_selectors",
-        "include", "assets", "required_pages",
+        "schema_version",
+        "product_version",
+        "context_abi",
+        "version_selectors",
+        "include",
+        "assets",
+        "required_pages",
     }
-    if not isinstance(manifest, dict) or set(manifest) != expected_manifest_keys or manifest.get("schema_version") != "cigar.docs-site.v1":
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != expected_manifest_keys
+        or manifest.get("schema_version") != "cigar.docs-site.v1"
+    ):
         raise ReleaseError("unsupported documentation site manifest")
     source_files = _published(root, manifest)
     published = {relative for relative, _ in source_files}
@@ -216,7 +258,9 @@ def build(root: Path, output: Path) -> dict[str, Any]:
         relative = safe_relative_path(relative)
         asset = resolve_beneath(root, relative)
         if not asset.is_file() or asset.suffix.lower() == ".md":
-            raise ReleaseError(f"documentation asset is not an allowed regular non-Markdown file: {relative}")
+            raise ReleaseError(
+                f"documentation asset is not an allowed regular non-Markdown file: {relative}"
+            )
         allowed_assets.add(relative)
     required_pages = manifest.get("required_pages")
     if (
@@ -227,7 +271,9 @@ def build(root: Path, output: Path) -> dict[str, Any]:
     ):
         raise ReleaseError("required documentation page inventory is invalid")
     if not set(required_pages).issubset(published):
-        raise ReleaseError(f"required documentation pages are not published: {sorted(set(required_pages) - published)}")
+        raise ReleaseError(
+            f"required documentation pages are not published: {sorted(set(required_pages) - published)}"
+        )
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ReleaseError("documentation output directory must be empty")
@@ -237,12 +283,21 @@ def build(root: Path, output: Path) -> dict[str, Any]:
         target_relative = _output_relative(relative)
         target = output / target_relative
         title, body = _render_markdown(
-            source.read_text(encoding="utf-8"), relative, published, allowed_assets, linked_assets, root
+            source.read_text(encoding="utf-8"),
+            relative,
+            published,
+            allowed_assets,
+            linked_assets,
+            root,
         )
-        write_bytes(target, _page(title, body, target, output, manifest["product_version"]))
+        write_bytes(
+            target, _page(title, body, target, output, manifest["product_version"])
+        )
         pages.append({"source": relative, "output": target_relative, "title": title})
     if linked_assets != allowed_assets:
-        raise ReleaseError(f"documentation asset allowlist contains unreferenced entries: {sorted(allowed_assets - linked_assets)}")
+        raise ReleaseError(
+            f"documentation asset allowlist contains unreferenced entries: {sorted(allowed_assets - linked_assets)}"
+        )
     for relative in sorted(linked_assets):
         if relative in published:
             continue

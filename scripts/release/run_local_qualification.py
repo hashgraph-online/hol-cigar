@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from exercise_runbooks import _source as operation_source
-from qualify_install import _validate_driver_receipt as validate_installed_driver_receipt
+from qualify_install import (
+    _validate_driver_receipt as validate_installed_driver_receipt,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -42,8 +44,20 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _run(root: Path, arguments: list[str], environment: dict[str, str] | None = None, expected: int = 0) -> subprocess.CompletedProcess[str]:
-    raw = run_bounded(arguments, cwd=root, env=environment, timeout=600, max_stdout=32 * 1024 * 1024, max_stderr=32 * 1024 * 1024)
+def _run(
+    root: Path,
+    arguments: list[str],
+    environment: dict[str, str] | None = None,
+    expected: int = 0,
+) -> subprocess.CompletedProcess[str]:
+    raw = run_bounded(
+        arguments,
+        cwd=root,
+        env=environment,
+        timeout=600,
+        max_stdout=32 * 1024 * 1024,
+        max_stderr=32 * 1024 * 1024,
+    )
     if raw.returncode != expected:
         command_label = Path(arguments[1] if len(arguments) > 1 else arguments[0]).name
         raise ReleaseError(
@@ -83,7 +97,9 @@ def _write_oci_fixture(
     secret_layer: bool = False,
 ) -> None:
     layer_tar = io.BytesIO()
-    with tarfile.open(fileobj=layer_tar, mode="w", format=tarfile.PAX_FORMAT) as layer_archive:
+    with tarfile.open(
+        fileobj=layer_tar, mode="w", format=tarfile.PAX_FORMAT
+    ) as layer_archive:
         layer_payload = (
             b"-----BEGIN " + b"PRIVATE KEY-----\n"
             if secret_layer
@@ -100,45 +116,61 @@ def _write_oci_fixture(
         layer_archive.addfile(layer_member, io.BytesIO(layer_payload))
     uncompressed_layer = layer_tar.getvalue()
     compressed_layer = gzip.compress(uncompressed_layer, compresslevel=9, mtime=0)
-    layer = _oci_descriptor(compressed_layer, "application/vnd.oci.image.layer.v1.tar+gzip")
+    layer = _oci_descriptor(
+        compressed_layer, "application/vnd.oci.image.layer.v1.tar+gzip"
+    )
     blobs: dict[str, bytes] = {
         f"blobs/sha256/{layer['digest'].removeprefix('sha256:')}": compressed_layer,
     }
     manifest_descriptors: list[dict[str, Any]] = []
     for architecture in ("amd64", "arm64"):
-        config_payload = canonical_json_bytes({
-            "architecture": architecture,
-            "config": {"Cmd": ["/usr/bin/cigar"], "User": runtime_user},
-            "os": "linux",
-            "rootfs": {
-                "diff_ids": [
-                    f"sha256:{'f' * 64 if wrong_diff_id else hashlib.sha256(uncompressed_layer).hexdigest()}"
-                ],
-                "type": "layers",
-            },
-        })
-        config = _oci_descriptor(config_payload, "application/vnd.oci.image.config.v1+json")
-        blobs[f"blobs/sha256/{config['digest'].removeprefix('sha256:')}"] = config_payload
-        manifest_payload = canonical_json_bytes({
-            "config": config,
-            "layers": [layer],
-            "mediaType": "application/vnd.oci.image.manifest.v1+json",
-            "schemaVersion": 2,
-        })
-        manifest = _oci_descriptor(manifest_payload, "application/vnd.oci.image.manifest.v1+json")
+        config_payload = canonical_json_bytes(
+            {
+                "architecture": architecture,
+                "config": {"Cmd": ["/usr/bin/cigar"], "User": runtime_user},
+                "os": "linux",
+                "rootfs": {
+                    "diff_ids": [
+                        f"sha256:{'f' * 64 if wrong_diff_id else hashlib.sha256(uncompressed_layer).hexdigest()}"
+                    ],
+                    "type": "layers",
+                },
+            }
+        )
+        config = _oci_descriptor(
+            config_payload, "application/vnd.oci.image.config.v1+json"
+        )
+        blobs[f"blobs/sha256/{config['digest'].removeprefix('sha256:')}"] = (
+            config_payload
+        )
+        manifest_payload = canonical_json_bytes(
+            {
+                "config": config,
+                "layers": [layer],
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "schemaVersion": 2,
+            }
+        )
+        manifest = _oci_descriptor(
+            manifest_payload, "application/vnd.oci.image.manifest.v1+json"
+        )
         manifest["annotations"] = {
             "dev.cigar.context-abi": "cigar.context.v1",
             "org.opencontainers.image.version": "0.1.0",
         }
         manifest["platform"] = {"architecture": architecture, "os": "linux"}
-        blobs[f"blobs/sha256/{manifest['digest'].removeprefix('sha256:')}"] = manifest_payload
+        blobs[f"blobs/sha256/{manifest['digest'].removeprefix('sha256:')}"] = (
+            manifest_payload
+        )
         manifest_descriptors.append(manifest)
     files = {
-        "index.json": canonical_json_bytes({
-            "manifests": manifest_descriptors,
-            "mediaType": "application/vnd.oci.image.index.v1+json",
-            "schemaVersion": 2,
-        }),
+        "index.json": canonical_json_bytes(
+            {
+                "manifests": manifest_descriptors,
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "schemaVersion": 2,
+            }
+        ),
         "oci-layout": canonical_json_bytes({"imageLayoutVersion": "1.0.0"}),
         **blobs,
     }
@@ -160,11 +192,26 @@ def main() -> int:
     root = arguments.root.resolve()
     output = arguments.out.resolve()
     qualification_root = (root / "artifacts/qualification").resolve()
-    if root in output.parents and output.parent != qualification_root and qualification_root not in output.parents:
-        raise ReleaseError("a repository-local WP21 report must be written beneath artifacts/qualification")
+    if (
+        root in output.parents
+        and output.parent != qualification_root
+        and qualification_root not in output.parents
+    ):
+        raise ReleaseError(
+            "a repository-local WP21 report must be written beneath artifacts/qualification"
+        )
     epoch = require_source_date_epoch(arguments.source_date_epoch)
     environment = os.environ.copy()
-    environment.update({"SOURCE_DATE_EPOCH": str(epoch), "TZ": "UTC", "LC_ALL": "C", "LANG": "C", "PYTHONHASHSEED": "0", "NO_COLOR": "1"})
+    environment.update(
+        {
+            "SOURCE_DATE_EPOCH": str(epoch),
+            "TZ": "UTC",
+            "LC_ALL": "C",
+            "LANG": "C",
+            "PYTHONHASHSEED": "0",
+            "NO_COLOR": "1",
+        }
+    )
     python = sys.executable
     checks: list[dict[str, Any]] = []
 
@@ -175,30 +222,79 @@ def main() -> int:
         requirements = load_json(root / "packaging/release-requirements.v1.json")
         gaps = load_json(root / "packaging/qualification-gaps.v1.json")
         validate_release_policy_documents(matrix, requirements, gaps)
-        qualification_policy = load_json(root / "packaging/qualification-category-map.v1.json")
+        qualification_policy = load_json(
+            root / "packaging/qualification-category-map.v1.json"
+        )
         validate_qualification_policy(qualification_policy)
-        weakened_requirements = load_json(root / "packaging/release-requirements.v1.json")
+        weakened_requirements = load_json(
+            root / "packaging/release-requirements.v1.json"
+        )
         weakened_requirements["required_evidence_categories"].remove("security")
         _expect_failure(
-            lambda: validate_release_policy_documents(matrix, weakened_requirements, gaps),
+            lambda: validate_release_policy_documents(
+                matrix, weakened_requirements, gaps
+            ),
             "weakened release policy",
         )
-        weakened_qualification_policy = load_json(root / "packaging/qualification-category-map.v1.json")
+        weakened_qualification_policy = load_json(
+            root / "packaging/qualification-category-map.v1.json"
+        )
         weakened_qualification_policy["universal_requirements"].clear()
         _expect_failure(
             lambda: validate_qualification_policy(weakened_qualification_policy),
             "weakened artifact qualification policy",
         )
-        checks.append({"id": "metadata", "status": "passed", "detail": "artifact matrix, contracts, versions, ABI, schemas, gaps, and pinned anti-weakening release and artifact-qualification policies are valid"})
+        checks.append(
+            {
+                "id": "metadata",
+                "status": "passed",
+                "detail": "artifact matrix, contracts, versions, ABI, schemas, gaps, and pinned anti-weakening release and artifact-qualification policies are valid",
+            }
+        )
 
         docs_report = temporary / "docs.json"
-        _run(root, [python, "scripts/release/check_docs.py", "--execute-local", "--report", str(docs_report)], environment)
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/check_docs.py",
+                "--execute-local",
+                "--report",
+                str(docs_report),
+            ],
+            environment,
+        )
         docs = load_json(docs_report)
-        checks.append({"id": "docs", "status": "passed", "detail": f"{docs['pages']} pages, {docs['links']} links, {docs['executed_commands']} local command steps"})
+        checks.append(
+            {
+                "id": "docs",
+                "status": "passed",
+                "detail": f"{docs['pages']} pages, {docs['links']} links, {docs['executed_commands']} local command steps",
+            }
+        )
 
         operations = temporary / "operations"
-        _run(root, [python, "scripts/release/exercise_runbooks.py", "--mode", "static", "--source-date-epoch", str(epoch), "--out", str(operations)], environment)
-        checks.append({"id": "runbooks-static", "status": "passed", "detail": "all eight required runbooks contain bounded preconditions, recovery, stop conditions, and evidence rules"})
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/exercise_runbooks.py",
+                "--mode",
+                "static",
+                "--source-date-epoch",
+                str(epoch),
+                "--out",
+                str(operations),
+            ],
+            environment,
+        )
+        checks.append(
+            {
+                "id": "runbooks-static",
+                "status": "passed",
+                "detail": "all eight required runbooks contain bounded preconditions, recovery, stop conditions, and evidence rules",
+            }
+        )
 
         operation_root = temporary / "operation-build-fixture"
         (operation_root / "packaging").mkdir(parents=True)
@@ -211,27 +307,40 @@ def main() -> int:
             "path": candidate_artifact.name,
             "sha256": hashlib.sha256(candidate_artifact.read_bytes()).hexdigest(),
         }
-        write_json(operation_root / "packaging/artifact-matrix.v1.json", {
-            "artifacts": [{
-                "contract": "contracts/source.v1.json",
-                "filename": candidate_artifact.name,
-                "id": "source",
-                "required_for_release": True,
-            }],
-            "context_abi": "cigar.context.v1",
-            "product_version": "0.1.0",
-            "release_state": "release",
-            "schema_version": "cigar.artifact-matrix.v1",
-        })
+        write_json(
+            operation_root / "packaging/artifact-matrix.v1.json",
+            {
+                "artifacts": [
+                    {
+                        "contract": "contracts/source.v1.json",
+                        "filename": candidate_artifact.name,
+                        "id": "source",
+                        "required_for_release": True,
+                    }
+                ],
+                "context_abi": "cigar.context.v1",
+                "product_version": "0.1.0",
+                "release_state": "release",
+                "schema_version": "cigar.artifact-matrix.v1",
+            },
+        )
         operation_build = operation_root / "build-manifest.json"
-        write_json(operation_build, {
-            "artifacts": [candidate_record],
-            "context_abi": "cigar.context.v1",
-            "product_version": "0.1.0",
-            "schema_version": "cigar.release-build.v1",
-            "source": {"clean": True, "committed": True, "revision": "b" * 40, "tree_sha256": "c" * 64},
-            "source_date_epoch": epoch,
-        })
+        write_json(
+            operation_build,
+            {
+                "artifacts": [candidate_record],
+                "context_abi": "cigar.context.v1",
+                "product_version": "0.1.0",
+                "schema_version": "cigar.release-build.v1",
+                "source": {
+                    "clean": True,
+                    "committed": True,
+                    "revision": "b" * 40,
+                    "tree_sha256": "c" * 64,
+                },
+                "source_date_epoch": epoch,
+            },
+        )
         operation_arguments = argparse.Namespace(
             candidate_manifest=operation_build,
             mode="live",
@@ -243,7 +352,9 @@ def main() -> int:
             operation_root / "packaging/operation-exercises.v1.json",
         )
         if operation_identity != ("b" * 40, epoch, ["source"]):
-            raise ReleaseError("operation candidate build binding returned an unexpected identity")
+            raise ReleaseError(
+                "operation candidate build binding returned an unexpected identity"
+            )
         candidate_artifact.write_bytes(b"mutated candidate artifact\n")
         _expect_failure(
             lambda: operation_source(
@@ -254,14 +365,30 @@ def main() -> int:
             "operation candidate artifact mutation",
         )
 
-        installed_checks = sorted({
-            "daemon-lifecycle", "doctor", "effect-recovery", "explain", "handoff", "ingest", "init",
-            "offline-restart", "read-only-parent", "replay", "source-add", "compile", "upgrade",
-        })
+        installed_checks = sorted(
+            {
+                "daemon-lifecycle",
+                "doctor",
+                "effect-recovery",
+                "explain",
+                "handoff",
+                "ingest",
+                "init",
+                "offline-restart",
+                "read-only-parent",
+                "replay",
+                "source-add",
+                "compile",
+                "upgrade",
+            }
+        )
         installed_driver_receipt = {
             "artifact_id": "source",
             "artifact_sha256": "d" * 64,
-            "checks": [{"id": identifier, "status": "passed"} for identifier in installed_checks],
+            "checks": [
+                {"id": identifier, "status": "passed"}
+                for identifier in installed_checks
+            ],
             "context_abi": "cigar.context.v1",
             "product_version": "0.1.0",
             "schema_version": "cigar.installed-driver.v1",
@@ -274,7 +401,10 @@ def main() -> int:
             "0.1.0",
             "cigar.context.v1",
         )
-        stale_installed_receipt = {**installed_driver_receipt, "artifact_sha256": "e" * 64}
+        stale_installed_receipt = {
+            **installed_driver_receipt,
+            "artifact_sha256": "e" * 64,
+        }
         _expect_failure(
             lambda: validate_installed_driver_receipt(
                 canonical_json_bytes(stale_installed_receipt),
@@ -285,57 +415,168 @@ def main() -> int:
             ),
             "installed driver stale artifact binding",
         )
-        checks.append({
-            "id": "candidate-driver-bindings",
-            "status": "passed",
-            "detail": "operation build manifests and installed-driver receipts bind exact candidate identities; mutated or stale artifact bindings failed",
-        })
+        checks.append(
+            {
+                "id": "candidate-driver-bindings",
+                "status": "passed",
+                "detail": "operation build manifests and installed-driver receipts bind exact candidate identities; mutated or stale artifact bindings failed",
+            }
+        )
 
         generated_inventory = temporary / "third-party-inventory.json"
-        _run(root, [python, "scripts/release/generate_license_inventory.py", "--out", str(generated_inventory)], environment)
-        if generated_inventory.read_bytes() != (root / "packaging/licenses/third-party-inventory.v1.json").read_bytes():
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/generate_license_inventory.py",
+                "--out",
+                str(generated_inventory),
+            ],
+            environment,
+        )
+        if (
+            generated_inventory.read_bytes()
+            != (root / "packaging/licenses/third-party-inventory.v1.json").read_bytes()
+        ):
             raise ReleaseError("committed third-party license inventory is stale")
         inventory = load_json(generated_inventory)
-        checks.append({"id": "license-inventory", "status": "passed", "detail": f"{inventory['component_count']} components inventoried; {inventory['review_required_count']} explicitly remain review-required"})
+        checks.append(
+            {
+                "id": "license-inventory",
+                "status": "passed",
+                "detail": f"{inventory['component_count']} components inventoried; {inventory['review_required_count']} explicitly remain review-required",
+            }
+        )
 
         distribution = temporary / "dist"
-        _run(root, [python, "scripts/release/build_archives.py", "--out", str(distribution), "--source-date-epoch", str(epoch)], environment)
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/build_archives.py",
+                "--out",
+                str(distribution),
+                "--source-date-epoch",
+                str(epoch),
+            ],
+            environment,
+        )
         build = load_json(distribution / "build-manifest.json")
-        checks.append({"id": "deterministic-archives", "status": "passed", "detail": f"{len(build['artifacts'])} source-derived archives built and contract-verified"})
+        checks.append(
+            {
+                "id": "deterministic-archives",
+                "status": "passed",
+                "detail": f"{len(build['artifacts'])} source-derived archives built and contract-verified",
+            }
+        )
 
         reproducibility = temporary / "reproducibility.json"
-        _run(root, [python, "scripts/release/check_reproducibility.py", "--source-date-epoch", str(epoch), "--report", str(reproducibility)], environment)
-        checks.append({"id": "reproducibility", "status": "passed", "detail": "two isolated homes produced identical SHA-256 payloads for all local archives"})
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/check_reproducibility.py",
+                "--source-date-epoch",
+                str(epoch),
+                "--report",
+                str(reproducibility),
+            ],
+            environment,
+        )
+        checks.append(
+            {
+                "id": "reproducibility",
+                "status": "passed",
+                "detail": "two isolated homes produced identical SHA-256 payloads for all local archives",
+            }
+        )
 
-        source_record = next(record for record in build["artifacts"] if record["id"] == "source")
+        source_record = next(
+            record for record in build["artifacts"] if record["id"] == "source"
+        )
         source_archive = distribution / source_record["path"]
         sbom_directory = temporary / "sbom"
-        _run(root, [python, "scripts/release/generate_sbom.py", "--artifact", str(source_archive), "--out", str(sbom_directory), "--source-date-epoch", str(epoch)], environment)
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/generate_sbom.py",
+                "--artifact",
+                str(source_archive),
+                "--out",
+                str(sbom_directory),
+                "--source-date-epoch",
+                str(epoch),
+            ],
+            environment,
+        )
         sbom_binding = load_json(sbom_directory / "sbom-artifacts.json")
-        checks.append({"id": "sbom", "status": "passed", "detail": f"SPDX 2.3 and CycloneDX 1.6 generated for {sbom_binding['component_count']} locked components"})
+        checks.append(
+            {
+                "id": "sbom",
+                "status": "passed",
+                "detail": f"SPDX 2.3 and CycloneDX 1.6 generated for {sbom_binding['component_count']} locked components",
+            }
+        )
 
         provenance = temporary / "provenance.json"
-        _run(root, [
-            python, "scripts/release/generate_provenance.py",
-            "--artifact", str(source_archive),
-            "--source-archive", str(source_archive),
-            "--source-revision", build["source"]["revision"],
-            "--builder-id", "cigar-local-qualification",
-            "--workflow-id", "cigar.local.wp21-qualification.v1",
-            "--network-mode", "unspecified",
-            "--command", "python3 scripts/release/build_archives.py",
-            "--source-date-epoch", str(epoch),
-            "--out", str(provenance),
-        ], environment)
-        checks.append({"id": "provenance", "status": "passed", "detail": "deterministic in-toto/SLSA statement binds artifact, source archive, locks, builder, and command"})
+        _run(
+            root,
+            [
+                python,
+                "scripts/release/generate_provenance.py",
+                "--artifact",
+                str(source_archive),
+                "--source-archive",
+                str(source_archive),
+                "--source-revision",
+                build["source"]["revision"],
+                "--builder-id",
+                "cigar-local-qualification",
+                "--workflow-id",
+                "cigar.local.wp21-qualification.v1",
+                "--network-mode",
+                "unspecified",
+                "--command",
+                "python3 scripts/release/build_archives.py",
+                "--source-date-epoch",
+                str(epoch),
+                "--out",
+                str(provenance),
+            ],
+            environment,
+        )
+        checks.append(
+            {
+                "id": "provenance",
+                "status": "passed",
+                "detail": "deterministic in-toto/SLSA statement binds artifact, source archive, locks, builder, and command",
+            }
+        )
 
         key_directory = temporary / "ephemeral-key"
         key_directory.mkdir()
         private_key = key_directory / "private.pem"
         public_key = key_directory / "public.pem"
-        _run(root, ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)], environment)
+        _run(
+            root,
+            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)],
+            environment,
+        )
         os.chmod(private_key, 0o600)
-        _run(root, ["openssl", "pkey", "-in", str(private_key), "-pubout", "-out", str(public_key)], environment)
+        _run(
+            root,
+            [
+                "openssl",
+                "pkey",
+                "-in",
+                str(private_key),
+                "-pubout",
+                "-out",
+                str(public_key),
+            ],
+            environment,
+        )
         _expect_failure(
             lambda: sign(
                 source_archive,
@@ -369,7 +610,9 @@ def main() -> int:
             verification_time=epoch,
         )
         corrupted = load_json(envelope)
-        signature = bytearray(base64.b64decode(corrupted["signature_base64"], validate=True))
+        signature = bytearray(
+            base64.b64decode(corrupted["signature_base64"], validate=True)
+        )
         signature[0] ^= 1
         corrupted["signature_base64"] = base64.b64encode(signature).decode("ascii")
         corrupted_path = key_directory / "corrupted.sig.json"
@@ -426,11 +669,13 @@ def main() -> int:
             ),
             "swapped artifact",
         )
-        checks.append({
-            "id": "signatures",
-            "status": "passed",
-            "detail": "domain-separated Ed25519 verification passed; output alias, corrupted, repurposed, expired, and same-name swapped payload cases failed",
-        })
+        checks.append(
+            {
+                "id": "signatures",
+                "status": "passed",
+                "detail": "domain-separated Ed25519 verification passed; output alias, corrupted, repurposed, expired, and same-name swapped payload cases failed",
+            }
+        )
 
         oci_contract = root / "packaging/contracts/oci-image.v1.json"
         oci_fixture = temporary / "oci-image.tar"
@@ -449,7 +694,9 @@ def main() -> int:
             "referenced_blobs": 5,
         }
         if oci_report.get("oci") != expected_oci:
-            raise ReleaseError("OCI package verifier returned an unexpected structural summary")
+            raise ReleaseError(
+                "OCI package verifier returned an unexpected structural summary"
+            )
         root_oci_fixture = temporary / "root-oci-image.tar"
         _write_oci_fixture(root_oci_fixture, epoch, "10001:0")
         _expect_failure(
@@ -496,36 +743,51 @@ def main() -> int:
             ),
             "OCI image containing private key material",
         )
-        checks.append({
-            "id": "oci-contract",
-            "status": "passed",
-            "detail": "an exact dual-platform OCI layout passed descriptor, layer-tar, diff-ID, content, version, ABI, and non-root checks; root-group, stale-diff-ID, and secret-layer images failed",
-        })
+        checks.append(
+            {
+                "id": "oci-contract",
+                "status": "passed",
+                "detail": "an exact dual-platform OCI layout passed descriptor, layer-tar, diff-ID, content, version, ABI, and non-root checks; root-group, stale-diff-ID, and secret-layer images failed",
+            }
+        )
 
         checksum_contract_path = temporary / "checksum-contract.json"
-        write_json(checksum_contract_path, {
-            "allow": ["SHA256SUMS", "payload.bin"],
-            "checksum_manifest": {"path": "SHA256SUMS", "scope": "all-payload-files"},
-            "content_scan": True,
-            "content_scan_exemptions": [],
-            "deny": [],
-            "formats": ["tar.gz"],
-            "id": "selftest-checksum-v1",
-            "line_endings": "lf",
-            "max_entries": 8,
-            "max_member_bytes": 1024,
-            "max_total_bytes": 4096,
-            "modes": ["0644"],
-            "required": ["SHA256SUMS", "payload.bin"],
-            "schema_version": "cigar.package-contract.v1",
-            "symlinks": "forbid",
-        })
+        write_json(
+            checksum_contract_path,
+            {
+                "allow": ["SHA256SUMS", "payload.bin"],
+                "checksum_manifest": {
+                    "path": "SHA256SUMS",
+                    "scope": "all-payload-files",
+                },
+                "content_scan": True,
+                "content_scan_exemptions": [],
+                "deny": [],
+                "formats": ["tar.gz"],
+                "id": "selftest-checksum-v1",
+                "line_endings": "lf",
+                "max_entries": 8,
+                "max_member_bytes": 1024,
+                "max_total_bytes": 4096,
+                "modes": ["0644"],
+                "required": ["SHA256SUMS", "payload.bin"],
+                "schema_version": "cigar.package-contract.v1",
+                "symlinks": "forbid",
+            },
+        )
         checksum_payload = b"synthetic package payload\n"
-        checksum_line = f"{hashlib.sha256(checksum_payload).hexdigest()}  payload.bin\n".encode("ascii")
+        checksum_line = (
+            f"{hashlib.sha256(checksum_payload).hexdigest()}  payload.bin\n".encode(
+                "ascii"
+            )
+        )
 
         def write_checksum_fixture(path: Path, manifest_payload: bytes) -> None:
             with tarfile.open(path, "w:gz") as archive:
-                for name, payload in (("payload.bin", checksum_payload), ("SHA256SUMS", manifest_payload)):
+                for name, payload in (
+                    ("payload.bin", checksum_payload),
+                    ("SHA256SUMS", manifest_payload),
+                ):
                     member = tarfile.TarInfo(name)
                     member.size = len(payload)
                     member.mode = 0o644
@@ -538,9 +800,13 @@ def main() -> int:
         write_checksum_fixture(checksum_fixture, checksum_line)
         verify_package(checksum_fixture, checksum_contract_path, None, None, epoch)
         bad_checksum_fixture = temporary / "bad-checksum-package.tar.gz"
-        write_checksum_fixture(bad_checksum_fixture, f"{'0' * 64}  payload.bin\n".encode("ascii"))
+        write_checksum_fixture(
+            bad_checksum_fixture, f"{'0' * 64}  payload.bin\n".encode("ascii")
+        )
         _expect_failure(
-            lambda: verify_package(bad_checksum_fixture, checksum_contract_path, None, None, epoch),
+            lambda: verify_package(
+                bad_checksum_fixture, checksum_contract_path, None, None, epoch
+            ),
             "stale internal checksum manifest",
         )
 
@@ -548,20 +814,22 @@ def main() -> int:
 
         def write_python_sdist_fixture(path: Path, gitignore_payload: bytes) -> None:
             prefix = "cigar_sdk-0.1.0/"
-            release_payload = canonical_json_bytes({
-                "schema_version": "cigar.sdk-release.v1",
-                "name": "cigar-sdk",
-                "version": "0.1.0",
-                "context_abi": "cigar.context.v1",
-            })
+            release_payload = canonical_json_bytes(
+                {
+                    "schema_version": "cigar.sdk-release.v1",
+                    "name": "cigar-sdk",
+                    "version": "0.1.0",
+                    "context_abi": "cigar.context.v1",
+                }
+            )
             members = {
                 ".gitignore": gitignore_payload,
                 "LICENSE": b"synthetic Apache-2.0 license fixture\n",
                 "NOTICE": b"synthetic CIGAR notice fixture\n",
                 "PKG-INFO": b"Metadata-Version: 2.4\nName: cigar-sdk\nVersion: 0.1.0\n",
                 "README.md": b"# Synthetic CIGAR SDK sdist fixture\n",
-                "pyproject.toml": b"[project]\nname = \"cigar-sdk\"\nversion = \"0.1.0\"\n",
-                "src/cigar_sdk/__init__.py": b"CONTEXT_ABI = \"cigar.context.v1\"\n",
+                "pyproject.toml": b'[project]\nname = "cigar-sdk"\nversion = "0.1.0"\n',
+                "src/cigar_sdk/__init__.py": b'CONTEXT_ABI = "cigar.context.v1"\n',
                 "src/cigar_sdk/release.json": release_payload,
             }
             with tarfile.open(path, "w:gz") as archive:
@@ -608,7 +876,13 @@ def main() -> int:
             member.mtime = epoch
             archive.addfile(member, io.BytesIO(payload))
         _expect_failure(
-            lambda: verify_package(malicious, root / "packaging/contracts/license-archive.v1.json", "0.1.0", "cigar.context.v1", epoch),
+            lambda: verify_package(
+                malicious,
+                root / "packaging/contracts/license-archive.v1.json",
+                "0.1.0",
+                "cigar.context.v1",
+                epoch,
+            ),
             "archive traversal",
         )
         entry_bomb = temporary / "entry-bomb.tar.gz"
@@ -619,12 +893,16 @@ def main() -> int:
                 member.mode = 0o644
                 member.mtime = epoch
                 archive.addfile(member, io.BytesIO())
-        bounded_contract = load_json(root / "packaging/contracts/license-archive.v1.json")
+        bounded_contract = load_json(
+            root / "packaging/contracts/license-archive.v1.json"
+        )
         bounded_contract["max_entries"] = 1
         bounded_contract_path = temporary / "bounded-contract.json"
         write_json(bounded_contract_path, bounded_contract)
         _expect_failure(
-            lambda: verify_package(entry_bomb, bounded_contract_path, "0.1.0", "cigar.context.v1", epoch),
+            lambda: verify_package(
+                entry_bomb, bounded_contract_path, "0.1.0", "cigar.context.v1", epoch
+            ),
             "archive entry-count bomb",
         )
         broad_contract = load_json(root / "packaging/contracts/license-archive.v1.json")
@@ -674,30 +952,55 @@ def main() -> int:
             ),
             "case-insensitive archive collision",
         )
-        checks.append({
-            "id": "negative-package",
-            "status": "passed",
-            "detail": "the required Hatchling .gitignore passed only with safe scanned bytes; credential-bearing .gitignore, stale internal checksums, traversal, entry-count bomb, root-level double-star deny match, and case-insensitive collision were rejected before extraction",
-        })
+        checks.append(
+            {
+                "id": "negative-package",
+                "status": "passed",
+                "detail": "the required Hatchling .gitignore passed only with safe scanned bytes; credential-bearing .gitignore, stale internal checksums, traversal, entry-count bomb, root-level double-star deny match, and case-insensitive collision were rejected before extraction",
+            }
+        )
 
-        _run(root, [python, "scripts/release/selftest_release_verifier.py"], environment)
-        checks.append({
-            "id": "release-verifier-selftest",
-            "status": "passed",
-            "detail": "a minimal committed, fully signed fixture passed and rejected a mismatched build contract, artifact or raw-report tampering, and an unreferenced payload",
-        })
+        _run(
+            root, [python, "scripts/release/selftest_release_verifier.py"], environment
+        )
+        checks.append(
+            {
+                "id": "release-verifier-selftest",
+                "status": "passed",
+                "detail": "a minimal committed, fully signed fixture passed and rejected a mismatched build contract, artifact or raw-report tampering, and an unreferenced payload",
+            }
+        )
 
-        release_gate = _run(root, [python, "scripts/release/validate_metadata.py", "--release"], environment, expected=1)
+        release_gate = _run(
+            root,
+            [python, "scripts/release/validate_metadata.py", "--release"],
+            environment,
+            expected=1,
+        )
         expected_release_gate_reasons = (
             "artifact matrix remains in development state",
             "release qualification gaps remain open",
         )
-        if not any(reason in release_gate.stderr for reason in expected_release_gate_reasons):
-            raise ReleaseError("production metadata gate failed for an unexpected reason")
-        checks.append({"id": "production-gate", "status": "passed", "detail": "production gate rejected the development workspace with no bypass"})
+        if not any(
+            reason in release_gate.stderr for reason in expected_release_gate_reasons
+        ):
+            raise ReleaseError(
+                "production metadata gate failed for an unexpected reason"
+            )
+        checks.append(
+            {
+                "id": "production-gate",
+                "status": "passed",
+                "detail": "production gate rejected the development workspace with no bypass",
+            }
+        )
 
     gaps_document = load_json(root / "packaging/qualification-gaps.v1.json")
-    blocking_gaps = sorted(entry["id"] for entry in gaps_document["gaps"] if entry.get("release_blocking") is True)
+    blocking_gaps = sorted(
+        entry["id"]
+        for entry in gaps_document["gaps"]
+        if entry.get("release_blocking") is True
+    )
     report = {
         "schema_version": "cigar.wp21-local-qualification.v1",
         "scope": "locally-testable-packaging-documentation-operations",
@@ -709,7 +1012,9 @@ def main() -> int:
         "release_blocking_gaps": blocking_gaps,
     }
     write_json(output, report)
-    print(f"WP21 local qualification passed {len(checks)} checks; {len(blocking_gaps)} release-blocking gaps remain")
+    print(
+        f"WP21 local qualification passed {len(checks)} checks; {len(blocking_gaps)} release-blocking gaps remain"
+    )
     return 0
 
 

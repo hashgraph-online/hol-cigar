@@ -15,7 +15,9 @@ MANIFEST = ROOT / "package-manifest.json"
 
 def main() -> None:
     files: list[dict[str, object]] = []
-    for path in sorted(ROOT.rglob("*"), key=lambda item: item.relative_to(ROOT).as_posix()):
+    for path in sorted(
+        ROOT.rglob("*"), key=lambda item: item.relative_to(ROOT).as_posix()
+    ):
         if path == MANIFEST:
             continue
         if path.is_symlink():
@@ -36,7 +38,9 @@ def main() -> None:
         "files": files,
     }
     temporary = MANIFEST.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n")
+    temporary.write_text(
+        json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
     os.replace(temporary, MANIFEST)
 
 

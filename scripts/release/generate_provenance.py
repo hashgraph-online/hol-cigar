@@ -33,7 +33,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--material", type=Path, action="append", default=[])
     parser.add_argument("--builder-id", required=True)
     parser.add_argument("--workflow-id", required=True)
-    parser.add_argument("--network-mode", choices=["disabled", "isolated", "unspecified"], required=True)
+    parser.add_argument(
+        "--network-mode", choices=["disabled", "isolated", "unspecified"], required=True
+    )
     parser.add_argument("--command", action="append", required=True)
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--out", type=Path, required=True)
@@ -51,31 +53,65 @@ def main() -> int:
     arguments = parse_arguments()
     root = arguments.root.resolve()
     epoch = require_source_date_epoch(arguments.source_date_epoch)
-    if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64}|unborn:[0-9a-f]{64})", arguments.source_revision) is None:
+    if (
+        re.fullmatch(
+            r"(?:[0-9a-f]{40}|[0-9a-f]{64}|unborn:[0-9a-f]{64})",
+            arguments.source_revision,
+        )
+        is None
+    ):
         raise ReleaseError("source revision is invalid")
-    for label, value in (("builder id", arguments.builder_id), ("workflow id", arguments.workflow_id), *(('command', value) for value in arguments.command)):
+    for label, value in (
+        ("builder id", arguments.builder_id),
+        ("workflow id", arguments.workflow_id),
+        *(("command", value) for value in arguments.command),
+    ):
         maximum = 4096 if label == "command" else 512
         if (
             not value
             or value != value.strip()
             or len(value.encode("utf-8")) > maximum
-            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+            or any(
+                ord(character) < 0x20 or ord(character) == 0x7F for character in value
+            )
         ):
             raise ReleaseError(f"provenance {label} is invalid")
-    if arguments.network_mode == "disabled" and os.environ.get("CIGAR_NO_EGRESS_ENFORCED") != "1":
-        raise ReleaseError("disabled-network provenance requires an environment-enforced no-egress marker")
-    subject_paths = {path.absolute().name: path.absolute() for path in arguments.artifact}
+    if (
+        arguments.network_mode == "disabled"
+        and os.environ.get("CIGAR_NO_EGRESS_ENFORCED") != "1"
+    ):
+        raise ReleaseError(
+            "disabled-network provenance requires an environment-enforced no-egress marker"
+        )
+    subject_paths = {
+        path.absolute().name: path.absolute() for path in arguments.artifact
+    }
     if len(subject_paths) != len(arguments.artifact):
         raise ReleaseError("provenance subjects have duplicate basenames")
-    subjects = sorted((_subject(path, name) for name, path in subject_paths.items()), key=lambda item: item["name"])
+    subjects = sorted(
+        (_subject(path, name) for name, path in subject_paths.items()),
+        key=lambda item: item["name"],
+    )
     if len({item["name"] for item in subjects}) != len(subjects):
         raise ReleaseError("provenance subjects have duplicate basenames")
-    standard_materials = [root / "Cargo.lock", root / "pnpm-lock.yaml", root / "sdk/python/uv.lock", root / "sdk/go/go.sum"]
+    standard_materials = [
+        root / "Cargo.lock",
+        root / "pnpm-lock.yaml",
+        root / "sdk/python/uv.lock",
+        root / "sdk/go/go.sum",
+    ]
     source_archive = arguments.source_archive.absolute()
-    supplied_materials = [source_archive, *(path.absolute() for path in arguments.material)]
-    material_paths = {path.absolute() for path in (*standard_materials, *supplied_materials)}
+    supplied_materials = [
+        source_archive,
+        *(path.absolute() for path in arguments.material),
+    ]
+    material_paths = {
+        path.absolute() for path in (*standard_materials, *supplied_materials)
+    }
     output_path = arguments.out.resolve()
-    require_distinct_output(output_path, [*arguments.artifact, *material_paths], "provenance")
+    require_distinct_output(
+        output_path, [*arguments.artifact, *material_paths], "provenance"
+    )
     materials = []
     material_paths_by_name: dict[str, Path] = {}
     for path in sorted(material_paths, key=lambda item: item.as_posix()):
@@ -96,9 +132,17 @@ def main() -> int:
     source_tree = sha256_bytes(canonical_json_bytes(materials))
     source = git_state(root, source_tree)
     if source["committed"] and source["revision"] != arguments.source_revision:
-        raise ReleaseError("explicit source revision disagrees with the checked-out revision")
+        raise ReleaseError(
+            "explicit source revision disagrees with the checked-out revision"
+        )
     invocation = hashlib.sha256(
-        (arguments.builder_id + "\x00" + "\x00".join(arguments.command) + "\x00" + "".join(item["digest"]["sha256"] for item in subjects)).encode("utf-8")
+        (
+            arguments.builder_id
+            + "\x00"
+            + "\x00".join(arguments.command)
+            + "\x00"
+            + "".join(item["digest"]["sha256"] for item in subjects)
+        ).encode("utf-8")
     ).hexdigest()
     provenance = {
         "_type": "https://in-toto.io/Statement/v1",
@@ -114,7 +158,11 @@ def main() -> int:
                     "sourceArchive": _subject(source_archive),
                     "workflowId": arguments.workflow_id,
                 },
-                "internalParameters": {"network": arguments.network_mode, "locale": "C", "timezone": "UTC"},
+                "internalParameters": {
+                    "network": arguments.network_mode,
+                    "locale": "C",
+                    "timezone": "UTC",
+                },
                 "resolvedDependencies": materials,
             },
             "runDetails": {

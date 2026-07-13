@@ -48,12 +48,17 @@ def main() -> None:
                 if handler.get("command") != "cigar-claude-hook":
                     fail(f"hook shell indirection is forbidden: {event}")
                 args = handler.get("args", [])
-                if "${CLAUDE_PLUGIN_ROOT}" not in args or "${CLAUDE_PLUGIN_DATA}" not in args:
+                if (
+                    "${CLAUDE_PLUGIN_ROOT}" not in args
+                    or "${CLAUDE_PLUGIN_DATA}" not in args
+                ):
                     fail(f"hook does not use documented plugin paths: {event}")
 
     mcp = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
     if set(mcp) != {"cigar"} or mcp["cigar"].get("command") != "cigar-mcp":
-        fail("MCP configuration may execute only the signed installed cigar-mcp package")
+        fail(
+            "MCP configuration may execute only the signed installed cigar-mcp package"
+        )
 
     for fixture in sorted((ROOT / "tests/fixtures/events").glob("*.json")):
         value = json.loads(fixture.read_text(encoding="utf-8"))

@@ -14,7 +14,16 @@ from pathlib import Path
 from typing import Any
 
 from generate_sbom import _go_components, _npm_components, _python_components
-from release_lib import ReleaseError, load_json, process_failure_summary, repo_root, require_distinct_output, run_bounded, sha256_file, write_json
+from release_lib import (
+    ReleaseError,
+    load_json,
+    process_failure_summary,
+    repo_root,
+    require_distinct_output,
+    run_bounded,
+    sha256_file,
+    write_json,
+)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -38,7 +47,10 @@ def _classify_text(value: str) -> str | None:
     if "permission is hereby granted, free of charge" in lower:
         return "MIT"
     if "redistributions of source code must retain" in lower:
-        if "neither the name" in lower or "contributors may be used to endorse" in lower:
+        if (
+            "neither the name" in lower
+            or "contributors may be used to endorse" in lower
+        ):
             return "BSD-3-Clause"
         return "BSD-2-Clause"
     if "permission to use, copy, modify" in lower and "isc" in lower:
@@ -53,7 +65,9 @@ def _notice_digests(directory: Path) -> list[str]:
         return []
     result: list[str] = []
     for path in sorted(directory.iterdir(), key=lambda item: item.name.lower()):
-        if path.is_file() and path.name.lower().startswith(("notice", "third-party", "third_party")):
+        if path.is_file() and path.name.lower().startswith(
+            ("notice", "third-party", "third_party")
+        ):
             result.append(sha256_file(path))
     return result
 
@@ -76,15 +90,17 @@ def _cargo(root: Path) -> list[dict[str, Any]]:
             if not relative.parts or relative.parts[0] != "vendor":
                 continue
             ecosystem = "generic"
-        entries.append({
-            "ecosystem": ecosystem,
-            "name": package["name"],
-            "version": package["version"],
-            "purl": f"pkg:{ecosystem}/{package['name']}@{package['version']}",
-            "license_expression": package.get("license") or "NOASSERTION",
-            "metadata_source": "cargo-metadata-locked-offline",
-            "notice_sha256": _notice_digests(directory),
-        })
+        entries.append(
+            {
+                "ecosystem": ecosystem,
+                "name": package["name"],
+                "version": package["version"],
+                "purl": f"pkg:{ecosystem}/{package['name']}@{package['version']}",
+                "license_expression": package.get("license") or "NOASSERTION",
+                "metadata_source": "cargo-metadata-locked-offline",
+                "notice_sha256": _notice_digests(directory),
+            }
+        )
     return entries
 
 
@@ -94,7 +110,10 @@ def _npm_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]:
     if not package_root.is_dir():
         return result
     for path in package_root.glob("*/node_modules/**/package.json"):
-        if not path.is_file() or "node_modules" in path.relative_to(package_root).parts[-2:]:
+        if (
+            not path.is_file()
+            or "node_modules" in path.relative_to(package_root).parts[-2:]
+        ):
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
@@ -106,8 +125,14 @@ def _npm_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]:
         if not isinstance(name, str) or not isinstance(version, str):
             continue
         if isinstance(license_value, list):
-            values = [item.get("type") if isinstance(item, dict) else item for item in license_value]
-            license_expression = " OR ".join(value for value in values if isinstance(value, str)) or "NOASSERTION"
+            values = [
+                item.get("type") if isinstance(item, dict) else item
+                for item in license_value
+            ]
+            license_expression = (
+                " OR ".join(value for value in values if isinstance(value, str))
+                or "NOASSERTION"
+            )
         elif isinstance(license_value, dict):
             license_expression = license_value.get("type", "NOASSERTION")
         elif isinstance(license_value, str):
@@ -122,20 +147,33 @@ def _npm(root: Path) -> list[dict[str, Any]]:
     metadata = _npm_metadata(root)
     entries: list[dict[str, Any]] = []
     for component in _npm_components(root):
-        expression, notices = metadata.get((component["name"], component["version"]), ("NOASSERTION", []))
-        entries.append({
-            "ecosystem": "npm", "name": component["name"], "version": component["version"],
-            "purl": component["purl"], "license_expression": expression,
-            "metadata_source": "installed-package-json" if expression != "NOASSERTION" else "unavailable",
-            "notice_sha256": notices,
-        })
+        expression, notices = metadata.get(
+            (component["name"], component["version"]), ("NOASSERTION", [])
+        )
+        entries.append(
+            {
+                "ecosystem": "npm",
+                "name": component["name"],
+                "version": component["version"],
+                "purl": component["purl"],
+                "license_expression": expression,
+                "metadata_source": "installed-package-json"
+                if expression != "NOASSERTION"
+                else "unavailable",
+                "notice_sha256": notices,
+            }
+        )
     return entries
 
 
 def _python_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]:
     result: dict[tuple[str, str], tuple[str, list[str]]] = {}
-    for path in (root / "sdk/python/.venv").glob("lib/python*/site-packages/*.dist-info/METADATA"):
-        message = email.parser.Parser().parsestr(path.read_text(encoding="utf-8", errors="replace"))
+    for path in (root / "sdk/python/.venv").glob(
+        "lib/python*/site-packages/*.dist-info/METADATA"
+    ):
+        message = email.parser.Parser().parsestr(
+            path.read_text(encoding="utf-8", errors="replace")
+        )
         name = message.get("Name")
         version = message.get("Version")
         if not name or not version:
@@ -143,7 +181,11 @@ def _python_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]
         expression = message.get("License-Expression")
         if not expression:
             legacy = message.get("License", "")
-            expression = legacy if len(legacy) < 160 and "\n" not in legacy else _classify_text(legacy)
+            expression = (
+                legacy
+                if len(legacy) < 160 and "\n" not in legacy
+                else _classify_text(legacy)
+            )
         if not expression:
             classifiers = "\n".join(message.get_all("Classifier", []))
             if "Mozilla Public License 2.0" in classifiers:
@@ -154,7 +196,10 @@ def _python_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]
                 expression = "BSD-3-Clause"
             elif "Apache Software License" in classifiers:
                 expression = "Apache-2.0"
-        result[(_normalize_name(name), version)] = (expression or "NOASSERTION", _notice_digests(path.parent))
+        result[(_normalize_name(name), version)] = (
+            expression or "NOASSERTION",
+            _notice_digests(path.parent),
+        )
     return result
 
 
@@ -164,18 +209,31 @@ def _python(root: Path) -> list[dict[str, Any]]:
     for component in _python_components(root):
         if component["name"] == "cigar-sdk":
             continue
-        expression, notices = metadata.get((_normalize_name(component["name"]), component["version"]), ("NOASSERTION", []))
-        entries.append({
-            "ecosystem": "pypi", "name": component["name"], "version": component["version"],
-            "purl": component["purl"], "license_expression": expression,
-            "metadata_source": "installed-wheel-metadata" if expression != "NOASSERTION" else "unavailable",
-            "notice_sha256": notices,
-        })
+        expression, notices = metadata.get(
+            (_normalize_name(component["name"]), component["version"]),
+            ("NOASSERTION", []),
+        )
+        entries.append(
+            {
+                "ecosystem": "pypi",
+                "name": component["name"],
+                "version": component["version"],
+                "purl": component["purl"],
+                "license_expression": expression,
+                "metadata_source": "installed-wheel-metadata"
+                if expression != "NOASSERTION"
+                else "unavailable",
+                "notice_sha256": notices,
+            }
+        )
     return entries
 
 
 def _go_module_directory(cache: Path, name: str, version: str) -> Path:
-    escaped = "".join(f"!{character.lower()}" if character.isupper() else character for character in name)
+    escaped = "".join(
+        f"!{character.lower()}" if character.isupper() else character
+        for character in name
+    )
     return cache / f"{escaped}@{version}"
 
 
@@ -187,18 +245,32 @@ def _go(root: Path) -> list[dict[str, Any]]:
         expression = "NOASSERTION"
         license_directory = directory
         while license_directory != cache and cache in license_directory.parents:
-            candidates = [path for path in license_directory.glob("LICENSE*") if path.is_file()]
+            candidates = [
+                path for path in license_directory.glob("LICENSE*") if path.is_file()
+            ]
             if candidates:
-                expression = _classify_text(candidates[0].read_text(encoding="utf-8", errors="replace")) or "NOASSERTION"
+                expression = (
+                    _classify_text(
+                        candidates[0].read_text(encoding="utf-8", errors="replace")
+                    )
+                    or "NOASSERTION"
+                )
                 directory = license_directory
                 break
             license_directory = license_directory.parent
-        entries.append({
-            "ecosystem": "golang", "name": component["name"], "version": component["version"],
-            "purl": component["purl"], "license_expression": expression,
-            "metadata_source": "module-cache-license" if expression != "NOASSERTION" else "unavailable",
-            "notice_sha256": _notice_digests(directory),
-        })
+        entries.append(
+            {
+                "ecosystem": "golang",
+                "name": component["name"],
+                "version": component["version"],
+                "purl": component["purl"],
+                "license_expression": expression,
+                "metadata_source": "module-cache-license"
+                if expression != "NOASSERTION"
+                else "unavailable",
+                "notice_sha256": _notice_digests(directory),
+            }
+        )
     return entries
 
 
@@ -207,7 +279,9 @@ def _status(expression: str, accepted: set[str], review: set[str]) -> str:
         return "review-required"
     aliases = {"3-Clause BSD License": "BSD-3-Clause"}
     normalized = aliases.get(expression, expression).replace(" / ", " OR ")
-    normalized = normalized.replace("MIT/Apache-2.0", "MIT OR Apache-2.0").replace("Unlicense/MIT", "Unlicense OR MIT")
+    normalized = normalized.replace("MIT/Apache-2.0", "MIT OR Apache-2.0").replace(
+        "Unlicense/MIT", "Unlicense OR MIT"
+    )
     token_pattern = re.compile(r"\s*(\(|\)|AND|OR|WITH|[A-Za-z0-9][A-Za-z0-9.+-]*)")
     tokens: list[str] = []
     offset = 0
@@ -278,17 +352,26 @@ def main() -> int:
     accepted = set(policy["accepted_expressions"])
     review = set(policy["review_required"])
     entries = _cargo(root) + _npm(root) + _python(root) + _go(root)
-    component_keys = [(entry["ecosystem"], entry["name"], entry["version"]) for entry in entries]
+    component_keys = [
+        (entry["ecosystem"], entry["name"], entry["version"]) for entry in entries
+    ]
     if len(set(component_keys)) != len(component_keys):
-        raise ReleaseError("locked license inventory contains ambiguous duplicate component identities")
+        raise ReleaseError(
+            "locked license inventory contains ambiguous duplicate component identities"
+        )
     unique = {key: entry for key, entry in zip(component_keys, entries, strict=True)}
-    entries = sorted(unique.values(), key=lambda entry: (entry["ecosystem"], entry["name"], entry["version"]))
+    entries = sorted(
+        unique.values(),
+        key=lambda entry: (entry["ecosystem"], entry["name"], entry["version"]),
+    )
     for entry in entries:
         entry["policy_status"] = _status(entry["license_expression"], accepted, review)
     review_count = sum(entry["policy_status"] == "review-required" for entry in entries)
     inventory = {
         "schema_version": "cigar.third-party-license-inventory.v1",
-        "policy_sha256": sha256_file(root / "packaging/licenses/third-party-policy.v1.json"),
+        "policy_sha256": sha256_file(
+            root / "packaging/licenses/third-party-policy.v1.json"
+        ),
         "status": "complete" if review_count == 0 else "review-required",
         "component_count": len(entries),
         "review_required_count": review_count,
@@ -309,12 +392,20 @@ def main() -> int:
     write_json(output, inventory)
     if arguments.require_complete and review_count:
         raise ReleaseError(f"{review_count} locked components require license review")
-    print(f"inventoried {len(entries)} locked components; {review_count} require review")
+    print(
+        f"inventoried {len(entries)} locked components; {review_count} require review"
+    )
     return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, json.JSONDecodeError, subprocess.TimeoutExpired, tomllib.TOMLDecodeError, ReleaseError) as error:
+    except (
+        OSError,
+        json.JSONDecodeError,
+        subprocess.TimeoutExpired,
+        tomllib.TOMLDecodeError,
+        ReleaseError,
+    ) as error:
         raise SystemExit(f"license inventory failed: {error}") from error

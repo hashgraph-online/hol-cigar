@@ -114,11 +114,22 @@ def validate_text() -> None:
         end = text.find("\n---\n", 4)
         require(end > 4, f"frontmatter is not closed: {path}")
         frontmatter = text[4:end]
-        require(re.search(r"(?m)^name: [a-z][a-z0-9-]*$", frontmatter) is not None, f"name missing: {path}")
+        require(
+            re.search(r"(?m)^name: [a-z][a-z0-9-]*$", frontmatter) is not None,
+            f"name missing: {path}",
+        )
         descriptions = re.findall(r"(?m)^description: (.+)$", frontmatter)
-        require(len(descriptions) == 1 and len(descriptions[0]) <= 240, f"description invalid: {path}")
+        require(
+            len(descriptions) == 1 and len(descriptions[0]) <= 240,
+            f"description invalid: {path}",
+        )
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    for heading in ["## Qualified host", "## What is registered", "## Limitations", "## Qualification"]:
+    for heading in [
+        "## Qualified host",
+        "## What is registered",
+        "## Limitations",
+        "## Qualification",
+    ]:
         require(heading in readme, f"README section missing: {heading}")
 
 
@@ -143,7 +154,10 @@ def validate_plugin() -> None:
     require(plugin.get("name") == "cigar", "plugin name mismatch")
     require(plugin.get("version") == "0.1.0", "plugin version mismatch")
     for redundant in ["skills", "agents", "hooks", "mcpServers", "commands"]:
-        require(redundant not in plugin, f"default component path is redundantly declared: {redundant}")
+        require(
+            redundant not in plugin,
+            f"default component path is redundantly declared: {redundant}",
+        )
 
     compatibility = load_json(ROOT / "compatibility.json")
     require(
@@ -164,21 +178,44 @@ def validate_plugin() -> None:
     require(set(mcp) == {"mcpServers"}, "unexpected MCP root field")
     require(set(mcp["mcpServers"]) == {"cigar"}, "unexpected MCP server")
     server = mcp["mcpServers"]["cigar"]
-    require(server.get("command") == "cigar-mcp", "MCP must use the installed long-lived MCP executable")
+    require(
+        server.get("command") == "cigar-mcp",
+        "MCP must use the installed long-lived MCP executable",
+    )
     require(server.get("args") == ["serve"], "MCP arguments mismatch")
-    require(server.get("env", {}).get("CIGAR_CLAUDE_PLUGIN_ROOT") == "${CLAUDE_PLUGIN_ROOT}", "MCP root is not public plugin data")
-    require(server.get("env", {}).get("CIGAR_CLAUDE_PLUGIN_DATA") == "${CLAUDE_PLUGIN_DATA}", "MCP data path is not public plugin data")
+    require(
+        server.get("env", {}).get("CIGAR_CLAUDE_PLUGIN_ROOT")
+        == "${CLAUDE_PLUGIN_ROOT}",
+        "MCP root is not public plugin data",
+    )
+    require(
+        server.get("env", {}).get("CIGAR_CLAUDE_PLUGIN_DATA")
+        == "${CLAUDE_PLUGIN_DATA}",
+        "MCP data path is not public plugin data",
+    )
 
 
 def validate_hooks_and_fixtures() -> None:
     hooks = load_json(ROOT / "hooks/hooks.json")["hooks"]
-    require(set(hooks) == REGISTERED, "hook registration differs from the safe qualified set")
-    require("WorktreeCreate" not in hooks, "WorktreeCreate must not replace Claude's Git behavior")
+    require(
+        set(hooks) == REGISTERED,
+        "hook registration differs from the safe qualified set",
+    )
+    require(
+        "WorktreeCreate" not in hooks,
+        "WorktreeCreate must not replace Claude's Git behavior",
+    )
     for event, groups in hooks.items():
-        require(isinstance(groups, list) and len(groups) == 1, f"hook group invalid: {event}")
+        require(
+            isinstance(groups, list) and len(groups) == 1,
+            f"hook group invalid: {event}",
+        )
         group = groups[0]
         require(set(group) == {"hooks"}, f"unsupported group field: {event}")
-        require(isinstance(group["hooks"], list) and len(group["hooks"]) == 1, f"handler count invalid: {event}")
+        require(
+            isinstance(group["hooks"], list) and len(group["hooks"]) == 1,
+            f"handler count invalid: {event}",
+        )
         handler = group["hooks"][0]
         require(
             handler
@@ -193,10 +230,16 @@ def validate_hooks_and_fixtures() -> None:
 
     seen: set[str] = set()
     fixtures = sorted((ROOT / "tests/fixtures/events").glob("*.json"))
-    require(len(fixtures) == len(EVENTS), "one fixture per documented parser event is required")
+    require(
+        len(fixtures) == len(EVENTS),
+        "one fixture per documented parser event is required",
+    )
     for path in fixtures:
         event = load_json(path)
-        require(event.get("transcript_path") == "/opaque/provider-transcript.jsonl", f"opaque transcript field missing: {path}")
+        require(
+            event.get("transcript_path") == "/opaque/provider-transcript.jsonl",
+            f"opaque transcript field missing: {path}",
+        )
         name = event.get("hook_event_name")
         require(name in EVENTS, f"unknown event fixture: {name}")
         require(name not in seen, f"duplicate event fixture: {name}")
@@ -217,7 +260,10 @@ def validate_manifest() -> None:
     manifest_path = ROOT / "package-manifest.json"
     require(manifest_path.is_file(), "package-manifest.json is missing")
     manifest = load_json(manifest_path)
-    require(manifest.get("schema_version") == "cigar.claude-code-package.v1", "manifest schema mismatch")
+    require(
+        manifest.get("schema_version") == "cigar.claude-code-package.v1",
+        "manifest schema mismatch",
+    )
     entries = manifest.get("files")
     require(isinstance(entries, list) and entries, "manifest is empty")
     actual = sorted(
@@ -226,13 +272,24 @@ def validate_manifest() -> None:
         if path.is_file() and path != manifest_path
     )
     paths = [entry.get("path") for entry in entries]
-    require(paths == sorted(paths) and len(paths) == len(set(paths)), "manifest paths are not strict and unique")
-    require(paths == actual, "manifest does not cover exactly every package file except itself")
+    require(
+        paths == sorted(paths) and len(paths) == len(set(paths)),
+        "manifest paths are not strict and unique",
+    )
+    require(
+        paths == actual,
+        "manifest does not cover exactly every package file except itself",
+    )
     for entry in entries:
         path = ROOT / entry["path"]
         data = path.read_bytes()
-        require(entry.get("bytes") == len(data), f"manifest byte count mismatch: {path}")
-        require(entry.get("sha256") == hashlib.sha256(data).hexdigest(), f"manifest digest mismatch: {path}")
+        require(
+            entry.get("bytes") == len(data), f"manifest byte count mismatch: {path}"
+        )
+        require(
+            entry.get("sha256") == hashlib.sha256(data).hexdigest(),
+            f"manifest digest mismatch: {path}",
+        )
 
 
 def main() -> None:

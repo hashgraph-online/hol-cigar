@@ -98,7 +98,7 @@ Release blocking: yes
 - [x] Classify fuzz data as hand-authored seed, minimized regression, reusable corpus, transient corpus, crash/artifact, or duplicate.
 - [x] Preserve the MCP regression SHA-1 `8990a2f1ca2774f3cea4ad12624eac0acf7bfd31` (SHA-256 `02c4f7d2c1e81d5f3c5768d3dfdccc94fe8d99a407ad60d58e464d49ced6b144`) as a named fixture tied to its regression test.
 - [x] Implement deterministic per-target minimization into fresh outputs; enforce byte/count ceilings, preserve named regressions, and emit old-to-new digest maps. Never share a writable corpus between fuzzers.
-- [ ] Commit only reviewed seeds/regressions/minimized corpus. Narrowly ignore transient output; never ignore crashes awaiting triage.
+- [x] Commit only reviewed seeds/regressions/minimized corpus. Narrowly ignore transient output; never ignore crashes awaiting triage.
 - [x] Move generated qualification receipts out of tracked source paths. Label any tracked sample receipt as non-qualification.
 - [x] Keep current WP19 smoke/mutation receipts as historical smoke evidence only.
 - [ ] Regenerate stale “unborn repository” content in `IMPLEMENTATION_STATUS.md`, `docs/execution/work-packets.yaml`, `packaging/qualification-gaps.v1.json`, and WP20/WP21 receipts without claiming completion.

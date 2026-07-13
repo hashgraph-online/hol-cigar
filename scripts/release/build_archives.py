@@ -42,7 +42,10 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def _validate_manifest(manifest: Any) -> None:
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != "cigar.local-archives.v1":
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != "cigar.local-archives.v1"
+    ):
         raise ReleaseError("unsupported local archive manifest")
     if not isinstance(manifest.get("archives"), list) or not manifest["archives"]:
         raise ReleaseError("local archive manifest has no archives")
@@ -53,9 +56,17 @@ def _validate_manifest(manifest: Any) -> None:
             raise ReleaseError("archive entry must be an object")
         identifier = entry.get("id")
         filename = entry.get("filename")
-        if not isinstance(identifier, str) or not identifier or identifier in identifiers:
+        if (
+            not isinstance(identifier, str)
+            or not identifier
+            or identifier in identifiers
+        ):
             raise ReleaseError(f"invalid or duplicate archive id: {identifier!r}")
-        if not isinstance(filename, str) or Path(filename).name != filename or filename in filenames:
+        if (
+            not isinstance(filename, str)
+            or Path(filename).name != filename
+            or filename in filenames
+        ):
             raise ReleaseError(f"invalid or duplicate archive filename: {filename!r}")
         if not isinstance(entry.get("include"), list) or not entry["include"]:
             raise ReleaseError(f"archive {identifier} has no include allowlist")
@@ -65,7 +76,9 @@ def _validate_manifest(manifest: Any) -> None:
         raise ReleaseError("local archive manifest must define source identity")
 
 
-def _add_bytes(archive: tarfile.TarFile, relative: str, payload: bytes, epoch: int, mode: int) -> None:
+def _add_bytes(
+    archive: tarfile.TarFile, relative: str, payload: bytes, epoch: int, mode: int
+) -> None:
     information = tarfile.TarInfo(relative)
     information.size = len(payload)
     information.mode = mode
@@ -77,7 +90,9 @@ def _add_bytes(archive: tarfile.TarFile, relative: str, payload: bytes, epoch: i
     archive.addfile(information, io.BytesIO(payload))
 
 
-def _add_file(archive: tarfile.TarFile, relative: str, path: Path, epoch: int, mode: int) -> None:
+def _add_file(
+    archive: tarfile.TarFile, relative: str, path: Path, epoch: int, mode: int
+) -> None:
     information = tarfile.TarInfo(relative)
     information.size = path.stat().st_size
     information.mode = mode
@@ -98,18 +113,33 @@ def _write_archive(
     replace: bool,
 ) -> None:
     if output.exists() and not replace:
-        raise ReleaseError(f"refusing to replace existing archive without --replace: {output}")
+        raise ReleaseError(
+            f"refusing to replace existing archive without --replace: {output}"
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(dir=output.parent, prefix=f".{output.name}.", delete=False) as raw:
+        with tempfile.NamedTemporaryFile(
+            dir=output.parent, prefix=f".{output.name}.", delete=False
+        ) as raw:
             temporary = Path(raw.name)
-            with gzip.GzipFile(filename="", mode="wb", compresslevel=9, fileobj=raw, mtime=epoch) as compressed:
-                with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive:
+            with gzip.GzipFile(
+                filename="", mode="wb", compresslevel=9, fileobj=raw, mtime=epoch
+            ) as compressed:
+                with tarfile.open(
+                    fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT
+                ) as archive:
                     metadata_payload = canonical_json_bytes(metadata)
-                    entries: list[tuple[str, Path | None, int]] = [("RELEASE-METADATA.json", None, 0o644)]
-                    entries.extend((relative, path, normalized_mode(relative)) for relative, path in files)
-                    for relative, path, mode in sorted(entries, key=lambda item: item[0].encode("utf-8")):
+                    entries: list[tuple[str, Path | None, int]] = [
+                        ("RELEASE-METADATA.json", None, 0o644)
+                    ]
+                    entries.extend(
+                        (relative, path, normalized_mode(relative))
+                        for relative, path in files
+                    )
+                    for relative, path, mode in sorted(
+                        entries, key=lambda item: item[0].encode("utf-8")
+                    ):
                         if path is None:
                             _add_bytes(archive, relative, metadata_payload, epoch, mode)
                         else:
@@ -132,14 +162,18 @@ def main() -> int:
     _validate_manifest(manifest)
     epoch = require_source_date_epoch(arguments.source_date_epoch)
     excludes = manifest.get("always_exclude", [])
-    if not isinstance(excludes, list) or not all(isinstance(value, str) for value in excludes):
+    if not isinstance(excludes, list) or not all(
+        isinstance(value, str) for value in excludes
+    ):
         raise ReleaseError("always_exclude must contain strings")
 
     expanded: dict[str, list[tuple[str, Path]]] = {}
     for entry in manifest["archives"]:
         includes = entry["include"]
         if not all(isinstance(value, str) for value in includes):
-            raise ReleaseError(f"archive {entry['id']} include patterns must be strings")
+            raise ReleaseError(
+                f"archive {entry['id']} include patterns must be strings"
+            )
         files = expand_files(root, includes, excludes)
         if not files:
             raise ReleaseError(f"archive {entry['id']} expanded to no files")
@@ -147,7 +181,9 @@ def main() -> int:
 
     source_tree_digest = tree_digest(expanded["source"])
     source = git_state(root, source_tree_digest)
-    if arguments.require_committed_clean and (not source["committed"] or not source["clean"]):
+    if arguments.require_committed_clean and (
+        not source["committed"] or not source["clean"]
+    ):
         raise ReleaseError("release archive requires a committed, clean source tree")
 
     output_root = arguments.out.resolve()
@@ -171,7 +207,13 @@ def main() -> int:
         output = output_root / entry["filename"]
         _write_archive(output, files, metadata, epoch, arguments.replace)
         try:
-            verify_package(output, contract_path, manifest["product_version"], manifest["context_abi"], epoch)
+            verify_package(
+                output,
+                contract_path,
+                manifest["product_version"],
+                manifest["context_abi"],
+                epoch,
+            )
         except ReleaseError:
             output.unlink(missing_ok=True)
             raise
@@ -187,12 +229,19 @@ def main() -> int:
 
     checksums_path = output_root / "SHA256SUMS"
     if checksums_path.exists() and not arguments.replace:
-        raise ReleaseError(f"refusing to replace existing checksum manifest without --replace: {checksums_path}")
-    checksum_payload = "".join(f"{record['sha256']}  {record['path']}\n" for record in sorted(build_records, key=lambda item: item["path"]))
+        raise ReleaseError(
+            f"refusing to replace existing checksum manifest without --replace: {checksums_path}"
+        )
+    checksum_payload = "".join(
+        f"{record['sha256']}  {record['path']}\n"
+        for record in sorted(build_records, key=lambda item: item["path"])
+    )
     write_bytes(checksums_path, checksum_payload.encode("ascii"))
     build_manifest_path = output_root / "build-manifest.json"
     if build_manifest_path.exists() and not arguments.replace:
-        raise ReleaseError(f"refusing to replace existing build manifest without --replace: {build_manifest_path}")
+        raise ReleaseError(
+            f"refusing to replace existing build manifest without --replace: {build_manifest_path}"
+        )
     write_json(
         build_manifest_path,
         {

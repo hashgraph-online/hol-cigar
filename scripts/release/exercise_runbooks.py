@@ -28,8 +28,14 @@ from release_lib import (
 
 
 _REQUIRED_EXERCISES = {
-    "backup", "restore", "key-rotation", "migration", "index-rebuild", "unknown-effect",
-    "journal-quarantine", "adapter-disable",
+    "backup",
+    "restore",
+    "key-rotation",
+    "migration",
+    "index-rebuild",
+    "unknown-effect",
+    "journal-quarantine",
+    "adapter-disable",
 }
 
 
@@ -44,11 +50,17 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> tuple[str, int, list[str]]:
+def _source(
+    arguments: argparse.Namespace, root: Path, manifest_path: Path
+) -> tuple[str, int, list[str]]:
     if arguments.candidate_manifest is None:
         if arguments.mode == "live":
             raise ReleaseError("live exercises require --candidate-manifest")
-        return f"development:{sha256_file(manifest_path)}", arguments.source_date_epoch, ["runbook-documentation"]
+        return (
+            f"development:{sha256_file(manifest_path)}",
+            arguments.source_date_epoch,
+            ["runbook-documentation"],
+        )
     if arguments.candidate_manifest.is_symlink():
         raise ReleaseError("candidate manifest must not be a symlink")
     candidate_path = arguments.candidate_manifest.resolve()
@@ -56,7 +68,12 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
         raise ReleaseError("candidate manifest must be a regular file")
     candidate = load_json(candidate_path)
     expected_candidate_keys = {
-        "schema_version", "product_version", "context_abi", "source_date_epoch", "source", "artifacts",
+        "schema_version",
+        "product_version",
+        "context_abi",
+        "source_date_epoch",
+        "source",
+        "artifacts",
     }
     if (
         not isinstance(candidate, dict)
@@ -72,7 +89,9 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
         or candidate.get("product_version") != matrix.get("product_version")
         or candidate.get("context_abi") != matrix.get("context_abi")
     ):
-        raise ReleaseError("candidate build manifest disagrees with the release artifact matrix")
+        raise ReleaseError(
+            "candidate build manifest disagrees with the release artifact matrix"
+        )
     source = candidate.get("source")
     epoch = candidate.get("source_date_epoch")
     artifacts = candidate.get("artifacts")
@@ -97,11 +116,21 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
     matrix_entries = {
         entry["id"]: entry
         for entry in matrix.get("artifacts", [])
-        if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry.get("required_for_release") is True
+        if isinstance(entry, dict)
+        and isinstance(entry.get("id"), str)
+        and entry.get("required_for_release") is True
     }
     for record in artifacts:
-        if not isinstance(record, dict) or set(record) != {"id", "path", "sha256", "bytes", "contract"}:
-            raise ReleaseError("candidate build manifest has an invalid artifact record")
+        if not isinstance(record, dict) or set(record) != {
+            "id",
+            "path",
+            "sha256",
+            "bytes",
+            "contract",
+        }:
+            raise ReleaseError(
+                "candidate build manifest has an invalid artifact record"
+            )
         identifier = record.get("id")
         relative = safe_relative_path(record.get("path", ""))
         digest = record.get("sha256")
@@ -116,13 +145,17 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
             or isinstance(size, bool)
             or size <= 0
         ):
-            raise ReleaseError("candidate build manifest has invalid artifact identity or binding")
+            raise ReleaseError(
+                "candidate build manifest has invalid artifact identity or binding"
+            )
         matrix_entry = matrix_entries[identifier]
         if (
             Path(relative).name != matrix_entry.get("filename")
             or record.get("contract") != f"packaging/{matrix_entry.get('contract')}"
         ):
-            raise ReleaseError(f"candidate artifact disagrees with the matrix: {identifier}")
+            raise ReleaseError(
+                f"candidate artifact disagrees with the matrix: {identifier}"
+            )
         supplied_path = candidate_path.parent
         path_has_symlink = False
         for part in relative.split("/"):
@@ -131,8 +164,14 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
         if path_has_symlink:
             raise ReleaseError(f"candidate artifact must not be a symlink: {relative}")
         artifact_path = resolve_beneath(candidate_path.parent, relative)
-        if not artifact_path.is_file() or artifact_path.stat().st_size != size or sha256_file(artifact_path) != digest:
-            raise ReleaseError(f"candidate artifact digest or size mismatch: {relative}")
+        if (
+            not artifact_path.is_file()
+            or artifact_path.stat().st_size != size
+            or sha256_file(artifact_path) != digest
+        ):
+            raise ReleaseError(
+                f"candidate artifact digest or size mismatch: {relative}"
+            )
         artifact_ids.append(identifier)
     if set(artifact_ids) != set(matrix_entries):
         raise ReleaseError(
@@ -142,32 +181,66 @@ def _source(arguments: argparse.Namespace, root: Path, manifest_path: Path) -> t
     return source["revision"], epoch, sorted(artifact_ids)
 
 
-def _validate_driver_receipt(receipt: Any, exercise: str, revision: str, epoch: int, artifact_ids: list[str]) -> dict[str, Any]:
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != "cigar.operation-exercise.v1":
+def _validate_driver_receipt(
+    receipt: Any, exercise: str, revision: str, epoch: int, artifact_ids: list[str]
+) -> dict[str, Any]:
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema_version") != "cigar.operation-exercise.v1"
+    ):
         raise ReleaseError(f"live driver {exercise} returned an unsupported receipt")
-    expected_keys = {"schema_version", "exercise", "mode", "source_revision", "artifact_ids", "status", "checks", "source_date_epoch"}
+    expected_keys = {
+        "schema_version",
+        "exercise",
+        "mode",
+        "source_revision",
+        "artifact_ids",
+        "status",
+        "checks",
+        "source_date_epoch",
+    }
     if set(receipt) != expected_keys:
-        raise ReleaseError(f"live driver {exercise} returned an unexpected receipt shape")
+        raise ReleaseError(
+            f"live driver {exercise} returned an unexpected receipt shape"
+        )
     if receipt.get("exercise") != exercise or receipt.get("mode") != "live":
         raise ReleaseError(f"live driver {exercise} mislabeled its exercise or mode")
-    if receipt.get("source_revision") != revision or receipt.get("source_date_epoch") != epoch:
+    if (
+        receipt.get("source_revision") != revision
+        or receipt.get("source_date_epoch") != epoch
+    ):
         raise ReleaseError(f"live driver {exercise} returned stale evidence")
     if receipt.get("artifact_ids") != artifact_ids:
-        raise ReleaseError(f"live driver {exercise} returned evidence for the wrong artifact set")
+        raise ReleaseError(
+            f"live driver {exercise} returned evidence for the wrong artifact set"
+        )
     checks = receipt.get("checks")
     if receipt.get("status") != "passed" or not isinstance(checks, list) or not checks:
         raise ReleaseError(f"live driver {exercise} did not pass")
-    if any(not isinstance(check, dict) or set(check) != {"id", "status", "detail"} or check.get("status") != "passed" for check in checks):
+    if any(
+        not isinstance(check, dict)
+        or set(check) != {"id", "status", "detail"}
+        or check.get("status") != "passed"
+        for check in checks
+    ):
         raise ReleaseError(f"live driver {exercise} returned a non-passing check")
     check_ids = [check.get("id") for check in checks]
-    if len(set(check_ids)) != len(check_ids) or not all(isinstance(value, str) and value for value in check_ids):
-        raise ReleaseError(f"live driver {exercise} returned invalid or duplicate check ids")
+    if len(set(check_ids)) != len(check_ids) or not all(
+        isinstance(value, str) and value for value in check_ids
+    ):
+        raise ReleaseError(
+            f"live driver {exercise} returned invalid or duplicate check ids"
+        )
     if any(
-        not isinstance(check.get("detail"), str) or not check["detail"] or len(check["detail"].encode("utf-8")) > 1024
+        not isinstance(check.get("detail"), str)
+        or not check["detail"]
+        or len(check["detail"].encode("utf-8")) > 1024
         or any(ord(character) < 0x20 for character in check["detail"])
         for check in checks
     ):
-        raise ReleaseError(f"live driver {exercise} returned an invalid or unbounded check detail")
+        raise ReleaseError(
+            f"live driver {exercise} returned an invalid or unbounded check detail"
+        )
     return receipt
 
 
@@ -189,7 +262,11 @@ def main() -> int:
     if len(set(identifiers)) != 8 or set(identifiers) != _REQUIRED_EXERCISES:
         raise ReleaseError("operation exercise ids are invalid or duplicated")
     for entry in exercises:
-        if not isinstance(entry, dict) or set(entry) != {"id", "document", "required_terms"}:
+        if not isinstance(entry, dict) or set(entry) != {
+            "id",
+            "document",
+            "required_terms",
+        }:
             raise ReleaseError("operation exercise entry has an unexpected shape")
         document = entry.get("document")
         terms = entry.get("required_terms")
@@ -203,14 +280,23 @@ def main() -> int:
                 isinstance(term, str)
                 and term
                 and len(term.encode("utf-8")) <= 512
-                and not any(ord(character) < 0x20 or ord(character) == 0x7F for character in term)
+                and not any(
+                    ord(character) < 0x20 or ord(character) == 0x7F
+                    for character in term
+                )
                 for term in terms
             )
         ):
-            raise ReleaseError(f"operation exercise entry is invalid: {entry.get('id')}")
+            raise ReleaseError(
+                f"operation exercise entry is invalid: {entry.get('id')}"
+            )
         resolve_beneath(root, document)
     revision, epoch, artifact_ids = _source(arguments, root, manifest_path)
-    subject_manifest = manifest_path if arguments.candidate_manifest is None else arguments.candidate_manifest.resolve()
+    subject_manifest = (
+        manifest_path
+        if arguments.candidate_manifest is None
+        else arguments.candidate_manifest.resolve()
+    )
     subject_manifest_sha256 = sha256_file(subject_manifest)
     output = arguments.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -224,8 +310,14 @@ def main() -> int:
             document = resolve_beneath(root, entry["document"])
             text = document.read_text(encoding="utf-8")
             terms = entry.get("required_terms")
-            if not isinstance(terms, list) or not terms or not all(isinstance(term, str) and term in text for term in terms):
-                raise ReleaseError(f"runbook {entry['id']} is missing a required stop/recovery term")
+            if (
+                not isinstance(terms, list)
+                or not terms
+                or not all(isinstance(term, str) and term in text for term in terms)
+            ):
+                raise ReleaseError(
+                    f"runbook {entry['id']} is missing a required stop/recovery term"
+                )
             receipt = {
                 "schema_version": "cigar.operation-exercise.v1",
                 "exercise": entry["id"],
@@ -233,13 +325,24 @@ def main() -> int:
                 "source_revision": revision,
                 "artifact_ids": artifact_ids,
                 "subject_manifest_sha256": subject_manifest_sha256,
-                "producer": {"name": Path(__file__).name, "sha256": sha256_file(Path(__file__).resolve())},
+                "producer": {
+                    "name": Path(__file__).name,
+                    "sha256": sha256_file(Path(__file__).resolve()),
+                },
                 "source_date_epoch": epoch,
                 "status": "passed",
                 "checks": [
-                    {"id": "document-present", "status": "passed", "detail": entry["document"]},
-                    {"id": "required-terms", "status": "passed", "detail": f"{len(terms)} required terms present"}
-                ]
+                    {
+                        "id": "document-present",
+                        "status": "passed",
+                        "detail": entry["document"],
+                    },
+                    {
+                        "id": "required-terms",
+                        "status": "passed",
+                        "detail": f"{len(terms)} required terms present",
+                    },
+                ],
             }
             receipt_path = output / f"{entry['id']}.static.json"
             write_json(receipt_path, receipt)
@@ -247,7 +350,9 @@ def main() -> int:
             receipt_paths.append((entry["id"], receipt_path))
     else:
         if os.environ.get("CIGAR_OPERATION_SANDBOX_ENFORCED") != "1":
-            raise ReleaseError("live exercises require an environment-enforced operation sandbox")
+            raise ReleaseError(
+                "live exercises require an environment-enforced operation sandbox"
+            )
         if arguments.driver_directory is None:
             raise ReleaseError("live exercises require --driver-directory")
         if arguments.driver_directory.is_symlink():
@@ -255,28 +360,60 @@ def main() -> int:
         driver_directory = arguments.driver_directory.resolve()
         if not driver_directory.is_dir():
             raise ReleaseError("live driver directory does not exist")
-        with tempfile.TemporaryDirectory(prefix="cigar-operation-drivers-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="cigar-operation-drivers-"
+        ) as temporary:
             staged_directory = Path(temporary)
             for entry in exercises:
                 driver = driver_directory / entry["id"]
-                if driver.is_symlink() or not driver.is_file() or not os.access(driver, os.X_OK):
-                    raise ReleaseError(f"live driver is missing, linked, or not executable: {entry['id']}")
+                if (
+                    driver.is_symlink()
+                    or not driver.is_file()
+                    or not os.access(driver, os.X_OK)
+                ):
+                    raise ReleaseError(
+                        f"live driver is missing, linked, or not executable: {entry['id']}"
+                    )
                 driver_digest = sha256_file(driver)
                 staged_driver = staged_directory / entry["id"]
                 shutil.copyfile(driver, staged_driver)
                 os.chmod(staged_driver, 0o500)
                 if sha256_file(staged_driver) != driver_digest:
-                    raise ReleaseError(f"live driver changed while staging: {entry['id']}")
-                command = [str(staged_driver), "--candidate-manifest", str(subject_manifest), "--source-date-epoch", str(epoch)]
-                result = run_bounded(command, cwd=root, timeout=3600, max_stdout=2 * 1024 * 1024, max_stderr=2 * 1024 * 1024)
+                    raise ReleaseError(
+                        f"live driver changed while staging: {entry['id']}"
+                    )
+                command = [
+                    str(staged_driver),
+                    "--candidate-manifest",
+                    str(subject_manifest),
+                    "--source-date-epoch",
+                    str(epoch),
+                ]
+                result = run_bounded(
+                    command,
+                    cwd=root,
+                    timeout=3600,
+                    max_stdout=2 * 1024 * 1024,
+                    max_stderr=2 * 1024 * 1024,
+                )
                 if result.returncode != 0:
-                    raise ReleaseError(process_failure_summary(result, f"live driver {entry['id']}"))
+                    raise ReleaseError(
+                        process_failure_summary(result, f"live driver {entry['id']}")
+                    )
                 receipt = _validate_driver_receipt(
                     load_json_bytes(result.stdout, f"live driver {entry['id']} stdout"),
-                    entry["id"], revision, epoch, artifact_ids,
+                    entry["id"],
+                    revision,
+                    epoch,
+                    artifact_ids,
                 )
-                if sha256_file(staged_driver) != driver_digest or sha256_file(subject_manifest) != subject_manifest_sha256:
-                    raise ReleaseError(f"live driver or candidate manifest changed during exercise: {entry['id']}")
+                if (
+                    sha256_file(staged_driver) != driver_digest
+                    or sha256_file(subject_manifest) != subject_manifest_sha256
+                ):
+                    raise ReleaseError(
+                        f"live driver or candidate manifest changed during exercise: {entry['id']}"
+                    )
                 receipt["subject_manifest_sha256"] = subject_manifest_sha256
                 receipt["producer"] = {"name": driver.name, "sha256": driver_digest}
                 receipt_path = output / f"{entry['id']}.live.json"

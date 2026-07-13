@@ -93,7 +93,9 @@ def canonical_json_bytes(value: Any) -> bytes:
             separators=(",", ":"),
         )
     except (TypeError, ValueError) as error:
-        raise ReleaseError(f"value cannot be encoded as canonical JSON: {error}") from error
+        raise ReleaseError(
+            f"value cannot be encoded as canonical JSON: {error}"
+        ) from error
     return (serialized + "\n").encode("utf-8")
 
 
@@ -105,7 +107,9 @@ def write_bytes(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as handle:
             temporary = Path(handle.name)
             handle.write(payload)
             handle.flush()
@@ -151,12 +155,18 @@ def run_bounded(
     max_stderr: int = 4 * 1024 * 1024,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run without a shell while draining both streams and killing on a byte-limit violation."""
-    if not arguments or not all(isinstance(value, str) and value for value in arguments):
+    if not arguments or not all(
+        isinstance(value, str) and value for value in arguments
+    ):
         raise ReleaseError("bounded process arguments are invalid")
     if timeout <= 0 or max_stdout < 0 or max_stderr < 0:
         raise ReleaseError("bounded process limits are invalid")
     try:
-        creation_flags = int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
+        creation_flags = (
+            int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+            if os.name == "nt"
+            else 0
+        )
         process = subprocess.Popen(
             arguments,
             cwd=cwd,
@@ -218,8 +228,16 @@ def run_bounded(
             stream.close()
 
     threads = [
-        threading.Thread(target=drain, args=(process.stdout, stdout, max_stdout, "stdout"), daemon=True),
-        threading.Thread(target=drain, args=(process.stderr, stderr, max_stderr, "stderr"), daemon=True),
+        threading.Thread(
+            target=drain,
+            args=(process.stdout, stdout, max_stdout, "stdout"),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=drain,
+            args=(process.stderr, stderr, max_stderr, "stderr"),
+            daemon=True,
+        ),
     ]
     for thread in threads:
         thread.start()
@@ -230,7 +248,9 @@ def run_bounded(
         process.wait()
         for thread in threads:
             thread.join(timeout=5)
-        raise subprocess.TimeoutExpired(arguments, timeout, bytes(stdout), bytes(stderr)) from error
+        raise subprocess.TimeoutExpired(
+            arguments, timeout, bytes(stdout), bytes(stderr)
+        ) from error
     for thread in threads:
         thread.join(timeout=5)
     if any(thread.is_alive() for thread in threads):
@@ -239,11 +259,17 @@ def run_bounded(
             thread.join(timeout=5)
         raise ReleaseError("bounded process output readers did not terminate")
     if overflow.is_set():
-        raise ReleaseError(f"bounded process output limit exceeded: {'; '.join(failures)}")
-    return subprocess.CompletedProcess(arguments, returncode, bytes(stdout), bytes(stderr))
+        raise ReleaseError(
+            f"bounded process output limit exceeded: {'; '.join(failures)}"
+        )
+    return subprocess.CompletedProcess(
+        arguments, returncode, bytes(stdout), bytes(stderr)
+    )
 
 
-def process_failure_summary(result: subprocess.CompletedProcess[bytes], label: str) -> str:
+def process_failure_summary(
+    result: subprocess.CompletedProcess[bytes], label: str
+) -> str:
     """Describe a failed child without copying potentially sensitive child output into release logs."""
     stdout = result.stdout or b""
     stderr = result.stderr or b""
@@ -269,7 +295,10 @@ def safe_relative_path(value: str) -> str:
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ReleaseError(f"unsafe path: {value!r}")
     windows_reserved = {
-        "con", "prn", "aux", "nul",
+        "con",
+        "prn",
+        "aux",
+        "nul",
         *(f"com{number}" for number in range(1, 10)),
         *(f"lpt{number}" for number in range(1, 10)),
     }
@@ -286,43 +315,102 @@ def safe_relative_path(value: str) -> str:
     return normalized
 
 
-_REQUIRED_RELEASE_EVIDENCE_CATEGORIES = frozenset({
-    "test", "traceability", "toolchain", "work-packet", "coverage", "mutation", "fuzz",
-    "sanitizer", "model", "chaos", "migration", "scale", "soak", "conformance", "benchmark",
-    "package", "install", "uninstall", "offline", "upgrade", "license", "sbom-spdx",
-    "sbom-cyclonedx", "signature", "provenance", "reproducibility", "docs", "demo",
-    "operations", "security",
-})
-_REQUIRED_SIGNED_BASENAMES = frozenset({
-    "SHA256SUMS", "release-evidence.json", "sbom.spdx.json", "sbom.cyclonedx.json",
-    "sbom-artifacts.json", "provenance.json",
-})
-_PROHIBITED_RELEASE_STATUSES = frozenset({"failed", "skipped", "waived", "quarantined", "unknown"})
-_RELEASE_REQUIREMENTS_V1_SHA256 = "5452202ea3c258d2ebb551ba0352433bcf820cac625c9cf95b9451608338739f"
-_QUALIFICATION_CATEGORY_MAP_V1_SHA256 = "23b8f288415d5a5c1be5da67a78e94812114f9fb2a6037f34f271e6988a82f32"
+_REQUIRED_RELEASE_EVIDENCE_CATEGORIES = frozenset(
+    {
+        "test",
+        "traceability",
+        "toolchain",
+        "work-packet",
+        "coverage",
+        "mutation",
+        "fuzz",
+        "sanitizer",
+        "model",
+        "chaos",
+        "migration",
+        "scale",
+        "soak",
+        "conformance",
+        "benchmark",
+        "package",
+        "install",
+        "uninstall",
+        "offline",
+        "upgrade",
+        "license",
+        "sbom-spdx",
+        "sbom-cyclonedx",
+        "signature",
+        "provenance",
+        "reproducibility",
+        "docs",
+        "demo",
+        "operations",
+        "security",
+    }
+)
+_REQUIRED_SIGNED_BASENAMES = frozenset(
+    {
+        "SHA256SUMS",
+        "release-evidence.json",
+        "sbom.spdx.json",
+        "sbom.cyclonedx.json",
+        "sbom-artifacts.json",
+        "provenance.json",
+    }
+)
+_PROHIBITED_RELEASE_STATUSES = frozenset(
+    {"failed", "skipped", "waived", "quarantined", "unknown"}
+)
+_RELEASE_REQUIREMENTS_V1_SHA256 = (
+    "5452202ea3c258d2ebb551ba0352433bcf820cac625c9cf95b9451608338739f"
+)
+_QUALIFICATION_CATEGORY_MAP_V1_SHA256 = (
+    "23b8f288415d5a5c1be5da67a78e94812114f9fb2a6037f34f271e6988a82f32"
+)
 
 
 def validate_qualification_policy(mapping: Any) -> None:
     """Reject an altered v1 artifact-to-evidence map before assembly or offline verification."""
     if (
         not isinstance(mapping, dict)
-        or set(mapping) != {
-            "schema_version", "qualifications", "universal_requirements", "additional_requirements",
+        or set(mapping)
+        != {
+            "schema_version",
+            "qualifications",
+            "universal_requirements",
+            "additional_requirements",
         }
         or mapping.get("schema_version") != "cigar.qualification-category-map.v1"
     ):
         raise ReleaseError("qualification category map has an unexpected shape")
-    if sha256_bytes(canonical_json_bytes(mapping)) != _QUALIFICATION_CATEGORY_MAP_V1_SHA256:
-        raise ReleaseError("qualification category map v1 differs from the verifier's pinned policy digest")
+    if (
+        sha256_bytes(canonical_json_bytes(mapping))
+        != _QUALIFICATION_CATEGORY_MAP_V1_SHA256
+    ):
+        raise ReleaseError(
+            "qualification category map v1 differs from the verifier's pinned policy digest"
+        )
 
 
-def validate_release_policy_documents(matrix: Any, requirements: Any, gaps: Any) -> None:
+def validate_release_policy_documents(
+    matrix: Any, requirements: Any, gaps: Any
+) -> None:
     """Reject malformed or weakened v1 release policy before it can become a verification bypass."""
-    if not isinstance(matrix, dict) or matrix.get("schema_version") != "cigar.artifact-matrix.v1":
+    if (
+        not isinstance(matrix, dict)
+        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
+    ):
         raise ReleaseError("unsupported artifact matrix")
     if matrix.get("release_state") not in {"development", "release"}:
         raise ReleaseError("artifact matrix release state is invalid")
-    if not isinstance(matrix.get("product_version"), str) or re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", matrix["product_version"]) is None:
+    if (
+        not isinstance(matrix.get("product_version"), str)
+        or re.fullmatch(
+            r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", matrix["product_version"]
+        )
+        is None
+    ):
         raise ReleaseError("artifact matrix product version is invalid")
     if matrix.get("context_abi") != "cigar.context.v1":
         raise ReleaseError("artifact matrix Context ABI is invalid")
@@ -332,17 +420,38 @@ def validate_release_policy_documents(matrix: Any, requirements: Any, gaps: Any)
     identifiers: set[str] = set()
     filenames: set[str] = set()
     portable_filenames: set[str] = set()
-    required_artifact_keys = {"id", "kind", "filename", "contract", "required_for_release", "qualification"}
-    allowed_artifact_keys = required_artifact_keys | {"producer", "platform", "ecosystem"}
+    required_artifact_keys = {
+        "id",
+        "kind",
+        "filename",
+        "contract",
+        "required_for_release",
+        "qualification",
+    }
+    allowed_artifact_keys = required_artifact_keys | {
+        "producer",
+        "platform",
+        "ecosystem",
+    }
     for artifact in artifacts:
-        if not isinstance(artifact, dict) or not required_artifact_keys.issubset(artifact) or not set(artifact).issubset(allowed_artifact_keys):
+        if (
+            not isinstance(artifact, dict)
+            or not required_artifact_keys.issubset(artifact)
+            or not set(artifact).issubset(allowed_artifact_keys)
+        ):
             raise ReleaseError("artifact matrix entry has an unexpected shape")
         identifier = artifact.get("id")
         filename = artifact.get("filename")
         contract = artifact.get("contract")
         qualifications = artifact.get("qualification")
-        if not isinstance(identifier, str) or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", identifier) is None or identifier in identifiers:
-            raise ReleaseError("artifact matrix has an invalid or duplicate artifact id")
+        if (
+            not isinstance(identifier, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", identifier) is None
+            or identifier in identifiers
+        ):
+            raise ReleaseError(
+                "artifact matrix has an invalid or duplicate artifact id"
+            )
         if (
             not isinstance(filename, str)
             or PurePosixPath(filename).name != filename
@@ -352,12 +461,25 @@ def validate_release_policy_documents(matrix: Any, requirements: Any, gaps: Any)
             raise ReleaseError("artifact matrix has an invalid or duplicate filename")
         safe_relative_path(filename)
         if not isinstance(contract, str) or not contract.startswith("contracts/"):
-            raise ReleaseError(f"artifact matrix contract path is invalid: {identifier}")
+            raise ReleaseError(
+                f"artifact matrix contract path is invalid: {identifier}"
+            )
         safe_relative_path(contract)
-        if not isinstance(artifact.get("kind"), str) or not artifact["kind"] or not isinstance(artifact.get("required_for_release"), bool):
+        if (
+            not isinstance(artifact.get("kind"), str)
+            or not artifact["kind"]
+            or not isinstance(artifact.get("required_for_release"), bool)
+        ):
             raise ReleaseError(f"artifact matrix fields are invalid: {identifier}")
-        if not isinstance(qualifications, list) or not qualifications or not all(isinstance(value, str) and value for value in qualifications) or len(set(qualifications)) != len(qualifications):
-            raise ReleaseError(f"artifact matrix qualifications are invalid: {identifier}")
+        if (
+            not isinstance(qualifications, list)
+            or not qualifications
+            or not all(isinstance(value, str) and value for value in qualifications)
+            or len(set(qualifications)) != len(qualifications)
+        ):
+            raise ReleaseError(
+                f"artifact matrix qualifications are invalid: {identifier}"
+            )
         identifiers.add(identifier)
         filenames.add(filename)
         portable_filenames.add(filename.casefold())
@@ -365,44 +487,102 @@ def validate_release_policy_documents(matrix: Any, requirements: Any, gaps: Any)
         raise ReleaseError("artifact matrix has no release-required artifact")
 
     required_requirement_keys = {
-        "schema_version", "required_evidence_categories", "required_artifact_ids_from",
-        "qualification_category_map", "required_source_state", "required_signed_basenames",
-        "required_signed_evidence_categories", "prohibited_statuses", "metric_gates",
+        "schema_version",
+        "required_evidence_categories",
+        "required_artifact_ids_from",
+        "qualification_category_map",
+        "required_source_state",
+        "required_signed_basenames",
+        "required_signed_evidence_categories",
+        "prohibited_statuses",
+        "metric_gates",
     }
-    if not isinstance(requirements, dict) or set(requirements) != required_requirement_keys or requirements.get("schema_version") != "cigar.release-requirements.v1":
+    if (
+        not isinstance(requirements, dict)
+        or set(requirements) != required_requirement_keys
+        or requirements.get("schema_version") != "cigar.release-requirements.v1"
+    ):
         raise ReleaseError("release requirements have an unexpected shape")
-    if sha256_bytes(canonical_json_bytes(requirements)) != _RELEASE_REQUIREMENTS_V1_SHA256:
-        raise ReleaseError("release requirements v1 differ from the verifier's pinned policy digest")
+    if (
+        sha256_bytes(canonical_json_bytes(requirements))
+        != _RELEASE_REQUIREMENTS_V1_SHA256
+    ):
+        raise ReleaseError(
+            "release requirements v1 differ from the verifier's pinned policy digest"
+        )
     categories = requirements.get("required_evidence_categories")
-    if not isinstance(categories, list) or len(categories) != len(set(categories)) or set(categories) != _REQUIRED_RELEASE_EVIDENCE_CATEGORIES:
+    if (
+        not isinstance(categories, list)
+        or len(categories) != len(set(categories))
+        or set(categories) != _REQUIRED_RELEASE_EVIDENCE_CATEGORIES
+    ):
         raise ReleaseError("release evidence category policy is missing or weakened")
-    if requirements.get("required_artifact_ids_from") != "packaging/artifact-matrix.v1.json":
+    if (
+        requirements.get("required_artifact_ids_from")
+        != "packaging/artifact-matrix.v1.json"
+    ):
         raise ReleaseError("release artifact source policy is invalid")
     safe_relative_path(requirements.get("qualification_category_map", ""))
-    if requirements.get("required_source_state") != {"committed": True, "clean": True, "tagged": False}:
+    if requirements.get("required_source_state") != {
+        "committed": True,
+        "clean": True,
+        "tagged": False,
+    }:
         raise ReleaseError("release source-state policy is invalid")
     signed_basenames = requirements.get("required_signed_basenames")
-    if not isinstance(signed_basenames, list) or len(signed_basenames) != len(set(signed_basenames)) or not _REQUIRED_SIGNED_BASENAMES.issubset(signed_basenames):
+    if (
+        not isinstance(signed_basenames, list)
+        or len(signed_basenames) != len(set(signed_basenames))
+        or not _REQUIRED_SIGNED_BASENAMES.issubset(signed_basenames)
+    ):
         raise ReleaseError("release signature payload policy is missing or weakened")
     signed_categories = requirements.get("required_signed_evidence_categories")
-    if not isinstance(signed_categories, list) or len(signed_categories) != len(set(signed_categories)) or not {"conformance", "benchmark"}.issubset(signed_categories):
+    if (
+        not isinstance(signed_categories, list)
+        or len(signed_categories) != len(set(signed_categories))
+        or not {"conformance", "benchmark"}.issubset(signed_categories)
+    ):
         raise ReleaseError("direct evidence signature policy is missing or weakened")
     prohibited = requirements.get("prohibited_statuses")
-    if not isinstance(prohibited, list) or set(prohibited) != _PROHIBITED_RELEASE_STATUSES or len(prohibited) != len(_PROHIBITED_RELEASE_STATUSES):
+    if (
+        not isinstance(prohibited, list)
+        or set(prohibited) != _PROHIBITED_RELEASE_STATUSES
+        or len(prohibited) != len(_PROHIBITED_RELEASE_STATUSES)
+    ):
         raise ReleaseError("prohibited release status policy is missing or weakened")
-    if not isinstance(requirements.get("metric_gates"), list) or not requirements["metric_gates"]:
+    if (
+        not isinstance(requirements.get("metric_gates"), list)
+        or not requirements["metric_gates"]
+    ):
         raise ReleaseError("release metric policy is empty")
 
-    if not isinstance(gaps, dict) or gaps.get("schema_version") != "cigar.qualification-gaps.v1" or not isinstance(gaps.get("gaps"), list):
+    if (
+        not isinstance(gaps, dict)
+        or gaps.get("schema_version") != "cigar.qualification-gaps.v1"
+        or not isinstance(gaps.get("gaps"), list)
+    ):
         raise ReleaseError("qualification gap inventory is invalid")
     gap_ids: set[str] = set()
     for gap in gaps["gaps"]:
-        if not isinstance(gap, dict) or set(gap) != {"id", "release_blocking", "owner", "condition", "closure"}:
+        if not isinstance(gap, dict) or set(gap) != {
+            "id",
+            "release_blocking",
+            "owner",
+            "condition",
+            "closure",
+        }:
             raise ReleaseError("qualification gap has an unexpected shape")
         identifier = gap.get("id")
-        if not isinstance(identifier, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]*", identifier) is None or identifier in gap_ids:
+        if (
+            not isinstance(identifier, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9-]*", identifier) is None
+            or identifier in gap_ids
+        ):
             raise ReleaseError("qualification gap has an invalid or duplicate id")
-        if not isinstance(gap.get("release_blocking"), bool) or not all(isinstance(gap.get(field), str) and gap[field] for field in ("owner", "condition", "closure")):
+        if not isinstance(gap.get("release_blocking"), bool) or not all(
+            isinstance(gap.get(field), str) and gap[field]
+            for field in ("owner", "condition", "closure")
+        ):
             raise ReleaseError(f"qualification gap fields are invalid: {identifier}")
         gap_ids.add(identifier)
 
@@ -433,12 +613,23 @@ def matches(path: str, patterns: Iterable[str]) -> bool:
 
 
 _PRUNE_NAMES = {
-    ".git", ".idea", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tmp", ".venv", ".vscode",
-    "__pycache__", "node_modules", "target"
+    ".git",
+    ".idea",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tmp",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "node_modules",
+    "target",
 }
 
 
-def expand_files(root: Path, includes: list[str], excludes: list[str]) -> list[tuple[str, Path]]:
+def expand_files(
+    root: Path, includes: list[str], excludes: list[str]
+) -> list[tuple[str, Path]]:
     """Expand allowlisted files without traversing common build/VCS trees."""
     found: list[tuple[str, Path]] = []
     root = root.resolve()
@@ -447,8 +638,14 @@ def expand_files(root: Path, includes: list[str], excludes: list[str]) -> list[t
         relative_dir = current_path.relative_to(root).as_posix()
         kept_directories: list[str] = []
         for directory in sorted(directories):
-            candidate = directory if relative_dir == "." else f"{relative_dir}/{directory}"
-            if directory in _PRUNE_NAMES or matches(candidate, excludes) or matches(f"{candidate}/x", excludes):
+            candidate = (
+                directory if relative_dir == "." else f"{relative_dir}/{directory}"
+            )
+            if (
+                directory in _PRUNE_NAMES
+                or matches(candidate, excludes)
+                or matches(f"{candidate}/x", excludes)
+            ):
                 continue
             path = current_path / directory
             if path.is_symlink():
@@ -499,8 +696,11 @@ def tree_digest(files: Iterable[tuple[str, Path]]) -> str:
 def git_state(root: Path, fallback_tree_digest: str) -> dict[str, Any]:
     def run(*arguments: str) -> subprocess.CompletedProcess[str]:
         raw = run_bounded(
-            ["git", *arguments], cwd=root, timeout=60,
-            max_stdout=32 * 1024 * 1024, max_stderr=1024 * 1024,
+            ["git", *arguments],
+            cwd=root,
+            timeout=60,
+            max_stdout=32 * 1024 * 1024,
+            max_stderr=1024 * 1024,
         )
         return subprocess.CompletedProcess(
             raw.args,
@@ -511,7 +711,11 @@ def git_state(root: Path, fallback_tree_digest: str) -> dict[str, Any]:
 
     revision_result = run("rev-parse", "--verify", "HEAD")
     committed = revision_result.returncode == 0
-    revision = revision_result.stdout.strip() if committed else f"unborn:{fallback_tree_digest}"
+    revision = (
+        revision_result.stdout.strip()
+        if committed
+        else f"unborn:{fallback_tree_digest}"
+    )
     status = run("status", "--porcelain=v1", "--untracked-files=all")
     clean = status.returncode == 0 and not status.stdout.strip()
     return {
@@ -536,19 +740,27 @@ def require_source_date_epoch(value: str | None) -> int:
 
 
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
-    ("private-key", re.compile(br"-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----")),
-    ("aws-access-key", re.compile(br"AKIA[0-9A-Z]{16}")),
-    ("github-token", re.compile(br"gh[pousr]_[A-Za-z0-9]{20,255}")),
-    ("slack-token", re.compile(br"xox[baprs]-[A-Za-z0-9-]{20,255}")),
+    (
+        "private-key",
+        re.compile(rb"-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----"),
+    ),
+    ("aws-access-key", re.compile(rb"AKIA[0-9A-Z]{16}")),
+    ("github-token", re.compile(rb"gh[pousr]_[A-Za-z0-9]{20,255}")),
+    ("slack-token", re.compile(rb"xox[baprs]-[A-Za-z0-9-]{20,255}")),
 )
 _DEVELOPER_PATH_PATTERNS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
-    ("macos-developer-path", re.compile(br"/Users/[A-Za-z0-9._-]{1,255}/")),
-    ("linux-developer-path", re.compile(br"/home/[A-Za-z0-9._-]{1,255}/")),
-    ("windows-developer-path", re.compile(br"[A-Za-z]:\\Users\\[A-Za-z0-9._ -]{1,255}\\")),
+    ("macos-developer-path", re.compile(rb"/Users/[A-Za-z0-9._-]{1,255}/")),
+    ("linux-developer-path", re.compile(rb"/home/[A-Za-z0-9._-]{1,255}/")),
+    (
+        "windows-developer-path",
+        re.compile(rb"[A-Za-z]:\\Users\\[A-Za-z0-9._ -]{1,255}\\"),
+    ),
 )
 
 
-def scan_payload(relative: str, payload: bytes, exemptions: list[dict[str, str]]) -> list[str]:
+def scan_payload(
+    relative: str, payload: bytes, exemptions: list[dict[str, str]]
+) -> list[str]:
     if any(matches(relative, [entry["pattern"]]) for entry in exemptions):
         return []
     findings: list[str] = []

@@ -11,7 +11,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from release_lib import ReleaseError, load_json, process_failure_summary, repo_root, require_source_date_epoch, run_bounded, write_json
+from release_lib import (
+    ReleaseError,
+    load_json,
+    process_failure_summary,
+    repo_root,
+    require_source_date_epoch,
+    run_bounded,
+    write_json,
+)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -23,7 +31,9 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _build(root: Path, destination: Path, home: Path, epoch: int, require_clean: bool) -> dict[str, Any]:
+def _build(
+    root: Path, destination: Path, home: Path, epoch: int, require_clean: bool
+) -> dict[str, Any]:
     environment = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": str(home),
@@ -36,10 +46,21 @@ def _build(root: Path, destination: Path, home: Path, epoch: int, require_clean:
         "NO_COLOR": "1",
     }
     (home / "tmp").mkdir(parents=True)
-    command = [sys.executable, str(root / "scripts/release/build_archives.py"), "--root", str(root), "--out", str(destination), "--source-date-epoch", str(epoch)]
+    command = [
+        sys.executable,
+        str(root / "scripts/release/build_archives.py"),
+        "--root",
+        str(root),
+        "--out",
+        str(destination),
+        "--source-date-epoch",
+        str(epoch),
+    ]
     if require_clean:
         command.append("--require-committed-clean")
-    result = run_bounded(command, cwd=root, env=environment, timeout=600, max_stdout=16 * 1024 * 1024)
+    result = run_bounded(
+        command, cwd=root, env=environment, timeout=600, max_stdout=16 * 1024 * 1024
+    )
     if result.returncode != 0:
         raise ReleaseError(process_failure_summary(result, "isolated archive build"))
     return load_json(destination / "build-manifest.json")
@@ -51,10 +72,26 @@ def main() -> int:
     epoch = require_source_date_epoch(arguments.source_date_epoch)
     with tempfile.TemporaryDirectory(prefix="cigar-reproducibility-") as directory:
         temporary = Path(directory)
-        first = _build(root, temporary / "builder-a/dist", temporary / "builder-a/home", epoch, arguments.require_committed_clean)
-        second = _build(root, temporary / "builder-b/dist", temporary / "builder-b/home", epoch, arguments.require_committed_clean)
-        first_artifacts = {item["id"]: (item["sha256"], item["bytes"]) for item in first["artifacts"]}
-        second_artifacts = {item["id"]: (item["sha256"], item["bytes"]) for item in second["artifacts"]}
+        first = _build(
+            root,
+            temporary / "builder-a/dist",
+            temporary / "builder-a/home",
+            epoch,
+            arguments.require_committed_clean,
+        )
+        second = _build(
+            root,
+            temporary / "builder-b/dist",
+            temporary / "builder-b/home",
+            epoch,
+            arguments.require_committed_clean,
+        )
+        first_artifacts = {
+            item["id"]: (item["sha256"], item["bytes"]) for item in first["artifacts"]
+        }
+        second_artifacts = {
+            item["id"]: (item["sha256"], item["bytes"]) for item in second["artifacts"]
+        }
         if first.get("source") != second.get("source"):
             raise ReleaseError("isolated builders reported different source identities")
         if first_artifacts != second_artifacts:
@@ -66,15 +103,27 @@ def main() -> int:
             "status": "passed",
             "source_date_epoch": epoch,
             "source": first["source"],
-            "environment": {"timezone": "UTC", "locale": "C", "python_hash_seed": "0", "network_required": False},
+            "environment": {
+                "timezone": "UTC",
+                "locale": "C",
+                "python_hash_seed": "0",
+                "network_required": False,
+            },
             "artifacts": [
-                {"id": identifier, "builder_a_sha256": value[0], "builder_b_sha256": second_artifacts[identifier][0], "bytes": value[1]}
+                {
+                    "id": identifier,
+                    "builder_a_sha256": value[0],
+                    "builder_b_sha256": second_artifacts[identifier][0],
+                    "bytes": value[1],
+                }
                 for identifier, value in sorted(first_artifacts.items())
             ],
         }
     if arguments.report is not None:
         write_json(arguments.report.resolve(), report)
-    print(f"reproducibility passed for {len(report['artifacts'])} local archive payloads")
+    print(
+        f"reproducibility passed for {len(report['artifacts'])} local archive payloads"
+    )
     return 0
 
 

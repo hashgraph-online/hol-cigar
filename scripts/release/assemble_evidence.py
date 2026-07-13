@@ -32,7 +32,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--evidence-directory", default="evidence")
     parser.add_argument("--signature-directory", default="signatures")
     parser.add_argument("--matrix", default="packaging/artifact-matrix.v1.json")
-    parser.add_argument("--requirements", default="packaging/release-requirements.v1.json")
+    parser.add_argument(
+        "--requirements", default="packaging/release-requirements.v1.json"
+    )
     parser.add_argument("--out", default="release-evidence.json")
     parser.add_argument("--allow-development", action="store_true")
     return parser.parse_args()
@@ -43,7 +45,11 @@ def _inside(base: Path, supplied: str) -> Path:
 
 
 def _artifact_ids(matrix: dict[str, Any]) -> set[str]:
-    result = {entry["id"] for entry in matrix.get("artifacts", []) if entry.get("required_for_release") is True}
+    result = {
+        entry["id"]
+        for entry in matrix.get("artifacts", [])
+        if entry.get("required_for_release") is True
+    }
     if not result:
         raise ReleaseError("artifact matrix has no required artifacts")
     return result
@@ -57,11 +63,22 @@ def _validate_receipt(
     artifact_ids: set[str],
     prohibited: set[str],
 ) -> dict[str, Any]:
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != "cigar.qualification-evidence.v1":
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema_version") != "cigar.qualification-evidence.v1"
+    ):
         raise ReleaseError(f"unsupported evidence receipt: {path}")
     required = {
-        "schema_version", "id", "category", "source_revision", "status", "artifact_ids",
-        "producer", "checks", "metrics", "attachments",
+        "schema_version",
+        "id",
+        "category",
+        "source_revision",
+        "status",
+        "artifact_ids",
+        "producer",
+        "checks",
+        "metrics",
+        "attachments",
     }
     if set(receipt) != required:
         raise ReleaseError(f"evidence receipt has an unexpected shape: {path}")
@@ -70,33 +87,77 @@ def _validate_receipt(
     if receipt["status"] in prohibited or receipt["status"] != "passed":
         raise ReleaseError(f"evidence is not passing: {path}")
     referenced = receipt["artifact_ids"]
-    if not isinstance(referenced, list) or not referenced or len(set(referenced)) != len(referenced) or any(value not in artifact_ids for value in referenced):
+    if (
+        not isinstance(referenced, list)
+        or not referenced
+        or len(set(referenced)) != len(referenced)
+        or any(value not in artifact_ids for value in referenced)
+    ):
         raise ReleaseError(f"evidence references an unknown artifact: {path}")
     checks = receipt["checks"]
-    if not isinstance(checks, list) or not checks or any(not isinstance(check, dict) or set(check) != {"id", "status"} or check.get("status") != "passed" for check in checks):
-        raise ReleaseError(f"evidence contains a non-passing or empty check set: {path}")
+    if (
+        not isinstance(checks, list)
+        or not checks
+        or any(
+            not isinstance(check, dict)
+            or set(check) != {"id", "status"}
+            or check.get("status") != "passed"
+            for check in checks
+        )
+    ):
+        raise ReleaseError(
+            f"evidence contains a non-passing or empty check set: {path}"
+        )
     check_ids = [check["id"] for check in checks]
-    if not all(isinstance(value, str) and value for value in check_ids) or len(set(check_ids)) != len(check_ids):
+    if not all(isinstance(value, str) and value for value in check_ids) or len(
+        set(check_ids)
+    ) != len(check_ids):
         raise ReleaseError(f"evidence contains invalid or duplicate check ids: {path}")
     metrics = receipt["metrics"]
     if not isinstance(metrics, dict) or any(
-        not isinstance(name, str) or not name
-        or not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value))
+        not isinstance(name, str)
+        or not name
+        or not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
         for name, value in metrics.items()
     ):
         raise ReleaseError(f"evidence metrics are invalid: {path}")
     producer = receipt["producer"]
-    if not isinstance(producer, dict) or set(producer) != {"name", "version", "tool_sha256", "command", "arguments_redacted"}:
+    if not isinstance(producer, dict) or set(producer) != {
+        "name",
+        "version",
+        "tool_sha256",
+        "command",
+        "arguments_redacted",
+    }:
         raise ReleaseError(f"evidence producer is invalid: {path}")
     if (
-        not all(isinstance(producer.get(name), str) and producer[name] and len(producer[name].encode("utf-8")) <= 128 for name in ("name", "version"))
-        or any(any(ord(character) < 0x20 or ord(character) == 0x7F for character in producer[name]) for name in ("name", "version"))
+        not all(
+            isinstance(producer.get(name), str)
+            and producer[name]
+            and len(producer[name].encode("utf-8")) <= 128
+            for name in ("name", "version")
+        )
+        or any(
+            any(
+                ord(character) < 0x20 or ord(character) == 0x7F
+                for character in producer[name]
+            )
+            for name in ("name", "version")
+        )
         or not isinstance(producer.get("tool_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", producer["tool_sha256"]) is None
         or not isinstance(producer.get("command"), list)
         or not producer["command"]
-        or not all(isinstance(value, str) and value and len(value.encode("utf-8")) <= 1024 for value in producer["command"])
-        or any(any(ord(character) < 0x20 or ord(character) == 0x7F for character in value) for value in producer["command"])
+        or not all(
+            isinstance(value, str) and value and len(value.encode("utf-8")) <= 1024
+            for value in producer["command"]
+        )
+        or any(
+            any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+            for value in producer["command"]
+        )
         or producer.get("arguments_redacted") is not True
     ):
         raise ReleaseError(f"evidence producer fields are invalid: {path}")
@@ -105,7 +166,12 @@ def _validate_receipt(
         raise ReleaseError(f"evidence attachments are empty: {path}")
     attachment_paths: set[str] = set()
     for reference in attachments:
-        if not isinstance(reference, dict) or set(reference) != {"path", "sha256", "bytes", "media_type"}:
+        if not isinstance(reference, dict) or set(reference) != {
+            "path",
+            "sha256",
+            "bytes",
+            "media_type",
+        }:
             raise ReleaseError(f"evidence attachment reference is invalid: {path}")
         relative = safe_relative_path(reference.get("path", ""))
         if relative in attachment_paths:
@@ -113,16 +179,33 @@ def _validate_receipt(
         attachment_paths.add(relative)
         attachment = resolve_beneath(dist, relative)
         if attachment == path.resolve() or not attachment.is_file():
-            raise ReleaseError(f"evidence attachment is missing or self-referential: {relative}")
-        if sha256_file(attachment) != reference.get("sha256") or attachment.stat().st_size != reference.get("bytes") or attachment.stat().st_size <= 0:
-            raise ReleaseError(f"evidence attachment digest or size mismatch: {relative}")
+            raise ReleaseError(
+                f"evidence attachment is missing or self-referential: {relative}"
+            )
+        if (
+            sha256_file(attachment) != reference.get("sha256")
+            or attachment.stat().st_size != reference.get("bytes")
+            or attachment.stat().st_size <= 0
+        ):
+            raise ReleaseError(
+                f"evidence attachment digest or size mismatch: {relative}"
+            )
         media_type = reference.get("media_type")
-        if not isinstance(media_type, str) or re.fullmatch(r"[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*(?:;[a-z0-9=._+-]+)?", media_type) is None:
+        if (
+            not isinstance(media_type, str)
+            or re.fullmatch(
+                r"[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*(?:;[a-z0-9=._+-]+)?",
+                media_type,
+            )
+            is None
+        ):
             raise ReleaseError(f"evidence attachment media type is invalid: {relative}")
     return receipt
 
 
-def _enforce_metric_gates(receipts: list[dict[str, Any]], requirements: dict[str, Any]) -> dict[str, float]:
+def _enforce_metric_gates(
+    receipts: list[dict[str, Any]], requirements: dict[str, Any]
+) -> dict[str, float]:
     gates = requirements.get("metric_gates")
     if not isinstance(gates, list) or not gates:
         raise ReleaseError("release metric gates are missing")
@@ -131,13 +214,25 @@ def _enforce_metric_gates(receipts: list[dict[str, Any]], requirements: dict[str
     for gate in gates:
         required = {"name", "category", "aggregation", "comparison", "threshold"}
         allowed = required | {"valid_min", "valid_max"}
-        if not isinstance(gate, dict) or not required.issubset(gate) or not set(gate).issubset(allowed):
+        if (
+            not isinstance(gate, dict)
+            or not required.issubset(gate)
+            or not set(gate).issubset(allowed)
+        ):
             raise ReleaseError("release metric gate has an unexpected shape")
         name = gate["name"]
         category = gate["category"]
         key = (category, name)
-        if not isinstance(name, str) or not name or not isinstance(category, str) or not category or key in seen:
-            raise ReleaseError("release metric gate has an invalid or duplicate identity")
+        if (
+            not isinstance(name, str)
+            or not name
+            or not isinstance(category, str)
+            or not category
+            or key in seen
+        ):
+            raise ReleaseError(
+                "release metric gate has an invalid or duplicate identity"
+            )
         seen.add(key)
         values = [
             float(receipt["metrics"][name])
@@ -145,14 +240,26 @@ def _enforce_metric_gates(receipts: list[dict[str, Any]], requirements: dict[str
             if receipt["category"] == category and name in receipt["metrics"]
         ]
         if not values or any(not math.isfinite(value) for value in values):
-            raise ReleaseError(f"required metric {category}:{name} is missing or non-finite")
+            raise ReleaseError(
+                f"required metric {category}:{name} is missing or non-finite"
+            )
         valid_min = gate.get("valid_min")
         valid_max = gate.get("valid_max")
         for label, bound in (("valid_min", valid_min), ("valid_max", valid_max)):
-            if bound is not None and (not isinstance(bound, (int, float)) or isinstance(bound, bool) or not math.isfinite(float(bound))):
+            if bound is not None and (
+                not isinstance(bound, (int, float))
+                or isinstance(bound, bool)
+                or not math.isfinite(float(bound))
+            ):
                 raise ReleaseError(f"metric gate {label} is invalid: {category}:{name}")
-        if valid_min is not None and valid_max is not None and float(valid_min) > float(valid_max):
-            raise ReleaseError(f"metric gate valid range is inverted: {category}:{name}")
+        if (
+            valid_min is not None
+            and valid_max is not None
+            and float(valid_min) > float(valid_max)
+        ):
+            raise ReleaseError(
+                f"metric gate valid range is inverted: {category}:{name}"
+            )
         if any(
             (valid_min is not None and value < float(valid_min))
             or (valid_max is not None and value > float(valid_max))
@@ -167,18 +274,32 @@ def _enforce_metric_gates(receipts: list[dict[str, Any]], requirements: dict[str
         elif aggregation == "sum":
             value = sum(values)
         else:
-            raise ReleaseError(f"metric gate uses an unsupported aggregation: {aggregation}")
+            raise ReleaseError(
+                f"metric gate uses an unsupported aggregation: {aggregation}"
+            )
         if not math.isfinite(value):
-            raise ReleaseError(f"metric gate aggregation is non-finite: {category}:{name}")
+            raise ReleaseError(
+                f"metric gate aggregation is non-finite: {category}:{name}"
+            )
         threshold = gate["threshold"]
-        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not math.isfinite(float(threshold)):
+        if (
+            not isinstance(threshold, (int, float))
+            or isinstance(threshold, bool)
+            or not math.isfinite(float(threshold))
+        ):
             raise ReleaseError(f"metric gate threshold is invalid: {category}:{name}")
         comparison = gate["comparison"]
-        passed = (comparison == "gte" and value >= float(threshold)) or (comparison == "lte" and value <= float(threshold))
+        passed = (comparison == "gte" and value >= float(threshold)) or (
+            comparison == "lte" and value <= float(threshold)
+        )
         if comparison not in {"gte", "lte"}:
-            raise ReleaseError(f"metric gate uses an unsupported comparison: {comparison}")
+            raise ReleaseError(
+                f"metric gate uses an unsupported comparison: {comparison}"
+            )
         if not passed:
-            raise ReleaseError(f"required metric {category}:{name} observed {value}, expected {comparison} {threshold}")
+            raise ReleaseError(
+                f"required metric {category}:{name} observed {value}, expected {comparison} {threshold}"
+            )
         observed[f"{category}:{name}"] = value
     return observed
 
@@ -192,7 +313,11 @@ def _mapped_requirements(specification: Any, label: str) -> list[dict[str, str]]
     if not isinstance(values, list) or not values:
         raise ReleaseError(f"qualification mapping is empty: {label}")
     for value in values:
-        if not isinstance(value, dict) or set(value) != {"category", "check"} or not all(isinstance(item, str) and item for item in value.values()):
+        if (
+            not isinstance(value, dict)
+            or set(value) != {"category", "check"}
+            or not all(isinstance(item, str) and item for item in value.values())
+        ):
             raise ReleaseError(f"qualification mapping requirement is invalid: {label}")
     return values
 
@@ -206,35 +331,66 @@ def _require_artifact_qualification(
     qualifications = mapping.get("qualifications")
     additional = mapping.get("additional_requirements")
     universal = mapping.get("universal_requirements", [])
-    if not isinstance(qualifications, dict) or not isinstance(additional, list) or not isinstance(universal, list):
+    if (
+        not isinstance(qualifications, dict)
+        or not isinstance(additional, list)
+        or not isinstance(universal, list)
+    ):
         raise ReleaseError("qualification category map is invalid")
 
     def present(identifier: str, requirement: dict[str, str]) -> bool:
         return any(
             receipt["category"] == requirement["category"]
             and identifier in receipt["artifact_ids"]
-            and any(check.get("id") == requirement["check"] and check.get("status") == "passed" for check in receipt["checks"])
+            and any(
+                check.get("id") == requirement["check"]
+                and check.get("status") == "passed"
+                for check in receipt["checks"]
+            )
             for receipt in receipts
         )
 
     for identifier in sorted(built_ids):
         entry = matrix_entries[identifier]
         for requirement in universal:
-            if not isinstance(requirement, dict) or set(requirement) != {"category", "check"}:
-                raise ReleaseError("universal artifact qualification mapping is invalid")
+            if not isinstance(requirement, dict) or set(requirement) != {
+                "category",
+                "check",
+            }:
+                raise ReleaseError(
+                    "universal artifact qualification mapping is invalid"
+                )
             if not present(identifier, requirement):
-                raise ReleaseError(f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence")
+                raise ReleaseError(
+                    f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence"
+                )
         for qualification in entry.get("qualification", []):
             if qualification not in qualifications:
-                raise ReleaseError(f"artifact {identifier} uses unmapped qualification {qualification}")
-            for requirement in _mapped_requirements(qualifications[qualification], qualification):
+                raise ReleaseError(
+                    f"artifact {identifier} uses unmapped qualification {qualification}"
+                )
+            for requirement in _mapped_requirements(
+                qualifications[qualification], qualification
+            ):
                 if not present(identifier, requirement):
-                    raise ReleaseError(f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence")
+                    raise ReleaseError(
+                        f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence"
+                    )
         for requirement in additional:
-            if not isinstance(requirement, dict) or set(requirement) != {"artifact_kind", "category", "check"}:
-                raise ReleaseError("additional artifact qualification mapping is invalid")
-            if requirement["artifact_kind"] == entry.get("kind") and not present(identifier, requirement):
-                raise ReleaseError(f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence")
+            if not isinstance(requirement, dict) or set(requirement) != {
+                "artifact_kind",
+                "category",
+                "check",
+            }:
+                raise ReleaseError(
+                    "additional artifact qualification mapping is invalid"
+                )
+            if requirement["artifact_kind"] == entry.get("kind") and not present(
+                identifier, requirement
+            ):
+                raise ReleaseError(
+                    f"artifact {identifier} lacks {requirement['category']}:{requirement['check']} evidence"
+                )
 
 
 def main() -> int:
@@ -245,34 +401,59 @@ def main() -> int:
         raise ReleaseError(f"distribution directory does not exist: {dist}")
     for path in dist.rglob("*"):
         if path.is_symlink():
-            raise ReleaseError(f"distribution directory contains a symlink: {path.relative_to(dist)}")
+            raise ReleaseError(
+                f"distribution directory contains a symlink: {path.relative_to(dist)}"
+            )
     matrix = load_json(resolve_beneath(root, arguments.matrix))
     requirements = load_json(resolve_beneath(root, arguments.requirements))
     gaps = load_json(root / "packaging/qualification-gaps.v1.json")
     validate_release_policy_documents(matrix, requirements, gaps)
     if not arguments.allow_development:
         if matrix.get("release_state") != "release":
-            raise ReleaseError("production evidence requires an artifact matrix in release state")
-        blocking = [entry.get("id") for entry in gaps.get("gaps", []) if isinstance(entry, dict) and entry.get("release_blocking") is True]
+            raise ReleaseError(
+                "production evidence requires an artifact matrix in release state"
+            )
+        blocking = [
+            entry.get("id")
+            for entry in gaps.get("gaps", [])
+            if isinstance(entry, dict) and entry.get("release_blocking") is True
+        ]
         if blocking:
-            raise ReleaseError(f"production evidence cannot be assembled with open qualification gaps: {blocking}")
-    qualification_mapping = load_json(resolve_beneath(root, requirements["qualification_category_map"]))
+            raise ReleaseError(
+                f"production evidence cannot be assembled with open qualification gaps: {blocking}"
+            )
+    qualification_mapping = load_json(
+        resolve_beneath(root, requirements["qualification_category_map"])
+    )
     validate_qualification_policy(qualification_mapping)
     build_manifest_path = _inside(dist, arguments.build_manifest)
     build = load_json(build_manifest_path)
     expected_build_keys = {
-        "schema_version", "product_version", "context_abi", "source_date_epoch", "source", "artifacts",
+        "schema_version",
+        "product_version",
+        "context_abi",
+        "source_date_epoch",
+        "source",
+        "artifacts",
     }
     if (
         not isinstance(build, dict)
         or set(build) != expected_build_keys
-        or build.get("schema_version") not in {"cigar.local-archive-build.v1", "cigar.release-build.v1"}
+        or build.get("schema_version")
+        not in {"cigar.local-archive-build.v1", "cigar.release-build.v1"}
     ):
         raise ReleaseError("unsupported build manifest")
-    if not arguments.allow_development and build["schema_version"] != "cigar.release-build.v1":
+    if (
+        not arguments.allow_development
+        and build["schema_version"] != "cigar.release-build.v1"
+    ):
         raise ReleaseError("production evidence requires a release build manifest")
-    if build.get("product_version") != matrix.get("product_version") or build.get("context_abi") != matrix.get("context_abi"):
-        raise ReleaseError("build version or Context ABI disagrees with artifact matrix")
+    if build.get("product_version") != matrix.get("product_version") or build.get(
+        "context_abi"
+    ) != matrix.get("context_abi"):
+        raise ReleaseError(
+            "build version or Context ABI disagrees with artifact matrix"
+        )
     if (
         not isinstance(build.get("source_date_epoch"), int)
         or isinstance(build["source_date_epoch"], bool)
@@ -285,15 +466,22 @@ def main() -> int:
         not isinstance(source, dict)
         or set(source) != {"revision", "tree_sha256", "committed", "clean"}
         or not isinstance(source.get("revision"), str)
-        or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64}|unborn:[0-9a-f]{64})", source["revision"]) is None
+        or re.fullmatch(
+            r"(?:[0-9a-f]{40}|[0-9a-f]{64}|unborn:[0-9a-f]{64})", source["revision"]
+        )
+        is None
         or not isinstance(source.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", source["tree_sha256"]) is None
         or not isinstance(source.get("committed"), bool)
         or not isinstance(source.get("clean"), bool)
     ):
         raise ReleaseError("build manifest source identity is invalid")
-    if not arguments.allow_development and (source.get("committed") is not True or source.get("clean") is not True):
-        raise ReleaseError("production evidence requires a committed, clean source revision")
+    if not arguments.allow_development and (
+        source.get("committed") is not True or source.get("clean") is not True
+    ):
+        raise ReleaseError(
+            "production evidence requires a committed, clean source revision"
+        )
 
     matrix_entries = {entry["id"]: entry for entry in matrix["artifacts"]}
     required_artifacts = _artifact_ids(matrix)
@@ -307,13 +495,17 @@ def main() -> int:
             raise ReleaseError("build manifest contains a non-object artifact record")
         identifier = entry.get("id")
         if not isinstance(identifier, str) or not identifier or identifier in built_ids:
-            raise ReleaseError("build manifest contains duplicate or invalid artifact ids")
+            raise ReleaseError(
+                "build manifest contains duplicate or invalid artifact ids"
+            )
         built_ids.add(identifier)
         typed_artifact_records.append(entry)
     if not arguments.allow_development and built_ids != required_artifacts:
         missing = sorted(required_artifacts - built_ids)
         extra = sorted(built_ids - required_artifacts)
-        raise ReleaseError(f"artifact matrix mismatch; missing={missing}, extra={extra}")
+        raise ReleaseError(
+            f"artifact matrix mismatch; missing={missing}, extra={extra}"
+        )
     if not built_ids:
         raise ReleaseError("build manifest has invalid artifact ids")
 
@@ -325,9 +517,13 @@ def main() -> int:
             raise ReleaseError("build manifest has an invalid artifact id")
         identifier = identifier_value
         if identifier not in matrix_entries:
-            raise ReleaseError(f"build manifest contains unknown artifact id: {identifier}")
+            raise ReleaseError(
+                f"build manifest contains unknown artifact id: {identifier}"
+            )
         if set(record) != {"id", "path", "sha256", "bytes", "contract"}:
-            raise ReleaseError(f"build manifest artifact record has an unexpected shape: {identifier}")
+            raise ReleaseError(
+                f"build manifest artifact record has an unexpected shape: {identifier}"
+            )
         if (
             not isinstance(record.get("sha256"), str)
             or re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) is None
@@ -335,36 +531,58 @@ def main() -> int:
             or isinstance(record["bytes"], bool)
             or record["bytes"] <= 0
         ):
-            raise ReleaseError(f"build manifest artifact digest or size is invalid: {identifier}")
+            raise ReleaseError(
+                f"build manifest artifact digest or size is invalid: {identifier}"
+            )
         relative = safe_relative_path(record.get("path", ""))
         if Path(relative).name != matrix_entries[identifier].get("filename"):
-            raise ReleaseError(f"build artifact filename disagrees with the matrix: {identifier}")
+            raise ReleaseError(
+                f"build artifact filename disagrees with the matrix: {identifier}"
+            )
         path = _inside(dist, relative)
         if path.resolve() in artifact_paths:
-            raise ReleaseError(f"multiple artifact ids reference the same payload: {relative}")
+            raise ReleaseError(
+                f"multiple artifact ids reference the same payload: {relative}"
+            )
         artifact_paths.add(path.resolve())
-        if sha256_file(path) != record.get("sha256") or path.stat().st_size != record.get("bytes"):
-            raise ReleaseError(f"artifact digest or size changed after build: {relative}")
+        if sha256_file(path) != record.get(
+            "sha256"
+        ) or path.stat().st_size != record.get("bytes"):
+            raise ReleaseError(
+                f"artifact digest or size changed after build: {relative}"
+            )
         contract_relative = matrix_entries[identifier]["contract"]
         expected_contract = f"packaging/{contract_relative}"
         if record.get("contract") != expected_contract:
-            raise ReleaseError(f"build artifact contract disagrees with the matrix: {identifier}")
+            raise ReleaseError(
+                f"build artifact contract disagrees with the matrix: {identifier}"
+            )
         contract_path = resolve_beneath(root, f"packaging/{contract_relative}")
-        verify_package(path, contract_path, matrix["product_version"], matrix["context_abi"], build["source_date_epoch"])
-        artifacts.append({
-            "id": identifier,
-            "path": relative,
-            "sha256": record["sha256"],
-            "bytes": record["bytes"],
-            "contract": f"packaging/{contract_relative}",
-            "status": "passed",
-        })
+        verify_package(
+            path,
+            contract_path,
+            matrix["product_version"],
+            matrix["context_abi"],
+            build["source_date_epoch"],
+        )
+        artifacts.append(
+            {
+                "id": identifier,
+                "path": relative,
+                "sha256": record["sha256"],
+                "bytes": record["bytes"],
+                "contract": f"packaging/{contract_relative}",
+                "status": "passed",
+            }
+        )
 
     evidence_directory = _inside(dist, arguments.evidence_directory)
     prohibited = set(requirements.get("prohibited_statuses", []))
     receipts: list[tuple[Path, dict[str, Any]]] = []
     for path in sorted(evidence_directory.glob("*.json"), key=lambda value: value.name):
-        receipt = _validate_receipt(load_json(path), path, dist, source["revision"], built_ids, prohibited)
+        receipt = _validate_receipt(
+            load_json(path), path, dist, source["revision"], built_ids, prohibited
+        )
         receipts.append((path, receipt))
     if not receipts:
         raise ReleaseError("no qualification evidence receipts were found")
@@ -373,34 +591,61 @@ def main() -> int:
         for reference in receipt["attachments"]:
             attachment = resolve_beneath(dist, reference["path"]).resolve()
             if attachment in artifact_paths or attachment in receipt_file_paths:
-                raise ReleaseError("evidence attachment overlaps an artifact or receipt")
+                raise ReleaseError(
+                    "evidence attachment overlaps an artifact or receipt"
+                )
     identifiers = [receipt["id"] for _, receipt in receipts]
     if len(set(identifiers)) != len(identifiers):
         raise ReleaseError("duplicate qualification evidence id")
     required_categories = set(requirements.get("required_evidence_categories", []))
     found_categories = {receipt["category"] for _, receipt in receipts}
     if not arguments.allow_development and found_categories != required_categories:
-        raise ReleaseError(f"evidence category mismatch; missing={sorted(required_categories - found_categories)}, extra={sorted(found_categories - required_categories)}")
+        raise ReleaseError(
+            f"evidence category mismatch; missing={sorted(required_categories - found_categories)}, extra={sorted(found_categories - required_categories)}"
+        )
     if not arguments.allow_development:
         _enforce_metric_gates([receipt for _, receipt in receipts], requirements)
-        _require_artifact_qualification(matrix_entries, built_ids, [receipt for _, receipt in receipts], qualification_mapping)
+        _require_artifact_qualification(
+            matrix_entries,
+            built_ids,
+            [receipt for _, receipt in receipts],
+            qualification_mapping,
+        )
 
     evidence = []
     for path, receipt in receipts:
         reference = file_reference(path, dist)
-        evidence.append({**reference, "id": receipt["id"], "category": receipt["category"], "source_revision": receipt["source_revision"], "status": receipt["status"], "artifact_ids": sorted(receipt["artifact_ids"]), "metrics": receipt["metrics"]})
+        evidence.append(
+            {
+                **reference,
+                "id": receipt["id"],
+                "category": receipt["category"],
+                "source_revision": receipt["source_revision"],
+                "status": receipt["status"],
+                "artifact_ids": sorted(receipt["artifact_ids"]),
+                "metrics": receipt["metrics"],
+            }
+        )
 
     signature_directory = _inside(dist, arguments.signature_directory)
-    signature_paths = sorted(signature_directory.glob("*.sig.json"), key=lambda value: value.name)
+    signature_paths = sorted(
+        signature_directory.glob("*.sig.json"), key=lambda value: value.name
+    )
     if not signature_paths and not arguments.allow_development:
         raise ReleaseError("no detached signature envelopes were found")
     signatures = [file_reference(path, dist) for path in signature_paths]
     output_path = dist / safe_relative_path(arguments.out)
-    occupied_paths = artifact_paths | receipt_file_paths | {
-        resolve_beneath(dist, reference["path"]).resolve()
-        for _, receipt in receipts
-        for reference in receipt["attachments"]
-    } | {path.resolve() for path in signature_paths} | {build_manifest_path.resolve()}
+    occupied_paths = (
+        artifact_paths
+        | receipt_file_paths
+        | {
+            resolve_beneath(dist, reference["path"]).resolve()
+            for _, receipt in receipts
+            for reference in receipt["attachments"]
+        }
+        | {path.resolve() for path in signature_paths}
+        | {build_manifest_path.resolve()}
+    )
     if output_path.resolve() in occupied_paths:
         raise ReleaseError("release evidence output overlaps an input payload")
     assembled = {
@@ -415,7 +660,9 @@ def main() -> int:
         "signatures": signatures,
     }
     write_json(output_path, assembled)
-    print(f"assembled {len(artifacts)} artifacts, {len(evidence)} evidence receipts, and {len(signatures)} signatures")
+    print(
+        f"assembled {len(artifacts)} artifacts, {len(evidence)} evidence receipts, and {len(signatures)} signatures"
+    )
     return 0
 
 

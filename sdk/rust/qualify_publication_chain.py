@@ -64,7 +64,9 @@ def sha256(path: Path) -> str:
 
 def source_tree_digest(path: Path) -> str:
     digest = hashlib.sha256()
-    for source in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+    for source in sorted(
+        candidate for candidate in path.rglob("*") if candidate.is_file()
+    ):
         relative = source.relative_to(path).as_posix().encode("utf-8")
         digest.update(len(relative).to_bytes(8, "big"))
         digest.update(relative)
@@ -87,7 +89,9 @@ def dependency_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                 else raw_specification
             )
             if not isinstance(specification, dict):
-                raise RuntimeError(f"dependency {alias} has an invalid normalized specification")
+                raise RuntimeError(
+                    f"dependency {alias} has an invalid normalized specification"
+                )
             if "path" in specification:
                 raise RuntimeError(f"normalized dependency {alias} retained a path")
             package = specification.get("package")
@@ -161,19 +165,26 @@ def add_to_registry(
     package_index.parent.mkdir(parents=True, exist_ok=True)
     existing: list[dict[str, Any]] = []
     if package_index.exists():
-        existing = [json.loads(line) for line in package_index.read_text().splitlines() if line]
+        existing = [
+            json.loads(line) for line in package_index.read_text().splitlines() if line
+        ]
     existing = [record for record in existing if record.get("vers") != version]
     existing.append(registry_record)
     existing.sort(key=lambda record: record["vers"])
     package_index.write_text(
-        "\n".join(json.dumps(record, separators=(",", ":"), sort_keys=True) for record in existing)
+        "\n".join(
+            json.dumps(record, separators=(",", ":"), sort_keys=True)
+            for record in existing
+        )
         + "\n",
         encoding="utf-8",
     )
     return {"name": name, "version": version, "sha256": checksum}
 
 
-def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -> dict[str, Any]:
+def inspect_crate(
+    crate_path: Path, expected_name: str, expected_version: str
+) -> dict[str, Any]:
     expected_root = f"{expected_name}-{expected_version}"
     with tarfile.open(crate_path, "r:gz") as archive:
         members = archive.getmembers()
@@ -181,11 +192,15 @@ def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -
         for member in members:
             path = PurePosixPath(member.name)
             if path.is_absolute() or ".." in path.parts:
-                raise RuntimeError(f"unsafe archive path in {crate_path.name}: {member.name}")
+                raise RuntimeError(
+                    f"unsafe archive path in {crate_path.name}: {member.name}"
+                )
             if member.issym() or member.islnk():
                 raise RuntimeError(f"link in {crate_path.name}: {member.name}")
             if path.parts[0] != expected_root:
-                raise RuntimeError(f"unexpected archive root in {crate_path.name}: {member.name}")
+                raise RuntimeError(
+                    f"unexpected archive root in {crate_path.name}: {member.name}"
+                )
         required = {
             f"{expected_root}/Cargo.toml",
             f"{expected_root}/Cargo.toml.orig",
@@ -203,7 +218,9 @@ def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -
         manifest_member = archive.getmember(f"{expected_root}/Cargo.toml")
         manifest_file = archive.extractfile(manifest_member)
         if manifest_file is None:
-            raise RuntimeError(f"cannot read normalized manifest from {crate_path.name}")
+            raise RuntimeError(
+                f"cannot read normalized manifest from {crate_path.name}"
+            )
         manifest = tomllib.loads(manifest_file.read().decode("utf-8"))
 
     package = manifest["package"]
@@ -215,12 +232,16 @@ def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -
 
     if expected_name == "cigar-aws-creds":
         if manifest["features"].get("default") != ["rustls-tls"]:
-            raise RuntimeError("cigar-aws-creds does not default to the reviewed Rustls profile")
+            raise RuntimeError(
+                "cigar-aws-creds does not default to the reviewed Rustls profile"
+            )
         if manifest["features"].get("rustls-tls") != [
             "http-credentials",
             "attohttpc/tls-rustls-webpki-roots-ring",
         ]:
-            raise RuntimeError("cigar-aws-creds lost its explicit Ring provider selection")
+            raise RuntimeError(
+                "cigar-aws-creds lost its explicit Ring provider selection"
+            )
         if manifest["dependencies"]["quick-xml"]["version"] != "=0.41.0":
             raise RuntimeError("cigar-aws-creds lost its exact quick-xml version")
     elif expected_name == "cigar-rust-s3":
@@ -230,11 +251,15 @@ def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -
             or credential_dependency.get("version") != "=0.39.1-cigar.1"
             or credential_dependency.get("default-features") is not False
         ):
-            raise RuntimeError("cigar-rust-s3 can fall back to an unreviewed credentials package")
+            raise RuntimeError(
+                "cigar-rust-s3 can fall back to an unreviewed credentials package"
+            )
         if "attohttpc/tls-rustls-webpki-roots-ring" not in manifest["features"].get(
             "sync-rustls-tls", []
         ):
-            raise RuntimeError("cigar-rust-s3 lost its explicit Ring provider selection")
+            raise RuntimeError(
+                "cigar-rust-s3 lost its explicit Ring provider selection"
+            )
         if manifest["dependencies"]["quick-xml"]["version"] != "=0.41.0":
             raise RuntimeError("cigar-rust-s3 lost its exact quick-xml version")
         removed_dependencies = {"async-std", "surf"} & set(manifest["dependencies"])
@@ -267,12 +292,15 @@ def inspect_crate(crate_path: Path, expected_name: str, expected_version: str) -
             )
         required_store_files = {
             f"{expected_root}/migrations/sqlite/0001_initial.sql",
-            *(f"{expected_root}/migrations/postgres/000{number}_{suffix}.sql" for number, suffix in (
-                (1, "shared_metadata"),
-                (2, "object_outbox"),
-                (3, "atom_projection"),
-                (4, "gc_revision_guard"),
-            )),
+            *(
+                f"{expected_root}/migrations/postgres/000{number}_{suffix}.sql"
+                for number, suffix in (
+                    (1, "shared_metadata"),
+                    (2, "object_outbox"),
+                    (3, "atom_projection"),
+                    (4, "gc_revision_guard"),
+                )
+            ),
         }
         if not required_store_files.issubset(names):
             raise RuntimeError("cigar-store package omitted one or more migrations")
@@ -296,26 +324,38 @@ def validate_report(report: dict[str, Any]) -> None:
         "limitations",
     }
     if set(report) != expected_top_level:
-        raise RuntimeError("publication qualification report has an unexpected top-level shape")
+        raise RuntimeError(
+            "publication qualification report has an unexpected top-level shape"
+        )
     if report["schema_version"] != "cigar.rust-publication-chain-qualification.v1":
-        raise RuntimeError("publication qualification report has an unexpected schema version")
+        raise RuntimeError(
+            "publication qualification report has an unexpected schema version"
+        )
     if report["status"] != "passed-local-registry":
         raise RuntimeError("publication qualification report did not pass")
     if report["external_publish_performed"] is not False:
-        raise RuntimeError("local qualification must not claim or perform an external publish")
+        raise RuntimeError(
+            "local qualification must not claim or perform an external publish"
+        )
     if report["clean_default_feature_consumer"] != "passed":
         raise RuntimeError("clean default-feature consumer did not pass")
 
     package_records = report["packages"]
-    if report["package_count"] != len(PACKAGES) or len(package_records) != len(PACKAGES):
-        raise RuntimeError("publication qualification report has an unexpected package count")
+    if report["package_count"] != len(PACKAGES) or len(package_records) != len(
+        PACKAGES
+    ):
+        raise RuntimeError(
+            "publication qualification report has an unexpected package count"
+        )
     for record, (expected_name, expected_version) in zip(
         package_records, PACKAGES, strict=True
     ):
         if set(record) != {"name", "version", "sha256"}:
             raise RuntimeError("package evidence must contain identity and digest only")
         if (record["name"], record["version"]) != (expected_name, expected_version):
-            raise RuntimeError("package evidence is not in the documented publication order")
+            raise RuntimeError(
+                "package evidence is not in the documented publication order"
+            )
         if re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) is None:
             raise RuntimeError("package evidence has an invalid SHA-256 digest")
 
@@ -328,9 +368,13 @@ def validate_report(report: dict[str, Any]) -> None:
         raise RuntimeError("reviewed source evidence has an unexpected record count")
     for record, expected_source in zip(source_records, expected_sources, strict=True):
         if set(record) != {"vendored", "sha256"}:
-            raise RuntimeError("reviewed source evidence must contain path and digest only")
+            raise RuntimeError(
+                "reviewed source evidence must contain path and digest only"
+            )
         if record["vendored"] != expected_source:
-            raise RuntimeError("reviewed source evidence has an unexpected relative path")
+            raise RuntimeError(
+                "reviewed source evidence has an unexpected relative path"
+            )
         if re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) is None:
             raise RuntimeError("reviewed source evidence has an invalid SHA-256 digest")
 
@@ -340,11 +384,15 @@ def validate_report(report: dict[str, Any]) -> None:
         "This local registry proves normalized dependency resolution but is not a crates.io publication receipt.",
     ]
     if report["limitations"] != expected_limitations:
-        raise RuntimeError("publication qualification report has unexpected free-form limitations")
+        raise RuntimeError(
+            "publication qualification report has unexpected free-form limitations"
+        )
 
     def reject_multiline_strings(value: Any) -> None:
         if isinstance(value, str) and ("\n" in value or "\r" in value):
-            raise RuntimeError("publication qualification report contains multiline payload text")
+            raise RuntimeError(
+                "publication qualification report contains multiline payload text"
+            )
         if isinstance(value, dict):
             for nested in value.values():
                 reject_multiline_strings(nested)
@@ -377,7 +425,10 @@ def main() -> int:
         if vendored_digest != publishable_digest:
             raise RuntimeError(f"publishable fork source drifted from {vendored}")
         source_digests.append(
-            {"vendored": vendored.relative_to(root).as_posix(), "sha256": vendored_digest}
+            {
+                "vendored": vendored.relative_to(root).as_posix(),
+                "sha256": vendored_digest,
+            }
         )
 
     with tempfile.TemporaryDirectory(prefix="cigar-cargo-home-") as cargo_home_raw:
@@ -385,7 +436,7 @@ def main() -> int:
         config = cargo_home / "config.toml"
         config.write_text(
             "[source.crates-io]\n"
-            "replace-with = \"cigar-local\"\n\n"
+            'replace-with = "cigar-local"\n\n'
             "[source.cigar-local]\n"
             f"local-registry = {json.dumps(str(registry))}\n\n"
             "[net]\noffline = true\n",
@@ -411,7 +462,11 @@ def main() -> int:
                 root=root,
                 environment=environment,
             )
-            crate_path = Path(environment["CARGO_TARGET_DIR"]) / "package" / f"{name}-{version}.crate"
+            crate_path = (
+                Path(environment["CARGO_TARGET_DIR"])
+                / "package"
+                / f"{name}-{version}.crate"
+            )
             manifest = inspect_crate(crate_path, name, version)
             records.append(add_to_registry(registry, crate_path, manifest))
 
@@ -419,14 +474,20 @@ def main() -> int:
             consumer = Path(consumer_raw)
             (consumer / "src").mkdir()
             (consumer / "Cargo.toml").write_text(
-                "[package]\nname = \"cigar-sdk-clean-consumer\"\nversion = \"0.0.0\"\n"
-                "edition = \"2024\"\nrust-version = \"1.92\"\npublish = false\n\n"
-                "[dependencies]\ncigar-sdk = \"=0.1.0\"\n",
+                '[package]\nname = "cigar-sdk-clean-consumer"\nversion = "0.0.0"\n'
+                'edition = "2024"\nrust-version = "1.92"\npublish = false\n\n'
+                '[dependencies]\ncigar-sdk = "=0.1.0"\n',
                 encoding="utf-8",
             )
             (consumer / "src/main.rs").write_text("fn main() {}\n", encoding="utf-8")
             run(
-                ["cargo", "check", "--offline", "--manifest-path", str(consumer / "Cargo.toml")],
+                [
+                    "cargo",
+                    "check",
+                    "--offline",
+                    "--manifest-path",
+                    str(consumer / "Cargo.toml"),
+                ],
                 root=root,
                 environment=environment,
             )
