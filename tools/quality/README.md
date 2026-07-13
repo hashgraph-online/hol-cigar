@@ -49,6 +49,11 @@ bounded raw outcome evidence to independently recompute cargo-mutants counts
 and score. Mutation runs are therefore diagnostic only until a closed
 attachment schema and adversarial verifier tests land; they cannot be used to
 claim combined qualification.
+Each qualifying libFuzzer target has a deterministic wall bound equal to its
+canonical campaign duration plus a fixed 900-second cold instrumented-build
+allowance. The bound is recorded in every process receipt and `verify-smoke`
+requires the exact reviewed value; it does not weaken the independently parsed
+libFuzzer-duration threshold.
 `corpus_manager.py` inventories, externally minimizes, and safely reconciles
 libFuzzer corpus growth. See `fuzz/README.md` and `fuzz/corpus-policy.v1.json`;
 neither tool is allowed to silently mutate or discard the checked-in corpus.

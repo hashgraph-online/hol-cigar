@@ -64,6 +64,12 @@ MUTATION_THRESHOLD_PERCENT = 90.0
 MAXIMUM_SUBPROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
 MAXIMUM_EVIDENCE_DOCUMENT_BYTES = 16 * 1024 * 1024
 DEFAULT_SMOKE_SEED = 190000
+# A cold AddressSanitizer/libFuzzer build is part of each target process's wall
+# time. Keep that build allowance fixed and reviewable rather than deriving it
+# from host speed or observed execution. The campaign's requested fuzz seconds
+# are added separately and are still verified from libFuzzer's own final stats.
+SMOKE_COLD_BUILD_ALLOWANCE_SECONDS = 15 * 60
+RUN_COUNT_FUZZ_WALL_TIMEOUT_SECONDS = 10 * 60
 MUTATION_VERIFICATION_UNAVAILABLE = (
     "combined smoke/mutation verification is unavailable: retained mutation "
     "evidence cannot yet independently recompute cargo-mutants outcomes; use "
@@ -316,6 +322,12 @@ def fuzz_command_record(
     )
 
 
+def smoke_fuzz_wall_timeout_seconds(requested_seconds: int) -> int:
+    if type(requested_seconds) is not int or requested_seconds <= 0:
+        raise GateFailure("smoke fuzz duration must be a positive integer")
+    return requested_seconds + SMOKE_COLD_BUILD_ALLOWANCE_SECONDS
+
+
 def mutation_command_record() -> str:
     return " ".join(
         [
@@ -398,6 +410,7 @@ def run(
         "started_at": started,
         "finished_at": utc_now(),
         "duration_seconds": process["duration_seconds"],
+        "wall_timeout_seconds": timeout_seconds,
         "exit_code": process["exit_code"],
         "timed_out": process["timed_out"],
         "output_overflow": process["output_overflow"],
@@ -1022,6 +1035,7 @@ BASE_PROCESS_FIELDS = frozenset(
         "started_at",
         "finished_at",
         "duration_seconds",
+        "wall_timeout_seconds",
         "exit_code",
         "timed_out",
         "output_overflow",
@@ -1450,7 +1464,11 @@ def smoke(args: argparse.Namespace) -> None:
             result = run(
                 command,
                 log_path=log_root / f"fuzz-{target}.log",
-                timeout_seconds=(requested_seconds + 180) if qualifying_smoke else 600,
+                timeout_seconds=(
+                    smoke_fuzz_wall_timeout_seconds(requested_seconds)
+                    if qualifying_smoke
+                    else RUN_COUNT_FUZZ_WALL_TIMEOUT_SECONDS
+                ),
                 cwd=execution_root,
                 env=cargo_fuzz_environment,
                 recorded_command=(
@@ -1818,6 +1836,11 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
             f"{label}: invalid duration",
         )
         expect(
+            type(result.get("wall_timeout_seconds")) is int
+            and result["wall_timeout_seconds"] > 0,
+            f"{label}: invalid wall timeout",
+        )
+        expect(
             type(result.get("captured_output_bytes")) is int
             and 0 <= result["captured_output_bytes"] <= MAXIMUM_SUBPROCESS_OUTPUT_BYTES,
             f"{label}: invalid captured-output byte count",
@@ -1862,6 +1885,10 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
             f"{label}: private-log descriptor is malformed",
         )
         expect_bounded_process(result, label)
+        expect(
+            result.get("wall_timeout_seconds") == timeout_seconds,
+            f"{label}: wall timeout does not match the reviewed bound",
+        )
         expect(
             is_nonnegative_number(result.get("duration_seconds"))
             and result["duration_seconds"] <= timeout_seconds,
@@ -2030,7 +2057,7 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
                 ),
                 label=str(target),
                 envelope=smoke_envelope,
-                timeout_seconds=requested_seconds + 180,
+                timeout_seconds=smoke_fuzz_wall_timeout_seconds(requested_seconds),
             )
             expect(target == expected_target, f"{target}: target order is invalid")
             expect(item.get("exit_code") == 0, f"{target}: nonzero fuzz exit")

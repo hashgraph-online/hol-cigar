@@ -311,6 +311,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                     env=environment,
                 )
                 self.assertEqual(result["exit_code"], 0)
+                self.assertEqual(result["wall_timeout_seconds"], 5)
                 self.assertEqual(result["_output"].strip(), "absent")
         finally:
             if previous is None:
@@ -409,13 +410,14 @@ class FuzzEvidenceTests(unittest.TestCase):
             }
 
         def process_record(
-            *, command: str, log_name: str, body: bytes
+            *, command: str, log_name: str, body: bytes, wall_timeout_seconds: int
         ) -> dict[str, Any]:
             return {
                 "command": command,
                 "started_at": "2026-01-01T00:00:10Z",
                 "finished_at": "2026-01-01T00:01:10Z",
                 "duration_seconds": 60.0,
+                "wall_timeout_seconds": wall_timeout_seconds,
                 "exit_code": 0,
                 "timed_out": False,
                 "output_overflow": False,
@@ -444,6 +446,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                 command=fuzz_and_mutation.harness_check_command_record(),
                 log_name="harness-check.log",
                 body=b"cargo check completed\n",
+                wall_timeout_seconds=900,
             ),
             "clean": True,
         }
@@ -452,6 +455,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                 command=fuzz_and_mutation.properties_command_record(),
                 log_name="properties-and-loom.log",
                 body=b"test result: ok. 15 passed; 0 failed\n",
+                wall_timeout_seconds=1800,
             ),
             "passed_test_count": 15,
             "clean": True,
@@ -461,6 +465,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                 command=fuzz_and_mutation.miri_command_record(),
                 log_name="strict-miri.log",
                 body=b"test result: ok. 1 passed; 0 failed\n",
+                wall_timeout_seconds=1800,
             ),
             "passed_test_count": 1,
             "miri_flags": campaign["supplemental_memory_model"]["flags"],
@@ -483,6 +488,11 @@ class FuzzEvidenceTests(unittest.TestCase):
                         ),
                         log_name=f"fuzz-{target}.log",
                         body=fuzz_body,
+                        wall_timeout_seconds=(
+                            fuzz_and_mutation.smoke_fuzz_wall_timeout_seconds(
+                                campaign["smoke_seconds_per_target"]
+                            )
+                        ),
                     ),
                     "target": target,
                     "sanitizer": "address",
@@ -720,6 +730,9 @@ class FuzzEvidenceTests(unittest.TestCase):
             def fuzz_runs(document: dict[str, Any]) -> None:
                 document["gates"]["asan_libfuzzer"][0]["requested_minimum_runs"] = 1
 
+            def fuzz_wall_timeout(document: dict[str, Any]) -> None:
+                document["gates"]["asan_libfuzzer"][0]["wall_timeout_seconds"] -= 1
+
             def fuzz_missing_field(document: dict[str, Any]) -> None:
                 document["gates"]["asan_libfuzzer"][0].pop("sanitizer")
 
@@ -780,6 +793,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                 ("fuzz seconds", fuzz_seconds),
                 ("fuzz seconds float", fuzz_seconds_float),
                 ("fuzz run mode", fuzz_runs),
+                ("fuzz wall timeout", fuzz_wall_timeout),
                 ("fuzz missing field", fuzz_missing_field),
                 ("fuzz corpus after", fuzz_corpus_after),
                 ("fuzz log metric", fuzz_metric),
@@ -832,6 +846,17 @@ class FuzzEvidenceTests(unittest.TestCase):
             harness_log.unlink()
             backup.rename(harness_log)
             self.verify_smoke_fixture(output, context)
+
+    def test_smoke_fuzz_wall_timeout_includes_fixed_cold_build_allowance(self) -> None:
+        self.assertEqual(
+            fuzz_and_mutation.smoke_fuzz_wall_timeout_seconds(60),
+            60 + fuzz_and_mutation.SMOKE_COLD_BUILD_ALLOWANCE_SECONDS,
+        )
+        self.assertEqual(fuzz_and_mutation.SMOKE_COLD_BUILD_ALLOWANCE_SECONDS, 900)
+        for invalid in (0, -1, 1.0, True):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(fuzz_and_mutation.GateFailure):
+                    fuzz_and_mutation.smoke_fuzz_wall_timeout_seconds(invalid)
 
     def test_private_evidence_loader_rejects_unsafe_documents(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
