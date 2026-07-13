@@ -140,6 +140,19 @@ class Wp20ReadinessTests(unittest.TestCase):
         shutil.copy2(
             ROOT / "baselines/cigarbench/manifest.json", baseline / "manifest.json"
         )
+        # Qualification runs from a read-only candidate.  The adversarial
+        # fixture tests intentionally mutate only this private temporary copy,
+        # so normalize its inherited candidate modes without making the
+        # candidate itself writable.
+        for directory, _, filenames in os.walk(self.root):
+            os.chmod(directory, 0o700)
+            for filename in filenames:
+                copied = Path(directory) / filename
+                if copied.is_symlink():
+                    raise AssertionError(
+                        f"unexpected symlink in test fixture: {copied}"
+                    )
+                os.chmod(copied, 0o600)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
