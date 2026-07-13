@@ -8,6 +8,39 @@
 
 The complete command list is available with `cigar help` and in `man/cigar.1`. Shell completion is emitted by `cigar completion bash|zsh|fish`.
 
+## Build profiles
+
+The default `full` feature preserves the complete CLI described below. The initial beta is a
+separate compile-time composition and must be built without default features:
+
+```console
+cargo build --release -p cigar-cli --no-default-features --features beta-embedded
+```
+
+`full` and `beta-embedded` are mutually exclusive, and selecting both or neither fails at compile
+time. This beta is a workspace-metadata administration preview, not the complete embedded CIGAR
+runtime. The beta binary contains only `init`, source add/list/remove, project
+list/attach/detach/switch/link/unlink, focus switch/close, help, and version. Those commands operate
+in-process against owner-only embedded state. The daemon, network targets, shared storage, effects,
+extensions, protocol operations, source discovery/ingest, catalog/index/retrieval, context
+planning/compilation, spaces/handoffs/replay, vector retrieval, MCP, plugins, completion/man
+generation, and their flags are not compiled into that binary. Adding a source records only a local
+metadata reference; it does not inspect or ingest the directory. Its exact user-facing surface is frozen in
+`assets/cigar-help-beta.txt`, and `cigar version` reports `0.1.0-beta.1`.
+The release profile qualifies this binary only for `x86_64-unknown-linux-gnu`; successful source
+compilation on another host is not a support claim. Embedded state uses owner-only files and a
+directory lock so concurrent beta processes cannot lose read-modify-write updates.
+
+An explicit beta configuration is intentionally smaller than the full configuration:
+
+```toml
+schema_version = 1
+target = "embedded"
+project_state_directory = "/absolute/project/.cigar"
+```
+
+Unknown fields and any target other than `embedded` fail closed.
+
 ## Configuration
 
 CLI configuration precedence is compiled defaults, `/etc/cigar/cli.toml`, user configuration, project `.cigar/cli.toml`, explicit `--config`, `CIGAR_*` environment overrides, then CLI flags. `--explain-config` reports the winning source for every field and redacts authorization material. Because project configuration is loaded implicitly, it cannot select a credential file or retarget an inherited credential; using a project-sourced HTTP endpoint with authorization requires an explicit config, environment, or CLI credential override.

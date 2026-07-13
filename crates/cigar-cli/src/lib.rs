@@ -1,15 +1,34 @@
-//! Content-safe CIGAR command parsing, transport dispatch, and rendering.
+//! Content-safe CIGAR command parsing, feature-selected execution, and rendering.
 
+#[cfg(all(feature = "full", feature = "beta-embedded"))]
+compile_error!("features `full` and `beta-embedded` are mutually exclusive");
+#[cfg(not(any(feature = "full", feature = "beta-embedded")))]
+compile_error!("exactly one of features `full` or `beta-embedded` must be enabled");
+
+#[cfg(feature = "full")]
+mod administration;
+#[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+#[path = "beta/administration.rs"]
 mod administration;
 mod arguments;
+#[cfg(feature = "full")]
 mod claude_plugin;
+#[cfg(feature = "full")]
+mod client;
+#[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+#[path = "beta/client.rs"]
 mod client;
 mod command;
+#[cfg(feature = "full")]
+mod configuration;
+#[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+#[path = "beta/configuration.rs"]
 mod configuration;
 mod error;
 mod render;
 
 use arguments::{ParsedInvocation, parse};
+#[cfg(feature = "full")]
 use client::{EmbeddedOperationClient, HttpOperationClient, OperationClient};
 use configuration::EffectiveConfiguration;
 use error::CliError;
@@ -105,10 +124,13 @@ pub fn confirmation_needed(arguments: &[OsString], terminal: TerminalContext) ->
 #[must_use]
 pub fn progress_start(arguments: &[OsString], terminal: TerminalContext) -> Option<String> {
     let invocation = parse(arguments.to_vec(), terminal).ok()?;
+    #[cfg(feature = "full")]
+    let generated_asset = invocation.command.is_completion() || invocation.command.is_man();
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    let generated_asset = false;
     if invocation.command.is_help()
         || invocation.command.is_version()
-        || invocation.command.is_completion()
-        || invocation.command.is_man()
+        || generated_asset
         || invocation.options.explain_config
         || invocation.require_confirmation(terminal).is_err()
         || !invocation.progress_enabled(terminal)
@@ -132,9 +154,14 @@ async fn execute(
         return Ok((command::help_text(), String::new()));
     }
     if invocation.command.is_version() {
-        let value = cigar_protocol::BuildMetadata::current(env!("CARGO_PKG_VERSION"));
-        return Ok((format!("{}\n", value.to_stable_json()), String::new()));
+        #[cfg(feature = "full")]
+        let rendered =
+            cigar_protocol::BuildMetadata::current(env!("CARGO_PKG_VERSION")).to_stable_json();
+        #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+        let rendered = beta_build_metadata()?;
+        return Ok((format!("{rendered}\n"), String::new()));
     }
+    #[cfg(feature = "full")]
     if invocation.command.is_completion() {
         let shell = invocation
             .positionals
@@ -143,6 +170,7 @@ async fn execute(
             .ok_or_else(CliError::invalid_command)?;
         return Ok((command::completion(shell)?.to_owned(), String::new()));
     }
+    #[cfg(feature = "full")]
     if invocation.command.is_man() {
         return Ok((command::man_page().to_owned(), String::new()));
     }
@@ -167,6 +195,7 @@ async fn execute(
         };
         progress.push_str(&format!("{marker} {}\n", invocation.command.path()));
     }
+    #[cfg(feature = "full")]
     let response = if invocation.command.is_administration()
         || (invocation.command.path() == "doctor"
             && (invocation.options.security || invocation.options.deep))
@@ -230,6 +259,8 @@ async fn execute(
             }
         }
     };
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    let response = administration::execute(&invocation, &configuration, deadline_at).await?;
     if invocation.progress_enabled(terminal) {
         let marker = if invocation.unicode_enabled(terminal) {
             "\u{2713}"
@@ -242,7 +273,59 @@ async fn execute(
     Ok((stdout, progress))
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+fn beta_build_metadata() -> Result<String, CliError> {
+    #[derive(serde::Serialize)]
+    struct BetaBuildMetadata {
+        schema_version: &'static str,
+        version: &'static str,
+        source_revision: &'static str,
+        build_profile: &'static str,
+        release_profile: &'static str,
+        channel: &'static str,
+        production_ready: bool,
+        qualified_target_triple: &'static str,
+        target_os: &'static str,
+        target_arch: &'static str,
+        target_env: &'static str,
+        capability_profile: &'static str,
+        enabled_features: [&'static str; 1],
+    }
+
+    let metadata = BetaBuildMetadata {
+        schema_version: "cigar.beta.build-metadata.v1",
+        version: concat!(env!("CARGO_PKG_VERSION"), "-beta.1"),
+        source_revision: match option_env!("CIGAR_SOURCE_REVISION") {
+            Some(revision) => revision,
+            None => "unknown",
+        },
+        build_profile: if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+        release_profile: "cigar.beta.embedded-local.linux-x86_64.v1",
+        channel: "beta",
+        production_ready: false,
+        qualified_target_triple: "x86_64-unknown-linux-gnu",
+        target_os: std::env::consts::OS,
+        target_arch: std::env::consts::ARCH,
+        target_env: if cfg!(target_env = "gnu") {
+            "gnu"
+        } else if cfg!(target_env = "musl") {
+            "musl"
+        } else if cfg!(target_env = "msvc") {
+            "msvc"
+        } else {
+            ""
+        },
+        capability_profile: "workspace-metadata-only",
+        enabled_features: ["beta-embedded"],
+    };
+    serde_json::to_string(&metadata).map_err(|_error| CliError::invalid_response())
+}
+
+#[cfg(all(test, feature = "full"))]
 mod tests {
     use super::{TerminalContext, confirmation_needed, progress_start, run};
     use std::ffi::OsString;

@@ -3,7 +3,11 @@
 use std::ffi::OsString;
 use std::io::{self, IsTerminal as _, Write as _};
 
-#[tokio::main]
+#[cfg_attr(feature = "full", tokio::main)]
+#[cfg_attr(
+    all(feature = "beta-embedded", not(feature = "full")),
+    tokio::main(flavor = "current_thread")
+)]
 async fn main() {
     let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
     let mut terminal = cigar_cli::TerminalContext {

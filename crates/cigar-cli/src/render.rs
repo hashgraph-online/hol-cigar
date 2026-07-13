@@ -187,7 +187,7 @@ fn escaped_terminal_text(value: &str) -> String {
         .collect()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "full"))]
 mod tests {
     use super::{render_error, render_success};
     use crate::arguments::{GlobalOptions, OutputFormat, ParsedInvocation, TargetKind};

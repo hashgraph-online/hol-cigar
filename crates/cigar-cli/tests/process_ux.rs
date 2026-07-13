@@ -1,5 +1,7 @@
 //! Installed-binary terminal and interrupt behavior.
 
+#![cfg(feature = "full")]
+
 #[cfg(unix)]
 mod unix {
     use base64::Engine as _;

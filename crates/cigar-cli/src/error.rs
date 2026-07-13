@@ -34,11 +34,22 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn invalid_configuration() -> Self {
         Self::new(
             "CLI_INVALID_CONFIGURATION",
             "CLI configuration is invalid",
             "run 'cigar status --explain-config' and correct the reported source",
+            78,
+        )
+    }
+
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn invalid_configuration() -> Self {
+        Self::new(
+            "CLI_INVALID_CONFIGURATION",
+            "embedded-beta configuration is invalid",
+            "run 'cigar source list --explain-config' and correct the explicit beta configuration",
             78,
         )
     }
@@ -61,6 +72,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn input_required() -> Self {
         Self::new(
             "CLI_INPUT_REQUIRED",
@@ -70,6 +82,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn invalid_input() -> Self {
         Self::new(
             "CLI_INVALID_INPUT",
@@ -79,6 +92,17 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn invalid_input() -> Self {
+        Self::new(
+            "CLI_INVALID_INPUT",
+            "the command argument or embedded state input is malformed",
+            "correct the bounded identifier or directory argument shown by 'cigar help'",
+            65,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn credential_unavailable() -> Self {
         Self::new(
             "CLI_CREDENTIAL_UNAVAILABLE",
@@ -88,6 +112,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn target_unavailable() -> Self {
         Self::new(
             "CLI_TARGET_UNAVAILABLE",
@@ -97,6 +122,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn stale_daemon() -> Self {
         Self::new(
             "CLI_STALE_DAEMON",
@@ -106,6 +132,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn deadline_exceeded() -> Self {
         Self::new(
             "DEADLINE_EXCEEDED",
@@ -115,6 +142,17 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn deadline_exceeded() -> Self {
+        Self::new(
+            "DEADLINE_EXCEEDED",
+            "the command deadline elapsed",
+            "inspect the private embedded state before retrying the command",
+            75,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn interrupted() -> Self {
         Self::new(
             "CLI_INTERRUPTED",
@@ -124,6 +162,17 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn interrupted() -> Self {
+        Self::new(
+            "CLI_INTERRUPTED",
+            "the command was cancelled",
+            "inspect the private embedded state before retrying a state change",
+            130,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn invalid_response() -> Self {
         Self::new(
             "CLI_INVALID_RESPONSE",
@@ -133,6 +182,17 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn invalid_response() -> Self {
+        Self::new(
+            "CLI_INVALID_RESPONSE",
+            "the embedded-beta result could not be rendered safely",
+            "stop using this build and report the content-free error code",
+            70,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn unsupported_target() -> Self {
         Self::new(
             "CLI_TARGET_UNSUPPORTED",
@@ -142,6 +202,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn unsupported_surface() -> Self {
         Self::new(
             "CLI_UNSUPPORTED_SURFACE",
@@ -151,6 +212,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn state_unavailable() -> Self {
         Self::new(
             "CLI_STATE_UNAVAILABLE",
@@ -160,11 +222,32 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn state_unavailable() -> Self {
+        Self::new(
+            "CLI_STATE_UNAVAILABLE",
+            "the private embedded state is unavailable",
+            "run 'cigar init' or provide a valid embedded-beta configuration",
+            69,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn state_corrupt() -> Self {
         Self::new(
             "CLI_STATE_CORRUPT",
             "local administrative state failed strict integrity validation",
             "stop mutations and restore a verified backup",
+            65,
+        )
+    }
+
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn state_corrupt() -> Self {
+        Self::new(
+            "CLI_STATE_CORRUPT",
+            "private embedded state failed strict integrity validation",
+            "stop mutations and restore state.json from a trusted local copy",
             65,
         )
     }
@@ -178,6 +261,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn external_command_failed() -> Self {
         Self::new(
             "CLI_EXTERNAL_COMMAND_FAILED",
@@ -187,6 +271,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn plugin_invalid() -> Self {
         Self::new(
             "CLI_PLUGIN_INVALID",
@@ -196,6 +281,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn plugin_incompatible() -> Self {
         Self::new(
             "CLI_PLUGIN_INCOMPATIBLE",
@@ -205,6 +291,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn plugin_handshake_failed() -> Self {
         Self::new(
             "CLI_PLUGIN_HANDSHAKE_FAILED",
@@ -214,6 +301,7 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
     pub(crate) const fn from_public_problem(
         code: &'static str,
         message: &'static str,

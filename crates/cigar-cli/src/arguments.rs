@@ -1,21 +1,31 @@
 //! Closed, content-safe command and global-option parser.
 
 use crate::TerminalContext;
+#[cfg(feature = "full")]
 use crate::client::OperationRequest;
 use crate::command::{CommandSpec, lookup};
+#[cfg(feature = "full")]
 use crate::configuration::EffectiveConfiguration;
 use crate::error::CliError;
+#[cfg(feature = "full")]
 use base64::Engine as _;
+#[cfg(feature = "full")]
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+#[cfg(feature = "full")]
 use cigar_api::generated::{HttpMethod, IdempotencyRequirement, RevisionRequirement};
+#[cfg(feature = "full")]
 use cigar_canon::{CanonicalNode, parse_strict_json, to_deterministic_cbor};
+#[cfg(feature = "full")]
 use std::collections::BTreeMap;
 use std::ffi::OsString;
+#[cfg(feature = "full")]
 use std::fs::File;
+#[cfg(feature = "full")]
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[cfg(feature = "full")]
 const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_DEADLINE_MILLIS: u64 = 300_000;
 
@@ -28,9 +38,12 @@ pub(crate) enum OutputFormat {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum TargetKind {
+    #[cfg_attr(all(feature = "beta-embedded", not(feature = "full")), default)]
     Embedded,
-    #[default]
+    #[cfg(feature = "full")]
+    #[cfg_attr(feature = "full", default)]
     Local,
+    #[cfg(feature = "full")]
     Remote,
 }
 
@@ -38,7 +51,9 @@ impl TargetKind {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Embedded => "embedded",
+            #[cfg(feature = "full")]
             Self::Local => "local",
+            #[cfg(feature = "full")]
             Self::Remote => "remote",
         }
     }
@@ -58,12 +73,19 @@ pub(crate) struct GlobalOptions {
     pub(crate) deadline: Duration,
     pub(crate) config: Option<PathBuf>,
     pub(crate) target: Option<TargetKind>,
+    #[cfg(feature = "full")]
     pub(crate) endpoint: Option<String>,
+    #[cfg(feature = "full")]
     pub(crate) authorization_file: Option<PathBuf>,
+    #[cfg(feature = "full")]
     pub(crate) input: Option<PathBuf>,
+    #[cfg(feature = "full")]
     pub(crate) idempotency_key: Option<String>,
+    #[cfg(feature = "full")]
     pub(crate) expected_revision: Option<String>,
+    #[cfg(feature = "full")]
     pub(crate) page_cursor: Option<String>,
+    #[cfg(feature = "full")]
     pub(crate) page_size: Option<u32>,
     pub(crate) quiet: bool,
     pub(crate) color: Toggle,
@@ -73,7 +95,9 @@ pub(crate) struct GlobalOptions {
     pub(crate) yes: bool,
     pub(crate) dry_run: bool,
     pub(crate) explain_config: bool,
+    #[cfg(feature = "full")]
     pub(crate) security: bool,
+    #[cfg(feature = "full")]
     pub(crate) deep: bool,
 }
 
@@ -84,12 +108,19 @@ impl Default for GlobalOptions {
             deadline: Duration::from_secs(30),
             config: None,
             target: None,
+            #[cfg(feature = "full")]
             endpoint: None,
+            #[cfg(feature = "full")]
             authorization_file: None,
+            #[cfg(feature = "full")]
             input: None,
+            #[cfg(feature = "full")]
             idempotency_key: None,
+            #[cfg(feature = "full")]
             expected_revision: None,
+            #[cfg(feature = "full")]
             page_cursor: None,
+            #[cfg(feature = "full")]
             page_size: None,
             quiet: false,
             color: Toggle::Auto,
@@ -99,7 +130,9 @@ impl Default for GlobalOptions {
             yes: false,
             dry_run: false,
             explain_config: false,
+            #[cfg(feature = "full")]
             security: false,
+            #[cfg(feature = "full")]
             deep: false,
         }
     }
@@ -137,6 +170,7 @@ impl ParsedInvocation {
         }
     }
 
+    #[cfg(feature = "full")]
     pub(crate) fn operation_request(
         &self,
         configuration: &EffectiveConfiguration,
@@ -218,16 +252,19 @@ pub(crate) fn parse(
     if values.is_empty() {
         values.push("help".to_owned());
     }
-    if values
-        .first()
-        .is_some_and(|value| matches!(value.as_str(), "--help" | "-h"))
+    #[cfg(feature = "full")]
     {
-        values = vec!["help".to_owned()];
-    } else if values
-        .first()
-        .is_some_and(|value| matches!(value.as_str(), "--version" | "-V"))
-    {
-        values = vec!["version".to_owned()];
+        if values
+            .first()
+            .is_some_and(|value| matches!(value.as_str(), "--help" | "-h"))
+        {
+            values = vec!["help".to_owned()];
+        } else if values
+            .first()
+            .is_some_and(|value| matches!(value.as_str(), "--version" | "-V"))
+        {
+            values = vec!["version".to_owned()];
+        }
     }
 
     let mut options = GlobalOptions::default();
@@ -251,23 +288,30 @@ pub(crate) fn parse(
             "--deadline" => options.deadline = parse_deadline(take_value(&values, &mut index)?)?,
             "--config" => options.config = Some(PathBuf::from(take_value(&values, &mut index)?)),
             "--target" => options.target = Some(parse_target(take_value(&values, &mut index)?)?),
+            #[cfg(feature = "full")]
             "--endpoint" => options.endpoint = Some(take_value(&values, &mut index)?.to_owned()),
+            #[cfg(feature = "full")]
             "--authorization-file" => {
                 options.authorization_file = Some(PathBuf::from(take_value(&values, &mut index)?));
             }
+            #[cfg(feature = "full")]
             "--input" => options.input = Some(PathBuf::from(take_value(&values, &mut index)?)),
+            #[cfg(feature = "full")]
             "--idempotency-key" => {
                 options.idempotency_key =
                     Some(bounded_graphic(take_value(&values, &mut index)?, 256)?);
             }
+            #[cfg(feature = "full")]
             "--expected-revision" => {
                 options.expected_revision =
                     Some(bounded_graphic(take_value(&values, &mut index)?, 256)?);
             }
+            #[cfg(feature = "full")]
             "--page-cursor" => {
                 options.page_cursor =
                     Some(bounded_graphic(take_value(&values, &mut index)?, 4096)?);
             }
+            #[cfg(feature = "full")]
             "--page-size" => {
                 let value = take_value(&values, &mut index)?
                     .parse::<u32>()
@@ -290,13 +334,19 @@ pub(crate) fn parse(
             }
             "--quiet" => options.quiet = true,
             "--non-interactive" => options.non_interactive = true,
-            "--yes" | "--confirm" => options.yes = true,
+            "--yes" => options.yes = true,
+            #[cfg(feature = "full")]
+            "--confirm" => options.yes = true,
             "--dry-run" => options.dry_run = true,
             "--explain-config" => options.explain_config = true,
+            #[cfg(feature = "full")]
             "--security" => options.security = true,
+            #[cfg(feature = "full")]
             "--deep" => options.deep = true,
             "--embedded" => options.target = merge_target(options.target, TargetKind::Embedded)?,
+            #[cfg(feature = "full")]
             "--local" => options.target = merge_target(options.target, TargetKind::Local)?,
+            #[cfg(feature = "full")]
             "--remote" => {
                 options.target = merge_target(options.target, TargetKind::Remote)?;
                 options.endpoint = Some(take_value(&values, &mut index)?.to_owned());
@@ -315,9 +365,15 @@ pub(crate) fn parse(
     };
     let command = lookup(&path).ok_or_else(CliError::invalid_command)?;
     let positionals: Vec<String> = words.into_iter().skip(consumed).collect();
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    if (command.is_help() || command.is_version()) && !positionals.is_empty() {
+        return Err(CliError::invalid_command());
+    }
+    #[cfg(feature = "full")]
     if command.is_completion() && positionals.len() != 1 {
         return Err(CliError::invalid_command());
     }
+    #[cfg(feature = "full")]
     if (options.security || options.deep) && command.path() != "doctor" {
         return Err(CliError::invalid_command());
     }
@@ -331,6 +387,7 @@ pub(crate) fn parse(
     })
 }
 
+#[cfg(feature = "full")]
 fn group_requires_subcommand(value: &str) -> bool {
     matches!(
         value,
@@ -353,6 +410,11 @@ fn group_requires_subcommand(value: &str) -> bool {
     )
 }
 
+#[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+fn group_requires_subcommand(value: &str) -> bool {
+    matches!(value, "source" | "project" | "focus")
+}
+
 fn take_value<'a>(values: &'a [String], index: &mut usize) -> Result<&'a str, CliError> {
     *index = index.checked_add(1).ok_or_else(CliError::invalid_command)?;
     values
@@ -372,7 +434,9 @@ fn parse_output(value: &str) -> Result<OutputFormat, CliError> {
 fn parse_target(value: &str) -> Result<TargetKind, CliError> {
     match value {
         "embedded" => Ok(TargetKind::Embedded),
+        #[cfg(feature = "full")]
         "local" => Ok(TargetKind::Local),
+        #[cfg(feature = "full")]
         "remote" => Ok(TargetKind::Remote),
         _ => Err(CliError::invalid_command()),
     }
@@ -417,6 +481,7 @@ fn parse_deadline(value: &str) -> Result<Duration, CliError> {
     Ok(Duration::from_millis(milliseconds))
 }
 
+#[cfg(feature = "full")]
 fn bounded_graphic(value: &str, maximum: usize) -> Result<String, CliError> {
     if value.is_empty()
         || value.len() > maximum
@@ -428,6 +493,7 @@ fn bounded_graphic(value: &str, maximum: usize) -> Result<String, CliError> {
     }
 }
 
+#[cfg(feature = "full")]
 fn valid_path_value(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 256
@@ -436,6 +502,7 @@ fn valid_path_value(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~'))
 }
 
+#[cfg(feature = "full")]
 fn request_payload(
     input: &Option<PathBuf>,
     path_parameters: &[(String, String)],
@@ -469,6 +536,7 @@ fn request_payload(
     to_deterministic_cbor(&CanonicalNode::Map(values)).map_err(|_error| CliError::invalid_input())
 }
 
+#[cfg(feature = "full")]
 fn read_bounded_regular(path: &PathBuf, maximum: u64) -> Result<Vec<u8>, CliError> {
     if path.as_os_str() == "-" {
         return Err(CliError::invalid_input());
@@ -495,13 +563,14 @@ fn read_bounded_regular(path: &PathBuf, maximum: u64) -> Result<Vec<u8>, CliErro
     Ok(bytes)
 }
 
+#[cfg(feature = "full")]
 fn random_idempotency_key() -> Result<String, CliError> {
     let mut bytes = [0_u8; 24];
     getrandom::fill(&mut bytes).map_err(|_error| CliError::target_unavailable())?;
     Ok(format!("cli-{}", URL_SAFE_NO_PAD.encode(bytes)))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "full"))]
 mod tests {
     use super::{OutputFormat, TargetKind, parse};
     use crate::TerminalContext;
@@ -549,6 +618,66 @@ mod tests {
             &["status", "--secret-token", "do-not-echo"][..],
         ] {
             assert!(parse(args(values), TerminalContext::default()).is_err());
+        }
+    }
+}
+
+#[cfg(all(test, feature = "beta-embedded", not(feature = "full")))]
+mod beta_tests {
+    use super::{TargetKind, parse};
+    use crate::TerminalContext;
+    use std::ffi::OsString;
+
+    fn args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn beta_parser_accepts_only_embedded_target_selection() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for values in [
+            &["source", "list"][..],
+            &["source", "list", "--embedded"][..],
+            &["source", "list", "--target", "embedded"][..],
+        ] {
+            let parsed = parse(args(values), TerminalContext::default())?;
+            assert!(
+                parsed
+                    .options
+                    .target
+                    .is_none_or(|target| target == TargetKind::Embedded)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn beta_parser_rejects_every_excluded_transport_and_operation_flag() {
+        for values in [
+            &["source", "list", "--target", "local"][..],
+            &["source", "list", "--target", "remote"][..],
+            &["source", "list", "--local"][..],
+            &["source", "list", "--remote", "https://example.test"][..],
+            &["source", "list", "--endpoint", "http://localhost"][..],
+            &["source", "list", "--authorization-file", "secret"][..],
+            &["source", "list", "--input", "request.json"][..],
+            &["source", "list", "--idempotency-key", "key"][..],
+            &["source", "list", "--expected-revision", "1"][..],
+            &["source", "list", "--page-cursor", "cursor"][..],
+            &["source", "list", "--page-size", "1"][..],
+            &["source", "list", "--security"][..],
+            &["source", "list", "--deep"][..],
+        ] {
+            assert!(
+                parse(args(values), TerminalContext::default()).is_err(),
+                "excluded beta flag was accepted: {values:?}"
+            );
+        }
+        for values in [&["help", "extra"][..], &["version", "extra"][..]] {
+            assert!(
+                parse(args(values), TerminalContext::default()).is_err(),
+                "beta metadata command accepted an extra positional: {values:?}"
+            );
         }
     }
 }

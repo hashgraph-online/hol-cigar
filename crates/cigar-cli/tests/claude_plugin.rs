@@ -1,5 +1,7 @@
 //! Installed-process Claude adapter lifecycle using public-surface stand-ins.
 
+#![cfg(feature = "full")]
+
 #[cfg(unix)]
 mod unix {
     use sha2::{Digest as _, Sha256};

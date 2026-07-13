@@ -1,0 +1,37 @@
+CIGAR initial beta — local workspace-metadata profile
+
+Usage: cigar [GLOBAL OPTIONS] <command> [subcommand] [arguments]
+
+Commands:
+  cigar init [project-root]
+  cigar source add <source-id> <directory>
+  cigar source list
+  cigar source remove <source-id>
+  cigar project list
+  cigar project attach <project-id> <directory>
+  cigar project detach <project-id>
+  cigar project switch <project-id>
+  cigar project link <from-project-id> <to-project-id>
+  cigar project unlink <from-project-id> <to-project-id>
+  cigar focus switch <focus-id>
+  cigar focus close [focus-id]
+  cigar help
+  cigar version
+
+Global options:
+  --output <text|json>          Select human or versioned machine output
+  --deadline <Nms|Ns|Nm>       Bound the complete command (maximum 5m)
+  --config <path>              Read an explicit embedded-beta configuration
+  --target embedded            Assert the only compiled execution target
+  --embedded                   Assert the only compiled execution target
+  --dry-run                    Validate without committing
+  --yes                        Confirm a reviewed state change
+  --non-interactive            Disable all prompts
+  --quiet                      Disable progress
+  --color <auto|always|never>  Control optional color
+  --unicode <auto|always|never> Control status glyphs
+  --width <20..1000>           Bound human layout
+  --explain-config             Print the closed beta configuration
+
+Only the commands and options listed above are compiled into this prerelease. Source entries are
+local metadata references; this build does not discover, ingest, index, retrieve, or compile context.

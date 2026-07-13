@@ -776,6 +776,7 @@ dependencies = [
  "cigar-store",
  "getrandom 0.4.3",
  "reqwest 0.13.4",
+ "rustix",
  "rustls",
  "serde",
  "serde_json",

@@ -8,28 +8,49 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+default = ["full"]
+full = [
+  "dep:base64",
+  "dep:cigar-api",
+  "dep:cigar-crypto",
+  "dep:cigar-daemon",
+  "dep:cigar-effects",
+  "dep:cigar-policy",
+  "dep:cigar-protocol",
+  "dep:cigar-store",
+  "dep:reqwest",
+  "dep:rustls",
+  "dep:sha2",
+  "tokio/process",
+]
+beta-embedded = []
+
 [dependencies]
-cigar-api.workspace = true
+cigar-api = { workspace = true, optional = true }
 cigar-canon.workspace = true
-cigar-crypto.workspace = true
-cigar-daemon = { path = "../cigar-daemon", version = "=0.1.0" }
-cigar-effects = { path = "../cigar-effects", version = "=0.1.0" }
-cigar-policy.workspace = true
-cigar-protocol.workspace = true
-cigar-store.workspace = true
-base64.workspace = true
+cigar-crypto = { workspace = true, optional = true }
+cigar-daemon = { path = "../cigar-daemon", version = "=0.1.0", optional = true }
+cigar-effects = { path = "../cigar-effects", version = "=0.1.0", optional = true }
+cigar-policy = { workspace = true, optional = true }
+cigar-protocol = { workspace = true, optional = true }
+cigar-store = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 getrandom.workspace = true
-reqwest.workspace = true
-rustls.workspace = true
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
-tokio = { workspace = true, features = ["process"] }
+sha2 = { workspace = true, optional = true }
+tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt", "signal", "sync", "time"] }
 toml.workspace = true
 
 [dev-dependencies]
 sha2.workspace = true
 tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
 
 [lints]
 workspace = true
