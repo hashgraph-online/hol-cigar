@@ -2,7 +2,7 @@
 
 Source specification: CIGAR v1 Production Implementation Execution Spec  
 Repository baseline for this status update: `main` at `0d8a8115b4fa1bedec534eeca497a157836ed6da` (tree `0e23e2ea2759045a5f5b201df193ad0eca105bee`); the next clean candidate is not frozen and release evidence is not candidate-bound
-Updated: 2026-07-13T16:12:10Z
+Updated: 2026-07-13T18:09:54Z
 Executor: Codex `/root`
 
 ## Environment
@@ -40,7 +40,7 @@ Executor: Codex `/root`
 | WP16 | complete | WP14 | Codex /root + SDK agents | `artifacts/work-packets/WP16.json` | none |
 | WP17 | complete | WP14-WP16 | Codex /root + Claude-adapter agent | `artifacts/work-packets/WP17.json` | none |
 | WP18 | complete | WP03, WP14 | Codex /root + shared-deployment agent | `artifacts/work-packets/WP18.json` | none |
-| WP19 | in_progress | WP01-WP18 | Codex /root + quality agents | `reports/conformance-result.v1.json`, `reports/invariant-traceability.v1.json`, `${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json`, `${CIGAR_EVIDENCE_DIR}/wp19-quality-mutation.json` | seven-day fuzz, full RC mutation/chaos/platform campaigns, final integrated matrix evidence |
+| WP19 | in_progress | WP01-WP18 | Codex /root + quality agents | `reports/conformance-result.v1.json`, `reports/invariant-traceability.v1.json`, `${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json` | closed representative-mutation evidence, seven-day fuzz, full RC mutation/chaos/platform campaigns, final integrated matrix evidence |
 | WP20 | in_progress | WP19 | Codex /root + demo/benchmark agents | `${CIGAR_EVIDENCE_DIR}/wp20-local-readiness.json` | installed artifacts, independent task corpus/evaluator, qualified performance and outcome evidence |
 | WP21 | in_progress | WP20 | Codex /root + SDK/release agents | `${CIGAR_EVIDENCE_DIR}/wp21-local-readiness.json`, `${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json` | machine-recorded external, candidate-binding, installed-artifact, and live-operation gaps |
 | WP22 | not_started | WP21 | unassigned | pending | WP19-WP21 exits, exact committed candidate, installed bytes, duration and external release gates |
@@ -49,8 +49,8 @@ Executor: Codex `/root`
 
 - Objective: finish WP19 quality hardening and integrated matrices, then carry the exact stabilized source through the locally testable WP20/WP21 gates without misrepresenting external evidence.
 - Completed transition: WP17 and WP18 are complete. All eight conformance profiles pass 24/24 cases; traceability is valid; 47 sealed security findings are reconciled; the 19-package Rust publication chain passes an offline local registry; seven demos, four SDK workflows, and the local CIGARBench protocol harness pass their honest local scopes.
-- Active hardening: the historical WP19 smoke campaign passed all 14 ASan/libFuzzer targets for at least 60 seconds each with no crash or sanitizer failure, plus the property/Loom and strict Miri gates. Its representative mutation slice caught 10/10 viable mutants. Exact copies of those development receipts are preserved outside the repository, but they intentionally do not satisfy the seven-day-per-target fuzz or four-hour full release-candidate mutation gates and are not bound to a clean candidate.
-- Active release blockers: `HEAD` exists, but the worktree is dirty. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence; they must be regenerated into `${CIGAR_EVIDENCE_DIR}` against the next exact clean candidate rather than edited by hand. The full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
+- Active hardening: the historical WP19 smoke campaign passed all 14 ASan/libFuzzer targets for at least 60 seconds each with no crash or sanitizer failure, plus the property/Loom and strict Miri gates. Its representative mutation slice reported 10/10 viable mutants caught. Exact copies of those development receipts are preserved outside the repository, but they intentionally do not satisfy the seven-day-per-target fuzz or four-hour full release-candidate mutation gates and are not bound to a clean candidate. The mutation receipt is diagnostic only: it does not retain the bounded raw outcomes needed to recompute every claimed metric, so the combined verifier fails closed and only the exact `verify-smoke` route can currently qualify WP19 smoke evidence.
+- Active release blockers: `HEAD` exists, but the worktree is dirty. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence; they must be regenerated into `${CIGAR_EVIDENCE_DIR}` against the next exact clean candidate rather than edited by hand. A closed mutation-evidence format and verifier are still required before any representative mutation result can qualify. The full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
 - Exact next action: reconcile and minimize intentional fuzz corpora, commit the resulting source/policy/status baseline, prove the candidate remains clean before and after smoke testing, then regenerate every invalidated matrix and WP19-WP21 receipt against that exact revision before beginning duration or external gates.
 
 ## Workspace state

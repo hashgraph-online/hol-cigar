@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-07-13T16:12:10Z
+updated: 2026-07-13T18:09:54Z
 current_packet: WP19
 repository:
   branch: main
@@ -30,8 +30,8 @@ packets:
   - id: WP19
     status: in_progress
     prerequisites: [WP01, WP02, WP03, WP04, WP05, WP06, WP07, WP08, WP09, WP10, WP11, WP12, WP13, WP14, WP15, WP16, WP17, WP18]
-    evidence: [reports/conformance-result.v1.json, reports/invariant-traceability.v1.json, "${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json", "${CIGAR_EVIDENCE_DIR}/wp19-quality-mutation.json"]
-    blockers: [seven-day-fuzz, full-rc-mutation-and-chaos, supported-platform-evidence, final-integrated-matrices]
+    evidence: [reports/conformance-result.v1.json, reports/invariant-traceability.v1.json, "${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json"]
+    blockers: [closed-representative-mutation-evidence, seven-day-fuzz, full-rc-mutation-and-chaos, supported-platform-evidence, final-integrated-matrices]
   - id: WP20
     status: in_progress
     prerequisites: [WP19]

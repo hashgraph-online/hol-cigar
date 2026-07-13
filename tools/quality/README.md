@@ -39,7 +39,16 @@ local debugging; it writes mode-0600 logs and those logs must never enter a
 release evidence bundle.
 
 `fuzz_and_mutation.py` runs the WP19 fuzz, property/Loom, Miri, and mutation
-slices with external evidence and private mutable worker corpora.
+slices with external evidence and private mutable worker corpora. Its closed
+`verify-smoke` route requires an exact canonical campaign and workspace, binds
+all private logs, recomputes recorded test/fuzzer metrics, and rejects receipt,
+log, command, corpus, source, or scratch substitution. The legacy combined
+`verify` and `all` routes are deliberately unavailable and fail closed before
+verification or execution: current mutation receipts do not retain enough
+bounded raw outcome evidence to independently recompute cargo-mutants counts
+and score. Mutation runs are therefore diagnostic only until a closed
+attachment schema and adversarial verifier tests land; they cannot be used to
+claim combined qualification.
 `corpus_manager.py` inventories, externally minimizes, and safely reconciles
 libFuzzer corpus growth. See `fuzz/README.md` and `fuzz/corpus-policy.v1.json`;
 neither tool is allowed to silently mutate or discard the checked-in corpus.

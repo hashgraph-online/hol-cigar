@@ -18,21 +18,36 @@ emitting content-free qualification evidence:
 EVIDENCE_DIR="$(mktemp -d)"
 chmod 700 "$EVIDENCE_DIR"
 python3 tools/quality/fuzz_and_mutation.py smoke --evidence-dir "$EVIDENCE_DIR"
+python3 tools/quality/fuzz_and_mutation.py verify-smoke --evidence-dir "$EVIDENCE_DIR"
 ```
 
 The default runs every target for the campaign's full 60-second smoke threshold with four bounded
-workers. `--runs N` is available for local harness viability checks, but evidence from run-count
-mode is explicitly non-qualifying. Every fuzzer gets a private temporary copy of its seed corpus,
-and all compilation runs from a Git-index-derived external source mirror. Fault/build scratch is
-preserved on failure and deleted only after a clean run proves the mirror and read-only candidate
-unchanged; private bounded logs remain attached to the receipt. Successful qualification therefore
-cannot add to or rewrite `fuzz/corpus`. Run the deterministic canonical trust-boundary mutation
-slice and then verify both artifacts against the current source tree:
+workers and deterministic seed 190000. `verify-smoke` accepts only that exact canonical duration,
+seed sequence, command set, current source/seed-corpus state, receipt schema, scratch-cleanup proof,
+and private log set; pass counts and libFuzzer run/time metrics are recomputed from the bound logs.
+The deleted private worker corpus means its recorded post-run digest is self-asserted: the verifier
+checks its exact schema, integer counts, monotonic growth, and policy ceilings, but cannot reconstruct
+that digest after successful scratch cleanup. Use a fresh, otherwise-empty evidence directory for
+each smoke attempt. `--runs N` is available for local
+harness viability checks, but evidence from run-count mode is explicitly non-qualifying. Every
+fuzzer gets a private temporary copy of its seed corpus, and all compilation runs from a
+Git-index-derived external source mirror. Fault/build scratch is preserved on failure and deleted
+only after a clean run proves the mirror and read-only candidate unchanged; private bounded logs
+remain attached to the receipt. Successful qualification therefore cannot add to or rewrite
+`fuzz/corpus`.
+
+The deterministic canonical trust-boundary mutation slice remains available for diagnostics:
 
 ```sh
 python3 tools/quality/fuzz_and_mutation.py mutation --evidence-dir "$EVIDENCE_DIR"
-python3 tools/quality/fuzz_and_mutation.py verify --evidence-dir "$EVIDENCE_DIR"
 ```
+
+The legacy combined `verify` and `all` routes intentionally fail closed before verification or
+execution. The retained mutation receipt does not yet preserve a bounded raw outcome attachment
+from which every cargo-mutants metric can be independently recomputed, so it cannot authorize a
+combined smoke/mutation claim. Until that evidence format and its substitution tests are
+implemented, only `verify-smoke` is a qualifying verifier; the representative mutation slice also
+does not claim the PRD's full four-hour release-candidate campaign.
 
 `CIGAR_EVIDENCE_DIR` is equivalent to `--evidence-dir`. The runner rejects repository-internal,
 group/world-writable, and existing receipt destinations. It never overwrites a receipt.

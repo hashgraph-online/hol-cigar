@@ -10,6 +10,13 @@
       "closure": "Reconcile the intentional source, corpus, policy, and status changes; commit the exact candidate; prove the worktree remains clean before and after smoke qualification; rebuild from its source archive; and regenerate every report with matching commit, tree, source-archive, policy, toolchain, and artifact digests."
     },
     {
+      "id": "closed-mutation-evidence-unavailable",
+      "release_blocking": true,
+      "owner": "quality",
+      "condition": "The representative cargo-mutants slice can run diagnostically, but its current receipt does not retain a bounded canonical raw-outcome attachment from which every count, survivor digest, denominator, score, command, and scope claim can be independently recomputed. The combined smoke/mutation verifier therefore fails closed and the mutation receipt is not qualification evidence.",
+      "closure": "Define a closed mutation receipt and attachment schema; retain bounded canonical raw outcomes and private logs outside the candidate; bind their digests, modes, source, command, toolchain, scope, scratch cleanup, and no-egress execution; add substitution and arithmetic negative tests; then enable an exact mutation-only verifier without weakening the smoke verifier."
+    },
+    {
       "id": "external-platform-builds",
       "release_blocking": true,
       "owner": "release-ci",

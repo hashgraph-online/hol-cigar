@@ -13,6 +13,7 @@ import concurrent.futures
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -61,7 +62,17 @@ MUTATION_FILTER = (
 )
 MUTATION_THRESHOLD_PERCENT = 90.0
 MAXIMUM_SUBPROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
+MAXIMUM_EVIDENCE_DOCUMENT_BYTES = 16 * 1024 * 1024
+DEFAULT_SMOKE_SEED = 190000
+MUTATION_VERIFICATION_UNAVAILABLE = (
+    "combined smoke/mutation verification is unavailable: retained mutation "
+    "evidence cannot yet independently recompute cargo-mutants outcomes; use "
+    "verify-smoke for the closed smoke-only gate"
+)
 SAFE_TARGET = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+CANONICAL_UTC_TIMESTAMP = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{6})?Z$"
+)
 EXCLUDED_SOURCE_DIRECTORIES = {"target", "artifacts", ".work", "__pycache__"}
 SOURCE_STATUS_SCOPE = (
     "Cargo.toml",
@@ -255,6 +266,87 @@ def redacted_command(command: list[str]) -> str:
     return " ".join(rendered)
 
 
+def harness_check_command_record() -> str:
+    return (
+        "cargo check --locked --manifest-path "
+        "<execution-source>/fuzz/Cargo.toml --all-targets"
+    )
+
+
+def properties_command_record() -> str:
+    return (
+        "cargo test --locked --manifest-path "
+        "<execution-source>/tests/properties/Cargo.toml --all-targets"
+    )
+
+
+def miri_command_record() -> str:
+    return (
+        "cargo +nightly miri test --locked --manifest-path "
+        "<execution-source>/tests/miri/Cargo.toml --target "
+        "x86_64-unknown-linux-gnu --test memory_model"
+    )
+
+
+def fuzz_command_record(
+    target: str, *, seed: int, seconds: int, campaign: dict[str, Any]
+) -> str:
+    return " ".join(
+        [
+            "cargo-fuzz",
+            "run",
+            "--sanitizer",
+            "address",
+            "--target-dir",
+            "<external-build-target>",
+            "--fuzz-dir",
+            "<execution-source>/fuzz",
+            target,
+            "<private-worker-corpus>",
+            "--",
+            "-dict=<execution-source>/fuzz/dictionaries/cigar.dict",
+            f"-max_total_time={seconds}",
+            f"-seed={seed}",
+            f"-timeout={campaign['timeout_seconds']}",
+            f"-rss_limit_mb={campaign['rss_limit_mib']}",
+            f"-max_len={campaign['maximum_input_bytes']}",
+            f"-artifact_prefix=<external-artifacts>/{target}/",
+            "-print_final_stats=1",
+        ]
+    )
+
+
+def mutation_command_record() -> str:
+    return " ".join(
+        [
+            "cargo",
+            "mutants",
+            "--cargo-arg=--locked",
+            "--cargo-arg=--offline",
+            "--manifest-path",
+            "crates/cigar-canon/Cargo.toml",
+            "--file",
+            "crates/cigar-canon/src/lib.rs",
+            "--re",
+            MUTATION_FILTER,
+            "--baseline",
+            "run",
+            "--jobs",
+            "4",
+            "--timeout",
+            "120",
+            "--minimum-test-timeout",
+            "20",
+            "--colors",
+            "never",
+            "--annotations",
+            "none",
+            "--output",
+            "<private-mutants-output>",
+        ]
+    )
+
+
 def run(
     command: list[str],
     *,
@@ -262,8 +354,9 @@ def run(
     timeout_seconds: float,
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
+    recorded_command: str | None = None,
 ) -> dict[str, Any]:
-    rendered = redacted_command(command)
+    rendered = recorded_command or redacted_command(command)
     print(f"running: {rendered}", flush=True)
     started = utc_now()
     if env is None:
@@ -492,7 +585,10 @@ def cargo_fuzz_execution_record(
 
 
 def recorded_cargo_fuzz_execution_is_valid(
-    record: object, source_binding: dict[str, Any]
+    record: object,
+    source_binding: dict[str, Any],
+    *,
+    expected_wrapper_path: Path | None = None,
 ) -> bool:
     if not isinstance(record, dict):
         return False
@@ -507,6 +603,11 @@ def recorded_cargo_fuzz_execution_is_valid(
         return False
     expected_wrapper = cargo_wrapper_source(
         real_cargo=real_cargo, python=sys.executable
+    )
+    expected_wrapper_path_sha256 = (
+        sha256_bytes(str(absolute_without_resolving(expected_wrapper_path)).encode())
+        if expected_wrapper_path is not None
+        else None
     )
     expected_keys = {
         "mode",
@@ -544,6 +645,10 @@ def recorded_cargo_fuzz_execution_is_valid(
         }
         and wrapper.get("basename") == "cargo"
         and wrapper.get("requested_path_sha256") == wrapper.get("resolved_path_sha256")
+        and (
+            expected_wrapper_path_sha256 is None
+            or wrapper.get("requested_path_sha256") == expected_wrapper_path_sha256
+        )
         and isinstance(wrapper.get("requested_path_sha256"), str)
         and re.fullmatch(r"[0-9a-f]{64}", wrapper["requested_path_sha256"]) is not None
         and wrapper.get("content_sha256") == sha256_bytes(expected_wrapper)
@@ -911,6 +1016,218 @@ def mutation_survivor_digests(outcomes: list[dict[str, Any]]) -> list[str]:
     return sorted(survivors)
 
 
+BASE_PROCESS_FIELDS = frozenset(
+    {
+        "command",
+        "started_at",
+        "finished_at",
+        "duration_seconds",
+        "exit_code",
+        "timed_out",
+        "output_overflow",
+        "descendant_cleanup_required",
+        "captured_output_bytes",
+        "maximum_output_bytes",
+        "private_log",
+        "execution_enforcement",
+    }
+)
+HARNESS_PROCESS_FIELDS = BASE_PROCESS_FIELDS | {"clean"}
+TEST_PROCESS_FIELDS = BASE_PROCESS_FIELDS | {"passed_test_count", "clean"}
+MIRI_PROCESS_FIELDS = TEST_PROCESS_FIELDS | {"miri_flags"}
+FUZZ_PROCESS_FIELDS = BASE_PROCESS_FIELDS | {
+    "target",
+    "sanitizer",
+    "deterministic_seed",
+    "qualification_mode",
+    "requested_minimum_seconds",
+    "requested_minimum_runs",
+    "observed_fuzzer_seconds",
+    "observed_executed_units",
+    "source_corpus",
+    "corpus_before",
+    "corpus_after",
+    "corpus_is_private_worker_copy",
+    "source_corpus_unchanged",
+    "crash_artifacts_before",
+    "crash_artifacts_after",
+    "artifact_directory_unchanged",
+    "clean",
+    "cargo_fuzz_invocation",
+}
+
+
+def _closed_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    document: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON key: {key}")
+        document[key] = value
+    return document
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON number: {value}")
+
+
+def load_private_evidence_document(path: Path, *, label: str) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise GateFailure(f"{label} evidence is not a regular non-symlink file")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise GateFailure(f"cannot securely open {label} evidence: {error}") from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise GateFailure(f"{label} evidence is not a singly linked regular file")
+        if before.st_mode & 0o777 != 0o600:
+            raise GateFailure(f"{label} evidence is not mode 0600")
+        if not 0 < before.st_size <= MAXIMUM_EVIDENCE_DOCUMENT_BYTES:
+            raise GateFailure(f"{label} evidence exceeds its byte bound or is empty")
+        chunks: list[bytes] = []
+        remaining = MAXIMUM_EVIDENCE_DOCUMENT_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        body = b"".join(chunks)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        current = path.stat(follow_symlinks=False)
+    except OSError as error:
+        raise GateFailure(f"{label} evidence path changed while reading") from error
+    if (
+        (before.st_dev, before.st_ino, before.st_size, before.st_mode, before.st_nlink)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mode, after.st_nlink)
+        or (after.st_dev, after.st_ino, after.st_size, after.st_mode, after.st_nlink)
+        != (
+            current.st_dev,
+            current.st_ino,
+            current.st_size,
+            current.st_mode,
+            current.st_nlink,
+        )
+        or after.st_nlink != 1
+        or len(body) != after.st_size
+    ):
+        raise GateFailure(f"{label} evidence changed while reading")
+    try:
+        document = json.loads(
+            body.decode("utf-8", "strict"),
+            object_pairs_hook=_closed_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise GateFailure(f"cannot read {label} evidence: {error}") from error
+    if not isinstance(document, dict):
+        raise GateFailure(f"{label} evidence root is not an object")
+    canonical = json.dumps(document, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    if body != canonical:
+        raise GateFailure(f"{label} evidence is not canonical JSON")
+    return document
+
+
+def read_private_attachment(
+    path: Path,
+    *,
+    record: dict[str, Any],
+    maximum_bytes: int,
+    label: str,
+) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise GateFailure(f"{label} is not a regular non-symlink file")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise GateFailure(f"cannot securely open {label}: {error}") from error
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_mode & 0o777 != 0o600
+            or not 0 <= before.st_size <= maximum_bytes
+        ):
+            raise GateFailure(f"{label} has unsafe type, links, mode, or size")
+        body = bytearray()
+        while len(body) <= maximum_bytes:
+            chunk = os.read(descriptor, min(1024 * 1024, maximum_bytes + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        current = path.stat(follow_symlinks=False)
+    except OSError as error:
+        raise GateFailure(f"{label} path changed while reading") from error
+    if (
+        (before.st_dev, before.st_ino, before.st_size, before.st_mode, before.st_nlink)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mode, after.st_nlink)
+        or (after.st_dev, after.st_ino, after.st_size, after.st_mode, after.st_nlink)
+        != (
+            current.st_dev,
+            current.st_ino,
+            current.st_size,
+            current.st_mode,
+            current.st_nlink,
+        )
+        or after.st_nlink != 1
+        or len(body) != after.st_size
+        or type(record.get("size")) is not int
+        or record.get("size") != len(body)
+        or record.get("mode") != "0600"
+        or record.get("sha256") != sha256_bytes(bytes(body))
+    ):
+        raise GateFailure(f"{label} changed or does not match its receipt")
+    return bytes(body)
+
+
+def parse_utc_timestamp(value: object) -> dt.datetime | None:
+    if not isinstance(value, str) or CANONICAL_UTC_TIMESTAMP.fullmatch(value) is None:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError:
+        return None
+    return parsed if parsed.utcoffset() == dt.timedelta(0) else None
+
+
+def is_utc_timestamp(value: object) -> bool:
+    return parse_utc_timestamp(value) is not None
+
+
+def is_nonnegative_number(value: object) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def corpus_state_record_is_valid(state: object) -> bool:
+    return (
+        isinstance(state, dict)
+        and set(state) == {"algorithm", "digest", "file_count", "total_bytes"}
+        and state.get("algorithm") == "sha256-path-and-content-v1"
+        and isinstance(state.get("digest"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", state["digest"]) is not None
+        and type(state.get("file_count")) is int
+        and state["file_count"] > 0
+        and type(state.get("total_bytes")) is int
+        and state["total_bytes"] >= 0
+    )
+
+
 def validate_campaign(campaign: dict[str, Any]) -> list[str]:
     targets = campaign.get("targets")
     if not isinstance(targets, list) or len(targets) != 14 or len(set(targets)) != 14:
@@ -926,6 +1243,28 @@ def validate_campaign(campaign: dict[str, Any]) -> list[str]:
         raise GateFailure("campaign target names collide case-insensitively")
     if campaign.get("sanitizers") != ["address"]:
         raise GateFailure("native smoke sanitizer must be exactly AddressSanitizer")
+    required_positive_integer_fields = {
+        "minimum_clean_cpu_seconds_per_target",
+        "smoke_seconds_per_target",
+        "maximum_input_bytes",
+        "timeout_seconds",
+        "rss_limit_mib",
+    }
+    if any(
+        type(campaign.get(field)) is not int or campaign[field] <= 0
+        for field in required_positive_integer_fields
+    ):
+        raise GateFailure("campaign numeric bounds must be positive integers")
+    if campaign.get("supplemental_memory_model") != {
+        "engine": "miri",
+        "flags": [
+            "-Zmiri-strict-provenance",
+            "-Zmiri-symbolic-alignment-check",
+        ],
+        "manifest": "tests/miri/Cargo.toml",
+        "target": "x86_64-unknown-linux-gnu",
+    }:
+        raise GateFailure("campaign strict Miri policy is invalid")
     declared = {
         match.group(1)
         for match in re.finditer(
@@ -1000,6 +1339,7 @@ def smoke(args: argparse.Namespace) -> None:
         timeout_seconds=900,
         cwd=execution_root,
         env=cargo_environment,
+        recorded_command=harness_check_command_record(),
     )
     require_clean(check, "fuzz harness check")
 
@@ -1016,9 +1356,11 @@ def smoke(args: argparse.Namespace) -> None:
         timeout_seconds=1800,
         cwd=execution_root,
         env=cargo_environment,
+        recorded_command=properties_command_record(),
     )
     require_clean(properties, "property and Loom suite")
 
+    strict_miri_flags = campaign["supplemental_memory_model"]["flags"]
     miri = run(
         [
             "cargo",
@@ -1038,21 +1380,28 @@ def smoke(args: argparse.Namespace) -> None:
         cwd=execution_root,
         env={
             **cargo_environment,
-            "MIRIFLAGS": "-Zmiri-strict-provenance -Zmiri-symbolic-alignment-check",
+            "MIRIFLAGS": " ".join(strict_miri_flags),
         },
+        recorded_command=miri_command_record(),
     )
     require_clean(miri, "strict Miri slice")
 
     campaign_smoke_seconds = int(campaign["smoke_seconds_per_target"])
     qualifying_smoke = args.runs is None
     requested_seconds = args.seconds if qualifying_smoke else None
-    if qualifying_smoke and requested_seconds < campaign_smoke_seconds:
+    if qualifying_smoke and requested_seconds != campaign_smoke_seconds:
         raise GateFailure(
-            f"--seconds must be at least the campaign smoke threshold ({campaign_smoke_seconds})"
+            f"qualifying --seconds must equal the campaign smoke threshold ({campaign_smoke_seconds})"
+        )
+    if qualifying_smoke and args.seed != DEFAULT_SMOKE_SEED:
+        raise GateFailure(
+            f"qualifying --seed must equal the canonical seed ({DEFAULT_SMOKE_SEED})"
         )
 
     raw_root = external_private_tempdir(output_directory, "wp19-smoke-artifacts-")
-    with tempfile.TemporaryDirectory(prefix="cigar-wp19-worker-corpus-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="worker-corpus-", dir=build_root
+    ) as temporary:
         worker_root = Path(temporary)
 
         def fuzz_one(index: int, target: str) -> dict[str, Any]:
@@ -1104,6 +1453,16 @@ def smoke(args: argparse.Namespace) -> None:
                 timeout_seconds=(requested_seconds + 180) if qualifying_smoke else 600,
                 cwd=execution_root,
                 env=cargo_fuzz_environment,
+                recorded_command=(
+                    fuzz_command_record(
+                        target,
+                        seed=seed,
+                        seconds=requested_seconds,
+                        campaign=campaign,
+                    )
+                    if qualifying_smoke
+                    else None
+                ),
             )
             after_artifacts = artifact_state(artifact_directory)
             if (
@@ -1199,10 +1558,12 @@ def smoke(args: argparse.Namespace) -> None:
         {
             "path_sha256": sha256_bytes(str(build_root).encode()),
             "kind": "tool-owned-external-smoke-build-scratch",
+            "basename": build_root.name,
         },
         {
             "path_sha256": sha256_bytes(str(raw_root).encode()),
             "kind": "tool-owned-external-smoke-artifact-scratch",
+            "basename": raw_root.name,
         },
     ]
     try:
@@ -1267,6 +1628,7 @@ def smoke(args: argparse.Namespace) -> None:
             "strict_miri": public_result(
                 miri,
                 passed_test_count=count_passed_tests(miri["_output"]),
+                miri_flags=strict_miri_flags,
                 clean=True,
             ),
             "asan_libfuzzer": fuzz_results,
@@ -1299,7 +1661,9 @@ def mutation(args: argparse.Namespace) -> None:
     build_root = external_private_tempdir(output_directory, "wp19-mutation-build-")
     log_root = external_private_tempdir(output_directory, "wp19-mutation-logs-")
     cargo_environment = locked_cargo_environment(build_root)
-    with tempfile.TemporaryDirectory(prefix="cigar-wp19-mutants-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="mutants-output-", dir=build_root
+    ) as temporary:
         output_parent = Path(temporary)
         command = [
             "cargo",
@@ -1332,6 +1696,7 @@ def mutation(args: argparse.Namespace) -> None:
             log_path=log_root / "representative-mutation.log",
             timeout_seconds=14_400,
             env=cargo_environment,
+            recorded_command=mutation_command_record(),
         )
         if result["exit_code"] not in {0, 2, 3}:
             require_clean(result, "representative mutation campaign")
@@ -1417,8 +1782,11 @@ def mutation(args: argparse.Namespace) -> None:
         )
 
 
-def verify_evidence(args: argparse.Namespace) -> None:
+def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) -> None:
     """Fail closed on stale, incomplete, threshold-failing, or overclaiming evidence."""
+
+    if include_mutation:
+        raise GateFailure(MUTATION_VERIFICATION_UNAVAILABLE)
 
     problems: list[str] = []
     try:
@@ -1429,13 +1797,31 @@ def verify_evidence(args: argparse.Namespace) -> None:
         ) from error
     output_directory = evidence_dir(args)
     smoke_evidence = output_directory / SMOKE_EVIDENCE_NAME
-    mutation_evidence = output_directory / MUTATION_EVIDENCE_NAME
 
     def expect(condition: bool, message: str) -> None:
         if not condition:
             problems.append(message)
 
     def expect_bounded_process(result: dict[str, Any], label: str) -> None:
+        if not isinstance(result, dict):
+            expect(False, f"{label}: process result is not an object")
+            return
+        expect(
+            is_utc_timestamp(result.get("started_at")), f"{label}: invalid start time"
+        )
+        expect(
+            is_utc_timestamp(result.get("finished_at")),
+            f"{label}: invalid finish time",
+        )
+        expect(
+            is_nonnegative_number(result.get("duration_seconds")),
+            f"{label}: invalid duration",
+        )
+        expect(
+            type(result.get("captured_output_bytes")) is int
+            and 0 <= result["captured_output_bytes"] <= MAXIMUM_SUBPROCESS_OUTPUT_BYTES,
+            f"{label}: invalid captured-output byte count",
+        )
         expect(result.get("timed_out") is False, f"{label}: process timed out")
         expect(
             result.get("output_overflow") is False,
@@ -1454,46 +1840,139 @@ def verify_evidence(args: argparse.Namespace) -> None:
             f"{label}: no-network enforcement binding is stale",
         )
 
-    try:
-        smoke_document = json.loads(smoke_evidence.read_text())
-        mutation_document = json.loads(mutation_evidence.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise GateFailure(f"cannot read quality evidence: {error}") from error
+    def expect_process_shape(
+        result: object,
+        *,
+        fields: frozenset[str],
+        command: str,
+        label: str,
+        envelope: tuple[dt.datetime, dt.datetime] | None = None,
+        timeout_seconds: int,
+    ) -> None:
+        if not isinstance(result, dict):
+            expect(False, f"{label}: process result is not an object")
+            return
+        private_log = result.get("private_log")
+        expect(set(result) == fields, f"{label}: process field set is not exact")
+        expect(result.get("command") == command, f"{label}: command binding is invalid")
+        expect(type(result.get("exit_code")) is int, f"{label}: exit code is invalid")
+        expect(
+            isinstance(private_log, dict)
+            and set(private_log) == {"name", "sha256", "size", "mode"},
+            f"{label}: private-log descriptor is malformed",
+        )
+        expect_bounded_process(result, label)
+        expect(
+            is_nonnegative_number(result.get("duration_seconds"))
+            and result["duration_seconds"] <= timeout_seconds,
+            f"{label}: duration exceeds its command timeout",
+        )
+        process_started = parse_utc_timestamp(result.get("started_at"))
+        process_finished = parse_utc_timestamp(result.get("finished_at"))
+        expect(
+            process_started is not None
+            and process_finished is not None
+            and process_started <= process_finished,
+            f"{label}: process timestamps are reversed",
+        )
+        if envelope is not None:
+            expect(
+                process_started is not None
+                and process_finished is not None
+                and envelope[0] <= process_started <= process_finished <= envelope[1],
+                f"{label}: process timestamps escape the receipt interval",
+            )
+
+    smoke_document = load_private_evidence_document(smoke_evidence, label="smoke")
 
     current_source_binding = source_binding_identity()
     current_source = current_source_binding["qualification_source"]
+    expect(
+        set(smoke_document)
+        == {
+            "schema_version",
+            "content_policy",
+            "started_at",
+            "finished_at",
+            "source",
+            "source_binding",
+            "campaign",
+            "seed_corpus",
+            "dependency_execution",
+            "toolchains",
+            "platform",
+            "gates",
+            "outcome",
+        },
+        "smoke evidence field set is not exact",
+    )
     expect(
         smoke_document.get("schema_version") == "cigar.wp19-quality-smoke.v1",
         "unexpected smoke evidence schema",
     )
     expect(
-        mutation_document.get("schema_version") == "cigar.wp19-quality-mutation.v1",
-        "unexpected mutation evidence schema",
+        smoke_document.get("content_policy")
+        == "metadata-only-no-corpus-no-subprocess-output",
+        "smoke evidence content policy is invalid",
+    )
+    smoke_started = parse_utc_timestamp(smoke_document.get("started_at"))
+    smoke_finished = parse_utc_timestamp(smoke_document.get("finished_at"))
+    expect(
+        smoke_started is not None
+        and smoke_finished is not None
+        and smoke_started <= smoke_finished,
+        "smoke evidence timestamps are invalid or reversed",
+    )
+    smoke_envelope = (
+        (smoke_started, smoke_finished)
+        if smoke_started is not None and smoke_finished is not None
+        else None
     )
     expect(smoke_document.get("source") == current_source, "smoke evidence is stale")
-    expect(
-        mutation_document.get("source") == current_source, "mutation evidence is stale"
-    )
-    expect(
-        smoke_document.get("source") == mutation_document.get("source"),
-        "smoke and mutation evidence bind different source trees",
-    )
     expect(
         smoke_document.get("source_binding") == current_source_binding,
         "smoke evidence Git/source/toolchain binding is stale",
     )
-    expect(
-        mutation_document.get("source_binding") == current_source_binding,
-        "mutation evidence Git/source/toolchain binding is stale",
-    )
-    expect(
-        smoke_document.get("source_binding") == mutation_document.get("source_binding"),
-        "smoke and mutation evidence bind different Git/source/toolchain states",
-    )
-
     campaign = json.loads(CAMPAIGN.read_text())
     targets = validate_campaign(campaign)
     policy = load_corpus_policy(targets)
+    evidence_campaign = smoke_document.get("campaign")
+    expect(
+        isinstance(evidence_campaign, dict)
+        and set(evidence_campaign)
+        == {
+            "path",
+            "sha256",
+            "target_count",
+            "smoke_seconds_per_target",
+            "minimum_clean_cpu_seconds_per_target",
+        }
+        and evidence_campaign.get("path") == "fuzz/campaign-v1.json"
+        and evidence_campaign.get("sha256") == sha256_file(CAMPAIGN)
+        and type(evidence_campaign.get("target_count")) is int
+        and evidence_campaign.get("target_count") == len(targets)
+        and type(evidence_campaign.get("smoke_seconds_per_target")) is int
+        and evidence_campaign.get("smoke_seconds_per_target")
+        == campaign["smoke_seconds_per_target"]
+        and type(evidence_campaign.get("minimum_clean_cpu_seconds_per_target")) is int
+        and evidence_campaign.get("minimum_clean_cpu_seconds_per_target")
+        == campaign["minimum_clean_cpu_seconds_per_target"],
+        "smoke campaign descriptor is stale or malformed",
+    )
+    expect(
+        smoke_document.get("toolchains")
+        == {
+            "rustc": tool_version(["rustc", "--version"]),
+            "cargo_nightly": tool_version(["cargo", "+nightly", "--version"]),
+            "cargo_fuzz": tool_version([str(direct_cargo_fuzz_binary()), "--version"]),
+            "miri": tool_version(["cargo", "+nightly", "miri", "--version"]),
+        },
+        "smoke toolchain descriptor is stale or malformed",
+    )
+    expect(
+        smoke_document.get("platform") == platform_record(),
+        "smoke platform descriptor is stale or malformed",
+    )
     recorded_seed = smoke_document.get("seed_corpus")
     if not isinstance(recorded_seed, dict):
         raise GateFailure("smoke evidence has no seed corpus descriptor")
@@ -1510,24 +1989,58 @@ def verify_evidence(args: argparse.Namespace) -> None:
         recorded_seed == current_seed, "seed corpus evidence is stale or substituted"
     )
     expected_seed_states = current_seed["targets"]
-    evidence_campaign = smoke_document.get("campaign", {})
+    gates = smoke_document.get("gates")
     expect(
-        evidence_campaign.get("sha256") == sha256_file(CAMPAIGN),
-        "smoke evidence binds a different campaign",
+        isinstance(gates, dict)
+        and set(gates)
+        == {
+            "harness_check",
+            "properties_and_loom",
+            "strict_miri",
+            "asan_libfuzzer",
+        },
+        "smoke gate field set is not exact",
     )
-    fuzz_results = smoke_document.get("gates", {}).get("asan_libfuzzer", [])
-    expect(isinstance(fuzz_results, list), "ASan result set is not a list")
-    if isinstance(fuzz_results, list):
+    gates = gates if isinstance(gates, dict) else {}
+    raw_fuzz_results = gates.get("asan_libfuzzer")
+    expect(isinstance(raw_fuzz_results, list), "ASan result set is not a list")
+    fuzz_results = raw_fuzz_results if isinstance(raw_fuzz_results, list) else []
+    if isinstance(raw_fuzz_results, list):
         expect(
-            [item.get("target") for item in fuzz_results] == targets,
+            len(fuzz_results) == len(targets)
+            and all(isinstance(item, dict) for item in fuzz_results)
+            and [item.get("target") for item in fuzz_results] == targets,
             "ASan result set does not exactly match the fourteen campaign targets",
         )
-        for item in fuzz_results:
+        for index, item in enumerate(fuzz_results):
+            if not isinstance(item, dict):
+                continue
             target = item.get("target", "unknown")
-            expect_bounded_process(item, str(target))
+            expected_target = targets[index] if index < len(targets) else "unknown"
+            expected_seed = DEFAULT_SMOKE_SEED + index
+            requested_seconds = campaign["smoke_seconds_per_target"]
+            expect_process_shape(
+                item,
+                fields=FUZZ_PROCESS_FIELDS,
+                command=fuzz_command_record(
+                    expected_target,
+                    seed=expected_seed,
+                    seconds=requested_seconds,
+                    campaign=campaign,
+                ),
+                label=str(target),
+                envelope=smoke_envelope,
+                timeout_seconds=requested_seconds + 180,
+            )
+            expect(target == expected_target, f"{target}: target order is invalid")
             expect(item.get("exit_code") == 0, f"{target}: nonzero fuzz exit")
             expect(item.get("clean") is True, f"{target}: not marked clean")
             expect(item.get("sanitizer") == "address", f"{target}: wrong sanitizer")
+            expect(
+                type(item.get("deterministic_seed")) is int
+                and item.get("deterministic_seed") == expected_seed,
+                f"{target}: deterministic seed is invalid",
+            )
             expect(
                 item.get("cargo_fuzz_invocation") == DIRECT_CARGO_FUZZ_MODE,
                 f"{target}: direct cargo-fuzz execution proof is missing",
@@ -1537,16 +2050,25 @@ def verify_evidence(args: argparse.Namespace) -> None:
                 f"{target}: only a run-count viability check was recorded",
             )
             expect(
-                int(item.get("observed_fuzzer_seconds") or -1)
-                >= int(campaign["smoke_seconds_per_target"]),
+                type(item.get("requested_minimum_seconds")) is int
+                and item.get("requested_minimum_seconds") == requested_seconds
+                and item.get("requested_minimum_runs") is None,
+                f"{target}: requested smoke threshold is invalid",
+            )
+            expect(
+                type(item.get("observed_fuzzer_seconds")) is int
+                and item["observed_fuzzer_seconds"] >= requested_seconds,
                 f"{target}: campaign smoke duration was not met",
             )
             expect(
-                int(item.get("observed_executed_units") or 0) > 0,
+                type(item.get("observed_executed_units")) is int
+                and item["observed_executed_units"] > 0,
                 f"{target}: no executed units",
             )
             expect(
-                item.get("crash_artifacts_before") == 0
+                type(item.get("crash_artifacts_before")) is int
+                and type(item.get("crash_artifacts_after")) is int
+                and item.get("crash_artifacts_before") == 0
                 and item.get("crash_artifacts_after") == 0,
                 f"{target}: crash artifact present",
             )
@@ -1563,18 +2085,28 @@ def verify_evidence(args: argparse.Namespace) -> None:
                 item.get("corpus_before") == expected_state,
                 f"{target}: private worker corpus did not start from the seed digest",
             )
+            corpus_after = item.get("corpus_after")
+            expect(
+                corpus_state_record_is_valid(corpus_after)
+                and isinstance(expected_state, dict)
+                and corpus_after["file_count"] >= expected_state["file_count"]
+                and corpus_after["total_bytes"] >= expected_state["total_bytes"]
+                and corpus_after["file_count"]
+                <= policy["limits"]["maximum_files_per_target"]
+                and corpus_after["total_bytes"]
+                <= policy["limits"]["maximum_total_bytes_per_target"],
+                f"{target}: private worker corpus-after state is invalid",
+            )
             expect(
                 item.get("source_corpus_unchanged") is True
                 and item.get("corpus_is_private_worker_copy") is True,
                 f"{target}: source immutability/private-worker proof is missing",
             )
 
-    expect(
-        smoke_document.get("dependency_execution", {}).get("mode")
-        == "locked-offline-cargo-wrapper",
-        "smoke dependencies were not recorded as locked and offline",
+    raw_dependency_execution = smoke_document.get("dependency_execution")
+    dependency_execution = (
+        raw_dependency_execution if isinstance(raw_dependency_execution, dict) else {}
     )
-    dependency_execution = smoke_document.get("dependency_execution", {})
     expect(
         isinstance(dependency_execution, dict)
         and set(dependency_execution)
@@ -1595,7 +2127,9 @@ def verify_evidence(args: argparse.Namespace) -> None:
         "smoke dependency-execution field set is not exact",
     )
     expect(
-        dependency_execution.get("ambient_environment") == "strict-reviewed-allowlist"
+        dependency_execution.get("mode") == "locked-offline-cargo-wrapper"
+        and dependency_execution.get("ambient_environment")
+        == "strict-reviewed-allowlist"
         and dependency_execution.get("credentials_proxies_cloud_ci_variables_inherited")
         is False
         and dependency_execution.get("build_outputs_external_to_repository") is True
@@ -1603,10 +2137,31 @@ def verify_evidence(args: argparse.Namespace) -> None:
         and dependency_execution.get("network_enforcement") == current_enforcement,
         "smoke hermetic/no-network execution proof is incomplete",
     )
+    cleanup = dependency_execution.get("success_scratch_cleanup")
+    cleanup_bindings = cleanup.get("bindings") if isinstance(cleanup, dict) else None
+    build_bindings = [
+        item
+        for item in cleanup_bindings or []
+        if isinstance(item, dict)
+        and item.get("kind") == "tool-owned-external-smoke-build-scratch"
+    ]
+    build_basename = (
+        build_bindings[0].get("basename") if len(build_bindings) == 1 else None
+    )
+    expected_wrapper_path = (
+        output_directory / build_basename / "cargo-wrapper" / "cargo"
+        if isinstance(build_basename, str)
+        and Path(build_basename).name == build_basename
+        else output_directory
+        / "invalid-smoke-build-binding"
+        / "cargo-wrapper"
+        / "cargo"
+    )
     expect(
         recorded_cargo_fuzz_execution_is_valid(
             dependency_execution.get("cargo_fuzz_execution"),
             current_source_binding,
+            expected_wrapper_path=expected_wrapper_path,
         ),
         "smoke direct cargo-fuzz/inner Cargo execution binding is invalid",
     )
@@ -1655,6 +2210,7 @@ def verify_evidence(args: argparse.Namespace) -> None:
         }
         and checkout.get("command")
         == "git checkout-index --all --prefix=<external-execution-source>"
+        and type(checkout.get("exit_code")) is int
         and checkout.get("exit_code") == 0
         and checkout.get("timed_out") is False
         and checkout.get("output_overflow") is False
@@ -1671,11 +2227,13 @@ def verify_evidence(args: argparse.Namespace) -> None:
         and checkout.get("captured_output_bytes") == checkout_private_log.get("size"),
         "smoke execution-source checkout proof is invalid",
     )
-    cleanup = dependency_execution.get("success_scratch_cleanup")
-    cleanup_bindings = cleanup.get("bindings") if isinstance(cleanup, dict) else None
     expected_cleanup_kinds = {
         "tool-owned-external-smoke-build-scratch",
         "tool-owned-external-smoke-artifact-scratch",
+    }
+    cleanup_prefixes = {
+        "tool-owned-external-smoke-build-scratch": "wp19-smoke-build-",
+        "tool-owned-external-smoke-artifact-scratch": "wp19-smoke-artifacts-",
     }
     expect(
         isinstance(cleanup, dict)
@@ -1687,9 +2245,17 @@ def verify_evidence(args: argparse.Namespace) -> None:
         and len(cleanup_bindings) == 2
         and all(
             isinstance(item, dict)
-            and set(item) == {"path_sha256", "kind"}
+            and set(item) == {"path_sha256", "kind", "basename"}
+            and isinstance(item.get("basename"), str)
+            and Path(item["basename"]).name == item["basename"]
+            and re.fullmatch(r"[A-Za-z0-9_-]{8,96}", item["basename"]) is not None
+            and item["basename"].startswith(cleanup_prefixes[item["kind"]])
             and re.fullmatch(r"[0-9a-f]{64}", str(item.get("path_sha256", "")))
             is not None
+            and item["path_sha256"]
+            == sha256_bytes(str(output_directory / item["basename"]).encode())
+            and not (output_directory / item["basename"]).exists()
+            and not (output_directory / item["basename"]).is_symlink()
             for item in cleanup_bindings
         ),
         "smoke scratch cleanup proof is invalid",
@@ -1711,12 +2277,18 @@ def verify_evidence(args: argparse.Namespace) -> None:
     ]
     expect(len(smoke_log_roots) == 1, "smoke private-log root set is not exact")
     if len(smoke_log_roots) == 1:
+        expect(
+            {path.name for path in output_directory.iterdir()}
+            == {SMOKE_EVIDENCE_NAME, smoke_log_roots[0].name},
+            "smoke-only evidence workspace top-level set is not exact",
+        )
+    if len(smoke_log_roots) == 1:
         smoke_log_root = smoke_log_roots[0]
         expected_log_records = [
             checkout,
-            smoke_document.get("gates", {}).get("harness_check"),
-            smoke_document.get("gates", {}).get("properties_and_loom"),
-            smoke_document.get("gates", {}).get("strict_miri"),
+            gates.get("harness_check"),
+            gates.get("properties_and_loom"),
+            gates.get("strict_miri"),
             *fuzz_results,
         ]
         log_records = [
@@ -1744,6 +2316,10 @@ def verify_evidence(args: argparse.Namespace) -> None:
             and not smoke_log_root.is_symlink()
             and smoke_log_root.is_dir()
             and smoke_log_root.stat().st_mode & 0o777 == 0o700
+            and re.fullmatch(
+                r"wp19-smoke-logs-[A-Za-z0-9_-]{6,64}", smoke_log_root.name
+            )
+            is not None
             and {path.name for path in smoke_log_root.iterdir()} == expected_log_names,
             "smoke private-log attachment set is invalid",
         )
@@ -1767,82 +2343,145 @@ def verify_evidence(args: argparse.Namespace) -> None:
                 expect(False, "smoke private-log record is malformed")
                 continue
             log_path = smoke_log_root / record["name"]
-            expect(
-                not log_path.is_symlink()
-                and log_path.is_file()
-                and log_path.stat().st_mode & 0o777 == 0o600
-                and record.get("mode") == "0600"
-                and record.get("size") == log_path.stat().st_size
-                and record.get("sha256") == sha256_file(log_path),
-                f"smoke private log is stale or unsafe: {record['name']}",
-            )
+            try:
+                log_body = read_private_attachment(
+                    log_path,
+                    record=record,
+                    maximum_bytes=expected_maximum,
+                    label=f"smoke private log {record['name']}",
+                )
+            except GateFailure as error:
+                expect(False, str(error))
+                continue
+            log_text = log_body.decode("utf-8", "replace")
+            if expected_name == "properties-and-loom.log":
+                expect(
+                    process_record.get("passed_test_count")
+                    == count_passed_tests(log_text),
+                    "property/Loom pass count does not match its private log",
+                )
+            elif expected_name == "strict-miri.log":
+                expect(
+                    process_record.get("passed_test_count")
+                    == count_passed_tests(log_text),
+                    "strict Miri pass count does not match its private log",
+                )
+            elif expected_name.startswith("fuzz-"):
+                expect(
+                    process_record.get("observed_executed_units")
+                    == parse_fuzzer_runs(log_text),
+                    f"{process_record.get('target')}: executed units do not match log",
+                )
+                expect(
+                    process_record.get("observed_fuzzer_seconds")
+                    == parse_fuzzer_elapsed_seconds(log_text),
+                    f"{process_record.get('target')}: elapsed seconds do not match log",
+                )
 
-    gates = smoke_document.get("gates", {})
-    properties = gates.get("properties_and_loom", {})
-    miri = gates.get("strict_miri", {})
-    harness = gates.get("harness_check", {})
-    expect_bounded_process(harness, "harness check")
-    expect_bounded_process(properties, "properties and Loom")
-    expect_bounded_process(miri, "strict Miri")
+    raw_properties = gates.get("properties_and_loom")
+    raw_miri = gates.get("strict_miri")
+    raw_harness = gates.get("harness_check")
+    properties = raw_properties if isinstance(raw_properties, dict) else {}
+    miri = raw_miri if isinstance(raw_miri, dict) else {}
+    harness = raw_harness if isinstance(raw_harness, dict) else {}
+    expect_process_shape(
+        raw_harness,
+        fields=HARNESS_PROCESS_FIELDS,
+        command=harness_check_command_record(),
+        label="harness check",
+        envelope=smoke_envelope,
+        timeout_seconds=900,
+    )
+    expect_process_shape(
+        raw_properties,
+        fields=TEST_PROCESS_FIELDS,
+        command=properties_command_record(),
+        label="properties and Loom",
+        envelope=smoke_envelope,
+        timeout_seconds=1800,
+    )
+    expect_process_shape(
+        raw_miri,
+        fields=MIRI_PROCESS_FIELDS,
+        command=miri_command_record(),
+        label="strict Miri",
+        envelope=smoke_envelope,
+        timeout_seconds=1800,
+    )
+    expect(
+        harness.get("exit_code") == 0 and harness.get("clean") is True,
+        "fuzz harness check is incomplete",
+    )
     expect(
         properties.get("exit_code") == 0
-        and int(properties.get("passed_test_count") or 0) >= 15,
+        and properties.get("clean") is True
+        and type(properties.get("passed_test_count")) is int
+        and properties["passed_test_count"] >= 15,
         "property/Loom gate is incomplete",
     )
     expect(
-        miri.get("exit_code") == 0 and int(miri.get("passed_test_count") or 0) >= 1,
+        miri.get("exit_code") == 0
+        and miri.get("clean") is True
+        and type(miri.get("passed_test_count")) is int
+        and miri["passed_test_count"] >= 1
+        and miri.get("miri_flags") == campaign["supplemental_memory_model"]["flags"],
         "strict Miri gate is incomplete",
     )
-    smoke_outcome = smoke_document.get("outcome", {})
-    expect(smoke_outcome.get("campaign_smoke_passed") is True, "campaign smoke failed")
+    smoke_outcome = smoke_document.get("outcome")
+    expected_outcome_note = (
+        "The campaign smoke threshold is distinct from the release accumulation. This "
+        "evidence intentionally does not claim the cumulative 604800 clean CPU-seconds "
+        "required for each target."
+    )
     expect(
-        smoke_outcome.get("seven_day_equivalent_satisfied") is False,
-        "bounded smoke must not claim seven-day-equivalent accumulation",
+        isinstance(smoke_outcome, dict)
+        and set(smoke_outcome)
+        == {
+            "viability_passed",
+            "campaign_smoke_passed",
+            "all_fourteen_targets_executed",
+            "crash_count",
+            "sanitizer_failure_count",
+            "seven_day_equivalent_satisfied",
+            "release_threshold_status",
+            "required_clean_cpu_seconds_per_target",
+            "note",
+        }
+        and smoke_outcome.get("viability_passed") is True
+        and smoke_outcome.get("campaign_smoke_passed") is True
+        and smoke_outcome.get("all_fourteen_targets_executed") is True
+        and type(smoke_outcome.get("crash_count")) is int
+        and smoke_outcome.get("crash_count") == 0
+        and type(smoke_outcome.get("sanitizer_failure_count")) is int
+        and smoke_outcome.get("sanitizer_failure_count") == 0
+        and smoke_outcome.get("seven_day_equivalent_satisfied") is False
+        and smoke_outcome.get("release_threshold_status") == "not-satisfied-by-smoke"
+        and type(smoke_outcome.get("required_clean_cpu_seconds_per_target")) is int
+        and smoke_outcome.get("required_clean_cpu_seconds_per_target")
+        == campaign["minimum_clean_cpu_seconds_per_target"]
+        and smoke_outcome.get("note") == expected_outcome_note,
+        "smoke outcome is incomplete, stale, or overclaims qualification",
     )
 
-    mutation_outcomes = mutation_document.get("outcomes", {})
-    mutation_outcome = mutation_document.get("outcome", {})
-    mutation_command = mutation_document.get("command", {})
-    mutation_scope = mutation_document.get("scope", {})
-    expect(
-        mutation_scope.get("ambient_environment") == "strict-reviewed-allowlist"
-        and mutation_scope.get("credentials_proxies_cloud_ci_variables_inherited")
-        is False
-        and mutation_scope.get("network_enforcement") == current_enforcement,
-        "mutation hermetic/no-network execution proof is incomplete",
-    )
-    expect_bounded_process(mutation_command, "mutation campaign")
-    expect(
-        mutation_command.get("exit_code") == 0,
-        "cargo-mutants command did not exit cleanly",
-    )
-    expect(
-        mutation_outcomes.get("missed") == 0
-        and mutation_outcomes.get("timeout") == 0
-        and mutation_outcomes.get("survivor_count") == 0
-        and mutation_outcomes.get("survivor_digests") == [],
-        "mutation survivors or timeouts remain",
-    )
-    expect(
-        float(mutation_outcomes.get("score_percent") or 0)
-        >= MUTATION_THRESHOLD_PERCENT,
-        "representative mutation score is below threshold",
-    )
-    expect(
-        mutation_outcome.get("representative_campaign_passed") is True,
-        "representative mutation campaign failed",
-    )
-    expect(
-        mutation_outcome.get("full_release_candidate_campaign_satisfied") is False,
-        "representative mutation evidence must not claim the full RC campaign",
-    )
     if problems:
-        raise GateFailure("evidence verification failed:\n- " + "\n- ".join(problems))
+        raise GateFailure(
+            "smoke evidence verification failed:\n- " + "\n- ".join(problems)
+        )
     print(
-        "verified source-bound WP19 ASan smoke, property/Loom, strict Miri, and "
-        "representative mutation evidence",
+        "verified source-bound WP19 ASan smoke, property/Loom, strict Miri, "
+        "private logs, and read-only execution-source evidence",
         flush=True,
     )
+
+
+def verify_smoke_evidence(args: argparse.Namespace) -> None:
+    verify_evidence(args, include_mutation=False)
+
+
+def combined_qualification_unavailable(_args: argparse.Namespace) -> None:
+    """Reject the legacy combined runner before it executes any qualification step."""
+
+    raise GateFailure(MUTATION_VERIFICATION_UNAVAILABLE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1854,7 +2493,7 @@ def parse_args() -> argparse.Namespace:
         limit.add_argument("--seconds", type=int, default=60)
         limit.add_argument("--runs", type=int)
         command_parser.add_argument("--jobs", type=int, default=4)
-        command_parser.add_argument("--seed", type=int, default=190000)
+        command_parser.add_argument("--seed", type=int, default=DEFAULT_SMOKE_SEED)
         command_parser.add_argument(
             "--corpus-dir",
             help="external digest-bound minimized corpus root; defaults to checked-in seeds",
@@ -1873,22 +2512,30 @@ def parse_args() -> argparse.Namespace:
     mutation_parser = subparsers.add_parser("mutation")
     add_evidence_option(mutation_parser)
     mutation_parser.set_defaults(function=mutation)
-    verify_parser = subparsers.add_parser("verify")
+    verify_parser = subparsers.add_parser(
+        "verify", help="fail closed; combined mutation verification is unavailable"
+    )
     add_evidence_option(verify_parser)
     verify_parser.add_argument(
         "--corpus-dir",
         help="required to revalidate an external minimized corpus receipt",
     )
     verify_parser.set_defaults(function=verify_evidence)
-    all_parser = subparsers.add_parser("all")
+    verify_smoke_parser = subparsers.add_parser(
+        "verify-smoke", help="strictly verify smoke evidence without mutation claims"
+    )
+    add_evidence_option(verify_smoke_parser)
+    verify_smoke_parser.add_argument(
+        "--corpus-dir",
+        help="required to revalidate an external minimized corpus receipt",
+    )
+    verify_smoke_parser.set_defaults(function=verify_smoke_evidence)
+    all_parser = subparsers.add_parser(
+        "all", help="fail closed; combined mutation verification is unavailable"
+    )
     add_smoke_options(all_parser)
     add_evidence_option(all_parser)
-
-    def run_all(args: argparse.Namespace) -> None:
-        smoke(args)
-        mutation(args)
-
-    all_parser.set_defaults(function=run_all)
+    all_parser.set_defaults(function=combined_qualification_unavailable)
     return parser.parse_args()
 
 
