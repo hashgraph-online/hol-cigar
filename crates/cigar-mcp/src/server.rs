@@ -1950,6 +1950,35 @@ mod tests {
     }
 
     #[test]
+    fn exact_out_of_range_numeric_id_corpus_fixture_fails_closed() -> Result<(), String> {
+        const FIXTURE: &str =
+            include_str!("../../../fuzz/corpus/mcp_messages/out-of-range-numeric-id");
+        let mut server = Server::new(MockBackend::default());
+        let response = server
+            .process_line(FIXTURE.trim_end())
+            .ok_or_else(|| "regression fixture produced no response".to_owned())?;
+        let parsed = json::parse(&response)
+            .map_err(|_| "regression response was not interoperable JSON".to_owned())?;
+        assert_eq!(parsed.object_field("id"), Some(&Value::Null));
+        assert_eq!(
+            parsed
+                .object_field("error")
+                .and_then(|error| error.object_field("code")),
+            Some(&Value::Number("-32600".to_owned()))
+        );
+        assert_eq!(
+            parsed
+                .object_field("error")
+                .and_then(|error| error.object_field("data"))
+                .and_then(|data| data.object_field("reason"))
+                .and_then(Value::as_str),
+            Some("invalid_id")
+        );
+        assert!(server.backend.calls.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn numeric_rpc_ids_are_integer_only_and_javascript_safe() -> Result<(), String> {
         let mut server = Server::new(MockBackend::default());
         for invalid_id in [

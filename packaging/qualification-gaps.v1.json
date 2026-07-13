@@ -1,13 +1,13 @@
 {
   "schema_version": "cigar.qualification-gaps.v1",
-  "generated_for": "development-workspace",
+  "generated_for": "development-candidate-pre-freeze",
   "gaps": [
     {
-      "id": "unborn-source-revision",
+      "id": "dirty-unbound-source-revision",
       "release_blocking": true,
       "owner": "release",
-      "condition": "The workspace has no committed Git revision.",
-      "closure": "Commit the candidate, rebuild only from the signed source archive, and bind every report to that revision."
+      "condition": "An initial commit exists at 0d8a8115b4fa1bedec534eeca497a157836ed6da (tree 0e23e2ea2759045a5f5b201df193ad0eca105bee), but launch-preparation changes have not yet been frozen as the next clean candidate and existing local qualification receipts either predate the commit or bind only a workspace source digest.",
+      "closure": "Reconcile the intentional source, corpus, policy, and status changes; commit the exact candidate; prove the worktree remains clean before and after smoke qualification; rebuild from its source archive; and regenerate every report with matching commit, tree, source-archive, policy, toolchain, and artifact digests."
     },
     {
       "id": "external-platform-builds",
@@ -34,8 +34,8 @@
       "id": "rust-sdk-dependency-publication",
       "release_blocking": true,
       "owner": "sdk",
-      "condition": "The two reviewed security support packages, 16 CIGAR dependency crates, and SDK pass topological cargo package plus a clean default-feature consumer against an offline local registry with exact Ring-backed fork identities. The workspace still has no committed candidate, and none of the 19 exact package versions has an approved crates.io ownership or publication receipt.",
-      "closure": "Commit the exact candidate and rerun the final VCS-bound package contracts; have an approved registry owner publish the approved package chain in the documented order and capture every registry identity/checksum receipt; then pass a clean crates.io consumer on the supported matrix and reconcile signing, SBOM, license, provenance, and artifact evidence."
+      "condition": "The two reviewed security support packages, 16 CIGAR dependency crates, and SDK pass topological cargo package plus a clean default-feature consumer against an offline local registry with exact Ring-backed fork identities. That receipt is not bound to a clean release-candidate commit, and none of the 19 exact package versions has an approved crates.io ownership or publication receipt.",
+      "closure": "Create the exact clean candidate and rerun the final VCS-bound package contracts; have an approved registry owner publish the approved package chain in the documented order and capture every registry identity/checksum receipt; then pass a clean crates.io consumer on the supported matrix and reconcile signing, SBOM, license, provenance, and artifact evidence."
     },
     {
       "id": "platform-installers-not-defined",

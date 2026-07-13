@@ -19,3 +19,4 @@ reports/*.info
 .coverage
 *.pyc
 .DS_Store
+/fuzz/.work/

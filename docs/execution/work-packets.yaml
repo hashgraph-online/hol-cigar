@@ -1,6 +1,12 @@
 schema_version: 1
-updated: 2026-07-13T14:55:25Z
+updated: 2026-07-13T16:12:10Z
 current_packet: WP19
+repository:
+  branch: main
+  baseline_head: 0d8a8115b4fa1bedec534eeca497a157836ed6da
+  baseline_tree: 0e23e2ea2759045a5f5b201df193ad0eca105bee
+  next_candidate: pending
+  candidate_bound_evidence: false
 packets:
   - { id: WP00, status: complete, prerequisites: [], evidence: artifacts/work-packets/WP00.json }
   - { id: WP01, status: complete, prerequisites: [WP00], evidence: artifacts/work-packets/WP01.json }
@@ -24,19 +30,19 @@ packets:
   - id: WP19
     status: in_progress
     prerequisites: [WP01, WP02, WP03, WP04, WP05, WP06, WP07, WP08, WP09, WP10, WP11, WP12, WP13, WP14, WP15, WP16, WP17, WP18]
-    evidence: [reports/conformance-result.v1.json, reports/invariant-traceability.v1.json, artifacts/qualification/wp19-quality-smoke.json, artifacts/qualification/wp19-quality-mutation.json]
+    evidence: [reports/conformance-result.v1.json, reports/invariant-traceability.v1.json, "${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json", "${CIGAR_EVIDENCE_DIR}/wp19-quality-mutation.json"]
     blockers: [seven-day-fuzz, full-rc-mutation-and-chaos, supported-platform-evidence, final-integrated-matrices]
   - id: WP20
     status: in_progress
     prerequisites: [WP19]
-    evidence: [artifacts/qualification/wp20-local-readiness.json]
+    evidence: ["${CIGAR_EVIDENCE_DIR}/wp20-local-readiness.json"]
     blockers: [installed-artifacts, independent-task-corpus, evaluator-attestation, qualified-performance-and-outcome-evidence]
   - id: WP21
     status: in_progress
     prerequisites: [WP20]
-    evidence: [artifacts/qualification/wp21-local-readiness.json, artifacts/qualification/rust-publication-chain-local.json]
-    blockers: [candidate-commit, external-platform-builds, production-signing, publication, installed-artifact-and-live-operation-evidence]
+    evidence: ["${CIGAR_EVIDENCE_DIR}/wp21-local-readiness.json", "${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json"]
+    blockers: [clean-candidate-commit-and-bound-evidence, external-platform-builds, production-signing, publication, installed-artifact-and-live-operation-evidence]
   - id: WP22
     status: not_started
     prerequisites: [WP21]
-    blockers: [WP19-WP21-exits, exact-candidate-commit, installed-byte-qualification, 24-hour-soak, final-release-evidence]
+    blockers: [WP19-WP21-exits, exact-clean-candidate-and-bound-evidence, installed-byte-qualification, 24-hour-soak, final-release-evidence]

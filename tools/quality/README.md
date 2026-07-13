@@ -37,3 +37,9 @@ python3 tools/quality/run_matrix.py \
 service credentials or endpoints fail closed. `--log-dir` is intended only for
 local debugging; it writes mode-0600 logs and those logs must never enter a
 release evidence bundle.
+
+`fuzz_and_mutation.py` runs the WP19 fuzz, property/Loom, Miri, and mutation
+slices with external evidence and private mutable worker corpora.
+`corpus_manager.py` inventories, externally minimizes, and safely reconciles
+libFuzzer corpus growth. See `fuzz/README.md` and `fuzz/corpus-policy.v1.json`;
+neither tool is allowed to silently mutate or discard the checked-in corpus.

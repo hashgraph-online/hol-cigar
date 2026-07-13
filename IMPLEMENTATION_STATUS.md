@@ -1,8 +1,8 @@
 # CIGAR v1 Implementation Status
 
 Source specification: CIGAR v1 Production Implementation Execution Spec  
-Repository revision: unborn `main`; no `HEAD` exists and release evidence is not candidate-bound  
-Updated: 2026-07-13T14:55:25Z  
+Repository baseline for this status update: `main` at `0d8a8115b4fa1bedec534eeca497a157836ed6da` (tree `0e23e2ea2759045a5f5b201df193ad0eca105bee`); the next clean candidate is not frozen and release evidence is not candidate-bound
+Updated: 2026-07-13T16:12:10Z
 Executor: Codex `/root`
 
 ## Environment
@@ -21,7 +21,7 @@ Executor: Codex `/root`
 
 | Packet | Status | Base | Owner | Evidence | Blocker |
 |---|---|---|---|---|---|
-| WP00 | complete | unborn main | Codex /root | `artifacts/work-packets/WP00.json` | none |
+| WP00 | complete | pre-commit workspace, first recorded by `0d8a8115` | Codex /root | `artifacts/work-packets/WP00.json` | none |
 | WP01 | complete | WP00 | Codex /root | `artifacts/work-packets/WP01.json` | none |
 | WP02 | complete | WP01 | Codex /root | `artifacts/work-packets/WP02.json` | none |
 | WP03 | complete | WP02 | Codex /root | `artifacts/work-packets/WP03.json` | none |
@@ -40,22 +40,23 @@ Executor: Codex `/root`
 | WP16 | complete | WP14 | Codex /root + SDK agents | `artifacts/work-packets/WP16.json` | none |
 | WP17 | complete | WP14-WP16 | Codex /root + Claude-adapter agent | `artifacts/work-packets/WP17.json` | none |
 | WP18 | complete | WP03, WP14 | Codex /root + shared-deployment agent | `artifacts/work-packets/WP18.json` | none |
-| WP19 | in_progress | WP01-WP18 | Codex /root + quality agents | `reports/conformance-result.v1.json`, `reports/invariant-traceability.v1.json`, `artifacts/qualification/wp19-quality-*.json` | seven-day fuzz, full RC mutation/chaos/platform campaigns, final integrated matrix evidence |
-| WP20 | in_progress | WP19 | Codex /root + demo/benchmark agents | `artifacts/qualification/wp20-local-readiness.json` | installed artifacts, independent task corpus/evaluator, qualified performance and outcome evidence |
-| WP21 | in_progress | WP20 | Codex /root + SDK/release agents | `artifacts/qualification/wp21-local-readiness.json`, `artifacts/qualification/rust-publication-chain-local.json` | 11 machine-recorded external/candidate/artifact gaps |
+| WP19 | in_progress | WP01-WP18 | Codex /root + quality agents | `reports/conformance-result.v1.json`, `reports/invariant-traceability.v1.json`, `${CIGAR_EVIDENCE_DIR}/wp19-quality-smoke.json`, `${CIGAR_EVIDENCE_DIR}/wp19-quality-mutation.json` | seven-day fuzz, full RC mutation/chaos/platform campaigns, final integrated matrix evidence |
+| WP20 | in_progress | WP19 | Codex /root + demo/benchmark agents | `${CIGAR_EVIDENCE_DIR}/wp20-local-readiness.json` | installed artifacts, independent task corpus/evaluator, qualified performance and outcome evidence |
+| WP21 | in_progress | WP20 | Codex /root + SDK/release agents | `${CIGAR_EVIDENCE_DIR}/wp21-local-readiness.json`, `${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json` | machine-recorded external, candidate-binding, installed-artifact, and live-operation gaps |
 | WP22 | not_started | WP21 | unassigned | pending | WP19-WP21 exits, exact committed candidate, installed bytes, duration and external release gates |
 
 ## Current packet
 
 - Objective: finish WP19 quality hardening and integrated matrices, then carry the exact stabilized source through the locally testable WP20/WP21 gates without misrepresenting external evidence.
 - Completed transition: WP17 and WP18 are complete. All eight conformance profiles pass 24/24 cases; traceability is valid; 47 sealed security findings are reconciled; the 19-package Rust publication chain passes an offline local registry; seven demos, four SDK workflows, and the local CIGARBench protocol harness pass their honest local scopes.
-- Active hardening: a genuine 60-second-per-target ASan/libFuzzer run found an out-of-range MCP numeric-ID response defect. Numeric request IDs and backend numeric responses now fail closed at an interoperable boundary; stable and nightly checks pass and the complete campaign is being rerun.
-- Active release blockers: no Git candidate commit, current full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
-- Exact next action: seal the corrected WP19 smoke/mutation evidence, rerun every integrated local matrix without competing load, regenerate local WP20/WP21 receipts, then stop at a hard no-go until a committed candidate and the non-waivable duration/external gates exist.
+- Active hardening: the historical WP19 smoke campaign passed all 14 ASan/libFuzzer targets for at least 60 seconds each with no crash or sanitizer failure, plus the property/Loom and strict Miri gates. Its representative mutation slice caught 10/10 viable mutants. Exact copies of those development receipts are preserved outside the repository, but they intentionally do not satisfy the seven-day-per-target fuzz or four-hour full release-candidate mutation gates and are not bound to a clean candidate.
+- Active release blockers: `HEAD` exists, but the worktree is dirty. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence; they must be regenerated into `${CIGAR_EVIDENCE_DIR}` against the next exact clean candidate rather than edited by hand. The full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
+- Exact next action: reconcile and minimize intentional fuzz corpora, commit the resulting source/policy/status baseline, prove the candidate remains clean before and after smoke testing, then regenerate every invalidated matrix and WP19-WP21 receipt against that exact revision before beginning duration or external gates.
 
 ## Workspace state
 
 - Existing unrelated changes preserved: `prd.md` remains intact except evidence-backed completion marks requested by the user.
-- Uncommitted changes: WP00-WP18 are complete; WP19-WP21 contain active source/evidence work; the repository still has no initial commit.
-- Generated and package artifacts require one final drift check after the active hardening run. No workspace result may be represented as release-candidate evidence while `HEAD` is absent.
+- Commit state: the initial commit is `0d8a8115b4fa1bedec534eeca497a157836ed6da`; it is a historical baseline, not a qualified release candidate.
+- Uncommitted changes: WP00-WP18 remain complete; WP19-WP21 contain active source and evidence-workspace migration work. Historical WP19-WP21 qualification receipts were preserved byte-for-byte outside the repository before their tracked copies were removed.
+- Generated and package artifacts require a final drift check after corpus reconciliation. No workspace result may be represented as release-candidate evidence while the worktree is dirty or while its source descriptor differs from the exact candidate commit/tree.
 - Migration/schema owner: Codex `/root`; SQLite and PostgreSQL histories remain append-only and checksum-verified.

@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/wp20-local-readiness.v1.schema.json",
+  "title": "CIGAR WP20 bounded local-readiness receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet",
+    "scope",
+    "status",
+    "wp20_exit_satisfied",
+    "release_ready",
+    "source_binding",
+    "checks",
+    "harness_test_evidence",
+    "demo_evidence",
+    "sdk_evidence",
+    "benchmark_evidence",
+    "release_blocking_gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.wp20-local-readiness.v1"},
+    "packet": {"const": "WP20"},
+    "scope": {"const": "locally-testable-source-demos-and-benchmark-harness"},
+    "status": {"const": "passed-local-scope"},
+    "wp20_exit_satisfied": {"const": false},
+    "release_ready": {"const": false},
+    "source_binding": {"$ref": "#/$defs/sourceBinding"},
+    "checks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/check"}
+    },
+    "harness_test_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "total_tests", "suites"],
+      "properties": {
+        "status": {"const": "passed"},
+        "total_tests": {"type": "integer", "minimum": 1},
+        "suites": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/testSuite"}
+        }
+      }
+    },
+    "demo_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directory",
+        "qualified_records",
+        "no_egress_enforcement",
+        "byte_identical_repeat",
+        "repeat_evidence",
+        "records"
+      ],
+      "properties": {
+        "directory": {"const": "reports/demos"},
+        "qualified_records": {"const": 7},
+        "no_egress_enforcement": {"const": "darwin-loopback-only-v1"},
+        "byte_identical_repeat": {"const": false},
+        "repeat_evidence": {"const": "not_present"},
+        "records": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {"$ref": "#/$defs/demoRecord"}
+        }
+      }
+    },
+    "sdk_evidence": {"$ref": "#/$defs/sdkEvidence"},
+    "benchmark_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_shaped_dry_run", "comparator_matrix_dry_run"],
+      "properties": {
+        "release_shaped_dry_run": {"$ref": "#/$defs/releaseShapedBenchmark"},
+        "comparator_matrix_dry_run": {"$ref": "#/$defs/comparatorBenchmark"}
+      }
+    },
+    "release_blocking_gaps": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "multihash": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"},
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "git_tree",
+        "committed",
+        "clean",
+        "dirty_path_count",
+        "evidence_source_bound",
+        "committed_candidate",
+        "reason"
+      ],
+      "properties": {
+        "revision": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+          ]
+        },
+        "git_tree": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+          ]
+        },
+        "committed": {"type": "boolean"},
+        "clean": {"type": "boolean"},
+        "dirty_path_count": {"type": "integer", "minimum": 0},
+        "evidence_source_bound": {"const": false},
+        "committed_candidate": {"const": false},
+        "reason": {
+          "enum": [
+            "repository_has_no_HEAD_and_inputs_are_not_candidate_bound",
+            "working_tree_not_clean_and_inputs_are_not_candidate_bound",
+            "local_inputs_do_not_embed_a_candidate_revision"
+          ]
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "detail"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "status": {
+          "enum": ["passed", "passed-ineligible", "not-evidenced", "not-executed"]
+        },
+        "detail": {"type": "string", "minLength": 1, "maxLength": 2048}
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executable", "implementation", "version"],
+      "properties": {
+        "executable": {"type": "string", "minLength": 1},
+        "implementation": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"}
+      }
+    },
+    "normalizedOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "normalization", "normalized_sha256"],
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 0},
+        "normalization": {"const": "unittest-duration-v1"},
+        "normalized_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "testSuite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "tests",
+        "command_sha256",
+        "producer",
+        "stdout",
+        "stderr"
+      ],
+      "properties": {
+        "id": {"enum": ["cigarbench", "comparator-matrix", "demos"]},
+        "status": {"const": "passed"},
+        "tests": {"type": "integer", "minimum": 1},
+        "command_sha256": {"$ref": "#/$defs/sha256"},
+        "producer": {"$ref": "#/$defs/producer"},
+        "stdout": {"$ref": "#/$defs/normalizedOutput"},
+        "stderr": {"$ref": "#/$defs/normalizedOutput"}
+      }
+    },
+    "demoRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "bytes",
+        "sha256",
+        "demo_id",
+        "manifest_sha256",
+        "fixture_sha256",
+        "driver_sha256",
+        "driver_support_sha256"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "demo_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "driver_sha256": {"$ref": "#/$defs/sha256"},
+        "driver_support_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sdkEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "bytes",
+        "sha256",
+        "bundle_id",
+        "manifest_id",
+        "runtime_count",
+        "source_workflow_qualified",
+        "installed_artifact_qualified",
+        "release_qualified"
+      ],
+      "properties": {
+        "path": {"const": "reports/demos/sdk-quickstarts.json"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_id": {"$ref": "#/$defs/multihash"},
+        "manifest_id": {"$ref": "#/$defs/multihash"},
+        "runtime_count": {"const": 4},
+        "source_workflow_qualified": {"const": true},
+        "installed_artifact_qualified": {"const": false},
+        "release_qualified": {"const": false}
+      }
+    },
+    "benchmarkBase": {
+      "type": "object",
+      "required": [
+        "path",
+        "bytes",
+        "sha256",
+        "attachment_count",
+        "attachment_set_sha256",
+        "attachments",
+        "decision",
+        "eligible",
+        "ineligible_reasons"
+      ],
+      "properties": {
+        "path": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "attachment_count": {"type": "integer", "minimum": 1},
+        "attachment_set_sha256": {"$ref": "#/$defs/sha256"},
+        "attachments": {"type": "array", "items": {"$ref": "#/$defs/asset"}},
+        "decision": {"type": "string"},
+        "eligible": {"const": false},
+        "ineligible_reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "releaseShapedBenchmark": {
+      "allOf": [
+        {"$ref": "#/$defs/benchmarkBase"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "attachment_count",
+            "attachment_set_sha256",
+            "attachments",
+            "decision",
+            "eligible",
+            "ineligible_reasons"
+          ],
+          "properties": {
+            "path": {"const": "reports/cigarbench/local-dry-run/qualification.json"},
+            "bytes": {"type": "integer", "minimum": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "attachment_count": {"const": 3},
+            "attachment_set_sha256": {"$ref": "#/$defs/sha256"},
+            "attachments": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {"$ref": "#/$defs/asset"}
+            },
+            "decision": {"const": "insufficient_evidence"},
+            "eligible": {"const": false},
+            "ineligible_reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+          }
+        }
+      ]
+    },
+    "comparatorBenchmark": {
+      "allOf": [
+        {"$ref": "#/$defs/benchmarkBase"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "bytes",
+            "sha256",
+            "attachment_count",
+            "attachment_set_sha256",
+            "attachments",
+            "comparator_count",
+            "decision",
+            "eligible",
+            "ineligible_reasons"
+          ],
+          "properties": {
+            "path": {"const": "reports/cigarbench/local-matrix-dry-run-v1/matrix-receipt.json"},
+            "bytes": {"type": "integer", "minimum": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "attachment_count": {"const": 36},
+            "attachment_set_sha256": {"$ref": "#/$defs/sha256"},
+            "attachments": {
+              "type": "array",
+              "minItems": 36,
+              "maxItems": 36,
+              "items": {"$ref": "#/$defs/asset"}
+            },
+            "comparator_count": {"const": 12},
+            "decision": {"const": "passed-ineligible"},
+            "eligible": {"const": false},
+            "ineligible_reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -157,6 +157,34 @@ The bounded harness tests are:
 python3 -m unittest discover -s benches/cigarbench/tests -v
 ```
 
+After the demo, SDK, release-shaped dry-run, and comparator-matrix reports have
+been regenerated, aggregate them with the fail-closed WP20 local-readiness
+generator. It reruns the CIGARBench, comparator-matrix, and demo unit suites;
+validates every referenced benchmark attachment against its recorded size and
+SHA-256; derives the current Git state; and hashes the exact report bytes.
+
+```sh
+: "${CIGAR_EVIDENCE_DIR:?set an external evidence directory}"
+case "$CIGAR_EVIDENCE_DIR" in /*) ;; *) exit 2 ;; esac
+mkdir -p "$CIGAR_EVIDENCE_DIR"
+chmod 0700 "$CIGAR_EVIDENCE_DIR"
+test ! -e "$CIGAR_EVIDENCE_DIR/wp20-local-readiness.json"
+python3 benches/cigarbench/generate_wp20_readiness.py \
+  --out "$CIGAR_EVIDENCE_DIR/wp20-local-readiness.json"
+```
+
+This receipt intentionally remains `passed-local-scope` with
+schema `cigar.wp20-local-readiness.v1`, `wp20_exit_satisfied=false`, and
+`release_ready=false`. The generator rejects repository-local or relative
+outputs, symlinked path components, non-private evidence directories, and any
+existing output. It creates the receipt once with mode `0600` and never
+overwrites it. A clean Git checkout does not promote the recorded
+fixtures into candidate-bound evidence: the input reports do not embed a source
+revision, and installed artifacts, independent adjudication, real comparator
+implementations, and pinned-host performance evidence remain separate WP20
+requirements. The generator also records demo repeatability as not evidenced
+unless a future source-bound workflow retains and verifies both report sets.
+
 The checked-in manifest has one synthetic smoke task per stratum. It deliberately
 cannot qualify. A release requires a larger adjudicated manifest, independently
 verified outcomes, pinned-runner variance calibration, a real installed consumer,

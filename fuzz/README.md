@@ -15,25 +15,112 @@ Run the complete deterministic ASan smoke, property/Loom suite, and strict Miri 
 emitting content-free qualification evidence:
 
 ```sh
-python3 tools/quality/fuzz_and_mutation.py smoke
+EVIDENCE_DIR="$(mktemp -d)"
+chmod 700 "$EVIDENCE_DIR"
+python3 tools/quality/fuzz_and_mutation.py smoke --evidence-dir "$EVIDENCE_DIR"
 ```
 
 The default runs every target for the campaign's full 60-second smoke threshold with four bounded
 workers. `--runs N` is available for local harness viability checks, but evidence from run-count
-mode is explicitly non-qualifying. Run the deterministic canonical trust-boundary mutation slice
-and then verify both artifacts against the current source tree:
+mode is explicitly non-qualifying. Every fuzzer gets a private temporary copy of its seed corpus,
+and crash artifacts are retained under the external evidence directory. Successful qualification
+therefore cannot add to or rewrite `fuzz/corpus`. Run the deterministic canonical trust-boundary
+mutation slice and then verify both artifacts against the current source tree:
 
 ```sh
-python3 tools/quality/fuzz_and_mutation.py mutation
-python3 tools/quality/fuzz_and_mutation.py verify
+python3 tools/quality/fuzz_and_mutation.py mutation --evidence-dir "$EVIDENCE_DIR"
+python3 tools/quality/fuzz_and_mutation.py verify --evidence-dir "$EVIDENCE_DIR"
 ```
+
+`CIGAR_EVIDENCE_DIR` is equivalent to `--evidence-dir`. The runner rejects repository-internal,
+group/world-writable, and existing receipt destinations. It never overwrites a receipt.
+
+## Corpus inventory and minimization
+
+`corpus-policy.v1.json` pins all hand-authored seeds and the minimized MCP numeric-ID regression,
+sets per-target byte/count ceilings, and defines crash-artifact names. Capture a content-free
+inventory outside the checkout before curating corpus growth:
+
+```sh
+AUDIT_DIR="$(mktemp -d)"
+chmod 700 "$AUDIT_DIR"
+python3 tools/quality/corpus_manager.py inventory \
+  --report "$AUDIT_DIR/inventory.json"
+```
+
+The inventory separately labels checked-in reusable inputs, untracked transient growth, named
+seeds/regressions, duplicates, fault artifacts, and tracked deletions. Deleted tracked inputs are
+read from Git's index, not restored over the working tree. Coverage-minimize one target into a new
+external directory:
+
+```sh
+python3 tools/quality/corpus_manager.py minimize \
+  --target mcp_messages \
+  --output-dir "$AUDIT_DIR/mcp-minimized"
+```
+
+The command copies all current and index-recovered inputs, runs libFuzzer merge minimization only
+on that external copy, adds every pinned named fixture back, canonicalizes anonymous names to the
+SHA-1 of their bytes, enforces the policy ceilings, and writes `minimization-report.json` with a
+content-free old-to-new digest map. The output path must be fresh. Review and test this staged
+corpus before intentionally applying it; the manager never deletes or overwrites source corpus.
+
+After reviewing an external inventory, reconcile interrupted smoke-run churn with an explicit,
+fail-closed operation:
+
+```sh
+python3 tools/quality/corpus_manager.py reconcile \
+  --inventory-report "$AUDIT_DIR/inventory.json" \
+  --quarantine-dir "$AUDIT_DIR/quarantine" \
+  --apply
+```
+
+Reconciliation first proves the live corpus and artifact inventory still exactly matches the
+preserved report. It copies every untracked transient into a fresh mode-0700 external quarantine,
+verifies bytes and digests, and durably writes a prepared manifest before changing the checkout.
+It then restores missing tracked inputs from Git's index with create-new writes and unlinks only
+unchanged, verified transient copies. Named fixtures, crash artifacts, symlinks, unclassified
+files, concurrent changes, existing output paths, or a stale inventory fail closed. A completed
+`reconciliation-manifest.json` records every action and the zero-churn postcondition. If the
+process is interrupted after the prepared manifest, keep the quarantine and inspect the recorded
+per-file progress before any manual recovery.
+
+Verify a complete staged campaign and exercise all staged inputs without making them writable:
+
+```sh
+python3 tools/quality/corpus_manager.py verify \
+  --output-dir "$AUDIT_DIR/minimized-all" \
+  --require-all-targets
+STAGED_SMOKE="$(mktemp -d)"
+chmod 700 "$STAGED_SMOKE"
+python3 tools/quality/fuzz_and_mutation.py smoke \
+  --runs 1 --jobs 14 \
+  --corpus-dir "$AUDIT_DIR/minimized-all/corpus" \
+  --evidence-dir "$STAGED_SMOKE"
+```
+
+The smoke runner accepts an explicit corpus only when it is external, contains exactly all
+fourteen campaign targets, and every target digest matches the adjacent minimization report bound
+to the current campaign and corpus policy. It still copies each staged target into a separate
+private worker directory before invoking libFuzzer.
+
+`fuzz/.work/` is reserved for disposable local worker corpus copies. Never place crash, timeout,
+leak, OOM, or slow-unit artifacts there; `fuzz/artifacts/` remains visible to Git for triage.
 
 Run one target directly:
 
 ```sh
-cargo fuzz run canonical_json_cbor fuzz/corpus/canonical_json_cbor \
-  -- -dict=fuzz/dictionaries/cigar.dict -max_total_time=60 -timeout=10 -rss_limit_mb=2048
+WORKER_CORPUS="$(mktemp -d)"
+FAULT_ARTIFACTS="$(mktemp -d)"
+cp -R fuzz/corpus/canonical_json_cbor "$WORKER_CORPUS/canonical_json_cbor"
+cargo fuzz run canonical_json_cbor "$WORKER_CORPUS/canonical_json_cbor" -- \
+  -dict=fuzz/dictionaries/cigar.dict \
+  -artifact_prefix="$FAULT_ARTIFACTS/" \
+  -max_total_time=60 -timeout=10 -rss_limit_mb=2048
 ```
+
+Keep `FAULT_ARTIFACTS` until every generated fault is triaged. The checked-in corpus remains a
+read-only input even for direct local runs.
 
 The release campaign is defined by `campaign-v1.json`. Evidence is cumulative only when it binds
 the source digest, target, sanitizer, corpus digest, toolchain, start/end times, clean exit, and

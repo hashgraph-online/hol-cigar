@@ -1,8 +1,9 @@
 # Qualification gaps
 
 The machine-readable source of truth is
-[`packaging/qualification-gaps.v1.json`](../../packaging/qualification-gaps.v1.json). In this
-development workspace the source is not yet committed, native platform and multi-architecture image
+[`packaging/qualification-gaps.v1.json`](../../packaging/qualification-gaps.v1.json). This
+development workspace has an initial commit, but the worktree is dirty and existing qualification
+receipts are not bound to an exact clean candidate. Native platform and multi-architecture image
 bytes are not all available, and production signing/publishing systems are external. Exact final-byte
 vulnerability, malware-indicator, secret, and unexpected-endpoint scan receipts are also unavailable
 until those artifacts exist. These are release-blocking gaps, not

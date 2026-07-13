@@ -69,7 +69,8 @@ unrelated workspace files. In addition:
 - `cigar-store` carries all SQLite and PostgreSQL migrations referenced by `include_str!`;
 - the SDK package contract requires `.cargo_vcs_info.json` from the final committed candidate.
 
-The current workspace has no commit, so local qualification intentionally does not claim the final
+The repository has an initial commit, but the next release candidate is not frozen and the current
+worktree is dirty. Local development qualification therefore does not claim that the final
 VCS-binding contract has passed.
 
 ## Repeatable local qualification
@@ -78,11 +79,12 @@ Install `cargo-local-registry`, create a fresh registry populated from the locke
 dependencies, and run the chain qualifier:
 
 ```sh
+: "${CIGAR_EVIDENCE_DIR:?set an external evidence directory}"
 REGISTRY="$(mktemp -d)"
 cargo local-registry sync Cargo.lock "$REGISTRY"
 python3 sdk/rust/qualify_publication_chain.py \
   --registry "$REGISTRY" \
-  --report artifacts/qualification/rust-publication-chain-local.json
+  --report "${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json"
 cargo audit --deny warnings
 cargo deny check
 ```
@@ -98,9 +100,11 @@ The evidence document uses the closed schema
 identities, versions, SHA-256 digests, fixed status fields, and fixed limitation statements; it does
 not record source text, archive payloads, commands, environment values, or credentials.
 
-The latest local result is
-`artifacts/qualification/rust-publication-chain-local.json`. Regenerate it after any manifest,
-lockfile, source, packaging-input, or release-metadata change.
+Write each newly generated local result to
+`${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json`, outside the source tree. The previously
+tracked result is retained only as a byte-preserved historical development receipt; it is not
+current, clean-source-bound, or release-candidate qualification. Regenerate the external receipt
+after any manifest, lockfile, source, packaging-input, or release-metadata change.
 
 ## External release closure
 

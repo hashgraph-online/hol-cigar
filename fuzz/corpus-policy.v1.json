@@ -1,0 +1,166 @@
+{
+  "schema_version": "cigar.fuzz-corpus-policy.v1",
+  "artifact_prefixes": [
+    "crash-",
+    "leak-",
+    "oom-",
+    "slow-unit-",
+    "timeout-"
+  ],
+  "deterministic_minimization_seed_base": 190100,
+  "maximum_subprocess_output_bytes": 16777216,
+  "minimization_wall_timeout_seconds": 1800,
+  "limits": {
+    "maximum_files_per_target": 4096,
+    "maximum_input_bytes": 1048576,
+    "maximum_total_bytes_per_target": 16777216
+  },
+  "targets": {
+    "builtin_source_parsers": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "rust-source",
+          "sha1": "587d27e092f673c290279f499b294f7c06e17e70",
+          "sha256": "b698b3caf551e9578f8214c1ddc55a89eea7583285442c5bfbc20cf504f45a21"
+        }
+      ]
+    },
+    "canonical_json_cbor": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "valid-map",
+          "sha1": "aaeb30c796b5934970803ff4ca6e1ff1c70ffc58",
+          "sha256": "7019aaa6cf2847320817e12f0ef73ae57afccd51966978888870ea44c15f3559"
+        }
+      ]
+    },
+    "contract_compiler_candidates": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-contract",
+          "sha1": "5f36b2ea290645ee34d943220a14b54ee5ea5be5",
+          "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+        }
+      ]
+    },
+    "delta_roundtrip": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "two-bodies",
+          "sha1": "53291d32d17cb311d3065dabbc9f6ed4db0319ce",
+          "sha256": "a7abe2019f7bd6e750b72761a982baa76551a9c70694d9d32885038e287e7b13"
+        }
+      ]
+    },
+    "effect_journal_recovery": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "crash-seed",
+          "sha1": "f40fb45b38ebf424f0b509537f65b8b42a394783",
+          "sha256": "68fb628a32a02f5cf9d961a69cac84d6fc92a2a093aed8a20e1548268d7c6bd8"
+        }
+      ]
+    },
+    "extension_frames": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-frame",
+          "sha1": "c4d96c021ba749fc1cbe47c97dcb182def54d256",
+          "sha256": "874faf50893cb5683a8916fcba4e00fa56aa25ed21807174e289d8bebbc8ceee"
+        }
+      ]
+    },
+    "handoff_accept_merge": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-pair",
+          "sha1": "e897ae8f46799e37e29939e1d676b98e241212b3",
+          "sha256": "a406c10449394405303e90f111c7627d2380071bdb30d3142216c2a877526b71"
+        }
+      ]
+    },
+    "identity_normalization": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "credential-authority",
+          "sha1": "50baaedaa0593d447fdd666063af142a53704dea",
+          "sha256": "864c1d7ada2cb54b69749f8f531287d5380cbcceeb49613934dff8c47f268b0f"
+        }
+      ]
+    },
+    "manifest_explanation_redaction": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "canary",
+          "sha1": "b260f8881d1ddd70208601e9d2ee35879164f31e",
+          "sha256": "2e0a80991504fb51f75a1acf4ab25e7dbcc70591e5e03c245525787e414626c8"
+        }
+      ]
+    },
+    "materializer_budget": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "escaping",
+          "sha1": "5e650b9b3411812e662490ea7abfe4cf3d7fe1c7",
+          "sha256": "0040e6afc9af5af9dcb7c4875c504f1f0d2d10ba2e9def68efc8a555b3d20bad"
+        }
+      ]
+    },
+    "mcp_messages": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "initialize",
+          "sha1": "7d759f2bdc91cf31c307e8eba6d88cc3a306461b",
+          "sha256": "c51808b7afb9291474737d8b0d3732c35aac1935224ed925706a0469eb21fc64"
+        },
+        {
+          "classification": "minimized-regression",
+          "name": "out-of-range-numeric-id",
+          "sha1": "8990a2f1ca2774f3cea4ad12624eac0acf7bfd31",
+          "sha256": "02c4f7d2c1e81d5f3c5768d3dfdccc94fe8d99a407ad60d58e464d49ced6b144"
+        }
+      ]
+    },
+    "policy_parse_evaluate": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-policy",
+          "sha1": "f6d092e86779ac681a0273d99de2505dfd80a286",
+          "sha256": "63fb8027176d65db945992a5d71fbac28040dbce5c35e5782f4209c5d60a8a27"
+        }
+      ]
+    },
+    "public_record_decoders": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-invalid",
+          "sha1": "c4d96c021ba749fc1cbe47c97dcb182def54d256",
+          "sha256": "874faf50893cb5683a8916fcba4e00fa56aa25ed21807174e289d8bebbc8ceee"
+        }
+      ]
+    },
+    "replay_envelopes": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "minimal-replay",
+          "sha1": "988e7ece0c0142b802248004810279a0a07ad5e0",
+          "sha256": "dd678f58f1eb80b99991329f64f7d1dc6a4588792e86a7a8bfa9f661279763c5"
+        }
+      ]
+    }
+  }
+}
