@@ -1,0 +1,35 @@
+name: fast-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: quality / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Install pinned test runner
+        run: cargo install cargo-nextest --version 0.9.140 --locked
+      - name: Check formatting
+        run: cargo xtask fmt --check
+      - name: Check generated files
+        run: cargo xtask generate --check
+      - name: Lint workspace
+        run: cargo xtask lint
+      - name: Test WP00
+        run: cargo xtask test unit
+      - name: Check documentation
+        run: cargo xtask docs --check

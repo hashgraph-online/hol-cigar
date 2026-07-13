@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtensionObservationV1",
+  "description": "Replay dependency emitted for an extension invocation, especially nondeterministic output.",
+  "type": "object",
+  "properties": {
+    "completed_at": {
+      "description": "Invocation completion time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "determinism": {
+      "description": "Declared determinism class.",
+      "$ref": "#/$defs/ExtensionDeterminism"
+    },
+    "effective_limits": {
+      "description": "Exact effective execution limits.",
+      "$ref": "#/$defs/ExtensionLimits"
+    },
+    "extension_id": {
+      "description": "Activated extension identity.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)*$"
+    },
+    "extension_version": {
+      "description": "Activated extension version.",
+      "$ref": "#/$defs/ExtensionSemanticVersion"
+    },
+    "host_call_count": {
+      "description": "Number of calls in that transcript.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "host_call_transcript_digest": {
+      "description": "Digest of the ordered completed host-call transcript.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "implementation_digest": {
+      "description": "Exact implementation digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "input_digest": {
+      "description": "Exact input digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "invocation_id": {
+      "description": "Observed invocation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "kind": {
+      "description": "Extension role invoked.",
+      "$ref": "#/$defs/ExtensionKind"
+    },
+    "manifest_digest": {
+      "description": "Exact activated manifest digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "observation_id": {
+      "description": "Unique observation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "outcome": {
+      "description": "Terminal outcome.",
+      "$ref": "#/$defs/ExtensionResponseOutcome"
+    },
+    "output_digest": {
+      "description": "Successful output digest retained as a replay dependency.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "output_schema_digest": {
+      "description": "Successful output schema digest.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "package_digest": {
+      "description": "Exact containing package digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.extension-observation.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "started_at": {
+      "description": "Invocation start time.",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_id",
+    "invocation_id",
+    "extension_id",
+    "extension_version",
+    "manifest_digest",
+    "implementation_digest",
+    "package_digest",
+    "kind",
+    "determinism",
+    "input_digest",
+    "effective_limits",
+    "host_call_transcript_digest",
+    "host_call_count",
+    "outcome",
+    "started_at",
+    "completed_at"
+  ],
+  "$defs": {
+    "ExtensionComputeBudget": {
+      "description": "Backend-specific compute ceiling.",
+      "oneOf": [
+        {
+          "description": "Deterministic WASM fuel units.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "fuel"
+            },
+            "units": {
+              "description": "Nonzero fuel ceiling.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "units"
+          ]
+        },
+        {
+          "description": "Native or remote CPU-time ceiling.",
+          "type": "object",
+          "properties": {
+            "duration": {
+              "description": "Nonzero CPU duration.",
+              "type": "integer",
+              "format": "uint64",
+              "maximum": 315576000000000000,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "cpu_time"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "duration"
+          ]
+        }
+      ]
+    },
+    "ExtensionDeterminism": {
+      "description": "Whether an extension promises deterministic semantic output.",
+      "oneOf": [
+        {
+          "description": "Identical declared inputs and host transcript produce identical semantic output.",
+          "type": "string",
+          "const": "deterministic"
+        },
+        {
+          "description": "Output must be captured as an explicit observation.",
+          "type": "string",
+          "const": "nondeterministic"
+        }
+      ]
+    },
+    "ExtensionKind": {
+      "description": "Closed v1 extension roles.",
+      "oneOf": [
+        {
+          "description": "Discovers or reads a governed source.",
+          "type": "string",
+          "const": "source_connector"
+        },
+        {
+          "description": "Converts source content into immutable atoms.",
+          "type": "string",
+          "const": "atomizer"
+        },
+        {
+          "description": "Produces authorized retrieval candidates.",
+          "type": "string",
+          "const": "retriever"
+        },
+        {
+          "description": "Produces one bounded ranking feature.",
+          "type": "string",
+          "const": "ranking_feature"
+        },
+        {
+          "description": "Produces an evidence-carrying representation transform.",
+          "type": "string",
+          "const": "transform"
+        },
+        {
+          "description": "Verifies a summary against declared evidence.",
+          "type": "string",
+          "const": "summary_verifier"
+        },
+        {
+          "description": "Counts or encodes tokens under one fingerprint.",
+          "type": "string",
+          "const": "tokenizer"
+        },
+        {
+          "description": "Renders a semantic bundle for a consumer.",
+          "type": "string",
+          "const": "materializer"
+        },
+        {
+          "description": "Supplies a policy decision through the trusted policy boundary.",
+          "type": "string",
+          "const": "policy_provider"
+        },
+        {
+          "description": "Implements a storage backend behind trusted repository traits.",
+          "type": "string",
+          "const": "storage_backend"
+        },
+        {
+          "description": "Performs one authorized effect connector operation.",
+          "type": "string",
+          "const": "effect_connector"
+        },
+        {
+          "description": "Reconciles an ambiguous external effect.",
+          "type": "string",
+          "const": "reconciler"
+        }
+      ]
+    },
+    "ExtensionLimits": {
+      "description": "Complete bounded resource profile for one extension invocation.",
+      "type": "object",
+      "properties": {
+        "compute": {
+          "description": "Fuel or CPU-time ceiling.",
+          "$ref": "#/$defs/ExtensionComputeBudget"
+        },
+        "max_concurrency": {
+          "description": "Maximum simultaneous invocations.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "max_host_calls": {
+          "description": "Maximum brokered calls during one invocation.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_input_bytes": {
+          "description": "Maximum exact input bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_memory_bytes": {
+          "description": "Maximum guest memory bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_output_bytes": {
+          "description": "Maximum exact output bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_recursion_depth": {
+          "description": "Maximum guest recursion depth.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "wall_deadline": {
+          "description": "Maximum elapsed wall time.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 315576000000000000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "max_memory_bytes",
+        "compute",
+        "wall_deadline",
+        "max_input_bytes",
+        "max_output_bytes",
+        "max_concurrency",
+        "max_recursion_depth",
+        "max_host_calls"
+      ]
+    },
+    "ExtensionResponseOutcome": {
+      "description": "Closed terminal extension outcomes.",
+      "oneOf": [
+        {
+          "description": "Extension returned a valid semantic output.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Extension rejected the declared operation without executing it.",
+          "type": "string",
+          "const": "rejected"
+        },
+        {
+          "description": "Extension failed or crashed before producing a valid output.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Invocation observed cancellation.",
+          "type": "string",
+          "const": "cancelled"
+        }
+      ]
+    },
+    "ExtensionSemanticVersion": {
+      "description": "Unambiguous integer semantic version used by extension compatibility ranges.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Semantic major version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Semantic minor version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "patch": {
+          "description": "Semantic patch version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "major",
+        "minor",
+        "patch"
+      ]
+    }
+  }
+}

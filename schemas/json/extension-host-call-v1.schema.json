@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtensionHostCallV1",
+  "description": "Completed request/response transcript for one brokered host call.",
+  "type": "object",
+  "properties": {
+    "call_id": {
+      "description": "Unique host-call identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "capability": {
+      "description": "Capability presented for this call.",
+      "$ref": "#/$defs/ExtensionHostCapability"
+    },
+    "completed_at": {
+      "description": "Call completion time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "handle": {
+      "description": "Exact scoped handle for handle-requiring calls.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "contentEncoding": "base64url",
+      "maxLength": 43,
+      "minLength": 43
+    },
+    "invocation_id": {
+      "description": "Owning invocation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "kind": {
+      "description": "Closed call operation.",
+      "$ref": "#/$defs/ExtensionHostCallKind"
+    },
+    "ordinal": {
+      "description": "Contiguous one-based call ordinal.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "request": {
+      "description": "Exact protected request bytes.",
+      "type": "string",
+      "maxLength": 89478486
+    },
+    "request_digest": {
+      "description": "Digest of exact protected request bytes.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "response": {
+      "description": "Exact protected response bytes.",
+      "type": "string",
+      "maxLength": 89478486
+    },
+    "response_digest": {
+      "description": "Digest of exact protected response bytes.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.extension-host-call.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "started_at": {
+      "description": "Call start time.",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "call_id",
+    "invocation_id",
+    "ordinal",
+    "kind",
+    "capability",
+    "request_digest",
+    "request",
+    "response_digest",
+    "response",
+    "started_at",
+    "completed_at"
+  ],
+  "$defs": {
+    "ExtensionHostCallKind": {
+      "description": "Closed broker call categories.",
+      "oneOf": [
+        {
+          "description": "Read bytes from a source handle.",
+          "type": "string",
+          "const": "read_source"
+        },
+        {
+          "description": "Read bytes from a blob handle.",
+          "type": "string",
+          "const": "read_blob"
+        },
+        {
+          "description": "Advance a bounded iterator handle.",
+          "type": "string",
+          "const": "iterator_next"
+        },
+        {
+          "description": "Read the deterministic clock.",
+          "type": "string",
+          "const": "clock_now"
+        },
+        {
+          "description": "Read deterministic random bytes.",
+          "type": "string",
+          "const": "random_fill"
+        },
+        {
+          "description": "Emit one structured trace record.",
+          "type": "string",
+          "const": "trace"
+        },
+        {
+          "description": "Check whether the invocation was cancelled.",
+          "type": "string",
+          "const": "check_cancelled"
+        },
+        {
+          "description": "Perform one brokered allowlisted network request.",
+          "type": "string",
+          "const": "network_request"
+        },
+        {
+          "description": "Read through a filesystem preopen handle.",
+          "type": "string",
+          "const": "file_read"
+        },
+        {
+          "description": "Write through a filesystem preopen handle.",
+          "type": "string",
+          "const": "file_write"
+        },
+        {
+          "description": "Forward a secret handle at a final host-owned boundary.",
+          "type": "string",
+          "const": "resolve_secret"
+        }
+      ]
+    },
+    "ExtensionHostCapability": {
+      "description": "Closed host authorities that an extension may request.",
+      "oneOf": [
+        {
+          "description": "Read content through an opaque source handle.",
+          "type": "string",
+          "const": "source_read"
+        },
+        {
+          "description": "Read content through an opaque blob handle.",
+          "type": "string",
+          "const": "blob_read"
+        },
+        {
+          "description": "Advance a bounded host-owned iterator.",
+          "type": "string",
+          "const": "bounded_iterator"
+        },
+        {
+          "description": "Read an invocation-fixed deterministic clock.",
+          "type": "string",
+          "const": "deterministic_clock"
+        },
+        {
+          "description": "Read from an invocation-fixed deterministic random stream.",
+          "type": "string",
+          "const": "deterministic_random"
+        },
+        {
+          "description": "Emit bounded structured trace events.",
+          "type": "string",
+          "const": "structured_tracing"
+        },
+        {
+          "description": "Observe invocation cancellation.",
+          "type": "string",
+          "const": "cancellation"
+        },
+        {
+          "description": "Request brokered network I/O to an allowlisted endpoint.",
+          "type": "string",
+          "const": "network"
+        },
+        {
+          "description": "Read through a declared filesystem preopen.",
+          "type": "string",
+          "const": "filesystem_read"
+        },
+        {
+          "description": "Write through a declared filesystem preopen.",
+          "type": "string",
+          "const": "filesystem_write"
+        },
+        {
+          "description": "Forward an opaque secret handle to a final host-owned boundary.",
+          "type": "string",
+          "const": "secret_handle"
+        }
+      ]
+    }
+  }
+}

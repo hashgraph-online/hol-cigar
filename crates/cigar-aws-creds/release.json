@@ -1,0 +1,1 @@
+{"context_abi":"cigar.context.v1","name":"cigar-aws-creds","schema_version":"cigar.patched-dependency-release.v1","upstream":{"name":"aws-creds","version":"0.39.1"},"version":"0.39.1-cigar.1"}

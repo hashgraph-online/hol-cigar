@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextEdge",
+  "description": "Immutable typed edge in the catalog provenance graph.",
+  "type": "object",
+  "properties": {
+    "edge_id": {
+      "description": "Unique immutable edge identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "from_version": {
+      "description": "Source semantic version.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "kind": {
+      "description": "Published edge semantics.",
+      "$ref": "#/$defs/EdgeKind"
+    },
+    "lifecycle": {
+      "description": "Current edge lifecycle.",
+      "$ref": "#/$defs/Lifecycle"
+    },
+    "provenance_digest": {
+      "description": "Snapshot manifest that proves this edge's origin.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.edge.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "superseded_by": {
+      "description": "Required successor edge when superseded and forbidden otherwise.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "to_version": {
+      "description": "Target semantic version.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "edge_id",
+    "from_version",
+    "to_version",
+    "kind",
+    "provenance_digest",
+    "lifecycle",
+    "extensions"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "EdgeKind": {
+      "description": "Closed typed provenance and semantic graph edges.",
+      "oneOf": [
+        {
+          "description": "Source version depends on target version.",
+          "type": "string",
+          "const": "depends_on"
+        },
+        {
+          "description": "Source version defines target symbol or concept.",
+          "type": "string",
+          "const": "defines"
+        },
+        {
+          "description": "Source version references target version.",
+          "type": "string",
+          "const": "references"
+        },
+        {
+          "description": "Source version supersedes target version.",
+          "type": "string",
+          "const": "supersedes"
+        },
+        {
+          "description": "Source version contradicts target version.",
+          "type": "string",
+          "const": "contradicts"
+        },
+        {
+          "description": "Source version provides evidence supporting target version.",
+          "type": "string",
+          "const": "supports"
+        },
+        {
+          "description": "Source version was derived from target version.",
+          "type": "string",
+          "const": "derived_from"
+        },
+        {
+          "description": "Source version applies to target version.",
+          "type": "string",
+          "const": "applies_to"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "Lifecycle": {
+      "description": "Closed immutable atom lifecycle.",
+      "oneOf": [
+        {
+          "description": "Eligible for governed selection.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "Replaced by another immutable version.",
+          "type": "string",
+          "const": "superseded"
+        },
+        {
+          "description": "Logically removed but retained for provenance.",
+          "type": "string",
+          "const": "tombstoned"
+        },
+        {
+          "description": "Withheld due to integrity or security concerns.",
+          "type": "string",
+          "const": "quarantined"
+        }
+      ]
+    }
+  }
+}

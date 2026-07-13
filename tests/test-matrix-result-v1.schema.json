@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/test-matrix-result-v1.schema.json",
+  "title": "CIGAR content-free test matrix result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "suite", "profile", "matrix", "source", "host", "started_at", "finished_at", "status", "selected_case_count", "passed_case_count", "failed_case_count", "cases"],
+  "properties": {
+    "schema_version": {"const": "cigar.test-matrix-result.v1"},
+    "suite": {"type": "string"},
+    "profile": {"type": "string"},
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "revision", "committed", "clean"],
+      "properties": {
+        "kind": {"enum": ["git", "workspace"]},
+        "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40,64}$"},
+        "committed": {"type": "boolean"},
+        "clean": {"type": "boolean"}
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "architecture", "python"],
+      "properties": {
+        "platform": {"enum": ["linux", "macos", "windows"]},
+        "architecture": {"type": "string"},
+        "python": {"type": "string"}
+      }
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["passed", "failed"]},
+    "selected_case_count": {"type": "integer", "minimum": 1},
+    "passed_case_count": {"type": "integer", "minimum": 0},
+    "failed_case_count": {"type": "integer", "minimum": 0},
+    "cases": {"type": "array", "minItems": 1, "items": {"type": "object"}}
+  }
+}

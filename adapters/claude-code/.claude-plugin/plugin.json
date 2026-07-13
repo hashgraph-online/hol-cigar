@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "cigar",
+  "displayName": "CIGAR",
+  "version": "0.1.0",
+  "description": "Deterministic, inspectable, governed context for Claude Code through public hooks and MCP.",
+  "author": {
+    "name": "CIGAR contributors"
+  },
+  "homepage": "https://github.com/CIGAR/cigar",
+  "repository": "https://github.com/CIGAR/cigar",
+  "license": "Apache-2.0",
+  "keywords": [
+    "context",
+    "governance",
+    "mcp",
+    "replay"
+  ]
+}

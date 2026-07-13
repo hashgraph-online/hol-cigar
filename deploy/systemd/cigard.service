@@ -1,0 +1,52 @@
+[Unit]
+Description=CIGAR context and effect daemon
+Documentation=https://github.com/CIGAR/cigar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cigar
+Group=cigar
+ExecStart=/usr/bin/cigard serve --config /etc/cigar/cigard.toml
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
+TimeoutStopSec=45s
+KillSignal=SIGTERM
+UMask=0077
+
+RuntimeDirectory=cigar
+RuntimeDirectoryMode=0750
+StateDirectory=cigar
+StateDirectoryMode=0750
+CacheDirectory=cigar
+CacheDirectoryMode=0750
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Rootless bubblewrap needs these namespaces; cgroup namespaces remain denied.
+RestrictNamespaces=user mnt pid net ipc uts
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @mount clone clone3 unshare setns pivot_root chroot
+SystemCallErrorNumber=EPERM
+
+ReadWritePaths=/var/lib/cigar /var/cache/cigar /run/cigar
+
+[Install]
+WantedBy=multi-user.target

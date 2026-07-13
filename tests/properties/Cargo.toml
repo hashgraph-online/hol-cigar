@@ -1,0 +1,24 @@
+[package]
+name = "cigar-quality-properties"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["."]
+
+[dependencies]
+cigar-canon = { path = "../../crates/cigar-canon" }
+cigar-catalog = { path = "../../crates/cigar-catalog" }
+cigar-compiler = { path = "../../crates/cigar-compiler" }
+cigar-crypto = { path = "../../crates/cigar-crypto" }
+cigar-effects = { path = "../../crates/cigar-effects" }
+cigar-policy = { path = "../../crates/cigar-policy" }
+cigar-protocol = { path = "../../crates/cigar-protocol" }
+loom = "=0.7.2"
+proptest = "=1.11.0"
+serde_json = "=1.0.150"
+sha2 = "=0.11.0"
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,54 @@
+{
+  "command": {
+    "command": "cargo mutants --manifest-path crates/cigar-canon/Cargo.toml --file crates/cigar-canon/src/lib.rs --re (encode_head|from_deterministic_cbor|semantic_envelope_v1|semantic_multihash_v1|digest_v1) --baseline run --jobs 4 --timeout 120 --minimum-test-timeout 20 --colors never --annotations none --output /var/folders/sn/g27gfcqn2fv65qnnt43_9p9c0000gn/T/cigar-wp19-mutants-13te7oys",
+    "duration_seconds": 26.471,
+    "exit_code": 0,
+    "finished_at": "2026-07-13T14:30:17.735518Z",
+    "started_at": "2026-07-13T14:29:51.264028Z"
+  },
+  "content_policy": "metadata-only-no-build-logs-no-mutated-source",
+  "finished_at": "2026-07-13T14:30:18.023867Z",
+  "outcome": {
+    "full_release_candidate_campaign_satisfied": false,
+    "note": "This deterministic trust-boundary slice is a real threshold gate, but it does not claim the PRD's four-hour full release-candidate mutation campaign.",
+    "representative_campaign_passed": true
+  },
+  "outcomes": {
+    "caught": 10,
+    "counts": {
+      "caught": 10,
+      "missed": 0,
+      "timeout": 0,
+      "unviable": 7
+    },
+    "missed": 0,
+    "required_score_percent": 90.0,
+    "score_percent": 100.0,
+    "survivors": [],
+    "timeout": 0,
+    "viable_denominator": 10
+  },
+  "platform": {
+    "machine": "arm64",
+    "python": "3.14.6",
+    "release": "24.6.0",
+    "system": "Darwin"
+  },
+  "schema_version": "cigar.wp19-quality-mutation.v1",
+  "scope": {
+    "file": "crates/cigar-canon/src/lib.rs",
+    "filter": "(encode_head|from_deterministic_cbor|semantic_envelope_v1|semantic_multihash_v1|digest_v1)",
+    "package": "cigar-canon",
+    "representative_not_full_workspace": true
+  },
+  "source": {
+    "algorithm": "sha256-path-and-content-v1",
+    "digest": "bf357b02305140e90950ecebf015d38f35f2e5639a42776191d9ad014bf5ea73",
+    "file_count": 326
+  },
+  "started_at": "2026-07-13T14:29:50.997823Z",
+  "toolchain": {
+    "cargo_mutants": "cargo-mutants 27.1.0",
+    "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "python-sdist-v1",
+  "formats": ["tar.gz"],
+  "allow": ["cigar_sdk-0.1.0/.gitignore", "cigar_sdk-0.1.0/README.md", "cigar_sdk-0.1.0/LICENSE", "cigar_sdk-0.1.0/NOTICE", "cigar_sdk-0.1.0/pyproject.toml", "cigar_sdk-0.1.0/src/**", "cigar_sdk-0.1.0/tests/**", "cigar_sdk-0.1.0/PKG-INFO"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/*.pyc"],
+  "required": ["cigar_sdk-0.1.0/.gitignore", "cigar_sdk-0.1.0/README.md", "cigar_sdk-0.1.0/LICENSE", "cigar_sdk-0.1.0/NOTICE", "cigar_sdk-0.1.0/pyproject.toml", "cigar_sdk-0.1.0/src/cigar_sdk/release.json", "cigar_sdk-0.1.0/PKG-INFO"],
+  "required_patterns": ["cigar_sdk-0.1.0/src/cigar_sdk/*.py"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "cigar_sdk-0.1.0/src/cigar_sdk/release.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "cigar_sdk-0.1.0/src/cigar_sdk/release.json", "format": "json", "json_pointer": "/context_abi"}
+}

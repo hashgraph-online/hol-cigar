@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HealthReport",
+  "description": "Aggregate service health report.",
+  "type": "object",
+  "properties": {
+    "components": {
+      "description": "Sorted unique component observations.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ComponentHealth"
+      },
+      "maxItems": 256
+    },
+    "observed_at": {
+      "description": "Observation time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.health-report.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "status": {
+      "description": "Aggregate status equal to the worst component status.",
+      "$ref": "#/$defs/HealthStatus"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "components",
+    "observed_at"
+  ],
+  "$defs": {
+    "ComponentHealth": {
+      "description": "Content-safe component health observation.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Stable component name.",
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "reason": {
+          "description": "Stable reason code when not healthy.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "description": "Current component status.",
+          "$ref": "#/$defs/HealthStatus"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status"
+      ]
+    },
+    "ErrorCode": {
+      "description": "Stable closed public error codes. Numeric and transport mappings are frozen in `spec/errors`.",
+      "oneOf": [
+        {
+          "description": "Caller input is structurally invalid.",
+          "type": "string",
+          "const": "INVALID_ARGUMENT"
+        },
+        {
+          "description": "A named resource limit was exceeded.",
+          "type": "string",
+          "const": "LIMIT_EXCEEDED"
+        },
+        {
+          "description": "Schema major or form is unsupported.",
+          "type": "string",
+          "const": "UNSUPPORTED_SCHEMA"
+        },
+        {
+          "description": "Authenticated principal is unknown.",
+          "type": "string",
+          "const": "UNKNOWN_PRINCIPAL"
+        },
+        {
+          "description": "Capability is malformed or insufficient.",
+          "type": "string",
+          "const": "INVALID_CAPABILITY"
+        },
+        {
+          "description": "Capability is expired.",
+          "type": "string",
+          "const": "CAPABILITY_EXPIRED"
+        },
+        {
+          "description": "Source connector is unavailable.",
+          "type": "string",
+          "const": "SOURCE_UNAVAILABLE"
+        },
+        {
+          "description": "Source snapshot is incomplete.",
+          "type": "string",
+          "const": "SNAPSHOT_INCOMPLETE"
+        },
+        {
+          "description": "Integrity verification failed.",
+          "type": "string",
+          "const": "INTEGRITY_FAILURE"
+        },
+        {
+          "description": "Index watermark is stale.",
+          "type": "string",
+          "const": "INDEX_STALE"
+        },
+        {
+          "description": "Required index is unavailable.",
+          "type": "string",
+          "const": "INDEX_UNAVAILABLE"
+        },
+        {
+          "description": "Requested consistency could not be satisfied.",
+          "type": "string",
+          "const": "CONSISTENCY_UNSATISFIED"
+        },
+        {
+          "description": "Policy denied the operation.",
+          "type": "string",
+          "const": "POLICY_DENIED"
+        },
+        {
+          "description": "Processor constraints denied the operation.",
+          "type": "string",
+          "const": "PROCESSOR_DENIED"
+        },
+        {
+          "description": "Instruction authority was insufficient.",
+          "type": "string",
+          "const": "INSTRUCTION_AUTHORITY_DENIED"
+        },
+        {
+          "description": "Required budget cannot be satisfied.",
+          "type": "string",
+          "const": "BUDGET_UNSATISFIABLE"
+        },
+        {
+          "description": "Required authorized context is missing.",
+          "type": "string",
+          "const": "MISSING_REQUIRED_CONTEXT"
+        },
+        {
+          "description": "Critical semantic conflict remains unresolved.",
+          "type": "string",
+          "const": "UNRESOLVED_CRITICAL_CONFLICT"
+        },
+        {
+          "description": "Delta base does not match provider-present state.",
+          "type": "string",
+          "const": "DELTA_BASE_MISMATCH"
+        },
+        {
+          "description": "Bundle was invalidated.",
+          "type": "string",
+          "const": "BUNDLE_INVALIDATED"
+        },
+        {
+          "description": "Optimistic revision does not match.",
+          "type": "string",
+          "const": "REVISION_CONFLICT"
+        },
+        {
+          "description": "Handoff expired.",
+          "type": "string",
+          "const": "HANDOFF_EXPIRED"
+        },
+        {
+          "description": "Handoff recipient does not match.",
+          "type": "string",
+          "const": "HANDOFF_RECIPIENT_MISMATCH"
+        },
+        {
+          "description": "Effect requires approval.",
+          "type": "string",
+          "const": "APPROVAL_REQUIRED"
+        },
+        {
+          "description": "Approval no longer binds current semantics or time.",
+          "type": "string",
+          "const": "APPROVAL_STALE"
+        },
+        {
+          "description": "External effect outcome is unknown.",
+          "type": "string",
+          "const": "EFFECT_UNKNOWN"
+        },
+        {
+          "description": "Effect cannot be safely retried.",
+          "type": "string",
+          "const": "UNSAFE_RETRY"
+        },
+        {
+          "description": "Replay lacks required dependencies.",
+          "type": "string",
+          "const": "REPLAY_INCOMPLETE"
+        },
+        {
+          "description": "Named dependency is unavailable.",
+          "type": "string",
+          "const": "DEPENDENCY_UNAVAILABLE"
+        },
+        {
+          "description": "Live operation requires explicit new authorization.",
+          "type": "string",
+          "const": "LIVE_AUTHORIZATION_REQUIRED"
+        },
+        {
+          "description": "Request rate limit was reached.",
+          "type": "string",
+          "const": "RATE_LIMITED"
+        },
+        {
+          "description": "Request deadline elapsed.",
+          "type": "string",
+          "const": "DEADLINE_EXCEEDED"
+        },
+        {
+          "description": "Dependency is degraded.",
+          "type": "string",
+          "const": "DEPENDENCY_DEGRADED"
+        },
+        {
+          "description": "Internal error hidden behind a correlation ID.",
+          "type": "string",
+          "const": "INTERNAL"
+        }
+      ]
+    },
+    "HealthStatus": {
+      "description": "Closed operational health status.",
+      "oneOf": [
+        {
+          "description": "Component is operating normally.",
+          "type": "string",
+          "const": "healthy"
+        },
+        {
+          "description": "Component is available with reduced guarantees or capacity.",
+          "type": "string",
+          "const": "degraded"
+        },
+        {
+          "description": "Component is not available for required operations.",
+          "type": "string",
+          "const": "unhealthy"
+        }
+      ]
+    }
+  }
+}

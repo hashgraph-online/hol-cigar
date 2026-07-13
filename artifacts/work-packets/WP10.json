@@ -1,0 +1,64 @@
+{
+  "packet": "WP10",
+  "source_commit": "workspace:db2b3cde048ac6002379481edd56e78259921acf5a451072b84e6cb6a5319937",
+  "prerequisites": ["WP03", "WP04", "WP07", "WP08", "WP09"],
+  "owned_paths": [
+    "crates/cigar-space",
+    "docs/reference/context-spaces.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-space --all-targets",
+    "cargo clippy -p cigar-space --all-targets -- -D warnings",
+    "cargo llvm-cov -p cigar-space --all-targets --lcov --output-path reports/wp10-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP10-WORKSPACE-NEXTEST", "result": "pass", "count": 177, "skipped": 0 },
+    { "id": "WP10-CONCURRENT-WRITERS", "result": "pass", "writer_counts": [2, 8, 64], "lost_updates": 0, "silent_overwrites": 0 },
+    { "id": "WP10-OPTIMISTIC-REVISION", "result": "pass", "stale_revision_rejected": true },
+    { "id": "WP10-THREE-WAY-MERGE", "result": "pass", "independent_additions": true, "identical_deduplication": true, "typed_conflict": true },
+    { "id": "WP10-OVERLAY-ISOLATION", "result": "pass", "content_leaks": 0, "existence_signal_leaks": 0, "discard_mutated_history": false },
+    { "id": "WP10-EVENT-STREAM", "result": "pass", "at_least_once_duplicates": true, "reconnect_resume": true, "slow_pages_bounded": true, "semantic_cursor_gaps": 0 },
+    { "id": "WP10-REVOCATION-PRIORITY", "result": "pass", "priority_within_atomic_batch": true },
+    { "id": "WP10-LEASE-FENCING", "result": "pass", "stale_fences_authorized": 0, "monotonic_reacquisition": true },
+    { "id": "WP10-FOCUS-BRANCH", "result": "pass", "offline_resume": true, "task_switch_preserves_checkpoint": true },
+    { "id": "WP10-PROJECT-FEDERATION", "result": "pass", "directional": true, "preview_disclosure_gated": true, "optional_cap_enforced": true, "unauthorized_project_b_visible": false }
+  ],
+  "metrics": {
+    "nextest_passed": 177,
+    "nextest_skipped": 0,
+    "wp10_scoped_tests": 7,
+    "maximum_concurrent_writers": 64,
+    "lost_updates": 0,
+    "silent_semantic_overwrites": 0,
+    "overlay_leaks": 0,
+    "cursor_semantic_gaps": 0,
+    "stale_fences_authorized": 0,
+    "unauthorized_project_b_visible": false,
+    "lcov_lines_found": 852,
+    "lcov_lines_hit": 765,
+    "lcov_line_percent": 89.79
+  },
+  "artifacts": [
+    { "path": "Cargo.lock", "sha256": "3f4834bfd5a51cc3056244e83af4d199d945c64799c4a231af22512bc1ee4a2a" },
+    { "path": "crates/cigar-space/Cargo.toml", "sha256": "7066b6a64819f130ea46baf3e78d7de7f333ef4b5f0f8c4c17f69f6557a58568" },
+    { "path": "crates/cigar-space/README.md", "sha256": "b6a2a53d50b74345ef1e3f43eabab810a1f0e1293d0e30a1119ae91f14983dea" },
+    { "path": "crates/cigar-space/src/lib.rs", "sha256": "3eb226bd87f27839749f64769c225e737d31b105b8bad0d7b9af35aca6d03f1a" },
+    { "path": "crates/cigar-space/src/contract.rs", "sha256": "aae319e86f601f64aa27bec5689f0801c747ec16479446cb3a82fca8d4906974" },
+    { "path": "crates/cigar-space/src/service.rs", "sha256": "630ed383c22bc096378283c6224df02f51572b5d7d064c78ace3644e351b0ba2" },
+    { "path": "crates/cigar-space/tests/space.rs", "sha256": "7be515bbf9051831458947b9aba8aa17c34ebdccae21c1d55d6fcea2cf8b0b52" },
+    { "path": "docs/reference/context-spaces.md", "sha256": "fe96aefa8783a591045ac2c9d86887a29e96f772eafadb0fa8fa0782a9151424" },
+    { "path": "reports/wp10-lcov.info", "sha256": "3cbaf1b95dced693cfbc1666b382216495d7989649840407b4b3e3bcb21d5822" }
+  ],
+  "known_limitations": [
+    "ContextSpaceService is the thread-safe in-process semantic reference implementation; durable daemon repository wiring and restart qualification are owned by WP14, and shared PostgreSQL publication is owned by WP18.",
+    "Leases are intentionally advisory and never grant authority; callers must combine fence verification with current policy authorization at the privileged operation boundary."
+  ],
+  "status": "complete"
+}

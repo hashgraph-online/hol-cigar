@@ -1,0 +1,214 @@
+name: cigar-wp18-failover
+
+# Qualification-only PostgreSQL HA topology. Secrets are supplied by the caller through
+# Compose environment-backed secrets; this file contains no password defaults.
+services:
+  primary:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    hostname: primary
+    environment:
+      POSTGRES_DB: cigar
+      POSTGRES_USER: cigar_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/owner_password
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=8
+      - -c
+      - max_replication_slots=8
+      - -c
+      - wal_keep_size=256MB
+      - -c
+      - wal_log_hints=on
+      - -c
+      - synchronous_commit=remote_apply
+      - -c
+      - hot_standby=on
+      - -c
+      - password_encryption=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -U cigar_owner -d cigar"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    volumes:
+      - primary-data:/var/lib/postgresql
+      - ./primary-init.sh:/docker-entrypoint-initdb.d/20-failover-roles.sh:ro
+    secrets:
+      - owner_password
+      - replication_password
+      - rewind_password
+      - router_password
+      - runtime_password
+    networks: [failover]
+    stop_grace_period: 30s
+    security_opt: [no-new-privileges:true]
+
+  standby:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    hostname: standby
+    entrypoint: [/usr/local/bin/standby-entrypoint.sh]
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=8
+      - -c
+      - max_replication_slots=8
+      - -c
+      - wal_keep_size=256MB
+      - -c
+      - wal_log_hints=on
+      - -c
+      - synchronous_commit=remote_apply
+      - -c
+      - hot_standby=on
+      - -c
+      - password_encryption=scram-sha-256
+    depends_on:
+      primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -q -U cigar_owner -d cigar &&
+          test "$(psql -XqAt -U cigar_owner -d postgres -c 'SELECT pg_is_in_recovery()')" = t
+      interval: 1s
+      timeout: 3s
+      retries: 90
+    volumes:
+      - standby-data:/var/lib/postgresql
+      - ./standby-entrypoint.sh:/usr/local/bin/standby-entrypoint.sh:ro
+    secrets:
+      - replication_password
+    networks: [failover]
+    stop_grace_period: 30s
+    security_opt: [no-new-privileges:true]
+
+  router:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    hostname: router
+    depends_on:
+      primary:
+        condition: service_healthy
+      standby:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${CIGAR_FAILOVER_ROUTER_PORT:-55433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h 127.0.0.1 -p 5432 -U cigar_router -d cigar"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+    secrets:
+      - router_password
+    networks: [failover, host-edge]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt: [no-new-privileges:true]
+
+  client:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    profiles: [operations]
+    entrypoint: [/usr/local/bin/client-psql.sh]
+    volumes:
+      - ./client-psql.sh:/usr/local/bin/client-psql.sh:ro
+    secrets:
+      - runtime_password
+    networks: [failover]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt: [no-new-privileges:true]
+
+  rejoin-primary:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    profiles: [operations]
+    entrypoint: [/usr/local/bin/rejoin-primary.sh]
+    environment:
+      PGDATA: /target/18/docker
+      CIGAR_REWIND_SOURCE_HOST: standby
+      CIGAR_REJOIN_SLOT: cigar_rejoined_slot
+      CIGAR_REJOIN_APPLICATION_NAME: cigar_standby
+      CIGAR_FORCE_REWIND_DIVERGENCE: "1"
+    volumes:
+      - primary-data:/target
+      - ./rejoin-primary.sh:/usr/local/bin/rejoin-primary.sh:ro
+    secrets:
+      - replication_password
+      - rewind_password
+    networks: [failover]
+    security_opt: [no-new-privileges:true]
+
+  physical-backup:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    profiles: [operations]
+    entrypoint: [/usr/local/bin/physical-backup.sh]
+    environment:
+      CIGAR_BACKUP_SOURCE_HOST: standby
+    volumes:
+      - physical-backup-data:/backup
+      - ./physical-backup.sh:/usr/local/bin/physical-backup.sh:ro
+    secrets:
+      - replication_password
+    networks: [failover]
+    security_opt: [no-new-privileges:true]
+
+  physical-restore:
+    image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
+    profiles: [operations]
+    entrypoint: [/usr/local/bin/physical-restore-entrypoint.sh]
+    command:
+      - postgres
+      - -c
+      - listen_addresses=
+      - -c
+      - synchronous_standby_names=
+      - -c
+      - password_encryption=scram-sha-256
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -q -U cigar_owner -d cigar &&
+          test "$(psql -XqAt -U cigar_owner -d postgres -c 'SELECT pg_is_in_recovery()')" = f &&
+          test "$(psql -XqAt -U cigar_owner -d postgres -c 'SHOW transaction_read_only')" = off
+      interval: 1s
+      timeout: 3s
+      retries: 90
+    volumes:
+      - physical-backup-data:/backup:ro
+      - physical-restore-data:/var/lib/postgresql
+      - ./physical-restore-entrypoint.sh:/usr/local/bin/physical-restore-entrypoint.sh:ro
+    network_mode: none
+    stop_grace_period: 30s
+    security_opt: [no-new-privileges:true]
+
+volumes:
+  primary-data: {}
+  standby-data: {}
+  physical-backup-data: {}
+  physical-restore-data: {}
+
+networks:
+  failover:
+    internal: true
+  host-edge: {}
+
+secrets:
+  owner_password:
+    environment: CIGAR_FAILOVER_OWNER_PASSWORD
+  replication_password:
+    environment: CIGAR_FAILOVER_REPLICATION_PASSWORD
+  rewind_password:
+    environment: CIGAR_FAILOVER_REWIND_PASSWORD
+  router_password:
+    environment: CIGAR_FAILOVER_ROUTER_PASSWORD
+  runtime_password:
+    environment: CIGAR_FAILOVER_RUNTIME_PASSWORD

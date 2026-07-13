@@ -1,0 +1,61 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "migration",
+  "description": "Append-only migration, tamper detection, backup/restore, snapshot compatibility, and live shared upgrade gates.",
+  "cases": [
+    {
+      "id": "MIG-BACKUP-001",
+      "title": "Signed SQLite backup verifies, restores, and preserves the semantic root.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib", "-E", "test(=backup::tests::signed_backup_verifies_restores_empty_and_preserves_root)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-BACKUP-001", "STORE-RESTORE-001"]
+    },
+    {
+      "id": "MIG-CLI-001",
+      "title": "Production CLI backup, restore, and store-owned GC use signed durable state.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-cli", "--lib", "-E", "test(=tests::production_backup_restore_and_store_owned_gc_use_signed_durable_state)"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["OPS-BACKUP-001", "OPS-RESTORE-001", "STORE-GC-001"]
+    },
+    {
+      "id": "MIG-SHARED-001",
+      "title": "Live PostgreSQL and object storage migrations, physical backup, restore, and deployment assets qualify together.",
+      "command": ["bash", "tools/qualify-shared-profile.sh"],
+      "timeout_seconds": 14400,
+      "profiles": ["release", "shared"],
+      "platforms": ["linux", "macos"],
+      "requirements": ["STORE-PG-MIGRATION-001", "STORE-BACKUP-001", "STORE-RESTORE-001"]
+    },
+    {
+      "id": "MIG-SPACE-001",
+      "title": "Space and handoff snapshots reject semantic tampering and duplicate state.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-space", "--test", "space", "--test", "handoff"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STATE-SNAPSHOT-001", "COMPAT-UPGRADE-001"]
+    },
+    {
+      "id": "MIG-SQLITE-001",
+      "title": "SQLite detects migration and durable state tampering.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib", "-E", "test(=conformance::tests::sqlite_detects_migration_and_state_tampering)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-MIGRATION-001", "STORE-INTEGRITY-001"]
+    },
+    {
+      "id": "MIG-SQLITE-002",
+      "title": "Migration plans are append-only, bounded, and self-describing.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib", "-E", "test(=conformance::tests::migration_plan_is_append_only_bounded_and_self_describing)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-MIGRATION-001", "COMPAT-UPGRADE-001"]
+    }
+  ]
+}

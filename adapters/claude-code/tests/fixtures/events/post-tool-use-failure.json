@@ -1,0 +1,15 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "false"
+  },
+  "tool_use_id": "toolu_fixture_failure",
+  "error": "Command exited with status 1",
+  "is_interrupt": false,
+  "duration_ms": 7
+}

@@ -1,0 +1,9 @@
+FROM haproxy:3.2-alpine@sha256:66e25cc9a8332635f4e897f7f4b1e5622c25f09f0ee23cddc6ce9bdb3a24772a
+
+USER root
+RUN apk add --no-cache postgresql-client
+COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
+COPY check-primary.sh /usr/local/bin/check-primary
+RUN chmod 0555 /usr/local/bin/check-primary \
+    && haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
+USER haproxy

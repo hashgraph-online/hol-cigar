@@ -1,0 +1,1398 @@
+{
+  "schema_version": 1,
+  "status": "frozen-v1",
+  "operation_count": 45,
+  "envelope_fields": [
+    {
+      "name": "idempotency_key",
+      "source": "envelope",
+      "bound": "max_bytes=256,mutation_only"
+    },
+    {
+      "name": "expected_revision",
+      "source": "envelope",
+      "bound": "max_bytes=256,revisioned_mutation_only"
+    },
+    {
+      "name": "dry_run",
+      "source": "envelope",
+      "bound": "boolean"
+    },
+    {
+      "name": "page_cursor",
+      "source": "envelope",
+      "bound": "max_bytes=4096"
+    },
+    {
+      "name": "page_size",
+      "source": "envelope",
+      "bound": "1..=1000"
+    },
+    {
+      "name": "path_parameters",
+      "source": "transport",
+      "bound": "max_items=8,sorted_unique"
+    }
+  ],
+  "operations": [
+    {
+      "operation_id": "discoverSources",
+      "request_schema": "DiscoverSourcesRequest",
+      "response_schema": "DiscoveryPlanResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "source_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "include_paths",
+          "source": "caller",
+          "bound": "max_items=1024,max_item_bytes=4096"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "ingestCatalog",
+      "request_schema": "IngestCatalogRequest",
+      "response_schema": "IngestionReceiptResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "source_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "plan_digest",
+          "source": "caller",
+          "bound": "content_digest"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getSourceStatus",
+      "request_schema": "SourceIdRequest",
+      "response_schema": "SourceStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "source_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "queryCatalog",
+      "request_schema": "QueryCatalogRequest",
+      "response_schema": "CatalogQueryResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "requirements",
+          "source": "caller",
+          "bound": "max_items=256"
+        },
+        {
+          "name": "max_results",
+          "source": "caller",
+          "bound": "1..=1000"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "batchAtoms",
+      "request_schema": "BatchAtomsRequest",
+      "response_schema": "AtomBatchResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "atom_ids",
+          "source": "caller",
+          "bound": "max_items=1000,unique,preserves_request_order"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "tombstoneAtom",
+      "request_schema": "AtomIdRequest",
+      "response_schema": "MutationReceipt",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "atom_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "createContextPlan",
+      "request_schema": "CreateContextPlanRequest",
+      "response_schema": "ContextPlanResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "contract",
+          "source": "caller",
+          "bound": "validated_context_contract"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "compileContextBundle",
+      "request_schema": "CompileContextBundleRequest",
+      "response_schema": "ContextBundle",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "plan_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "compileContextDelta",
+      "request_schema": "CompileContextDeltaRequest",
+      "response_schema": "ContextDeltaResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "base_bundle_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "target_plan_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getContextBundle",
+      "request_schema": "BundleIdRequest",
+      "response_schema": "ContextBundle",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "bundle_id",
+          "source": "path",
+          "bound": "version_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getContextBundleManifest",
+      "request_schema": "BundleIdRequest",
+      "response_schema": "SelectionManifest",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "bundle_id",
+          "source": "path",
+          "bound": "version_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "explainContextBundle",
+      "request_schema": "ExplainContextBundleRequest",
+      "response_schema": "ContextExplanationResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "bundle_id",
+          "source": "path",
+          "bound": "version_id"
+        },
+        {
+          "name": "version_ids",
+          "source": "caller",
+          "bound": "max_items=1000,sorted_unique"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "materializeContextBundle",
+      "request_schema": "MaterializeContextBundleRequest",
+      "response_schema": "MaterializationResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "bundle_id",
+          "source": "path",
+          "bound": "version_id"
+        },
+        {
+          "name": "profile",
+          "source": "caller",
+          "bound": "closed_enum"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "revalidateContextBundle",
+      "request_schema": "BundleIdRequest",
+      "response_schema": "RevalidationResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "bundle_id",
+          "source": "path",
+          "bound": "version_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "createSpace",
+      "request_schema": "CreateSpaceRequest",
+      "response_schema": "ContextCommit",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "workspace_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "project_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "branch_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "task_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "session_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "purpose",
+          "source": "caller",
+          "bound": "1..=4096_bytes"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "forkSpace",
+      "request_schema": "ForkSpaceRequest",
+      "response_schema": "SpaceForkResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        },
+        {
+          "name": "fork",
+          "source": "caller",
+          "bound": "tagged_private_overlay_or_focus_branch"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "publishSpace",
+      "request_schema": "PublishSpaceRequest",
+      "response_schema": "SpacePublishResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        },
+        {
+          "name": "overlay_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "purpose",
+          "source": "caller",
+          "bound": "1..=4096_bytes"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getSpaceLog",
+      "request_schema": "SpaceIdRequest",
+      "response_schema": "SpaceLogResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "subscribeSpaceEvents",
+      "request_schema": "SpaceIdRequest",
+      "response_schema": "StreamOpenResponse",
+      "event_schema": "SpaceEventPayload",
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 1048576,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": [
+        {
+          "name": "event",
+          "source": "server",
+          "bound": "event_schema,max_bytes=1048576"
+        }
+      ]
+    },
+    {
+      "operation_id": "createSpaceCheckpoint",
+      "request_schema": "CheckpointSpaceRequest",
+      "response_schema": "SpaceCheckpointResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        },
+        {
+          "name": "focus_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "listSpaceConflicts",
+      "request_schema": "SpaceIdRequest",
+      "response_schema": "ConflictListResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "resolveSpaceConflict",
+      "request_schema": "ResolveSpaceConflictRequest",
+      "response_schema": "ConflictResolutionResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "space_id",
+          "source": "path",
+          "bound": "context_space_id"
+        },
+        {
+          "name": "conflict_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "resolution",
+          "source": "caller",
+          "bound": "closed_tagged_resolution"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "createHandoff",
+      "request_schema": "CreateHandoffRequest",
+      "response_schema": "CreateHandoffResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "recipient",
+          "source": "caller",
+          "bound": "recipient_selector"
+        },
+        {
+          "name": "task",
+          "source": "caller",
+          "bound": "1..=4096_bytes"
+        },
+        {
+          "name": "acceptance_criteria",
+          "source": "caller",
+          "bound": "max_items=256"
+        },
+        {
+          "name": "requested_projects",
+          "source": "caller",
+          "bound": "max_items=64,sorted_unique"
+        },
+        {
+          "name": "requested_capabilities",
+          "source": "caller",
+          "bound": "max_items=64,sorted_unique"
+        },
+        {
+          "name": "budget",
+          "source": "caller",
+          "bound": "validated_budget"
+        },
+        {
+          "name": "topics",
+          "source": "caller",
+          "bound": "max_items=64,sorted_unique"
+        },
+        {
+          "name": "references",
+          "source": "caller",
+          "bound": "validated_typed_references"
+        },
+        {
+          "name": "bundle_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "audience",
+          "source": "caller",
+          "bound": "1..=256_bytes"
+        },
+        {
+          "name": "ttl_seconds",
+          "source": "caller",
+          "bound": "1..=86400"
+        },
+        {
+          "name": "reusable",
+          "source": "caller",
+          "bound": "boolean"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "previewHandoff",
+      "request_schema": "HandoffIdRequest",
+      "response_schema": "HandoffPreviewResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "handoff_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "acceptHandoff",
+      "request_schema": "AcceptHandoffRequest",
+      "response_schema": "HandoffAcceptance",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "handoff_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "target_plan_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "revokeHandoff",
+      "request_schema": "RevokeHandoffRequest",
+      "response_schema": "MutationReceipt",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "handoff_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "reason_digest",
+          "source": "caller",
+          "bound": "content_digest"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "recordHandoffResult",
+      "request_schema": "RecordHandoffResultRequest",
+      "response_schema": "HandoffResultReceipt",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "handoff_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "base_commit_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "claims",
+          "source": "caller",
+          "bound": "max_items=1024"
+        },
+        {
+          "name": "decisions",
+          "source": "caller",
+          "bound": "max_items=1024,sorted_unique"
+        },
+        {
+          "name": "artifacts",
+          "source": "caller",
+          "bound": "max_items=1024,sorted_unique"
+        },
+        {
+          "name": "source_changes",
+          "source": "caller",
+          "bound": "max_items=1024,sorted_unique"
+        },
+        {
+          "name": "verifier_receipts",
+          "source": "caller",
+          "bound": "max_items=1024,sorted_unique"
+        },
+        {
+          "name": "unresolved_questions",
+          "source": "caller",
+          "bound": "max_items=1024,max_item_bytes=4096"
+        },
+        {
+          "name": "blockers",
+          "source": "caller",
+          "bound": "max_items=1024,max_item_bytes=4096"
+        },
+        {
+          "name": "effect_references",
+          "source": "caller",
+          "bound": "max_items=1024,sorted_unique"
+        },
+        {
+          "name": "requested_followup_capabilities",
+          "source": "caller",
+          "bound": "max_items=64,sorted_unique"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "mergeHandoff",
+      "request_schema": "MergeHandoffRequest",
+      "response_schema": "HandoffMergeResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "handoff_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "delta_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "space_id",
+          "source": "caller",
+          "bound": "context_space_id"
+        },
+        {
+          "name": "overlay_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "prepareEffect",
+      "request_schema": "PrepareEffectRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "connector",
+          "source": "caller",
+          "bound": "1..=256_bytes"
+        },
+        {
+          "name": "operation",
+          "source": "caller",
+          "bound": "1..=256_bytes"
+        },
+        {
+          "name": "arguments_digest",
+          "source": "caller",
+          "bound": "content_digest"
+        },
+        {
+          "name": "encrypted_arguments",
+          "source": "caller",
+          "bound": "blob_ref"
+        },
+        {
+          "name": "target",
+          "source": "caller",
+          "bound": "1..=256_bytes"
+        },
+        {
+          "name": "preconditions",
+          "source": "caller",
+          "bound": "max_items=256,sorted_unique"
+        },
+        {
+          "name": "result_schema_digest",
+          "source": "caller",
+          "bound": "content_digest"
+        },
+        {
+          "name": "risk",
+          "source": "caller",
+          "bound": "closed_enum"
+        },
+        {
+          "name": "source_decision_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "bundle_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "required_capability",
+          "source": "caller",
+          "bound": "closed_enum"
+        },
+        {
+          "name": "idempotency_scope",
+          "source": "caller",
+          "bound": "1..=256_bytes"
+        },
+        {
+          "name": "retry_policy",
+          "source": "caller",
+          "bound": "closed_enum"
+        },
+        {
+          "name": "ttl_seconds",
+          "source": "caller",
+          "bound": "1..=86400"
+        },
+        {
+          "name": "compensation",
+          "source": "caller",
+          "bound": "optional_compensation_spec"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "authorizeEffect",
+      "request_schema": "AuthorizeEffectRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "effect_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "approval",
+          "source": "caller",
+          "bound": "optional_bounded_approval"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "dispatchEffect",
+      "request_schema": "EffectIdRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "effect_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getEffectStatus",
+      "request_schema": "EffectIdRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "effect_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "reconcileEffect",
+      "request_schema": "EffectIdRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "effect_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "compensateEffect",
+      "request_schema": "CompensateEffectRequest",
+      "response_schema": "EffectStatusResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "effect_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "compensation_effect_id",
+          "source": "caller",
+          "bound": "record_id"
+        },
+        {
+          "name": "compensation_spec_digest",
+          "source": "caller",
+          "bound": "content_digest"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "createReplay",
+      "request_schema": "CreateReplayRequest",
+      "response_schema": "ReplayJobResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "decision_id",
+          "source": "caller",
+          "bound": "version_id"
+        },
+        {
+          "name": "mode",
+          "source": "caller",
+          "bound": "evidence_or_invocation_or_observational_or_live"
+        },
+        {
+          "name": "simulate_effects",
+          "source": "caller",
+          "bound": "boolean"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "runObservationalReplay",
+      "request_schema": "ReplayIdRequest",
+      "response_schema": "ReplayExecution",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "replay_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "compareLiveReplay",
+      "request_schema": "CompareLiveReplayRequest",
+      "response_schema": "ReplayExecution",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "replay_id",
+          "source": "path",
+          "bound": "record_id"
+        },
+        {
+          "name": "live_authorization_id",
+          "source": "caller",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getReplayCompleteness",
+      "request_schema": "ReplayIdRequest",
+      "response_schema": "ReplayCompleteness",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [
+        {
+          "name": "replay_id",
+          "source": "path",
+          "bound": "record_id"
+        }
+      ],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getLiveness",
+      "request_schema": "EmptyRequest",
+      "response_schema": "LivenessResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getReadiness",
+      "request_schema": "EmptyRequest",
+      "response_schema": "ReadinessResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getVersion",
+      "request_schema": "EmptyRequest",
+      "response_schema": "VersionResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getCapabilities",
+      "request_schema": "EmptyRequest",
+      "response_schema": "CapabilitiesResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getConfiguration",
+      "request_schema": "EmptyRequest",
+      "response_schema": "ConfigurationResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getDiagnostics",
+      "request_schema": "EmptyRequest",
+      "response_schema": "DiagnosticsResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    },
+    {
+      "operation_id": "getMetrics",
+      "request_schema": "EmptyRequest",
+      "response_schema": "MetricsResponse",
+      "event_schema": null,
+      "request_max_bytes": 16777216,
+      "response_max_bytes": 16777216,
+      "event_max_bytes": 0,
+      "request_fields": [],
+      "response_fields": [
+        {
+          "name": "payload",
+          "source": "server",
+          "bound": "operation_schema,max_bytes=16777216"
+        }
+      ],
+      "event_fields": []
+    }
+  ]
+}

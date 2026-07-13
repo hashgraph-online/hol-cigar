@@ -1,0 +1,13 @@
+{
+  "schema_version": "cigar.sdk-semantic-bundle-fixture.v1",
+  "bundle": {
+    "schema_version": "cigar.context-bundle.v1",
+    "bundle_id": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+    "contract_digest": "12201111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest": "12202222222222222222222222222222222222222222222222222222222222222222",
+    "blocks": [],
+    "total_tokens": 0,
+    "extensions": {}
+  },
+  "expected_bundle_id": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84"
+}

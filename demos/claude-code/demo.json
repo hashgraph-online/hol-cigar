@@ -1,0 +1,61 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "claude-code-experience",
+  "title": "Recorded Claude Code hook and MCP experience",
+  "fixed_seed": 41007,
+  "fixture": "fixture.json",
+  "fixture_digest": "1220c92b048abc64eb4e09959b9ad314cde90322e1b10e653ed97d60fa573dbf9ee2",
+  "driver": "driver.py",
+  "driver_digest": "1220577c51220eca10dfec5f4f0b14d39d5a72f9ae4a867127261bd19a00e97abdf6",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "recorded-hook-events", "fake-cigar-backend", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "bootstrap-at-most-500-tokens", "no-duplicate-injection", "mcp-output-bounded",
+    "checkpoint-sequence-exact", "degraded-marker-visible", "manifest-inspectable", "uninstall-safe"
+  ],
+  "checks": [
+    {
+      "check_id": "duplicate-events-idempotent",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-claude-hook", "exact_duplicate_returns_original_without_second_backend_call"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["no-duplicate-injection"]
+    },
+    {
+      "check_id": "compaction-resume-exact",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-claude-hook", "compaction_checkpoints_invalidates_present_set_and_recompiles"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["checkpoint-sequence-exact", "degraded-marker-visible"]
+    },
+    {
+      "check_id": "bootstrap-and-output-bounded",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-claude-hook", "bootstrap_and_backend_output_are_bounded_without_model_calls"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["bootstrap-at-most-500-tokens", "mcp-output-bounded", "manifest-inspectable"]
+    },
+    {
+      "check_id": "install-uninstall-byte-preserving",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-cli", "--test", "claude_plugin", "fake_home_install_preview_doctor_and_byte_preserving_uninstall"],
+      "timeout_seconds": 600,
+      "minimum_passed_tests": 1,
+      "assertions": ["uninstall-safe"]
+    }
+  ],
+  "teardown": ["safe-uninstall", "remove-isolated-home", "remove-recorded-hook-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario claude-code-experience --output-dir reports/demos",
+  "canary_ids": ["claude-secret"],
+  "live_mode": {
+    "enabled": true,
+    "required_environment": ["ANTHROPIC_API_KEY", "CIGAR_CLAUDE_LIVE_MODEL"],
+    "check": {
+      "check_id": "claude-controlled-live-smoke",
+      "command": ["python3", "demos/claude-code/live_smoke.py"],
+      "timeout_seconds": 240,
+      "minimum_passed_tests": 1,
+      "assertions": []
+    }
+  }
+}

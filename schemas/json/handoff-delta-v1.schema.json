@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HandoffDelta",
+  "description": "Typed child result proposed against an exact base snapshot.",
+  "type": "object",
+  "properties": {
+    "artifacts": {
+      "description": "Sorted artifact references.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "base_commit_id": {
+      "description": "Exact base context commit.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "blockers": {
+      "description": "Bounded blockers.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 65536,
+        "minLength": 1
+      },
+      "maxItems": 10000
+    },
+    "claims": {
+      "description": "Evidence-backed result claims.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ResultClaim"
+      },
+      "maxItems": 10000
+    },
+    "decisions": {
+      "description": "Sorted decision record references.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "delta_id": {
+      "description": "Unique result identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "effect_references": {
+      "description": "Sorted effect journal references.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "handoff_id": {
+      "description": "Exact handoff capsule identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "producer_id": {
+      "description": "Authenticated result producer.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requested_followup_capabilities": {
+      "description": "Sorted follow-up capabilities requested, not granted.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      },
+      "maxItems": 128
+    },
+    "schema_version": {
+      "description": "Must be `cigar.handoff-delta.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "source_changes": {
+      "description": "Sorted source-change references.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "unresolved_questions": {
+      "description": "Bounded unresolved questions.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 65536,
+        "minLength": 1
+      },
+      "maxItems": 10000
+    },
+    "verifier_receipts": {
+      "description": "Sorted verifier receipt references.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "delta_id",
+    "handoff_id",
+    "base_commit_id",
+    "producer_id",
+    "claims",
+    "decisions",
+    "artifacts",
+    "source_changes",
+    "verifier_receipts",
+    "unresolved_questions",
+    "blockers",
+    "effect_references",
+    "requested_followup_capabilities",
+    "extensions"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "Capability": {
+      "description": "Closed capabilities that may be granted and attenuated.",
+      "oneOf": [
+        {
+          "description": "Observe authorized context records.",
+          "type": "string",
+          "const": "read_context"
+        },
+        {
+          "description": "Compile an authorized context bundle.",
+          "type": "string",
+          "const": "compile_context"
+        },
+        {
+          "description": "Propose private overlay mutations.",
+          "type": "string",
+          "const": "write_overlay"
+        },
+        {
+          "description": "Publish an overlay through optimistic merge.",
+          "type": "string",
+          "const": "publish_overlay"
+        },
+        {
+          "description": "Create a handoff capsule.",
+          "type": "string",
+          "const": "create_handoff"
+        },
+        {
+          "description": "Accept a handoff capsule.",
+          "type": "string",
+          "const": "accept_handoff"
+        },
+        {
+          "description": "Invoke a mediated tool.",
+          "type": "string",
+          "const": "invoke_tool"
+        },
+        {
+          "description": "Propose an external effect intent.",
+          "type": "string",
+          "const": "propose_effect"
+        },
+        {
+          "description": "Approve an external effect.",
+          "type": "string",
+          "const": "approve_effect"
+        },
+        {
+          "description": "Reconcile an unknown effect.",
+          "type": "string",
+          "const": "reconcile_effect"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "ResultClaim": {
+      "description": "Evidence-backed claim returned by a child agent.",
+      "type": "object",
+      "properties": {
+        "claim": {
+          "description": "Bounded claim text.",
+          "type": "string",
+          "maxLength": 65536,
+          "minLength": 1
+        },
+        "evidence": {
+          "description": "Sorted unique evidence versions.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 68,
+            "minLength": 68,
+            "pattern": "^1220[0-9a-f]{64}$"
+          },
+          "maxItems": 10000,
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "evidence"
+      ]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+[package]
+name = "cigar-crypto"
+description = "CIGAR cryptography and secret-safe value types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+argon2.workspace = true
+chacha20poly1305.workspace = true
+ciborium.workspace = true
+cigar-canon.workspace = true
+ed25519-dalek.workspace = true
+getrandom.workspace = true
+keyring.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+zeroize.workspace = true

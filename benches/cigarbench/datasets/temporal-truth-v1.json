@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "temporal-truth-v1",
+  "fixed_seed": 20004,
+  "source_revision": "synthetic-temporal-v1",
+  "task": "Select the correction valid for the task time without allowing a future fact to hide current truth.",
+  "critical_context": ["fact/current", "correction/recorded-late", "valid-time/task"],
+  "prohibited_context": ["fact/future-not-yet-effective"],
+  "expected_outcome": ["bitemporal selection exact", "late correction applied", "future fact excluded"],
+  "canary": "BENCH_CANARY_TEMPORAL_A064F9"
+}

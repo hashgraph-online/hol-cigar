@@ -1,0 +1,77 @@
+{
+  "packet": "WP02",
+  "source_commit": "workspace:82a51cadf3c06a501ecf2a97cd70c0f3a809d353dbf5b1bb7dc40cc4c6048005",
+  "prerequisites": ["WP01"],
+  "owned_paths": [
+    "crates/cigar-canon",
+    "crates/cigar-crypto",
+    "spec/canonicalization",
+    "spec/errors",
+    "schemas/vectors",
+    "crates/cigar-protocol/src/generated/error_registry.rs",
+    "schemas/proto/generated/error_codes.proto",
+    "schemas/openapi/error-registry-v1.json",
+    "sdk/typescript/src/verify-vectors.ts",
+    "sdk/python/src/cigar_sdk/verify_vectors.py",
+    "sdk/go/cmd/cigar-verify-vectors"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask test vectors",
+    "cargo xtask docs --check",
+    "corepack pnpm --dir sdk/typescript typecheck",
+    "uv run --project sdk/python python -m compileall -q sdk/python/src/cigar_sdk",
+    "go test ./... (working directory sdk/go)",
+    "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/wp02-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP02-CANON-UNIT", "result": "pass", "count": 12 },
+    { "id": "WP02-CRYPTO-UNIT", "result": "pass", "count": 8 },
+    { "id": "WP02-WORKSPACE-NEXTEST", "result": "pass", "count": 77, "skipped": 0 },
+    { "id": "WP02-GOLDEN-VECTORS", "result": "pass", "valid": 348, "invalid": 15 },
+    { "id": "WP02-DIFFERENTIAL", "result": "pass", "records_per_language": 100000, "languages": ["rust", "typescript", "python", "go"] },
+    { "id": "WP02-ERROR-REGISTRY", "result": "pass", "codes": 34 },
+    { "id": "WP02-KNOWN-ANSWER", "result": "pass", "algorithms": ["RFC8949 deterministic CBOR", "SHA-256 multihash", "RFC8032 Ed25519", "XChaCha20-Poly1305"] },
+    { "id": "WP02-KEY-PROVIDER", "result": "pass", "operations": ["create", "resolve", "rotate", "sign", "verify", "wrap", "unwrap", "destroy"] },
+    { "id": "WP02-UUIDV7-CONCURRENCY", "result": "pass", "same_millisecond_ids": 8000 },
+    { "id": "WP02-GENERATION-REPRODUCIBILITY", "result": "pass" }
+  ],
+  "metrics": {
+    "nextest_passed": 77,
+    "nextest_skipped": 0,
+    "golden_vectors": 363,
+    "golden_valid": 348,
+    "golden_invalid": 15,
+    "differential_records_per_language": 100000,
+    "differential_languages": 4,
+    "stable_error_codes": 34,
+    "semantic_envelope_profiles": 6,
+    "digest_domains": 6,
+    "lcov_lines_found": 8352,
+    "lcov_lines_hit": 5292,
+    "lcov_line_percent": 63.36
+  },
+  "artifacts": [
+    { "path": "schemas/vectors/canonical-v1.json", "sha256": "b0edad436b281c63bc5398666e5d0d4a3987217e30b8360b5b40c20f371ac549" },
+    { "path": "spec/errors/catalog.yaml", "sha256": "0d958b0c09c5c8d6ed7c945a63c27867ca88fbb113eb400f202efe44634c01d2" },
+    { "path": "crates/cigar-protocol/src/generated/error_registry.rs", "sha256": "e8752aba67e93c7fe18b21dc075f1b8edc0f096a9516a353b3521b7ff61ff39c" },
+    { "path": "schemas/proto/generated/error_codes.proto", "sha256": "604103e44c0c5e8d4bee8430f6bebd1f6934e3a833a9ee593551e7df8a01d119" },
+    { "path": "schemas/openapi/error-registry-v1.json", "sha256": "eb9de524e10f55ef9690430ecaef05243f6f87fbf7aca02dd4a4f684523a62fa" },
+    { "path": "spec/canonicalization/discriminants.md", "sha256": "183d1e64f446d98422d88c81e18ab190f160763676df57dbb91d64cd2c475fb4" },
+    { "path": "spec/canonicalization/semantic-envelopes-v1.md", "sha256": "c1fcba5c71636dc3c464bbb659b8faf8861d2942b838d3923191484694b21fa3" },
+    { "path": "crates/cigar-canon/src/bin/cigar-verify-vectors.rs", "sha256": "4c37eb29f3e9bb9fc80a87d9cb8aae096f77d3e216c582cd3a4d70e13d47d414" },
+    { "path": "sdk/typescript/src/verify-vectors.ts", "sha256": "20ab3e6172fb77fe219b0c335cf4b623e27d33e684ba6efa27491ebb2878b901" },
+    { "path": "sdk/python/src/cigar_sdk/verify_vectors.py", "sha256": "ca5d3b024eab87b6f8abe1d5cd79c89702cabfea372cfb55a138222cb4298ee5" },
+    { "path": "sdk/go/cmd/cigar-verify-vectors/main.go", "sha256": "0ffcc5645c28187ba43211b82f5adc72a25b1184beada4ae8c5109030d28ba10" },
+    { "path": "reports/wp02-lcov.info", "sha256": "e1eb28e59b967b25005e8cf51790cd0bb7435d7e40c6dd7ea9b9d5d56af5572a" }
+  ],
+  "known_limitations": [
+    "OS keychain and encrypted development-keystore implementations are explicitly owned by WP04."
+  ],
+  "status": "complete"
+}

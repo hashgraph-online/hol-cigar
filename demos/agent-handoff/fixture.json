@@ -1,0 +1,21 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "multi-agent-handoff",
+  "fixed_seed": 41003,
+  "fixed_time": "2026-01-15T12:02:00Z",
+  "flow": ["delegate-test-research", "delegate-security-review", "attempt-forbidden-read", "attempt-write-amplification", "accept-typed-results", "merge-optimistically"],
+  "parent_transcript_tokens": 10000,
+  "children": [
+    {"role": "test-researcher", "capabilities": ["read_context"], "maximum_tokens": 1800},
+    {"role": "security-reviewer", "capabilities": ["read_context"], "maximum_tokens": 1900}
+  ],
+  "adversarial_request": {"project": "forbidden-project", "capability": "write_overlay"},
+  "expected": {
+    "adversarial_request_denied": true,
+    "denial_discloses_source": false,
+    "grant_amplified": false,
+    "maximum_package_ratio": 0.2,
+    "result_fields": ["claims", "artifacts", "uncertainty", "verification"]
+  },
+  "secret_canary": "DEMO_CANARY_PARENT_TRANSCRIPT_35F29C"
+}

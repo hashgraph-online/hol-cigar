@@ -1,0 +1,72 @@
+{
+  "packet": "WP07",
+  "source_commit": "workspace:7c994ead29f497ccad18fc90b3df8f264179e91b904bafb4ee3108b32d7883b8",
+  "prerequisites": ["WP01", "WP02"],
+  "owned_paths": [
+    "crates/cigar-policy",
+    "schemas/policy/policy-profile-v1.schema.json",
+    "docs/reference/policy-capabilities.md"
+  ],
+  "commands": [
+    "python3 -m json.tool schemas/policy/policy-profile-v1.schema.json",
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-policy --all-targets",
+    "cargo clippy -p cigar-policy --all-targets --all-features -- -D warnings",
+    "cargo llvm-cov -p cigar-policy --all-targets --lcov --output-path reports/wp07-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP07-WORKSPACE-NEXTEST", "result": "pass", "count": 150, "skipped": 0 },
+    { "id": "WP07-AUTHORIZATION-LATTICE", "result": "pass", "hard_gate_mutations": 14, "monotonic": true },
+    { "id": "WP07-DENY-PRECEDENCE", "result": "pass", "lower_allow_override_count": 0, "rule_dag_cycles_rejected": true },
+    { "id": "WP07-NONINTERFERENCE", "result": "pass", "denied_view_classes": 1, "caller_canary_leaks": 0 },
+    { "id": "WP07-PROCESSOR-CONFINEMENT", "result": "pass", "unauthorized_processor_invocations": 0 },
+    { "id": "WP07-INSTRUCTION-SEPARATION", "result": "pass", "payload_promotions": 0 },
+    { "id": "WP07-NEGATIVE-MATRIX", "result": "pass", "cross_tenant_allowed": 0, "cross_project_allowed": 0 },
+    { "id": "WP07-REVOCATION", "result": "pass", "synchronous_before_invalidation": true, "old_bundle_blocked_after_policy_change": true },
+    { "id": "WP07-OUTAGE", "result": "pass", "protected_fail_closed": true },
+    { "id": "WP07-REDACTION", "result": "pass", "exact_structural_paths": true, "source_policy_lineage": true, "required_field_fail_closed": true },
+    { "id": "WP07-CAPABILITIES", "result": "pass", "signature_bound": true, "tamper_rejected": true, "attenuation_broadening_rejected": true, "arbitrary_chain_api": true },
+    { "id": "WP07-EFFECT", "result": "pass", "risk_approval": true, "fencing": true, "constraint_denial": true },
+    { "id": "WP07-PROFILE", "result": "pass", "json_toml_digest_equal": true, "schema_valid_json": true },
+    { "id": "WP07-TIMING-CLASS", "result": "pass", "denied_classes_equal": true }
+  ],
+  "metrics": {
+    "nextest_passed": 150,
+    "nextest_skipped": 0,
+    "wp07_scoped_tests": 11,
+    "hard_gate_mutations": 14,
+    "lower_allow_override_count": 0,
+    "caller_canary_leaks": 0,
+    "unauthorized_processor_invocations": 0,
+    "payload_instruction_promotions": 0,
+    "cross_tenant_allowed": 0,
+    "cross_project_allowed": 0,
+    "lcov_lines_found": 1211,
+    "lcov_lines_hit": 1050,
+    "lcov_line_percent": 86.71
+  },
+  "artifacts": [
+    { "path": "crates/cigar-policy/Cargo.toml", "sha256": "620b673bea77f56a8ef9b1ff4e2461a971ee8b55a668a3bb6e98819fbf7bb01f" },
+    { "path": "crates/cigar-policy/README.md", "sha256": "4ea652e354d4acd90b3ed8eba198dc644c8eff2b8924db1a8534a6a95c23badf" },
+    { "path": "crates/cigar-policy/src/lib.rs", "sha256": "c6f9f054cd677337585a2585112b116455e57f885eca429ce001d3b05026d74f" },
+    { "path": "crates/cigar-policy/src/contract.rs", "sha256": "b0327fec5390ad2304ff885681067271787ccd846640184c9fdd38f5b554f1ff" },
+    { "path": "crates/cigar-policy/src/engine.rs", "sha256": "24da6c0a2ccfabb7dfd400dd287cf217c4880a58e5e24ff4eb7ba655060ff331" },
+    { "path": "crates/cigar-policy/src/redaction.rs", "sha256": "dafac7702173c6b3f22227b69ad2e951dc95cd142551352b273046c49a11ad33" },
+    { "path": "crates/cigar-policy/src/capability.rs", "sha256": "f813692c3ca115a7953d7242b417422f0b3076b1659a36e739374df4797fb68d" },
+    { "path": "crates/cigar-policy/tests/policy.rs", "sha256": "74e1fca6539a0c86541bf57b1ef960932a0495aa68f0c882409c89b40aed18c1" },
+    { "path": "schemas/policy/policy-profile-v1.schema.json", "sha256": "be23bd76a6a669356b7953ecb4df65621cd5602ef1a21d25f209bb9e84df855b" },
+    { "path": "docs/reference/policy-capabilities.md", "sha256": "a0fdf007807964bce04ce9cd8b5176d3b6b3b8540b9fec26663ba816a66b772e" },
+    { "path": "reports/wp07-lcov.info", "sha256": "86ef8ccb43d8c6cf61ebb15ab187c424f00568a8c21cdc4c5ecb45828c0a1b0e" }
+  ],
+  "known_limitations": [
+    "Timing classes are disclosure-stable and resource-independent in the kernel; calibrated wall-clock tolerance under load is qualified again in the WP19 adversarial and performance harness.",
+    "The built-in engine is local and deterministic; external policy providers may implement the same PolicyEngine interface, but the kernel hard gates remain mandatory."
+  ],
+  "status": "complete"
+}

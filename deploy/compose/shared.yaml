@@ -1,0 +1,64 @@
+name: cigar-shared-development
+
+services:
+  postgres:
+    image: postgres:18.2-bookworm
+    environment:
+      POSTGRES_DB: cigar
+      POSTGRES_USER: cigar_migrator
+      POSTGRES_PASSWORD: cigar-migrator-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cigar_migrator -d cigar"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-shared:/var/lib/postgresql
+      - ./postgres-shared-init.sql:/docker-entrypoint-initdb.d/10-cigar-roles.sql:ro
+    security_opt:
+      - no-new-privileges:true
+
+  object-storage:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: cigar-minio-admin
+      MINIO_ROOT_PASSWORD: cigar-minio-development-only
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    ports:
+      - "127.0.0.1:59000:9000"
+      - "127.0.0.1:59001:9001"
+    volumes:
+      - object-shared:/data
+    security_opt:
+      - no-new-privileges:true
+
+  object-bootstrap:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      object-storage:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -euc
+      - |
+        mc alias set local http://object-storage:9000 cigar-minio-admin cigar-minio-development-only
+        mc mb --ignore-existing local/cigar-shared
+        mc admin user add local cigar-runtime cigar-object-development-only
+        mc admin policy create local cigar-runtime /policy/runtime.json
+        mc admin policy attach local cigar-runtime --user cigar-runtime
+    volumes:
+      - ./minio-runtime-policy.json:/policy/runtime.json:ro
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-shared: {}
+  object-shared: {}

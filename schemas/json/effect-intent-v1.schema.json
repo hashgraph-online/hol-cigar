@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EffectIntent",
+  "description": "Durable effect intent created before any external dispatch.",
+  "type": "object",
+  "properties": {
+    "arguments_digest": {
+      "description": "Digest of normalized arguments.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "bundle_id": {
+      "description": "Source context bundle.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "compensation": {
+      "description": "Optional compensation specification.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompensationSpec"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connector": {
+      "description": "Connector identifier.",
+      "type": "string",
+      "maxLength": 1024,
+      "minLength": 1
+    },
+    "created_at": {
+      "description": "Intent creation time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "effect_id": {
+      "description": "Unique logical effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "encrypted_arguments": {
+      "description": "Encrypted normalized arguments reference.",
+      "$ref": "#/$defs/BlobRef"
+    },
+    "expires_at": {
+      "description": "Exclusive dispatch expiry.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "idempotency_key": {
+      "description": "Secret-safe idempotency key.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[!-~]+$"
+    },
+    "idempotency_scope": {
+      "description": "Normalized connector idempotency scope.",
+      "type": "string",
+      "maxLength": 1024,
+      "minLength": 1
+    },
+    "operation": {
+      "description": "Connector operation.",
+      "type": "string",
+      "maxLength": 1024,
+      "minLength": 1
+    },
+    "preconditions": {
+      "description": "Sorted unique precondition digests.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 256
+    },
+    "required_capability": {
+      "description": "Capability required at authorization and dispatch time.",
+      "$ref": "#/$defs/Capability"
+    },
+    "result_schema_digest": {
+      "description": "Expected result-schema digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "retry_policy": {
+      "description": "Safe retry strategy.",
+      "$ref": "#/$defs/RetryPolicy"
+    },
+    "risk": {
+      "description": "Risk classification.",
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.effect-intent.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "source_decision_id": {
+      "description": "Source decision record.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "target": {
+      "description": "Bounded external target selector.",
+      "type": "string",
+      "maxLength": 1024,
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "effect_id",
+    "connector",
+    "operation",
+    "arguments_digest",
+    "encrypted_arguments",
+    "target",
+    "preconditions",
+    "result_schema_digest",
+    "risk",
+    "source_decision_id",
+    "bundle_id",
+    "required_capability",
+    "idempotency_scope",
+    "idempotency_key",
+    "retry_policy",
+    "created_at",
+    "expires_at",
+    "extensions"
+  ],
+  "$defs": {
+    "BlobRef": {
+      "description": "Reference to encrypted content-addressed payload bytes.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Exact content digest.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "media_type": {
+          "description": "Payload media type.",
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
+        },
+        "size_bytes": {
+          "description": "Plaintext payload size before encryption.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "digest",
+        "size_bytes",
+        "media_type"
+      ]
+    },
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "Capability": {
+      "description": "Closed capabilities that may be granted and attenuated.",
+      "oneOf": [
+        {
+          "description": "Observe authorized context records.",
+          "type": "string",
+          "const": "read_context"
+        },
+        {
+          "description": "Compile an authorized context bundle.",
+          "type": "string",
+          "const": "compile_context"
+        },
+        {
+          "description": "Propose private overlay mutations.",
+          "type": "string",
+          "const": "write_overlay"
+        },
+        {
+          "description": "Publish an overlay through optimistic merge.",
+          "type": "string",
+          "const": "publish_overlay"
+        },
+        {
+          "description": "Create a handoff capsule.",
+          "type": "string",
+          "const": "create_handoff"
+        },
+        {
+          "description": "Accept a handoff capsule.",
+          "type": "string",
+          "const": "accept_handoff"
+        },
+        {
+          "description": "Invoke a mediated tool.",
+          "type": "string",
+          "const": "invoke_tool"
+        },
+        {
+          "description": "Propose an external effect intent.",
+          "type": "string",
+          "const": "propose_effect"
+        },
+        {
+          "description": "Approve an external effect.",
+          "type": "string",
+          "const": "approve_effect"
+        },
+        {
+          "description": "Reconcile an unknown effect.",
+          "type": "string",
+          "const": "reconcile_effect"
+        }
+      ]
+    },
+    "CompensationSpec": {
+      "description": "Optional compensation operation bound into an original effect intent.",
+      "type": "object",
+      "properties": {
+        "arguments_digest": {
+          "description": "Digest of normalized compensation arguments.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "encrypted_arguments": {
+          "description": "Protected compensation arguments.",
+          "$ref": "#/$defs/BlobRef"
+        },
+        "operation": {
+          "description": "Connector operation used for compensation.",
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "arguments_digest",
+        "encrypted_arguments"
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "RetryPolicy": {
+      "description": "Closed safe retry strategies declared at intent creation.",
+      "oneOf": [
+        {
+          "description": "Never redispatch automatically.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "never"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Connector guarantees same-key idempotency for a bounded number of attempts.",
+          "type": "object",
+          "properties": {
+            "max_attempts": {
+              "description": "Maximum total dispatch attempts including the first.",
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "same_key_idempotent"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "max_attempts"
+          ]
+        },
+        {
+          "description": "Reconciliation must prove non-execution before a retry authorization.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "reconcile_before_retry"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "RiskLevel": {
+      "description": "Closed effect risk classification.",
+      "oneOf": [
+        {
+          "description": "Reversible low-impact mutation.",
+          "type": "string",
+          "const": "low"
+        },
+        {
+          "description": "Bounded mutation with material consequences.",
+          "type": "string",
+          "const": "medium"
+        },
+        {
+          "description": "High-impact or difficult-to-reverse mutation.",
+          "type": "string",
+          "const": "high"
+        },
+        {
+          "description": "Critical irreversible or security-sensitive mutation.",
+          "type": "string",
+          "const": "critical"
+        }
+      ]
+    }
+  }
+}

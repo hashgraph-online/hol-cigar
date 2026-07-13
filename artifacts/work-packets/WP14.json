@@ -1,0 +1,503 @@
+{
+  "packet": "WP14",
+  "source_commit": "workspace:f62973d8d9b80e1c0039a5e8617d79782da4f66985e983654fb60eae31253248",
+  "prerequisites": [
+    "WP04",
+    "WP05",
+    "WP06",
+    "WP07",
+    "WP08",
+    "WP09",
+    "WP10",
+    "WP11",
+    "WP12",
+    "WP13"
+  ],
+  "owned_paths": [
+    "crates/cigar-api",
+    "crates/cigar-daemon",
+    "crates/cigar-extension-host",
+    "crates/cigar-windows-ipc",
+    "schemas/openapi",
+    "schemas/proto/cigar_service.proto",
+    "spec/api",
+    "deploy"
+  ],
+  "commands": [
+    "cargo fmt --all -- --check",
+    "cargo xtask lint",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo test --workspace --all-targets",
+    "cargo nextest run --workspace --all-targets",
+    "cargo test -p cigar-api --all-targets",
+    "cargo test -p cigar-daemon --all-targets",
+    "cargo test -p cigar-extension-host --all-targets",
+    "cargo clippy -p cigar-api -p cigar-daemon -p cigar-extension-host -p cigar-windows-ipc --all-targets -- -D warnings",
+    "RUSTDOCFLAGS='-D warnings' cargo doc -p cigar-api -p cigar-daemon -p cigar-extension-host -p cigar-windows-ipc --no-deps",
+    "cargo xtask docs",
+    "cargo deny check",
+    "cargo check -p cigar-windows-ipc --target x86_64-pc-windows-msvc",
+    "cargo clippy -p cigar-windows-ipc --all-targets --target x86_64-pc-windows-msvc -- -D warnings",
+    "cargo llvm-cov -p cigar-api -p cigar-daemon -p cigar-extension-host -p cigar-windows-ipc --all-targets --lcov --output-path reports/wp14-lcov.info",
+    "docker build --progress=plain -f deploy/docker/Dockerfile -t cigar-honey-wp14-bootstrap-test:local .",
+    "docker run --rm --entrypoint /usr/local/bin/cigard cigar-honey-wp14-bootstrap-test:local version",
+    "docker run --rm --entrypoint /usr/local/bin/cigard cigar-honey-wp14-bootstrap-test:local validate-config --config /etc/cigar/cigard.toml",
+    "systemd-analyze verify deploy/systemd/cigard.service (Debian bookworm verifier with packaged-binary placeholder)"
+  ],
+  "tests": [
+    {
+      "id": "WP14-WORKSPACE-NEXTEST",
+      "result": "pass",
+      "count": 478,
+      "skipped": 0
+    },
+    {
+      "id": "WP14-TYPED-TRANSPORT-CONFORMANCE",
+      "result": "pass",
+      "operation_count": 45,
+      "unary_operations": 44,
+      "server_stream_operations": 1,
+      "exact_http_routes": true,
+      "exact_grpc_rpcs": true,
+      "generated_openapi_proto_identity": true,
+      "embedded_http_grpc_wire_differential": true,
+      "real_handler_live_tcp_http2_grpc_differential": true
+    },
+    {
+      "id": "WP14-TRANSPORT-NEGATIVE",
+      "result": "pass",
+      "malformed_and_oversized_rejected": true,
+      "duplicate_fields_rejected": true,
+      "compressed_expanded_and_ratio_bounds": true,
+      "deadline_and_cancellation": true,
+      "stream_backpressure_resume_and_disconnect": true,
+      "cursor_forgery_rejected": true,
+      "idempotency_and_revision_enforced": true
+    },
+    {
+      "id": "WP14-AUTHENTICATION",
+      "result": "pass",
+      "local_socket_and_token_permissions": true,
+      "public_bind_refused": true,
+      "tls_oidc_and_optional_mtls": true,
+      "bounded_jwks_refresh": true,
+      "unsigned_algorithm_audience_issuer_tenant_subject_temporal_attacks_rejected": true,
+      "server_derived_project_identity": true
+    },
+    {
+      "id": "WP14-WORKER-RUNTIME",
+      "result": "pass",
+      "bounded_queues": 9,
+      "bounded_blocking_pool": true,
+      "queue_exhaustion_fail_closed": true,
+      "durable_idle_poll": true,
+      "poison_worker_closes_readiness": true,
+      "shutdown_prevents_new_dispatch_claims": true,
+      "active_clients": 32
+    },
+    {
+      "id": "WP14-RESTART-DURABILITY",
+      "result": "pass",
+      "catalog_and_bundle_restart": true,
+      "space_handoff_commit_restart": true,
+      "idempotency_restart": true,
+      "replay_restart": true,
+      "effect_claim_sqlite_restart_exactly_once": true,
+      "unreceipted_dispatch_becomes_unknown_without_resend": true
+    },
+    {
+      "id": "WP14-READINESS",
+      "result": "pass",
+      "component_count": 8,
+      "migration_blob_policy_journal_index_key_worker_metadata_truth": true,
+      "live_dependency_failure_changes_http_200_to_503": true,
+      "protected_content_absent": true
+    },
+    {
+      "id": "WP14-EXTENSION-HOST",
+      "result": "pass",
+      "tests": 21,
+      "signature_digest_abi_schema_confusion_rejected": true,
+      "capability_escape_rejected": true,
+      "wasi_and_subprocess_resource_limits": true,
+      "crash_and_cancel_isolation": true,
+      "forged_state_mutation_has_no_trusted_outcome": true,
+      "macos_os_sandbox_escape_denied": true
+    },
+    {
+      "id": "WP14-DEPLOYMENT",
+      "result": "pass",
+      "static_tests": 3,
+      "real_container_build": true,
+      "container_uid_gid": "65532:65532",
+      "binary_and_configuration_root_owned_read_only": true,
+      "writable_state_and_runtime_user_owned": true,
+      "version_and_config_smoke": true,
+      "systemd_analyze_verify": true
+    },
+    {
+      "id": "WP14-WINDOWS-IPC",
+      "result": "pass",
+      "cross_target_check": "x86_64-pc-windows-msvc",
+      "owner_sid_acl_adapter": true,
+      "closed_named_pipe_namespace": true,
+      "remote_clients_rejected_by_configuration": true
+    }
+  ],
+  "metrics": {
+    "nextest_passed": 478,
+    "nextest_skipped": 0,
+    "api_tests": 53,
+    "daemon_unit_tests": 116,
+    "daemon_deployment_tests": 3,
+    "extension_host_tests": 21,
+    "exact_operations": 45,
+    "bounded_worker_queues": 9,
+    "readiness_components": 8,
+    "real_load_clients": 32,
+    "lcov_lines_found": 32952,
+    "lcov_lines_hit": 26369,
+    "lcov_line_percent": 80.02,
+    "qualified_container_image_id": "sha256:ed6dee4aa3d4f4cf56434c68c5980122f07ca32580aa940dfdebef58752f7020"
+  },
+  "artifacts": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "1e822b912b02c06cd4207429929b2dc81daff71989bbfcee14c783805ae9f4ab"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "5436c9f916f7afe708457ea2ab523b412a5c136ce7fe59b50f594b29a7a27571"
+    },
+    {
+      "path": "deny.toml",
+      "sha256": "3c8139b619b99a67ea6ff4652200299ac5847cd38a90a2f6904e7560d9948c91"
+    },
+    {
+      "path": ".dockerignore",
+      "sha256": "b1f4bed49ddf6a799bb6cec19079bc75d2fb4e0066292c56a4439b89abb87f74"
+    },
+    {
+      "path": "schemas/openapi/cigar-v1.json",
+      "sha256": "d455fa7ad4adac9eab4e6d95aa201b58b0e99286659d6b2ca994ec4c8cc5aa6a"
+    },
+    {
+      "path": "schemas/proto/cigar_service.proto",
+      "sha256": "9d4545595b9967f3ae3f95f686c314923fc3a162bda4924e10f15991c63cf1e5"
+    },
+    {
+      "path": "spec/api/operations-v1.json",
+      "sha256": "55c8dd34d7c6a62b0c68dce181c80ed8d4815810828476c188df190ef529d07b"
+    },
+    {
+      "path": "spec/api/operation-payloads-v1.json",
+      "sha256": "4ef0878a35952a98f0e4107e913f7ade8ffc028677974205436318b30b376817"
+    },
+    {
+      "path": "spec/context-abi/service-api-v1.md",
+      "sha256": "3de8410ceea5592f6894c4831dc59cd4250648b80df55958b6e1318b8107488e"
+    },
+    {
+      "path": "crates/cigar-api/Cargo.toml",
+      "sha256": "602bf1d7a443977ad80503c96fad65ad797843c392af8e28c53a93bd6a4f5c85"
+    },
+    {
+      "path": "crates/cigar-api/build.rs",
+      "sha256": "a632d4a38755bd1c2377334e3afea2f4d79d837dc6d93780753ceadd53558435"
+    },
+    {
+      "path": "crates/cigar-api/src/generated/operations.rs",
+      "sha256": "6c3f23c3f59a2991681a244a0ecfc6e3d4f9b4a58964f14b4416d3c177dfbf14"
+    },
+    {
+      "path": "crates/cigar-api/src/typed.rs",
+      "sha256": "0791426e82f53480ef35acd10f0a19153aaed257ef3ec9f6eb27efe4bfdb64bf"
+    },
+    {
+      "path": "crates/cigar-api/src/handler_registry.rs",
+      "sha256": "add7195e9083229d239ba3f94157810da7674f475c8be47c3c12b094d387dc88"
+    },
+    {
+      "path": "crates/cigar-api/src/http.rs",
+      "sha256": "59013caf16cf8921e8d690c3bcba230c3c0ca254fd75c9b69e9ca5600cfa7a3e"
+    },
+    {
+      "path": "crates/cigar-api/src/grpc.rs",
+      "sha256": "bd540d50979e4d8163c1e67a9ec3445e53b0b65fa338eb597ffc69949ea867f5"
+    },
+    {
+      "path": "crates/cigar-api/src/service.rs",
+      "sha256": "8840aecbf27ca8776fa264d867d1d36ca6e66da79ee7e6446b3f5fb0dd1e7320"
+    },
+    {
+      "path": "crates/cigar-api/src/cursor.rs",
+      "sha256": "5d55286bfaf5face45597162e210d5b44e911ad41af96fa650dcf5b7c635d16d"
+    },
+    {
+      "path": "crates/cigar-api/src/idempotency.rs",
+      "sha256": "3fd6406b5a2aaccc5aeb4aa8e3a9adab8193e2641d8e9111fcaed0fecb4e1335"
+    },
+    {
+      "path": "crates/cigar-api/src/quota.rs",
+      "sha256": "3ed109669dfcdd0cb96703373b82bbaf8740492f72a5e8344e21bcda0343bf5a"
+    },
+    {
+      "path": "crates/cigar-api/src/readiness.rs",
+      "sha256": "c4659cc85351e706b45d5dfcce49654efb2d4af225b3a19f8068588c1f98b110"
+    },
+    {
+      "path": "crates/cigar-api/tests/complete_registry_differential.rs",
+      "sha256": "9baee70eb85cdc17170ce961678cc7882a40f2bbcfae18e1c93c28b2577d85d8"
+    },
+    {
+      "path": "crates/cigar-api/tests/transport_conformance.rs",
+      "sha256": "6a99da79286195aec1219a4a34cdf262217d15b6051e029db67afe5442a66bd5"
+    },
+    {
+      "path": "crates/cigar-api/tests/typed_payload_contract.rs",
+      "sha256": "ff860472ad2d24b59f13fdab628dba4e337b6a29d6ffa0bbf0bb8249b0639ed0"
+    },
+    {
+      "path": "crates/cigar-daemon/Cargo.toml",
+      "sha256": "00e616f5d17cd357ba79976c6344bd8e3f2913fd1d432073bc67396922c6787b"
+    },
+    {
+      "path": "crates/cigar-daemon/src/lib.rs",
+      "sha256": "58b9520ff3c9069c0cb343189a6ff18233f8f1e92aad9663005ba2b9adbf37ab"
+    },
+    {
+      "path": "crates/cigar-daemon/src/main.rs",
+      "sha256": "55570cd16aa57a89c95c9dd59e77e1cc312c0d4e252ee239a4b8073d470b9684"
+    },
+    {
+      "path": "crates/cigar-daemon/src/application.rs",
+      "sha256": "7261197d74698e8faf88d8ddc4cb34e52391a0019e259a654bd09e1220f32e86"
+    },
+    {
+      "path": "crates/cigar-daemon/src/auth.rs",
+      "sha256": "60b8f139d655bd98e6f89c198701c504d66341b7bd9ce89b7f541ae27ab5b624"
+    },
+    {
+      "path": "crates/cigar-daemon/src/catalog_context_application.rs",
+      "sha256": "cbc61252efc7adaf3de43c24b63e17386b5b4ea0816cf07f5ba52a35fb642f3e"
+    },
+    {
+      "path": "crates/cigar-daemon/src/composition.rs",
+      "sha256": "24ff2e48130b89b7e1bc80a32ff2080e93209d71f7910d5aa98679424dd195d0"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "sha256": "7dba66be71ad6da2738a79e69ab390720501fa92916ab03f25fc71811330d1e6"
+    },
+    {
+      "path": "crates/cigar-daemon/src/domain_identity.rs",
+      "sha256": "6752947be4ad04b69d7d726903b4d0fe52e757437da10c6bd757ddf867985fb4"
+    },
+    {
+      "path": "crates/cigar-daemon/src/durable_idempotency.rs",
+      "sha256": "8e7f80edc77af48fb5b21fc2f71fcd76fc92e5d2c1ebda05d623739399021cee"
+    },
+    {
+      "path": "crates/cigar-daemon/src/durable_replay.rs",
+      "sha256": "f6cb444ef55c58c9dc054e02a4e26adaeacef4132fffa2dffb771427dc402c53"
+    },
+    {
+      "path": "crates/cigar-daemon/src/durable_snapshot.rs",
+      "sha256": "272ee2d0d1c97e5bed648e026d621ca3838bf61950ff959a36600c581187dfb2"
+    },
+    {
+      "path": "crates/cigar-daemon/src/effect_replay_adapters.rs",
+      "sha256": "bd705b4c5207293ac578bb33e667d97842275d68dc85a340d9e278a59b699fa8"
+    },
+    {
+      "path": "crates/cigar-daemon/src/endpoint.rs",
+      "sha256": "948aa15a84c04c67b7b2b2e1f05015c9098367bbdb73ba4eae38a340c5dcb77e"
+    },
+    {
+      "path": "crates/cigar-daemon/src/governed_facade.rs",
+      "sha256": "be6adef896b7ce02cba4c1fa7ae97d06ee39ead1c93e663cb5066ebe84ef9c40"
+    },
+    {
+      "path": "crates/cigar-daemon/src/jwks.rs",
+      "sha256": "6e3809db041c6d455a4a4592bc933879ea520492628464e870e80312f2d736d1"
+    },
+    {
+      "path": "crates/cigar-daemon/src/lifecycle.rs",
+      "sha256": "0a87a0357ce659d95b7297c7991ab9abee04849d72b0eb5eb93ad356a867f073"
+    },
+    {
+      "path": "crates/cigar-daemon/src/process.rs",
+      "sha256": "37329ef5626e21f4c57e07e1b55836ef796fc7d5289052dce3f42c44c3043af8"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_application.rs",
+      "sha256": "f36347b7a5244ef0c06dda49fd0ff085e2f775ac1de1dac65fa1923a1dbb98a3"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_authority.rs",
+      "sha256": "1402b1b3ddab2ed51d588d3c8f7e34a87dcf34a6c5fba6fd09ae7e08c640e3c3"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_bootstrap.rs",
+      "sha256": "044f177bf075fe877f7df2f95bffee0d9cf0927f8af2abdb00ef976b14d1c3ab"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_effects.rs",
+      "sha256": "11a69fd2e5e1d9ff26bcc9edd46099fdca712d91a0bfd0908a3a71ce37b41868"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_index.rs",
+      "sha256": "759f8e0bbe6cdf11d4fcc36c5d1ee9ecdd312d56343ade20b95dacb6d68156a8"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_runtime.rs",
+      "sha256": "f84cafee131c2bd8135131ca8cac9c6a5dc7259933ac9dd25af9739352e68266"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_sources.rs",
+      "sha256": "d064347fd53f836df5872172cb03e805e0e50402efe7fd57a0ea4cbd28190138"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_transport_differential.rs",
+      "sha256": "d1b0bc0a07d31ddcf83e19403a516b7ea07c540fc09f601d276c7bb0ea5a0e1d"
+    },
+    {
+      "path": "crates/cigar-daemon/src/replay_jobs.rs",
+      "sha256": "ae682225c40b2296d7a3bf552df51b9498d5153db18ca1952518e22eaf234851"
+    },
+    {
+      "path": "crates/cigar-daemon/src/repository_production_checks.rs",
+      "sha256": "5ee2b5948582f5a01f29fdafb4fcc1fb69ebeddef1c6b428a9b519903ca52b8c"
+    },
+    {
+      "path": "crates/cigar-daemon/src/server.rs",
+      "sha256": "8d0ef50a6720532aeddae2bafed002599c1f9937fcbcc68d68acaac44362c207"
+    },
+    {
+      "path": "crates/cigar-daemon/src/space_handoff_adapters.rs",
+      "sha256": "2d515a3dd9c0a98e090f96db3f625a40886ba4cbd1b3ea4e70061a961e4df8b3"
+    },
+    {
+      "path": "crates/cigar-daemon/src/telemetry.rs",
+      "sha256": "133965a2ba8476552cfd2bac7f409a4dc61bdf720a376429ddb32745c15d73b7"
+    },
+    {
+      "path": "crates/cigar-daemon/src/worker.rs",
+      "sha256": "f2bce8b93485a957597282594d7ebf2a61bd5ac55af372d1edc2516a09853423"
+    },
+    {
+      "path": "crates/cigar-daemon/tests/deployment_assets.rs",
+      "sha256": "321e8b28681efe6db25049c2cbcbb0e37c1f94b19ccdcd727f40fe72e698194d"
+    },
+    {
+      "path": "crates/cigar-extension-host/Cargo.toml",
+      "sha256": "e5eb7de4a13f6698506b4f9837c9f27799e0f608df884315072e51abba06276a"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/broker.rs",
+      "sha256": "9f91f2e7c2880d2bb27ba082898462a6755a0f5fc01aeb6aa876f4a08851c3ef"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/frame.rs",
+      "sha256": "0f07eb97c2cc098094946d76a91dd9d202fb044290f7f55d710863809b72aaca"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/host.rs",
+      "sha256": "08c3b438c71e421d793b5efc9204c08dd0c8f0484e5a0a17aa4c7a945fd5b2f9"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/manifest.rs",
+      "sha256": "04363443dcdab5ce337a759ba4beff7a10d2d082549b6c3bb1d9db7b0de02f14"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/remote.rs",
+      "sha256": "afbbbd37aad3be80b4b3d412b292ac892b585d2c2ce8ec0a47c67e97946cc611"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/subprocess.rs",
+      "sha256": "e2abb1c0ce3b59e7259c5e563bca2b2896e569581044cd40008e98e689096a86"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/wasi.rs",
+      "sha256": "fbc957486544f4c6bd4c4f9152f12f92a46de3b81fbfa888b0e9a1f85c6c48ab"
+    },
+    {
+      "path": "crates/cigar-extension-host/src/tests.rs",
+      "sha256": "d83d6f6bb1c3bc40dea7c43c95f4be8b802634282a4a4a2479d824d329a78f04"
+    },
+    {
+      "path": "crates/cigar-windows-ipc/Cargo.toml",
+      "sha256": "45fe0bf86e9eed0dc440b13c777dc1588ae51d29f94cb690c83641dc0b9d6eb2"
+    },
+    {
+      "path": "crates/cigar-windows-ipc/src/lib.rs",
+      "sha256": "cbd7dda3d48614b20b34f5b6a82e4315bdb70eaaf796c1cab2dfe306cb490a43"
+    },
+    {
+      "path": "crates/cigar-windows-ipc/src/windows.rs",
+      "sha256": "58ea5620ff88f73706e895606ef32707d9bafceecf1f42121cd8b4a6a1e7ac4b"
+    },
+    {
+      "path": "crates/cigar-effects/Cargo.toml",
+      "sha256": "26e6c3800b7e58326f85a8d537edd88a99ea35ff8e5fe56ff8ca48ef8838bbe5"
+    },
+    {
+      "path": "crates/cigar-effects/src/reference/demo.rs",
+      "sha256": "f5f6ff859fdd93387fbfb70f500cd8921197b86ef09457b67c0defec5ecd060b"
+    },
+    {
+      "path": "crates/cigar-effects/src/reference/filesystem.rs",
+      "sha256": "e40bf9bd6e76260ed07a92bdf267b88514d465aaca644704c790352bb9b4721d"
+    },
+    {
+      "path": "crates/cigar-effects/src/reference/http.rs",
+      "sha256": "dd50446027c8ecfaa9a2654f1e6c5703b5021e17edd874d002460f3e53cdc387"
+    },
+    {
+      "path": "crates/cigar-effects/tests/protected_argument_documents.rs",
+      "sha256": "aecb578e8a5eb34881e5eb9ab589c6fa426f9426891f5de3ab3296e586374289"
+    },
+    {
+      "path": "deploy/README.md",
+      "sha256": "130a7e0e3e0ec09abc72c8b7303c9f34976746464d4a3e95893fc5a8e28ab320"
+    },
+    {
+      "path": "deploy/docker/Dockerfile",
+      "sha256": "fcde1060e552871db52dd118bdf26b97a9b04ca34c84b853879cd0caf76e6001"
+    },
+    {
+      "path": "deploy/docker/cigard.example.toml",
+      "sha256": "b3c98ad68df6950497ed72c3ca69e02183290aa1d90c7fc194f967bb818b8be4"
+    },
+    {
+      "path": "deploy/systemd/cigard.service",
+      "sha256": "427a524f322f85e2eae738bdbe874ba9cfb52193290daea9e214c153c2b7228e"
+    },
+    {
+      "path": "deploy/systemd/cigar.sysusers",
+      "sha256": "c88f23ede08bc40dd57c441cc30baabbffb72f91bf29145389db62a868183d57"
+    },
+    {
+      "path": "deploy/systemd/cigar.tmpfiles",
+      "sha256": "e9aed1c5e081e4bbbe55d9aa71d55cdeff958d6ac2a44b57730379b3a61f398f"
+    },
+    {
+      "path": "docs/execution/WP14-operation-domain-map.md",
+      "sha256": "7e05ea9ec51a602bad3ebd170768f3047c25b08fd2f751f28933f326d5f2de87"
+    },
+    {
+      "path": "reports/wp14-lcov.info",
+      "sha256": "107c9b622ec4a723756210b01e13d4045e17c5a5c12395daa78de36fdccb8e04"
+    }
+  ],
+  "known_limitations": [
+    "The stock standalone bootstrap installs recorded-only replay provider boundaries; deployments that make live provider calls require the explicit tenant-bound adapter integration owned by WP17.",
+    "The idempotent HTTPS effect connector requires an explicit bounded HttpTransport and fails closed when configured without one; live connector credential/transport installation is owned by later adapter and operational packets.",
+    "PostgreSQL, object storage, shared durable wakeups, shared migrations, and rolling shared deployment are WP18 scope; WP14 shared mode qualifies transport authentication without claiming shared storage.",
+    "The Windows named-pipe adapter is cross-compiled and strictly linted, while native Windows runtime qualification and Linux bubblewrap matrices remain WP19-WP21 platform gates and are not claimed by this host run.",
+    "The real non-root container qualification is linux/arm64 on this host; multi-architecture installed-artifact qualification and provenance are WP21-WP22."
+  ],
+  "status": "complete"
+}
+

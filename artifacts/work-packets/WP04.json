@@ -1,0 +1,77 @@
+{
+  "packet": "WP04",
+  "source_commit": "workspace:eb6fb7a99c8b998f1e4186e193cd57758b9adc42b931aa43b29c6fa5c9aa54a8",
+  "prerequisites": ["WP03"],
+  "owned_paths": [
+    "crates/cigar-store",
+    "crates/cigar-crypto/src/keystore.rs",
+    "migrations/sqlite",
+    "docs/reference/store-contracts.md",
+    "docs/runbooks/local-storage-recovery.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "CIGAR_PERFORMANCE_GATES=1 cargo test -p cigar-store sqlite_durable_commit_p95 -- --nocapture",
+    "/usr/bin/time -l target/debug/deps/cigar_store-ba8cb73db75084b4 --exact conformance::tests::sqlite_opens_and_exact_queries_one_million_atom_projection --nocapture",
+    "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/wp04-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP04-WORKSPACE-NEXTEST", "result": "pass", "count": 96, "skipped": 0, "leaky": 0 },
+    { "id": "WP04-SQLITE-CONFORMANCE", "result": "pass", "public_methods": 19, "invariants": 13 },
+    { "id": "WP04-SQLITE-CONFIG", "result": "pass", "wal": true, "synchronous_full": true, "foreign_keys": true, "defensive": true, "cache_kibibytes": 32768, "fts5": true },
+    { "id": "WP04-PROCESS-KILL-RPO", "result": "pass", "before_commit_revision": 0, "after_commit_revision": 1 },
+    { "id": "WP04-WAL-TRUNCATION", "result": "pass", "silent_rollback_rejected": true },
+    { "id": "WP04-RESOURCE-FAULTS", "result": "pass", "cases": ["sqlite_full", "sqlite_permission", "blob_permission"] },
+    { "id": "WP04-BLOB-SECURITY", "result": "pass", "cases": ["plaintext_canary_absent", "bit_corruption", "ciphertext_swap", "quarantine", "durable_invalidation", "missing_blob", "key_rotation"] },
+    { "id": "WP04-ATOMIC-PUBLICATION", "result": "pass", "named_failpoints": 26, "orphan_reconciled": true },
+    { "id": "WP04-BACKUP-RESTORE", "result": "pass", "online_during_read": true, "empty_target_only": true, "signed_manifest": true, "identical_canonical_root": true, "corruption_rejected": true },
+    { "id": "WP04-PROJECTION-REBUILD", "result": "pass", "atom_and_fts_transactional": true },
+    { "id": "WP04-MILLION-ATOM", "result": "pass", "samples": 30, "atom_count": 1000000 },
+    { "id": "WP04-KEY-STORAGE", "result": "pass", "argon2id_development_keystore": true, "native_os_keychain_adapter": true, "atomic_rotation": true }
+  ],
+  "metrics": {
+    "nextest_passed": 96,
+    "nextest_skipped": 0,
+    "repository_methods_exercised": 19,
+    "repository_invariants_checked": 13,
+    "durable_commit_samples": 30,
+    "durable_commit_p95_microseconds": 12563,
+    "durable_commit_gate_microseconds": 25000,
+    "million_atom_open_samples": 30,
+    "million_atom_open_p95_microseconds": 834,
+    "million_atom_exact_query_p95_microseconds": 25,
+    "million_atom_database_bytes": 452182016,
+    "million_atom_maximum_resident_bytes": 184598528,
+    "idle_rss_gate_bytes": 314572800,
+    "lcov_lines_found": 12444,
+    "lcov_lines_hit": 8835,
+    "lcov_line_percent": 71.00
+  },
+  "artifacts": [
+    { "path": "Cargo.toml", "sha256": "1c6ef4e1883889d25afe141afb57db9a59f58e473b8b5a5eab29c6eab265e4ba" },
+    { "path": "Cargo.lock", "sha256": "97b2f46f16a8730dad90fe3a0e356086885db9a87e43ab1d0c68f4cabbce6eba" },
+    { "path": "deny.toml", "sha256": "e0be4767f29185d42ca8570864470cd4bc1194492a3d15d51c98c3f41240b846" },
+    { "path": ".config/nextest.toml", "sha256": "a7cde53280d0c985cfdd389a64116ce6a88c9553a2f56e5bab950931cb3959fd" },
+    { "path": "crates/cigar-crypto/src/keystore.rs", "sha256": "d3c9f4c988f77835244bffbc19e4c291dd617a2d5f051d1542ce55699a8a6653" },
+    { "path": "crates/cigar-store/src/sqlite.rs", "sha256": "207794f07c53d3a0358faff26ae12c195411cd622ade9dfbbd552e76bcb8829e" },
+    { "path": "crates/cigar-store/src/blob.rs", "sha256": "a6df99cfe13bc90d6b01aa126501745fe13fae5284d545499790f14353192188" },
+    { "path": "crates/cigar-store/src/backup.rs", "sha256": "9bc807c1650b376df8715276fab46926517104aae8c2f10d6ac317984c3de319" },
+    { "path": "crates/cigar-store/src/conformance.rs", "sha256": "abc57b4ca28b17f026ee01152d2b138fe866b6e0d62080b5d7275243d1ff0c34" },
+    { "path": "crates/cigar-store/tests/sqlite_process_kill.rs", "sha256": "ef255b293f3677c6b0e6375f6c3cc5b91ec5e3ce6dfb8bb3850c2110e37fdcc5" },
+    { "path": "migrations/sqlite/0001_initial.sql", "sha256": "5d461110aeed4c43c7f0668599ac7070fdee6d8b349dc2b2815de4ca84f0efe1" },
+    { "path": "docs/reference/store-contracts.md", "sha256": "dd7fdeaf67a2163e61747cce0ddde2dc33bb888b1d4347cc6a6bd7332701a898" },
+    { "path": "docs/runbooks/local-storage-recovery.md", "sha256": "746e3141db0d1379ed535b9cf7ef63a7424f460a9477458c97b9be69b6af2681" },
+    { "path": "reports/wp04-lcov.info", "sha256": "e576cec4b848c4fdd419ea0532b2ce853df32fd544aacf17077ddb5ea8a9ae88" }
+  ],
+  "known_limitations": [
+    "Hermetic CI validates the encrypted keystore and compiles the native OS keychain adapter but does not create a real user keychain entry; live credential-store access remains an opt-in platform qualification test.",
+    "PostgreSQL and shared object storage are intentionally owned by WP18."
+  ],
+  "status": "complete"
+}

@@ -1,0 +1,72 @@
+{
+  "packet": "WP11",
+  "source_commit": "workspace:5a174a744b3da15dd91058bc737fd96fce0017d9000a0bdad15d0e478993c28e",
+  "prerequisites": ["WP07", "WP08", "WP09", "WP10"],
+  "owned_paths": [
+    "crates/cigar-space/src/handoff.rs",
+    "crates/cigar-space/tests/handoff.rs",
+    "docs/reference/handoffs.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-space --all-targets",
+    "cargo clippy -p cigar-space --all-targets -- -D warnings",
+    "cargo llvm-cov -p cigar-space --all-targets --lcov --output-path reports/wp11-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP11-WORKSPACE-NEXTEST", "result": "pass", "count": 186, "skipped": 0 },
+    { "id": "WP11-SIGNED-CAPSULE", "result": "pass", "modified_rejected": true, "forged_rejected": true, "persisted_exact": true, "creation_event_digest": true },
+    { "id": "WP11-AUDIENCE-RECIPIENT-TIME", "result": "pass", "wrong_audience_rejected": true, "wrong_recipient_rejected": true, "role_reresolved": true, "creation_boundary_inclusive": true, "expiry_boundary_exclusive": true },
+    { "id": "WP11-REVOCATION", "result": "pass", "capsule": true, "key": true, "issuer": true, "recipient": true },
+    { "id": "WP11-REPLAY", "result": "pass", "one_time_nonce": true, "duplicate_acceptance_id": true, "reusable_distinct_acceptances": true },
+    { "id": "WP11-CAPABILITY-LATTICE", "result": "pass", "generated_cases": 256, "authority_amplifications": 0 },
+    { "id": "WP11-PARTIAL-ACCEPTANCE", "result": "pass", "per_reference_reauthorization": true, "inaccessible_content_leaks": 0, "target_restriction": true },
+    { "id": "WP11-RECIPIENT-BUNDLE", "result": "pass", "deterministic": true, "inspectable_receipt": true, "topic_scope_exact": true },
+    { "id": "WP11-TRANSCRIPT-EXCLUSION", "result": "pass", "transcript_fields": 0, "canary_leaks": 0 },
+    { "id": "WP11-CHILD-RESULT", "result": "pass", "evidence_required": true, "typed_parent_conflict": true, "followup_capabilities_auto_granted": 0 },
+    { "id": "WP11-OUTCOME-GATE", "result": "pass", "fixtures": 100, "maximum_reference_percent": 15.99, "productive_first_action_percent": 92.0 }
+  ],
+  "metrics": {
+    "nextest_passed": 186,
+    "nextest_skipped": 0,
+    "wp11_scoped_tests": 9,
+    "generated_capability_cases": 256,
+    "authority_amplifications": 0,
+    "inaccessible_content_leaks": 0,
+    "transcript_canary_leaks": 0,
+    "automatic_followup_capability_grants": 0,
+    "outcome_fixtures": 100,
+    "maximum_reference_handoff_percent": 15.99,
+    "reference_handoff_limit_percent": 20.0,
+    "productive_first_action_percent": 92.0,
+    "productive_first_action_minimum_percent": 90.0,
+    "lcov_lines_found": 1408,
+    "lcov_lines_hit": 1290,
+    "lcov_line_percent": 91.62
+  },
+  "artifacts": [
+    { "path": "Cargo.lock", "sha256": "f1bf36856d4658aad80354604d07274e564bc99ff6667395adf39cbf68278c63" },
+    { "path": "crates/cigar-space/Cargo.toml", "sha256": "86c8eb6cfdfab9e2324e0defd7d2c98fd03e071ad0f053bda9226957624aa6c2" },
+    { "path": "crates/cigar-space/README.md", "sha256": "edca82081ce7ced650cabe799fc069d2f0a7940dc30cc4084e5de600652d8426" },
+    { "path": "crates/cigar-space/src/lib.rs", "sha256": "4b84380e29b8c2a5092f9353144c6f9ede484c1390421d73a2f037aff2d3174f" },
+    { "path": "crates/cigar-space/src/contract.rs", "sha256": "aae319e86f601f64aa27bec5689f0801c747ec16479446cb3a82fca8d4906974" },
+    { "path": "crates/cigar-space/src/service.rs", "sha256": "630ed383c22bc096378283c6224df02f51572b5d7d064c78ace3644e351b0ba2" },
+    { "path": "crates/cigar-space/src/handoff.rs", "sha256": "d77a4eb0670f2c4d46792362bfc75ada526400f981b38c90e9b6946ae104cd9a" },
+    { "path": "crates/cigar-space/tests/space.rs", "sha256": "7be515bbf9051831458947b9aba8aa17c34ebdccae21c1d55d6fcea2cf8b0b52" },
+    { "path": "crates/cigar-space/tests/handoff.rs", "sha256": "5de44f03fc9166b6a51e1bb136cf29fe94e507a092817d1d2d606d15fd0b8aee" },
+    { "path": "docs/reference/context-spaces.md", "sha256": "fe96aefa8783a591045ac2c9d86887a29e96f772eafadb0fa8fa0782a9151424" },
+    { "path": "docs/reference/handoffs.md", "sha256": "2a6761a3cc222ea5112a6a98bc6fbdd9d69f8615666dc693c67f8f311cf2ce5c" },
+    { "path": "reports/wp11-lcov.info", "sha256": "3e9f6d1a07c29e2cc657a5389ddf035c1c9e202fc4ae4a5176a5506ac778291d" }
+  ],
+  "known_limitations": [
+    "HandoffService is the in-process semantic reference implementation; durable daemon repository transactions for capsules, acceptances, replay nonces, and creation events are composed in WP14.",
+    "Recipient-specific compilation is an injected deterministic callback over a closed accepted context; the installed runtime target adapters are integrated and qualified in WP14 and WP17."
+  ],
+  "status": "complete"
+}

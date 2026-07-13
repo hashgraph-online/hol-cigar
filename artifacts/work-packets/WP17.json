@@ -1,0 +1,151 @@
+{
+  "packet": "WP17",
+  "source_commit": "workspace:2ebebf1bbdcb49a8a7168efdc23bb4c88030f3098200ac2edae1364833145dbb",
+  "prerequisites": [
+    "WP09",
+    "WP11",
+    "WP12",
+    "WP14",
+    "WP15"
+  ],
+  "owned_paths": [
+    "adapters/claude-code",
+    "crates/cigar-claude-hook",
+    "crates/cigar-mcp",
+    "crates/cigar-cli/src/claude_plugin.rs",
+    "crates/cigar-cli/tests/claude_plugin.rs"
+  ],
+  "commands": [
+    "cargo test --locked -p cigar-claude-hook -p cigar-mcp -p cigar-cli --all-targets",
+    "cargo fmt --check -p cigar-cli -p cigar-claude-hook -p cigar-mcp",
+    "cargo clippy --locked -p cigar-claude-hook -p cigar-mcp -p cigar-cli --all-targets -- -D warnings",
+    "RUSTDOCFLAGS='-D warnings' cargo doc --locked -p cigar-claude-hook -p cigar-mcp -p cigar-cli --no-deps",
+    "cargo check --locked -p cigar-claude-hook -p cigar-mcp --target x86_64-pc-windows-msvc",
+    "adapters/claude-code/tests/validate-package.sh",
+    "adapters/claude-code/tests/static-private-path-scan.sh",
+    "adapters/claude-code/tests/run-fixture-demo.sh",
+    "adapters/claude-code/tests/public-surface-smoke.sh",
+    "isolated-home Claude Code 2.1.207 controlled two-turn loopback smoke",
+    "isolated-home Claude public plugin preview/install/list/doctor/uninstall lifecycle"
+  ],
+  "tests": [
+    {
+      "id": "WP17-RUST",
+      "result": "pass",
+      "tests": 69,
+      "hook": 11,
+      "cli": 24,
+      "installer": 2,
+      "cli_process": 6,
+      "mcp": 22,
+      "mcp_process": 4,
+      "clippy_warnings": 0,
+      "rustdoc_warnings": 0
+    },
+    {
+      "id": "WP17-PACKAGE",
+      "result": "pass",
+      "sealed_entries": 63,
+      "sealed_payload_bytes": 66501,
+      "plugin_metadata_only_plugin_json": true,
+      "private_path_scan": "pass",
+      "public_surfaces_only": true
+    },
+    {
+      "id": "WP17-HOOK-FIXTURES",
+      "result": "pass",
+      "event_fixtures": 30,
+      "malformed_rejected": true,
+      "oversized_rejected": true,
+      "duplicate_idempotent": true,
+      "daemon_unavailable_visible_and_non_corrupting": true,
+      "governed_effect_fails_closed": true,
+      "compaction_checkpoint": true,
+      "subagent_handoff": true,
+      "bootstrap_tokens_max": 500,
+      "model_calls": 0
+    },
+    {
+      "id": "WP17-MCP",
+      "result": "pass",
+      "tools": 10,
+      "skipped_tool_schemas": 0,
+      "bounded_outputs": true,
+      "visible_provenance_authority_metadata": true,
+      "exact_idempotency_enforced": true,
+      "private_request_material_not_in_argv": true
+    },
+    {
+      "id": "WP17-INSTALL-LIFECYCLE",
+      "result": "pass",
+      "fake_home_byte_preserving_uninstall": true,
+      "real_public_claude_cli": true,
+      "preview": true,
+      "install": true,
+      "list_enabled": true,
+      "doctor": true,
+      "uninstall": true,
+      "private_provider_files": false
+    },
+    {
+      "id": "WP17-CONTROLLED-LIVE",
+      "result": "pass",
+      "claude_code": "2.1.207",
+      "claimed_range": "2.1.207 <= version < 2.1.208",
+      "qualified_platforms": [
+        "macos-aarch64",
+        "macos-arm64"
+      ],
+      "loaded_skills": 5,
+      "loaded_agents": 3,
+      "mcp_connected": true,
+      "tool_invoked": "mcp__plugin_cigar_cigar__context_compile",
+      "tool_result_received": true,
+      "tool_error": false,
+      "permission_denials": 0,
+      "external_provider_charge": false
+    }
+  ],
+  "metrics": {
+    "fixture_prompt_median_ms": 26.585,
+    "fixture_prompt_p95_ms": 29.79,
+    "fixture_prompt_p99_ms": 30.605,
+    "fixture_prompt_samples": 50,
+    "mcp_tools": 10,
+    "event_fixtures": 30,
+    "rust_tests": 69
+  },
+  "artifacts": [
+    {
+      "path": "adapters/claude-code/package-manifest.json",
+      "sha256": "cf60ef03344d6920f9c77b091abefb216f90552cc75ba0f20ba3ac121d6f1cc1"
+    },
+    {
+      "path": "adapters/claude-code/compatibility.json",
+      "sha256": "6dc2c190b07b57ae6a7946d9d71b3a46b1700b08ef5111b898b8a79fda89fd62"
+    },
+    {
+      "path": "adapters/claude-code/.claude-plugin/plugin.json",
+      "sha256": "0576671e2c3889d54bc7b394eca5aa14d49d9726cd9b63cf8944ed8c384593ec"
+    },
+    {
+      "path": "adapters/claude-code/hooks/hooks.json",
+      "sha256": "3937c63618ce797aae56d98142f9be84d9aebf2ab336c4a97a51dd631e0968e8"
+    },
+    {
+      "path": "adapters/claude-code/.mcp.json",
+      "sha256": "4c88452347dfc1aa4f6c64a1925e42187a1d5cf01a9b5e50f7094805595cdceb"
+    }
+  ],
+  "official_surfaces": [
+    "https://code.claude.com/docs/en/plugins-reference",
+    "https://code.claude.com/docs/en/hooks",
+    "https://code.claude.com/docs/en/mcp",
+    "https://code.claude.com/docs/en/plugins"
+  ],
+  "known_limitations": [
+    "The compatibility claim is intentionally restricted to the natively qualified Apple-silicon macOS host. Portable Linux and Windows assets remain non-installable until native distributed-artifact qualification expands compatibility.json.",
+    "Personal Claude OAuth was expired; the exact claimed Claude range passed a controlled public-process loopback smoke without an external model/provider charge."
+  ],
+  "status": "complete"
+}

@@ -1,0 +1,16 @@
+[package]
+name = "cigar-miri-qualification"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["."]
+
+[dependencies]
+cigar-canon = { path = "../../crates/cigar-canon" }
+cigar-protocol = { path = "../../crates/cigar-protocol" }
+
+[[test]]
+name = "memory_model"
+path = "memory_model.rs"

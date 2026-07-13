@@ -1,0 +1,26 @@
+{
+  "schema_version": "cigar.shared-qualification.v1",
+  "packet": "WP18",
+  "source": "workspace:8cddfacb43cb3f81d4737d27f021a2ed6764629ee639372e6a30f7926d8d76b9",
+  "started_at": "2026-07-12T20:05:37Z",
+  "finished_at": "2026-07-12T20:05:46Z",
+  "result": "pass",
+  "exit_code": 0,
+  "live_tests_required": true,
+  "postgres_dump_restore": true,
+  "postgres_basebackup_manifest_verified": true,
+  "s3_compatible_live": true,
+  "s3_fresh_namespace_restore": true,
+  "s3_runtime_immutable_delete_denied": true,
+  "deployment_assets": true,
+  "commands": [
+    "docker compose config --quiet",
+    "kubectl kustomize deploy/kubernetes/shared",
+    "cargo test --locked --package cigar-store --test postgres_shared -- --nocapture",
+    "cargo test --locked --package cigar-store --test object_s3 -- --nocapture",
+    "cargo test --locked --package cigar-daemon --test deployment_assets",
+    "pg_basebackup --wal-method=stream --manifest-checksums=SHA256",
+    "pg_verifybackup"
+  ],
+  "log": "artifacts/qualification/wp18-shared-profile.log"
+}

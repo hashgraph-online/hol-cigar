@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EffectApproval",
+  "description": "Approval binding the exact intent semantics and limits.",
+  "type": "object",
+  "properties": {
+    "approval_id": {
+      "description": "Unique approval identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "approved_at": {
+      "description": "Approval time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "approver_id": {
+      "description": "Approver identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bundle_id": {
+      "description": "Bound source bundle.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "conditions_digest": {
+      "description": "Digest of approval conditions and limits.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "effect_id": {
+      "description": "Bound effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "expires_at": {
+      "description": "Exclusive expiry.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "intent_digest": {
+      "description": "Bound intent digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "kind": {
+      "description": "Approval provenance.",
+      "$ref": "#/$defs/ApprovalKind"
+    },
+    "risk": {
+      "description": "Bound risk.",
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.effect-approval.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "target_digest": {
+      "description": "Bound target digest without disclosing the target.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "approval_id",
+    "effect_id",
+    "intent_digest",
+    "target_digest",
+    "risk",
+    "bundle_id",
+    "conditions_digest",
+    "approver_id",
+    "kind",
+    "approved_at",
+    "expires_at"
+  ],
+  "$defs": {
+    "ApprovalKind": {
+      "description": "Closed approval provenance.",
+      "oneOf": [
+        {
+          "description": "Explicit human approval.",
+          "type": "string",
+          "const": "human"
+        },
+        {
+          "description": "Policy-authorized automated approval for eligible risk.",
+          "type": "string",
+          "const": "policy"
+        }
+      ]
+    },
+    "RiskLevel": {
+      "description": "Closed effect risk classification.",
+      "oneOf": [
+        {
+          "description": "Reversible low-impact mutation.",
+          "type": "string",
+          "const": "low"
+        },
+        {
+          "description": "Bounded mutation with material consequences.",
+          "type": "string",
+          "const": "medium"
+        },
+        {
+          "description": "High-impact or difficult-to-reverse mutation.",
+          "type": "string",
+          "const": "high"
+        },
+        {
+          "description": "Critical irreversible or security-sensitive mutation.",
+          "type": "string",
+          "const": "critical"
+        }
+      ]
+    }
+  }
+}

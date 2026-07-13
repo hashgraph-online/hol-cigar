@@ -1,0 +1,77 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "installation",
+  "description": "Clean-home CLI, plugin, SDK package, archive contract, reproducibility, and installed-candidate gates.",
+  "cases": [
+    {
+      "id": "INSTALL-CLAUDE-001",
+      "title": "Claude plugin install, repair, rollback, uninstall, and fake-home isolation are exact.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-cli", "--test", "claude_plugin"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-PLUGIN-001", "INSTALL-UNINSTALL-001"],
+      "isolate_home": true
+    },
+    {
+      "id": "INSTALL-CLI-001",
+      "title": "The compiled CLI process exposes stable machine output and refuses unsafe filesystem state.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-cli", "--test", "process_ux"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-CLI-001", "VER-JSON-OUTPUT-001"],
+      "isolate_home": true
+    },
+    {
+      "id": "INSTALL-GO-001",
+      "title": "Go module is consumable from a clean package test context.",
+      "command": ["go", "-C", "sdk/go", "test", "./..."],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-SDK-GO-001"],
+      "isolate_home": false
+    },
+    {
+      "id": "INSTALL-PYTHON-001",
+      "title": "Python wheel and sdist build, install, and release contracts pass.",
+      "command": ["uv", "run", "--project", "sdk/python", "pytest", "sdk/python/tests/test_release_contract.py"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-SDK-PYTHON-001"],
+      "isolate_home": false
+    },
+    {
+      "id": "INSTALL-RUST-001",
+      "title": "Rust SDK crate package contains only the declared publication contract and resolves its public dependency chain.",
+      "command": ["cargo", "package", "--locked", "--manifest-path", "sdk/rust/Cargo.toml", "--allow-dirty"],
+      "timeout_seconds": 1800,
+      "profiles": ["release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-SDK-RUST-001"],
+      "isolate_home": false
+    },
+    {
+      "id": "INSTALL-TYPESCRIPT-001",
+      "title": "npm package contents install and execute from a clean consumer project.",
+      "command": ["corepack", "pnpm", "--dir", "sdk/typescript", "run", "pack:check"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["INSTALL-SDK-TYPESCRIPT-001"],
+      "isolate_home": false
+    },
+    {
+      "id": "INSTALL-WP21-001",
+      "title": "All locally testable archives, contracts, docs, runbooks, SBOMs, signatures, provenance, and reproducibility gates pass.",
+      "command": ["python3", "scripts/release/run_local_qualification.py", "--source-date-epoch", "1783900800", "--out", "artifacts/qualification/wp21-local-readiness.json"],
+      "timeout_seconds": 7200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["PKG-CONTRACT-001", "PKG-REPRODUCIBLE-001", "DOCS-EXEC-001", "OPS-RUNBOOK-001"],
+      "isolate_home": false
+    }
+  ]
+}

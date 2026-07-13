@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "SubagentStart",
+  "agent_id": "agent-fixture-1",
+  "agent_type": "Explore"
+}

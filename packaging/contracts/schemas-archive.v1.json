@@ -1,0 +1,16 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "schemas-archive-v1",
+  "formats": ["tar.gz"],
+  "allow": ["RELEASE-METADATA.json", "LICENSE", "NOTICE", "schemas/**", "packaging/licenses/**", "packaging/schemas/**"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem"],
+  "required": ["RELEASE-METADATA.json", "schemas/openapi/cigar-v1.json", "schemas/proto/cigar_service.proto", "schemas/proto/context_abi.proto", "NOTICE", "packaging/licenses/Apache-2.0.txt", "packaging/schemas/release-evidence.v1.schema.json", "packaging/schemas/release-build.v1.schema.json", "packaging/schemas/qualification-evidence.v1.schema.json", "packaging/schemas/provenance.v1.schema.json", "packaging/schemas/signature-envelope.v1.schema.json"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": []
+}

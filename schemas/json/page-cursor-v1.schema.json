@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PageCursor",
+  "description": "Unpadded base64url encoding of 1..=1024 opaque cursor bytes.",
+  "type": "string",
+  "contentEncoding": "base64url",
+  "maxLength": 1366,
+  "minLength": 2
+}

@@ -1,0 +1,23 @@
+[package]
+name = "xtask"
+description = "Authoritative CIGAR workspace build and release orchestration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cigar-api.workspace = true
+cigar-canon.workspace = true
+cigar-protocol.workspace = true
+cigar-testkit.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+yaml_serde.workspace = true

@@ -1,0 +1,70 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "chaos",
+  "description": "Deterministic crash, cancellation, storage fault, resource exhaustion, and shared-service failover gates.",
+  "cases": [
+    {
+      "id": "CHAOS-BLOB-001",
+      "title": "Every encrypted blob publication failpoint is atomic and reconcilable.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib", "-E", "test(=blob::tests::every_publication_failpoint_is_atomic_and_reconcilable)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-BLOB-ATOMIC-001", "VER-FAULT-001"]
+    },
+    {
+      "id": "CHAOS-DAEMON-001",
+      "title": "Durable snapshot loss and semantic tampering fail closed across restart.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-daemon", "--lib", "-E", "test(=durable_snapshot::tests::missing_chunk_and_semantically_tampered_snapshot_fail_closed)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STATE-SNAPSHOT-001", "VER-FAULT-001"]
+    },
+    {
+      "id": "CHAOS-EFFECT-001",
+      "title": "All 24 effect boundaries use process kill, fresh recovery, and a 100000-operation ambiguity campaign.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_faults"],
+      "timeout_seconds": 2400,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["EFX-CRASH-001", "EFX-RPO-001", "VER-FAULT-001"]
+    },
+    {
+      "id": "CHAOS-EFFECT-002",
+      "title": "Remote commit followed by SQLite receipt loss recovers without a duplicate effect.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_sqlite"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["EFX-UNKNOWN-001", "EFX-RECONCILE-001", "STORE-RPO-001"]
+    },
+    {
+      "id": "CHAOS-EXTENSION-001",
+      "title": "Extension subprocess resource exhaustion is terminated and output floods are rejected.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-extension-host", "--lib", "-E", "test(=tests::isolated_subprocess_kills_infinite_loop_and_rejects_output_flood)"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos"],
+      "requirements": ["EXT-RESOURCE-001", "VER-FAULT-001"]
+    },
+    {
+      "id": "CHAOS-SHARED-001",
+      "title": "Physical PostgreSQL failover, lag, backup, restore, and timeline changes retain semantic state.",
+      "command": ["bash", "tools/wp18-failover/qualify.sh"],
+      "timeout_seconds": 14400,
+      "profiles": ["release", "shared"],
+      "platforms": ["linux", "macos"],
+      "requirements": ["STORE-FAILOVER-001", "STORE-RPO-001", "OPS-RESTORE-001"]
+    },
+    {
+      "id": "CHAOS-SQLITE-001",
+      "title": "Process termination and WAL truncation preserve the exact SQLite commit boundary.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--test", "sqlite_process_kill"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-RPO-001", "STORE-WAL-001", "VER-FAULT-001"]
+    }
+  ]
+}

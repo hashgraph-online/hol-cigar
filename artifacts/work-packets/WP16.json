@@ -1,0 +1,195 @@
+{
+  "packet": "WP16",
+  "source_commit": "workspace:81dd918aeab463d8945396fc5825e6d46d10abdd88b8e45b6f3d744d93a4f72e",
+  "prerequisites": [
+    "WP14"
+  ],
+  "owned_paths": [
+    "sdk",
+    "crates/xtask/src/lib.rs",
+    "schemas/generated-manifest.json"
+  ],
+  "commands": [
+    "cargo xtask generate --check",
+    "python3 sdk/generate_clients.py --check",
+    "cargo test --locked -p cigar-sdk --all-features --all-targets",
+    "cargo test --locked -p cigar-sdk --no-default-features --all-targets",
+    "cargo clippy --locked -p cigar-sdk --all-features --all-targets -- -D warnings",
+    "RUSTDOCFLAGS='-D warnings' cargo doc --locked -p cigar-sdk --all-features --no-deps",
+    "corepack pnpm test (sdk/typescript)",
+    "corepack pnpm pack:check (sdk/typescript)",
+    "corepack pnpm typecheck (sdk/typescript)",
+    "uv run --frozen ruff check src tests examples (sdk/python)",
+    "uv run --frozen mypy src tests examples (sdk/python)",
+    "uv run --frozen pytest -q (sdk/python)",
+    "clean CPython 3.14.6 wheel and sdist installs with uv",
+    "go test -race ./... (sdk/go)",
+    "go vet ./... (sdk/go)",
+    "clean external Go consumer module",
+    "pinned protoc/protoc-gen-go/protoc-gen-go-grpc temporary reproduction",
+    "TypeScript, Python, and Go canonical vector and replay verification",
+    "Rust, TypeScript, Python, and Go quickstarts"
+  ],
+  "tests": [
+    {
+      "id": "WP16-CAPABILITY-PARITY",
+      "result": "pass",
+      "sdks": 4,
+      "operations_per_sdk": 45,
+      "nominal_types_per_sdk": 70,
+      "runtime_schema_validation": true
+    },
+    {
+      "id": "WP16-RUST",
+      "result": "pass",
+      "all_feature_tests": 22,
+      "remote_only_tests": 21,
+      "embedded_and_http": true,
+      "clippy_warnings": 0,
+      "rustdoc_warnings": 0
+    },
+    {
+      "id": "WP16-TYPESCRIPT",
+      "result": "pass",
+      "node": "24.10.0",
+      "tests": 19,
+      "esm": true,
+      "clean_packed_install": true,
+      "javascript_and_declaration_maps_inline_sources": true,
+      "postinstall_download": false
+    },
+    {
+      "id": "WP16-PYTHON",
+      "result": "pass",
+      "python": "3.14.6",
+      "tests": 19,
+      "ruff": "pass",
+      "strict_mypy": "pass",
+      "clean_wheel_install": true,
+      "clean_sdist_install": true,
+      "py_typed": true
+    },
+    {
+      "id": "WP16-GO",
+      "result": "pass",
+      "go": "1.26.3",
+      "top_level_tests": 18,
+      "race": "pass",
+      "vet": "pass",
+      "clean_external_consumer": true,
+      "http_high_level_methods": 45,
+      "grpc_high_level_methods": 45,
+      "grpc_unary_and_server_stream": true,
+      "grpc_cancel_resume_close": true,
+      "transport_retry_disabled": true
+    },
+    {
+      "id": "WP16-GENERATED-WIRE",
+      "result": "pass",
+      "protoc": "6.33.2",
+      "protoc_gen_go": "1.36.11",
+      "protoc_gen_go_grpc": "1.6.2",
+      "go_protobuf_byte_reproducible": true,
+      "go_grpc_byte_reproducible": true,
+      "xtask_drift_check_covers_grpc_stub": true
+    },
+    {
+      "id": "WP16-CROSS-LANGUAGE-VECTORS",
+      "result": "pass",
+      "canonical_vectors": 363,
+      "differential_records": 100000,
+      "typescript_python_go_replay_byte_identical": true,
+      "rust_frozen_codec": true
+    },
+    {
+      "id": "WP16-QUICKSTART-PARITY",
+      "result": "pass",
+      "rust": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+      "typescript": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+      "python_wheel": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+      "python_sdist": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+      "go": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84"
+    },
+    {
+      "id": "WP16-UNSAFE-RETRY",
+      "result": "pass",
+      "typescript_dispatch_attempts": 1,
+      "python_dispatch_attempts": 1,
+      "go_http_dispatch_attempts": 1,
+      "go_grpc_dispatch_attempts": 1,
+      "rust_dispatch_attempts": 1
+    }
+  ],
+  "metrics": {
+    "sdks": 4,
+    "operation_bindings": 180,
+    "nominal_type_bindings": 280,
+    "quickstart_bundle_id": "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84",
+    "canonical_vectors": 363,
+    "differential_records_per_non_rust_sdk": 100000
+  },
+  "artifacts": [
+    {
+      "path": "sdk/capabilities-v1.json",
+      "sha256": "6d7ad67070299b5b036266de4d39ad5047410b4ac1644e143fae9b3df9c6f356"
+    },
+    {
+      "path": "sdk/generate_clients.py",
+      "sha256": "ef5f9c7cf07fb3ed4f3cb5400e6d46566577db56fc5228778dbfbfca4d1706bc"
+    },
+    {
+      "path": "sdk/typescript/package.json",
+      "sha256": "0dee0107e317354f60f566746437106128a8332d43b64da84bdd83ead542bcda"
+    },
+    {
+      "path": "sdk/typescript/dist/index.js.map",
+      "sha256": "f22d3ea79028425af471b4f879433dc387d1759072336cc23bf45ffe51ca154f"
+    },
+    {
+      "path": "sdk/typescript/dist/index.d.ts.map",
+      "sha256": "25486096053e4416daad9e3dae40cd8a02266b61f161b1aa68ab1aedf486cb5c"
+    },
+    {
+      "path": "sdk/python/pyproject.toml",
+      "sha256": "a79607a31b75e7d42995652daa115541e7ba3d572fd5dd802e157c94a133be3a"
+    },
+    {
+      "path": "sdk/python/dist/cigar_sdk-0.1.0-py3-none-any.whl",
+      "sha256": "786c196bde1ff03562c823d08902dfaf4908ce54609aa706845c4e74902b8577"
+    },
+    {
+      "path": "sdk/python/dist/cigar_sdk-0.1.0.tar.gz",
+      "sha256": "e0d1689353098a8e5e41698a0a8cb32a1b0a727e09560d39e04a5d6585a8dad7"
+    },
+    {
+      "path": "sdk/go/grpc_client.go",
+      "sha256": "e87e1a99144e21346436f8b7d1241bbe646af8b586e228aba32952f237a544bb"
+    },
+    {
+      "path": "sdk/go/gen/cigarv1/cigar_service.pb.go",
+      "sha256": "d4d762377fac809d51681ac8bb035032f48051a67c387000cc377608d44f5a3e"
+    },
+    {
+      "path": "sdk/go/gen/cigarv1/cigar_service_grpc.pb.go",
+      "sha256": "67c5b7f2b8d3f19729e970bc075a8b0897c038230f0c408e736731329ba78b5e"
+    },
+    {
+      "path": "sdk/rust/Cargo.toml",
+      "sha256": "4620726dccb4ab3fdffa9a5a51e8f1e569910ce3229db4de26d962c6db93ce88"
+    },
+    {
+      "path": "sdk/fixtures/semantic-bundle-v1.json",
+      "sha256": "263f8dd46c4e7946e185d825e4fc485ba76b68c5ba2e15530ba42c11dca02cd2"
+    },
+    {
+      "path": "crates/xtask/src/lib.rs",
+      "sha256": "6640eb4ad0a4ee18542936068ffd9bdd1999c6b57b582e73144fc0da503800d5"
+    },
+    {
+      "path": "schemas/generated-manifest.json",
+      "sha256": "df9f05aff0b7dadc7da468d3c0e14e41410263285a42b0af1ee9a322d7d18693"
+    }
+  ],
+  "known_limitations": [],
+  "status": "complete"
+}

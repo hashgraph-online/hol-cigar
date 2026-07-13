@@ -1,0 +1,3226 @@
+{
+  "components": {
+    "schemas": {
+      "OperationEvent": {
+        "additionalProperties": false,
+        "maxProperties": 3,
+        "properties": {
+          "event_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "payload_cbor": {
+            "contentEncoding": "base64url",
+            "maxLength": 1398102,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "event_id",
+          "payload_cbor"
+        ],
+        "type": "object"
+      },
+      "OperationRequest": {
+        "additionalProperties": false,
+        "maxProperties": 8,
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "type": "boolean"
+          },
+          "expected_revision": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "operation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "page_cursor": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "page_size": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path_parameters": {
+            "items": {
+              "$ref": "#/components/schemas/PathParameter"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "payload_cbor": {
+            "contentEncoding": "base64url",
+            "maxLength": 22369622,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "payload_cbor",
+          "path_parameters"
+        ],
+        "type": "object"
+      },
+      "OperationResponse": {
+        "additionalProperties": false,
+        "maxProperties": 4,
+        "properties": {
+          "next_page_cursor": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "operation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "payload_cbor": {
+            "contentEncoding": "base64url",
+            "maxLength": 22369622,
+            "type": "string"
+          },
+          "semantic_etag": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "payload_cbor"
+        ],
+        "type": "object"
+      },
+      "PathParameter": {
+        "additionalProperties": false,
+        "maxProperties": 2,
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._~-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
+      "Problem": {
+        "additionalProperties": false,
+        "maxProperties": 5,
+        "properties": {
+          "code": {
+            "maximum": 4294967295,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "detail": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "retry": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "trace_id": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "operatorBearer": {
+        "bearerFormat": "operator JWT or local token",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "tenantBearer": {
+        "bearerFormat": "JWT or local token",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated frozen v1 operation surface; payload bytes are bounded and operation-specific.",
+    "title": "CIGAR Service API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/livez": {
+      "get": {
+        "operationId": "getLiveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "health",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "LivenessResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetLiveness",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "operatorBearer": []
+          }
+        ],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "operator",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "MetricsResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetMetrics",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "health",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "ReadinessResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetReadiness",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "operationId": "getCapabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "anonymous",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "CapabilitiesResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetCapabilities",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/catalog/atoms/{atom_id}:tombstone": {
+      "post": {
+        "operationId": "tombstoneAtom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "atom_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "AtomIdRequest",
+        "x-cigar-response-schema": "MutationReceipt",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "TombstoneAtom",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/catalog/atoms:batch": {
+      "post": {
+        "operationId": "batchAtoms",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "BatchAtomsRequest",
+        "x-cigar-response-schema": "AtomBatchResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "BatchAtoms",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/catalog/sources/{source_id}": {
+      "get": {
+        "operationId": "getSourceStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "SourceIdRequest",
+        "x-cigar-response-schema": "SourceStatusResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetSourceStatus",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/catalog:ingest": {
+      "post": {
+        "operationId": "ingestCatalog",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "IngestCatalogRequest",
+        "x-cigar-response-schema": "IngestionReceiptResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "IngestCatalog",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/catalog:query": {
+      "post": {
+        "operationId": "queryCatalog",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "QueryCatalogRequest",
+        "x-cigar-response-schema": "CatalogQueryResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "QueryCatalog",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/configuration": {
+      "get": {
+        "operationId": "getConfiguration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "operatorBearer": []
+          }
+        ],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "operator",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "ConfigurationResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetConfiguration",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles/{bundle_id}": {
+      "get": {
+        "operationId": "getContextBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "BundleIdRequest",
+        "x-cigar-response-schema": "ContextBundle",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetContextBundle",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles/{bundle_id}/manifest": {
+      "get": {
+        "operationId": "getContextBundleManifest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "BundleIdRequest",
+        "x-cigar-response-schema": "SelectionManifest",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetContextBundleManifest",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles/{bundle_id}:explain": {
+      "post": {
+        "operationId": "explainContextBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "ExplainContextBundleRequest",
+        "x-cigar-response-schema": "ContextExplanationResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "ExplainContextBundle",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles/{bundle_id}:materialize": {
+      "post": {
+        "operationId": "materializeContextBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "MaterializeContextBundleRequest",
+        "x-cigar-response-schema": "MaterializationResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "MaterializeContextBundle",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles/{bundle_id}:revalidate": {
+      "post": {
+        "operationId": "revalidateContextBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "BundleIdRequest",
+        "x-cigar-response-schema": "RevalidationResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "RevalidateContextBundle",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/bundles:compile": {
+      "post": {
+        "operationId": "compileContextBundle",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CompileContextBundleRequest",
+        "x-cigar-response-schema": "ContextBundle",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CompileContextBundle",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/deltas:compile": {
+      "post": {
+        "operationId": "compileContextDelta",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CompileContextDeltaRequest",
+        "x-cigar-response-schema": "ContextDeltaResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CompileContextDelta",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/context/plans": {
+      "post": {
+        "operationId": "createContextPlan",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ContextService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CreateContextPlanRequest",
+        "x-cigar-response-schema": "ContextPlanResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CreateContextPlan",
+        "x-cigar-service": "ContextService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/diagnostics": {
+      "get": {
+        "operationId": "getDiagnostics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "operatorBearer": []
+          }
+        ],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "operator",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "DiagnosticsResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetDiagnostics",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects": {
+      "post": {
+        "operationId": "prepareEffect",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "PrepareEffectRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "PrepareEffect",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects/{effect_id}": {
+      "get": {
+        "operationId": "getEffectStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EffectIdRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetEffectStatus",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects/{effect_id}:authorize": {
+      "post": {
+        "operationId": "authorizeEffect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "AuthorizeEffectRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "AuthorizeEffect",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects/{effect_id}:compensate": {
+      "post": {
+        "operationId": "compensateEffect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CompensateEffectRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "CompensateEffect",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects/{effect_id}:dispatch": {
+      "post": {
+        "operationId": "dispatchEffect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "EffectIdRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "DispatchEffect",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/effects/{effect_id}:reconcile": {
+      "post": {
+        "operationId": "reconcileEffect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "EffectService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "EffectIdRequest",
+        "x-cigar-response-schema": "EffectStatusResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "ReconcileEffect",
+        "x-cigar-service": "EffectService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs": {
+      "post": {
+        "operationId": "createHandoff",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CreateHandoffRequest",
+        "x-cigar-response-schema": "CreateHandoffResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CreateHandoff",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs/{handoff_id}/results": {
+      "post": {
+        "operationId": "recordHandoffResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handoff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "RecordHandoffResultRequest",
+        "x-cigar-response-schema": "HandoffResultReceipt",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "RecordHandoffResult",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs/{handoff_id}:accept": {
+      "post": {
+        "operationId": "acceptHandoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handoff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "AcceptHandoffRequest",
+        "x-cigar-response-schema": "HandoffAcceptance",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "AcceptHandoff",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs/{handoff_id}:merge": {
+      "post": {
+        "operationId": "mergeHandoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handoff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "MergeHandoffRequest",
+        "x-cigar-response-schema": "HandoffMergeResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "MergeHandoff",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs/{handoff_id}:preview": {
+      "post": {
+        "operationId": "previewHandoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handoff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "HandoffIdRequest",
+        "x-cigar-response-schema": "HandoffPreviewResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "PreviewHandoff",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/handoffs/{handoff_id}:revoke": {
+      "post": {
+        "operationId": "revokeHandoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handoff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "HandoffService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "RevokeHandoffRequest",
+        "x-cigar-response-schema": "MutationReceipt",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "RevokeHandoff",
+        "x-cigar-service": "HandoffService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/replays": {
+      "post": {
+        "operationId": "createReplay",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CreateReplayRequest",
+        "x-cigar-response-schema": "ReplayJobResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CreateReplay",
+        "x-cigar-service": "ReplayService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/replays/{replay_id}/completeness": {
+      "get": {
+        "operationId": "getReplayCompleteness",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "replay_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "ReplayIdRequest",
+        "x-cigar-response-schema": "ReplayCompleteness",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetReplayCompleteness",
+        "x-cigar-service": "ReplayService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/replays/{replay_id}:compare": {
+      "post": {
+        "operationId": "compareLiveReplay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "replay_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CompareLiveReplayRequest",
+        "x-cigar-response-schema": "ReplayExecution",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CompareLiveReplay",
+        "x-cigar-service": "ReplayService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/replays/{replay_id}:run": {
+      "post": {
+        "operationId": "runObservationalReplay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "replay_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "ReplayService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "ReplayIdRequest",
+        "x-cigar-response-schema": "ReplayExecution",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "RunObservationalReplay",
+        "x-cigar-service": "ReplayService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/sources:discover": {
+      "post": {
+        "operationId": "discoverSources",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "CatalogService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "DiscoverSourcesRequest",
+        "x-cigar-response-schema": "DiscoveryPlanResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "DiscoverSources",
+        "x-cigar-service": "CatalogService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces": {
+      "post": {
+        "operationId": "createSpace",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CreateSpaceRequest",
+        "x-cigar-response-schema": "ContextCommit",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "CreateSpace",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}/checkpoints": {
+      "post": {
+        "operationId": "createSpaceCheckpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "CheckpointSpaceRequest",
+        "x-cigar-response-schema": "SpaceCheckpointResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "CreateSpaceCheckpoint",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}/conflicts": {
+      "get": {
+        "operationId": "listSpaceConflicts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "SpaceIdRequest",
+        "x-cigar-response-schema": "ConflictListResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "ListSpaceConflicts",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}/conflicts/{conflict_id}:resolve": {
+      "post": {
+        "operationId": "resolveSpaceConflict",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "conflict_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "ResolveSpaceConflictRequest",
+        "x-cigar-response-schema": "ConflictResolutionResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "ResolveSpaceConflict",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}/events": {
+      "get": {
+        "operationId": "subscribeSpaceEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationEvent"
+                }
+              }
+            },
+            "description": "Bounded resumable event stream"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-event-schema": "SpaceEventPayload",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "SpaceIdRequest",
+        "x-cigar-response-schema": "StreamOpenResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "SubscribeSpaceEvents",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "server_stream"
+      }
+    },
+    "/v1/spaces/{space_id}/log": {
+      "get": {
+        "operationId": "getSpaceLog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "SpaceIdRequest",
+        "x-cigar-response-schema": "SpaceLogResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetSpaceLog",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}:fork": {
+      "post": {
+        "operationId": "forkSpace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "ForkSpaceRequest",
+        "x-cigar-response-schema": "SpaceForkResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "ForkSpace",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/spaces/{space_id}:publish": {
+      "post": {
+        "operationId": "publishSpace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [
+          {
+            "tenantBearer": []
+          }
+        ],
+        "tags": [
+          "SpaceService"
+        ],
+        "x-cigar-auth-class": "tenant",
+        "x-cigar-idempotency-requirement": "required",
+        "x-cigar-mutation": true,
+        "x-cigar-request-schema": "PublishSpaceRequest",
+        "x-cigar-response-schema": "SpacePublishResponse",
+        "x-cigar-revision-requirement": "required",
+        "x-cigar-rpc": "PublishSpace",
+        "x-cigar-service": "SpaceService",
+        "x-cigar-stream-kind": "unary"
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful bounded response"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stable CIGAR problem response"
+          }
+        },
+        "security": [],
+        "tags": [
+          "OperationsService"
+        ],
+        "x-cigar-auth-class": "anonymous",
+        "x-cigar-idempotency-requirement": "not_applicable",
+        "x-cigar-mutation": false,
+        "x-cigar-request-schema": "EmptyRequest",
+        "x-cigar-response-schema": "VersionResponse",
+        "x-cigar-revision-requirement": "none",
+        "x-cigar-rpc": "GetVersion",
+        "x-cigar-service": "OperationsService",
+        "x-cigar-stream-kind": "unary"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "CatalogService"
+    },
+    {
+      "name": "ContextService"
+    },
+    {
+      "name": "SpaceService"
+    },
+    {
+      "name": "HandoffService"
+    },
+    {
+      "name": "EffectService"
+    },
+    {
+      "name": "ReplayService"
+    },
+    {
+      "name": "OperationsService"
+    }
+  ]
+}

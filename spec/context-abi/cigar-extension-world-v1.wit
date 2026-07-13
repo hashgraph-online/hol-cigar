@@ -1,0 +1,34 @@
+package cigar:extension@1.0.0;
+
+/// Least-authority scalar world for a CIGAR Preview 2 Component Model extension.
+world extension {
+  /// Length of the canonical framed ExtensionInvocationV1 input.
+  import input-len: func() -> u32;
+
+  /// Reads one invocation-frame byte, or returns u32::MAX for an invalid index.
+  import input-byte: func(index: u32) -> u32;
+
+  /// Appends one response-frame byte at the next contiguous index.
+  import output-byte: func(index: u32, value: u32) -> u32;
+
+  /// Clears the bounded request scratch buffer.
+  import scratch-clear: func();
+
+  /// Appends one request byte at the next contiguous scratch index.
+  import scratch-byte: func(index: u32, value: u32) -> u32;
+
+  /// Dispatches one broker-authorized host call.
+  ///
+  /// `kind` is an ExtensionHostCallKind discriminant. `handle-index` indexes the
+  /// invocation's authenticated handle vector; u32::MAX denotes no handle.
+  import host-call: func(kind: u32, handle-index: u32) -> u32;
+
+  /// Reads one byte of the most recent host-call response.
+  import host-response-byte: func(index: u32) -> u32;
+
+  /// Returns one when invocation cancellation has been requested, otherwise zero.
+  import cancelled: func() -> u32;
+
+  /// Executes one invocation and returns the exact response-frame byte count.
+  export invoke: func() -> u32;
+}

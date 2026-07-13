@@ -1,0 +1,103 @@
+{
+  "schema_version": "cigar.docs-commands.v1",
+  "commands": [
+    {
+      "id": "release-metadata-local",
+      "block_sha256": "fe94090307c9f051916f1e6b7b24ba64c50567acb0722c53e85c4000dbe4c15c",
+      "mode": "local",
+      "cwd": ".",
+      "argv": ["python3", "scripts/release/validate_metadata.py"],
+      "expected_exit": 0
+    },
+    {
+      "id": "docs-build-local",
+      "block_sha256": "f47582fe05597bc0c9a507898633735e531c4cc7d83b56e5595c90cf4e54c483",
+      "mode": "local",
+      "cwd": ".",
+      "argv": ["python3", "scripts/release/build_docs_site.py", "--check"],
+      "expected_exit": 0
+    },
+    {
+      "id": "release-verifier-selftest",
+      "block_sha256": "1c2b5484eddc619068e128ea7a79223133567252f498316a4816f0304f224a96",
+      "mode": "local",
+      "cwd": ".",
+      "argv": ["python3", "scripts/release/selftest_release_verifier.py"],
+      "expected_exit": 0
+    },
+    {
+      "id": "quickstart-version-help",
+      "block_sha256": "436b03a718ded5f277471ee3b93c04b36d0011a57003bd10a2097cc60a8b2de5",
+      "mode": "installed-candidate",
+      "cwd": "${EMPTY_WORKSPACE}",
+      "steps": [
+        {"argv": ["${CIGAR_BIN}", "--output", "json", "version"], "expected_exit": 0},
+        {"argv": ["${CIGAR_BIN}", "help"], "expected_exit": 0}
+      ]
+    },
+    {
+      "id": "quickstart-init",
+      "block_sha256": "aa752acb889aead6ef45c966503aba033ae4e6c72716d2fa69d2b9f63570aa9c",
+      "mode": "installed-candidate",
+      "cwd": "${UNICODE_WORKSPACE}",
+      "argv": ["${CIGAR_BIN}", "--embedded", "--yes", "init"],
+      "expected_exit": 0
+    },
+    {
+      "id": "quickstart-source-compile",
+      "block_sha256": "fcfc4b742ee27772e6e8955bd9dccde2273d99bb616707a9bde02c8f46bb68dc",
+      "mode": "installed-candidate",
+      "cwd": "${UNICODE_WORKSPACE}",
+      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "quickstart"],
+      "expected_exit": 0
+    },
+    {
+      "id": "install-archive",
+      "block_sha256": "7f487949e875a084c8220108abce0ce17fd54a7e307ab460122f05829df1e4e4",
+      "mode": "installed-candidate",
+      "cwd": ".",
+      "argv": ["python3", "scripts/release/qualify_install.py", "${BINARY_ARCHIVE}", "--contract", "packaging/contracts/binary-archive.v1.json", "--qualification-driver", "${CIGAR_QUALIFICATION_DRIVER}", "--expected-artifact-id", "${ARTIFACT_ID}", "--expected-target", "${TARGET_TRIPLE}"],
+      "expected_exit": 0
+    },
+    {
+      "id": "handoff-flow",
+      "block_sha256": "7d951793872ca8cd14ae8292c36742e6b53ce0e98e987c685c1bbc05a2099ea2",
+      "mode": "installed-candidate",
+      "cwd": "${QUALIFICATION_PROJECT}",
+      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "handoff"],
+      "expected_exit": 0
+    },
+    {
+      "id": "effect-replay-flow",
+      "block_sha256": "5f25d373dca16a90f570b34273cb1937edb374c81694a5a733ba1ab807092a1c",
+      "mode": "installed-candidate",
+      "cwd": "${QUALIFICATION_PROJECT}",
+      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "effect-replay"],
+      "expected_exit": 0
+    },
+    {
+      "id": "claude-plugin-flow",
+      "block_sha256": "ef66bf566bbcecc8ed69562b0a70d85d5c8fb9854e33bf5a2dd62167aaff214f",
+      "mode": "installed-candidate",
+      "cwd": "${QUALIFICATION_PROJECT}",
+      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "claude-plugin"],
+      "expected_exit": 0
+    },
+    {
+      "id": "release-verify",
+      "block_sha256": "3993882b80b6bc7a6307d7678b0c0015cb04ae4ed0a730f15df37bdfba2dfd34",
+      "mode": "installed-candidate",
+      "cwd": "${EMPTY_WORKSPACE}",
+      "argv": ["${CIGAR_BIN}", "release", "verify", "${DIST_DIRECTORY}"],
+      "expected_exit": 0
+    },
+    {
+      "id": "runbook-live",
+      "block_sha256": "8b2b2ede9b92e88e0355a25edcd7c4ca311257b8f1765b186e7d396b452e1dea",
+      "mode": "live",
+      "cwd": "${ISOLATED_OPERATION_ENVIRONMENT}",
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/exercise_runbooks.py", "--mode", "live", "--candidate-manifest", "${CANDIDATE_MANIFEST}", "--driver-directory", "${RUNBOOK_DRIVER_DIRECTORY}", "--out", "${RUNBOOK_EVIDENCE_DIRECTORY}"],
+      "expected_exit": 0
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": "cigar.conformance.profile-registry.v1",
+  "profiles": [
+    "cigar-core-v1",
+    "cigar-catalog-v1",
+    "cigar-compiler-v1",
+    "cigar-handoff-v1",
+    "cigar-effect-v1",
+    "cigar-replay-v1",
+    "cigar-service-v1",
+    "cigar-runtime-claude-code-v1"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/docs-check.v1.schema.json",
+  "title": "CIGAR documentation correctness report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "product_version", "context_abi", "pages", "links", "code_blocks", "declared_commands", "executed_commands", "failed_commands", "executed_modes"],
+  "properties": {
+    "schema_version": {"const": "cigar.docs-check.v1"}, "status": {"const": "passed"},
+    "product_version": {"type": "string", "minLength": 1}, "context_abi": {"const": "cigar.context.v1"},
+    "pages": {"type": "integer", "minimum": 1}, "links": {"type": "integer", "minimum": 0},
+    "code_blocks": {"type": "integer", "minimum": 0}, "declared_commands": {"type": "integer", "minimum": 1},
+    "executed_commands": {"type": "integer", "minimum": 0}, "failed_commands": {"const": 0},
+    "executed_modes": {"type": "array", "uniqueItems": true, "items": {"enum": ["local", "installed-candidate", "live"]}}
+  }
+}

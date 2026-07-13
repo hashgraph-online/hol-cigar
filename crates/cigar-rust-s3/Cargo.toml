@@ -1,0 +1,120 @@
+[package]
+name = "cigar-rust-s3"
+version = "0.37.2-cigar.1"
+edition = "2024"
+rust-version = "1.92"
+authors = ["Drazen Urch", "CIGAR contributors"]
+description = "Security-reviewed CIGAR distribution of the rust-s3 support library"
+license = "MIT"
+repository = "https://github.com/CIGAR/cigar"
+homepage = "https://github.com/CIGAR/cigar"
+readme = "README.md"
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE", "NOTICE", "CIGAR-PATCHES.md", "release.json"]
+
+[features]
+blocking = ["block_on_proc", "tokio/rt", "tokio/rt-multi-thread"]
+default = ["sync-rustls-tls"]
+fail-on-err = []
+http-credentials = ["awscreds/http-credentials"]
+sync = ["attohttpc", "maybe-async/is_sync"]
+sync-native-tls = ["attohttpc/tls", "awscreds/native-tls", "sync"]
+sync-native-tls-vendored = ["attohttpc/tls-vendored", "awscreds/native-tls-vendored", "sync"]
+sync-rustls-tls = ["attohttpc/tls-rustls-webpki-roots-ring", "awscreds/rustls-tls", "sync"]
+tags = ["minidom"]
+tokio-native-tls = ["awscreds/native-tls", "reqwest/native-tls", "with-tokio"]
+tokio-rustls-tls = ["awscreds/rustls-tls", "reqwest/rustls-tls", "with-tokio"]
+with-tokio = ["futures-util", "reqwest", "tokio", "tokio/fs", "tokio-stream", "sysinfo"]
+
+[lib]
+name = "s3"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = "0.1"
+aws-region = "0.28.1"
+base64 = "0.22"
+bytes = "1.2"
+cfg-if = "1"
+hex = "0.4"
+hmac = "0.12"
+http = "1"
+log = "0.4"
+maybe-async = "0.2"
+md5 = "0.8"
+percent-encoding = "2"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+sha2 = "0.10"
+thiserror = { version = "2", default-features = false }
+url = "2"
+
+[dependencies.attohttpc]
+version = "=0.30.1"
+optional = true
+default-features = false
+
+[dependencies.awscreds]
+package = "cigar-aws-creds"
+version = "=0.39.1-cigar.1"
+path = "../cigar-aws-creds"
+default-features = false
+
+[dependencies.block_on_proc]
+version = "0.2"
+optional = true
+
+[dependencies.futures-util]
+version = "0.3"
+optional = true
+default-features = false
+
+[dependencies.minidom]
+version = "0.16"
+optional = true
+
+[dependencies.quick-xml]
+version = "=0.41.0"
+features = ["serialize"]
+
+[dependencies.reqwest]
+version = "0.12"
+features = ["stream"]
+optional = true
+default-features = false
+
+[dependencies.sysinfo]
+version = "0.37.0"
+optional = true
+
+[dependencies.time]
+version = "0.3.6"
+features = ["formatting", "macros"]
+default-features = false
+
+[dependencies.tokio]
+version = "1"
+features = ["io-util"]
+optional = true
+default-features = false
+
+[dependencies.tokio-stream]
+version = "0.1"
+optional = true
+
+[dev-dependencies]
+anyhow = "1"
+env_logger = "0.11"
+
+[dev-dependencies.tokio]
+version = "1"
+features = ["rt", "rt-multi-thread", "macros", "fs"]
+
+[dev-dependencies.uuid]
+version = "1"
+features = ["v4"]
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("with-async-std"))'] }

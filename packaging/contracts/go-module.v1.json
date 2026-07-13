@@ -1,0 +1,23 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "go-module-v1",
+  "formats": ["zip"],
+  "allow": ["github.com/CIGAR/cigar/sdk/go@v0.1.0/**"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/vendor/**", "**/testdata/private/**"],
+  "required": [
+    "github.com/CIGAR/cigar/sdk/go@v0.1.0/go.mod", "github.com/CIGAR/cigar/sdk/go@v0.1.0/README.md",
+    "github.com/CIGAR/cigar/sdk/go@v0.1.0/LICENSE", "github.com/CIGAR/cigar/sdk/go@v0.1.0/NOTICE",
+    "github.com/CIGAR/cigar/sdk/go@v0.1.0/release.json"
+  ],
+  "required_patterns": ["github.com/CIGAR/cigar/sdk/go@v0.1.0/*.go"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "github.com/CIGAR/cigar/sdk/go@v0.1.0/release.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "github.com/CIGAR/cigar/sdk/go@v0.1.0/release.json", "format": "json", "json_pointer": "/context_abi"}
+}

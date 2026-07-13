@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextDelta",
+  "description": "Deterministic block delta between two bundle identities.",
+  "type": "object",
+  "properties": {
+    "added_blocks": {
+      "description": "Sorted unique blocks added or replaced.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContextBlock"
+      },
+      "maxItems": 10000
+    },
+    "base_bundle_id": {
+      "description": "Required provider-present base bundle.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "removed_block_ids": {
+      "description": "Sorted unique block identities removed from the base.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "resulting_tokens": {
+      "description": "Exact token count after applying the delta.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "schema_version": {
+      "description": "Must be `cigar.context-delta.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "target_bundle_id": {
+      "description": "Resulting target bundle.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "base_bundle_id",
+    "target_bundle_id",
+    "added_blocks",
+    "removed_block_ids",
+    "resulting_tokens"
+  ],
+  "$defs": {
+    "ContextBlock": {
+      "description": "One packed, provenance-complete semantic block.",
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "description": "Content-derived block identity.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "content_digest": {
+          "description": "Exact digest of rendered block content.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "lane": {
+          "description": "Destination lane.",
+          "$ref": "#/$defs/LaneKind"
+        },
+        "provenance": {
+          "description": "Sorted unique catalog versions that prove provenance.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 68,
+            "minLength": 68,
+            "pattern": "^1220[0-9a-f]{64}$"
+          },
+          "maxItems": 10000,
+          "minItems": 1
+        },
+        "representation": {
+          "description": "Representation kind.",
+          "$ref": "#/$defs/RepresentationKind"
+        },
+        "token_count": {
+          "description": "Exact physical tokens under the target tokenizer.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "transform_receipt": {
+          "description": "Evidence receipt for a non-exact transform.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "lane",
+        "representation",
+        "content_digest",
+        "token_count",
+        "provenance"
+      ]
+    },
+    "LaneKind": {
+      "description": "Standard deterministic context lanes.",
+      "oneOf": [
+        {
+          "description": "Non-bypassable rules and instructions.",
+          "type": "string",
+          "const": "rules"
+        },
+        {
+          "description": "Current task statement and exact constraints.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Source, documentation, and verification evidence.",
+          "type": "string",
+          "const": "evidence"
+        },
+        {
+          "description": "Prior decisions and relevant history.",
+          "type": "string",
+          "const": "history"
+        },
+        {
+          "description": "Tool contracts and capability descriptions.",
+          "type": "string",
+          "const": "tools"
+        }
+      ]
+    },
+    "RepresentationKind": {
+      "description": "Evidence-carrying representation selected for one context block.",
+      "oneOf": [
+        {
+          "description": "Exact source content.",
+          "type": "string",
+          "const": "exact"
+        },
+        {
+          "description": "Deterministically extracted source span.",
+          "type": "string",
+          "const": "extracted"
+        },
+        {
+          "description": "Evidence-backed deterministic summary.",
+          "type": "string",
+          "const": "summarized"
+        },
+        {
+          "description": "Redacted marker with no protected content.",
+          "type": "string",
+          "const": "redacted"
+        }
+      ]
+    }
+  }
+}

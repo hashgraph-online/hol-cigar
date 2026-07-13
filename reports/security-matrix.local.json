@@ -1,0 +1,190 @@
+{
+  "cases": [
+    {
+      "canary_scan": "passed",
+      "command_sha256": "a1b2798479dbf91848b61e9a85f4a38d766412d2b82667998f3e06d418663db2",
+      "duration_ms": 2207,
+      "exit_code": 0,
+      "id": "SEC-API-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 2789,
+        "sha256": "39a8e66024832cdafa511679b2e8bc61ecfe83531b30d2994fb186b760bc3097"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "3aae6034f5ece56ebce34680f846c33da297d253a212755c811fd0b1d6353ad7",
+      "duration_ms": 6949,
+      "exit_code": 0,
+      "id": "SEC-CATALOG-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 4634,
+        "sha256": "59457e8343b050a00711944851d5b6d723d797baa94ae4fc5e5dd865a5645fcb"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "a42a0de8f196575f9981382586a2850b3d19dd70caea04b56cc2a484fe016f6a",
+      "duration_ms": 22738,
+      "exit_code": 100,
+      "failure_kind": "nonzero-exit",
+      "id": "SEC-CLI-001",
+      "status": "failed",
+      "stderr": {
+        "bytes": 7025,
+        "sha256": "f9dd702c6605f9384dbbe8e072715b88d6e7ad18bf5dd404ce4e3dc4aa473a00"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "9ef9707d1adf73ca53cc0bd25f4fd22f1994354aeacd321e0606a299d6fec0ef",
+      "duration_ms": 22027,
+      "exit_code": 0,
+      "id": "SEC-DAEMON-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 18629,
+        "sha256": "cd22e9fe0ddeffebc1b6daa7f62834d397c70c44136627588197d6f8e71e9cc8"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "0503c6abd0735c775f5285bf093b7d86eb4709d5b995d51f2af9187a1b77b416",
+      "duration_ms": 4540,
+      "exit_code": 0,
+      "id": "SEC-EFFECT-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 3334,
+        "sha256": "fe53353b64af7c7e689b815268b42571a0aeb513787067d9832ee78096692fa5"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "376038f139f706f5526be17a2f3ef1b4638232e69c700a16c9071ccc4d9c27c4",
+      "duration_ms": 10763,
+      "exit_code": 0,
+      "id": "SEC-EXTENSION-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 4411,
+        "sha256": "edcc152a2f738144f2ff5fec7f121e936a6516b61445813075090bee36db6307"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "69a1282d553ffa573e7445345cee18a58cdaa5cab6384f3f3f7ceb981a9f59ca",
+      "duration_ms": 7078,
+      "exit_code": 0,
+      "id": "SEC-POLICY-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 2266,
+        "sha256": "e624b57febfd17bfa91a7e7099b32d2cf5c3e8f2d5367cb60a91a61533805081"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "a4964fdfadf1dce2a639b59cce57752dc86ea176e99eae05827fbcfc246c5b27",
+      "duration_ms": 6103,
+      "exit_code": 0,
+      "id": "SEC-REPLAY-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 1728,
+        "sha256": "49bf4f9df47f81814cb6c9cafbc63904f41e3ce5b1351c8089af0d6f7bce610a"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "a92e81bffc58bb33f8c9ce371b6cfd5d1303523547ad0ace766592c0e268820c",
+      "duration_ms": 7482,
+      "exit_code": 0,
+      "id": "SEC-REPLAY-002",
+      "status": "passed",
+      "stderr": {
+        "bytes": 575,
+        "sha256": "ba77280e208dca8148b800ed88f44019f8ea6ddaf6515082d8deae230fb00123"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "canary_scan": "passed",
+      "command_sha256": "d067c3dfb7d0772a01f717404435eb298082fc71df74614d5e6cb0d5c1231483",
+      "duration_ms": 19725,
+      "exit_code": 100,
+      "failure_kind": "nonzero-exit",
+      "id": "SEC-STORE-001",
+      "status": "failed",
+      "stderr": {
+        "bytes": 7085,
+        "sha256": "b20b66d43f4b9a3a6394823626136ea9cb8be39a3b8b3918a1b1fa2008659cef"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "failed_case_count": 2,
+  "finished_at": "2026-07-13T14:34:00.868Z",
+  "host": {
+    "architecture": "arm64",
+    "platform": "macos",
+    "python": "3.14.6"
+  },
+  "matrix": {
+    "path": "tests/security/matrix-v1.json",
+    "sha256": "c9c796f779995435484f609ab9f3ef1df3bbe7673b12ee5659f2c8d059cf21b3"
+  },
+  "passed_case_count": 8,
+  "profile": "local",
+  "schema_version": "cigar.test-matrix-result.v1",
+  "selected_case_count": 10,
+  "source": {
+    "clean": false,
+    "committed": false,
+    "kind": "workspace",
+    "revision": null
+  },
+  "started_at": "2026-07-13T14:32:11.253Z",
+  "status": "failed",
+  "suite": "security"
+}

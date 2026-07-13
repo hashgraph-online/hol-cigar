@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PlanLane",
+  "description": "One standard lane in a deterministic context plan.",
+  "type": "object",
+  "properties": {
+    "budget_tokens": {
+      "description": "Exact token budget for this lane.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "candidate_versions": {
+      "description": "Sorted unique candidate semantic versions assigned to the lane.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "kind": {
+      "description": "Lane kind.",
+      "$ref": "#/$defs/LaneKind"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "budget_tokens",
+    "candidate_versions"
+  ],
+  "$defs": {
+    "LaneKind": {
+      "description": "Standard deterministic context lanes.",
+      "oneOf": [
+        {
+          "description": "Non-bypassable rules and instructions.",
+          "type": "string",
+          "const": "rules"
+        },
+        {
+          "description": "Current task statement and exact constraints.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Source, documentation, and verification evidence.",
+          "type": "string",
+          "const": "evidence"
+        },
+        {
+          "description": "Prior decisions and relevant history.",
+          "type": "string",
+          "const": "history"
+        },
+        {
+          "description": "Tool contracts and capability descriptions.",
+          "type": "string",
+          "const": "tools"
+        }
+      ]
+    }
+  }
+}

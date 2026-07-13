@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/package-contract.v1.schema.json",
+  "title": "CIGAR package contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "formats", "allow", "deny", "required", "symlinks", "line_endings", "modes", "max_entries", "max_member_bytes", "max_total_bytes", "content_scan", "content_scan_exemptions"],
+  "properties": {
+    "schema_version": {"const": "cigar.package-contract.v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*-v1$"},
+    "formats": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["tar", "tar.gz", "zip", "wheel"]}},
+    "allow": {"$ref": "#/$defs/patterns"},
+    "deny": {"$ref": "#/$defs/patterns"},
+    "required": {"$ref": "#/$defs/patterns"},
+    "required_any": {"type": "array", "items": {"$ref": "#/$defs/patterns"}},
+    "required_patterns": {"$ref": "#/$defs/patterns"},
+    "symlinks": {"const": "forbid"},
+    "line_endings": {"const": "lf"},
+    "modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["0644", "0755"]}},
+    "max_entries": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "max_member_bytes": {"type": "integer", "minimum": 1},
+    "max_total_bytes": {"type": "integer", "minimum": 1},
+    "max_layer_uncompressed_bytes": {"type": "integer", "minimum": 1},
+    "content_scan": {"const": true},
+    "content_scan_exemptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "reason"],
+        "properties": {"pattern": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}}
+      }
+    },
+    "checksum_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "scope"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "scope": {"const": "all-payload-files"}
+      }
+    },
+    "version_binding": {"$ref": "#/$defs/binding"},
+    "abi_binding": {"$ref": "#/$defs/binding"}
+  },
+  "$defs": {
+    "patterns": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_pattern", "format", "json_pointer"],
+      "properties": {
+        "path_pattern": {"type": "string", "minLength": 1},
+        "format": {"const": "json"},
+        "json_pointer": {"type": "string", "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$"}
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "plugin-archive-v1",
+  "formats": ["tar.gz", "zip"],
+  "allow": ["RELEASE-METADATA.json", ".claude-plugin/plugin.json", ".mcp.json", "README.md", "agents/**", "compatibility.json", "hooks/**", "schemas/**", "skills/**", "bin/cigar-claude-hook", "bin/cigar-claude-hook.exe", "LICENSE", "NOTICE", "SHA256SUMS"],
+  "deny": ["tests/**", "**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/*.pdb"],
+  "required_any": [["bin/cigar-claude-hook", "bin/cigar-claude-hook.exe"]],
+  "required": ["RELEASE-METADATA.json", ".claude-plugin/plugin.json", ".mcp.json", "compatibility.json", "hooks/hooks.json", "LICENSE", "NOTICE", "SHA256SUMS"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 10000,
+  "max_member_bytes": 134217728,
+  "max_total_bytes": 268435456,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "checksum_manifest": {"path": "SHA256SUMS", "scope": "all-payload-files"},
+  "version_binding": {"path_pattern": ".claude-plugin/plugin.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "compatibility.json", "format": "json", "json_pointer": "/context_abi"}
+}

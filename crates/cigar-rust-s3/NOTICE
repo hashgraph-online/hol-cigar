@@ -1,0 +1,5 @@
+cigar-rust-s3
+
+This package is a security-reviewed distribution of rust-s3 0.37.2.
+The original work is Copyright (c) 2016 Drazen Urch and is distributed under the MIT License.
+CIGAR packaging and security modifications are Copyright 2026 CIGAR contributors.

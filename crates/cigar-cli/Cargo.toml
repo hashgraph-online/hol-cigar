@@ -1,0 +1,39 @@
+[package]
+name = "cigar-cli"
+description = "CIGAR command-line interface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+cigar-api.workspace = true
+cigar-canon.workspace = true
+cigar-crypto.workspace = true
+cigar-daemon = { path = "../cigar-daemon", version = "=0.1.0" }
+cigar-effects = { path = "../cigar-effects", version = "=0.1.0" }
+cigar-policy.workspace = true
+cigar-protocol.workspace = true
+cigar-store.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["process"] }
+toml.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "cigar"
+path = "src/main.rs"

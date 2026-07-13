@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/claude-hook-fixture.v1.json",
+  "title": "CIGAR Claude Code hook fixture",
+  "type": "object",
+  "required": [
+    "session_id",
+    "transcript_path",
+    "cwd",
+    "hook_event_name"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "transcript_path": {
+      "type": "string",
+      "description": "Documented provider field accepted as opaque input and never opened by CIGAR."
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    },
+    "hook_event_name": {
+      "type": "string",
+      "enum": [
+        "SessionStart",
+        "SessionEnd",
+        "UserPromptSubmit",
+        "InstructionsLoaded",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PostToolBatch",
+        "SubagentStart",
+        "SubagentStop",
+        "TaskCreated",
+        "TaskCompleted",
+        "PreCompact",
+        "PostCompact",
+        "CwdChanged",
+        "WorktreeCreate",
+        "WorktreeRemove",
+        "Stop",
+        "StopFailure",
+        "Setup",
+        "UserPromptExpansion",
+        "PermissionRequest",
+        "PermissionDenied",
+        "Notification",
+        "MessageDisplay",
+        "TeammateIdle",
+        "ConfigChange",
+        "FileChanged",
+        "Elicitation",
+        "ElicitationResult"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

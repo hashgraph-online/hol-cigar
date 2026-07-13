@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "effect-crash-v1",
+  "fixed_seed": 20007,
+  "source_revision": "synthetic-effect-crash-v1",
+  "task": "Recover an effect after remote acceptance and local receipt loss without an unsafe retry.",
+  "critical_context": ["effect/prepared-intent", "effect/unknown-state", "connector/reconcile-contract"],
+  "prohibited_context": ["effect/automatic-non-idempotent-retry"],
+  "expected_outcome": ["unknown explicit", "one logical mutation", "reconciliation evidence retained"],
+  "canary": "BENCH_CANARY_EFFECT_D39726"
+}

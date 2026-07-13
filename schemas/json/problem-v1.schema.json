@@ -1,0 +1,406 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Problem",
+  "description": "Safe bounded RFC 9457-style problem record.",
+  "type": "object",
+  "properties": {
+    "code": {
+      "description": "Stable symbolic and numeric error code.",
+      "$ref": "#/$defs/ErrorCode"
+    },
+    "correlation_id": {
+      "description": "Correlation identity for privileged internal logs.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "details": {
+      "description": "Typed bounded safe details permitted by this error schema.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "http_status": {
+      "description": "HTTP status mapped from the error catalog.",
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0
+    },
+    "message": {
+      "description": "Safe bounded message with no protected identifiers.",
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1
+    },
+    "remediation": {
+      "description": "Safe bounded remediation guidance.",
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1
+    },
+    "retry": {
+      "description": "Stable retry guidance.",
+      "$ref": "#/$defs/RetryClass"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.problem.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "code",
+    "http_status",
+    "retry",
+    "message",
+    "remediation",
+    "correlation_id",
+    "details"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ErrorCode": {
+      "description": "Stable closed public error codes. Numeric and transport mappings are frozen in `spec/errors`.",
+      "oneOf": [
+        {
+          "description": "Caller input is structurally invalid.",
+          "type": "string",
+          "const": "INVALID_ARGUMENT"
+        },
+        {
+          "description": "A named resource limit was exceeded.",
+          "type": "string",
+          "const": "LIMIT_EXCEEDED"
+        },
+        {
+          "description": "Schema major or form is unsupported.",
+          "type": "string",
+          "const": "UNSUPPORTED_SCHEMA"
+        },
+        {
+          "description": "Authenticated principal is unknown.",
+          "type": "string",
+          "const": "UNKNOWN_PRINCIPAL"
+        },
+        {
+          "description": "Capability is malformed or insufficient.",
+          "type": "string",
+          "const": "INVALID_CAPABILITY"
+        },
+        {
+          "description": "Capability is expired.",
+          "type": "string",
+          "const": "CAPABILITY_EXPIRED"
+        },
+        {
+          "description": "Source connector is unavailable.",
+          "type": "string",
+          "const": "SOURCE_UNAVAILABLE"
+        },
+        {
+          "description": "Source snapshot is incomplete.",
+          "type": "string",
+          "const": "SNAPSHOT_INCOMPLETE"
+        },
+        {
+          "description": "Integrity verification failed.",
+          "type": "string",
+          "const": "INTEGRITY_FAILURE"
+        },
+        {
+          "description": "Index watermark is stale.",
+          "type": "string",
+          "const": "INDEX_STALE"
+        },
+        {
+          "description": "Required index is unavailable.",
+          "type": "string",
+          "const": "INDEX_UNAVAILABLE"
+        },
+        {
+          "description": "Requested consistency could not be satisfied.",
+          "type": "string",
+          "const": "CONSISTENCY_UNSATISFIED"
+        },
+        {
+          "description": "Policy denied the operation.",
+          "type": "string",
+          "const": "POLICY_DENIED"
+        },
+        {
+          "description": "Processor constraints denied the operation.",
+          "type": "string",
+          "const": "PROCESSOR_DENIED"
+        },
+        {
+          "description": "Instruction authority was insufficient.",
+          "type": "string",
+          "const": "INSTRUCTION_AUTHORITY_DENIED"
+        },
+        {
+          "description": "Required budget cannot be satisfied.",
+          "type": "string",
+          "const": "BUDGET_UNSATISFIABLE"
+        },
+        {
+          "description": "Required authorized context is missing.",
+          "type": "string",
+          "const": "MISSING_REQUIRED_CONTEXT"
+        },
+        {
+          "description": "Critical semantic conflict remains unresolved.",
+          "type": "string",
+          "const": "UNRESOLVED_CRITICAL_CONFLICT"
+        },
+        {
+          "description": "Delta base does not match provider-present state.",
+          "type": "string",
+          "const": "DELTA_BASE_MISMATCH"
+        },
+        {
+          "description": "Bundle was invalidated.",
+          "type": "string",
+          "const": "BUNDLE_INVALIDATED"
+        },
+        {
+          "description": "Optimistic revision does not match.",
+          "type": "string",
+          "const": "REVISION_CONFLICT"
+        },
+        {
+          "description": "Handoff expired.",
+          "type": "string",
+          "const": "HANDOFF_EXPIRED"
+        },
+        {
+          "description": "Handoff recipient does not match.",
+          "type": "string",
+          "const": "HANDOFF_RECIPIENT_MISMATCH"
+        },
+        {
+          "description": "Effect requires approval.",
+          "type": "string",
+          "const": "APPROVAL_REQUIRED"
+        },
+        {
+          "description": "Approval no longer binds current semantics or time.",
+          "type": "string",
+          "const": "APPROVAL_STALE"
+        },
+        {
+          "description": "External effect outcome is unknown.",
+          "type": "string",
+          "const": "EFFECT_UNKNOWN"
+        },
+        {
+          "description": "Effect cannot be safely retried.",
+          "type": "string",
+          "const": "UNSAFE_RETRY"
+        },
+        {
+          "description": "Replay lacks required dependencies.",
+          "type": "string",
+          "const": "REPLAY_INCOMPLETE"
+        },
+        {
+          "description": "Named dependency is unavailable.",
+          "type": "string",
+          "const": "DEPENDENCY_UNAVAILABLE"
+        },
+        {
+          "description": "Live operation requires explicit new authorization.",
+          "type": "string",
+          "const": "LIVE_AUTHORIZATION_REQUIRED"
+        },
+        {
+          "description": "Request rate limit was reached.",
+          "type": "string",
+          "const": "RATE_LIMITED"
+        },
+        {
+          "description": "Request deadline elapsed.",
+          "type": "string",
+          "const": "DEADLINE_EXCEEDED"
+        },
+        {
+          "description": "Dependency is degraded.",
+          "type": "string",
+          "const": "DEPENDENCY_DEGRADED"
+        },
+        {
+          "description": "Internal error hidden behind a correlation ID.",
+          "type": "string",
+          "const": "INTERNAL"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "RetryClass": {
+      "description": "Stable retry guidance independent of transport.",
+      "oneOf": [
+        {
+          "description": "Repeating the same request is not expected to help.",
+          "type": "string",
+          "const": "never"
+        },
+        {
+          "description": "Same semantic request is safe to repeat immediately.",
+          "type": "string",
+          "const": "safe"
+        },
+        {
+          "description": "Retry only after bounded backoff.",
+          "type": "string",
+          "const": "after_backoff"
+        },
+        {
+          "description": "Retry only after current policy/capability authorization.",
+          "type": "string",
+          "const": "after_reauthorization"
+        },
+        {
+          "description": "Retry only after reconciliation proves safety.",
+          "type": "string",
+          "const": "after_reconciliation"
+        }
+      ]
+    }
+  }
+}

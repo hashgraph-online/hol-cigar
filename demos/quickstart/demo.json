@@ -1,0 +1,44 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "offline-context-compiler",
+  "title": "Offline deterministic context compiler",
+  "fixed_seed": 41001,
+  "fixture": "fixture.json",
+  "fixture_digest": "12204665f7c33908d3b36daea2c43c43e9e34891f37351e22a1f398bc365e7fd9ab8",
+  "driver": "driver.py",
+  "driver_digest": "1220a63f890b7127e119e49b31f31af4814adbda8074e9ff143d8db7290507aa94e3",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "generated-120-file-repository", "network-disabled", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "bundle-digest-deterministic", "index-watermark-strong", "superseded-decision-absent",
+    "selected-provenance-complete", "delta-roundtrip-exact", "physical-input-reduction-at-least-40-percent"
+  ],
+  "checks": [
+    {
+      "check_id": "daemon-real-compile-artifacts",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-daemon", "dry_run_does_not_mutate_and_restart_serves_real_compile_artifacts"],
+      "timeout_seconds": 900,
+      "minimum_passed_tests": 1,
+      "assertions": ["index-watermark-strong", "superseded-decision-absent", "selected-provenance-complete", "physical-input-reduction-at-least-40-percent"]
+    },
+    {
+      "check_id": "compiler-permutation-identity",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-compiler", "--test", "compiler", "golden_bundle_permutation_and_parallel_execution_are_identical"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["bundle-digest-deterministic"]
+    },
+    {
+      "check_id": "compiler-delta-roundtrip",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-compiler", "--test", "materialization_delta_cache", "delta_round_trip_rejects_wrong_base_tamper_and_target_change"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["delta-roundtrip-exact"]
+    }
+  ],
+  "teardown": ["remove-isolated-home", "remove-generated-repository", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario offline-context-compiler --output-dir reports/demos",
+  "canary_ids": ["offline-context"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

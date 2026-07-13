@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/benchmark-event-v1.json",
+  "title": "CIGARBench raw paired event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "event_id", "run_id", "pair_id", "dataset_id", "task_id",
+    "stratum", "treatment", "baseline_id", "order", "sample_index", "warmup",
+    "evidence_class", "pins", "metrics", "environment_digest", "assignment_digest", "seed_commitment", "attestation"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-event.v1"},
+    "event_id": {"$ref": "#/$defs/multihash"},
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "pair_id": {"$ref": "#/$defs/identifier"},
+    "dataset_id": {"$ref": "#/$defs/identifier"},
+    "task_id": {"$ref": "#/$defs/identifier"},
+    "stratum": {"$ref": "#/$defs/identifier"},
+    "treatment": {"enum": ["baseline", "cigar"]},
+    "baseline_id": {"$ref": "#/$defs/identifier"},
+    "order": {"enum": [1, 2]},
+    "sample_index": {"type": "integer", "minimum": 0},
+    "warmup": {"type": "boolean"},
+    "evidence_class": {"enum": ["harness_smoke", "qualification"]},
+    "environment_digest": {"$ref": "#/$defs/multihash"},
+    "assignment_digest": {"$ref": "#/$defs/multihash"},
+    "seed_commitment": {"$ref": "#/$defs/multihash"},
+    "attestation": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key_id", "mac"],
+          "properties": {
+            "key_id": {"$ref": "#/$defs/identifier"},
+            "mac": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "runtime", "tools", "repository", "output_budget", "sampling", "tokenizer", "source", "adapter", "compiler", "consumer_artifact"],
+      "properties": {
+        "model": {"$ref": "#/$defs/identifier"},
+        "runtime": {"$ref": "#/$defs/identifier"},
+        "tools": {"$ref": "#/$defs/identifier"},
+        "repository": {"$ref": "#/$defs/identifier"},
+        "output_budget": {"type": "integer", "minimum": 1},
+        "sampling": {"$ref": "#/$defs/identifier"},
+        "tokenizer": {"$ref": "#/$defs/identifier"},
+        "source": {"$ref": "#/$defs/identifier"},
+        "adapter": {"$ref": "#/$defs/identifier"},
+        "compiler": {"$ref": "#/$defs/identifier"},
+        "consumer_artifact": {"$ref": "#/$defs/multihash"}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "physical_input_tokens", "cache_read_tokens", "cache_write_tokens", "verified_success",
+        "critical_recall", "context_precision", "prohibited_context_rate", "context_caused_harm",
+        "stale_harm", "rework_count", "latency_ms", "intervention_count", "cost",
+        "unauthorized_context_count", "calibration_variance"
+      ],
+      "properties": {
+        "physical_input_tokens": {"type": "integer", "minimum": 0},
+        "cache_read_tokens": {"type": "integer", "minimum": 0},
+        "cache_write_tokens": {"type": "integer", "minimum": 0},
+        "verified_success": {"type": "boolean"},
+        "critical_recall": {"$ref": "#/$defs/ratio"},
+        "context_precision": {"$ref": "#/$defs/ratio"},
+        "prohibited_context_rate": {"$ref": "#/$defs/ratio"},
+        "context_caused_harm": {"type": "boolean"},
+        "stale_harm": {"$ref": "#/$defs/ratio"},
+        "rework_count": {"type": "integer", "minimum": 0},
+        "latency_ms": {"type": "number", "minimum": 0},
+        "intervention_count": {"type": "integer", "minimum": 0},
+        "cost": {"type": "number", "minimum": 0},
+        "unauthorized_context_count": {"type": "integer", "minimum": 0},
+        "calibration_variance": {"$ref": "#/$defs/ratio"}
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "multihash": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}

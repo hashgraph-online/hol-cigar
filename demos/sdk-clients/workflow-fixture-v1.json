@@ -1,0 +1,155 @@
+{
+  "schema_version": "cigar.sdk-recorded-workflow.v1",
+  "expected_operations": [
+    "discoverSources",
+    "ingestCatalog",
+    "createContextPlan",
+    "compileContextBundle",
+    "getContextBundleManifest"
+  ],
+  "expected_bundle_id": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067",
+  "expected_manifest_id": "12209331ff79dd161de4760fb85a69885c123ff60aa511835a54f9f8467a50898ce3",
+  "expected_contract_digest": "12202fba1534ccaabc58ee1b8a9a550256385bb1b1741d05e0b4b12ed7922296390e",
+  "operations": [
+    {
+      "operation_id": "discoverSources",
+      "idempotency_key": null,
+      "path_parameters": [],
+      "request": {
+        "source_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7801",
+        "include_paths": [
+          "c2RrLXdvcmtmbG93LWZpeHR1cmUubWQ"
+        ]
+      },
+      "request_cbor_base64url": "omlzb3VyY2VfaWR4JDAxODkwZjQ3LThlN2QtN2I0Mi1hMWQyLTNjNGQ1ZTZmNzgwMW1pbmNsdWRlX3BhdGhzgXgfYzJSckxYZHZjbXRtYkc5M0xXWnBlSFIxY21VdWJXUQ",
+      "response": {
+        "source_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7801",
+        "included_count": 1,
+        "included_bytes": 43,
+        "plan_digest": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "response_cbor_base64url": "pGlzb3VyY2VfaWR4JDAxODkwZjQ3LThlN2QtN2I0Mi1hMWQyLTNjNGQ1ZTZmNzgwMWtwbGFuX2RpZ2VzdHhEMTIyMGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJuaW5jbHVkZWRfYnl0ZXMYK25pbmNsdWRlZF9jb3VudAE"
+    },
+    {
+      "operation_id": "ingestCatalog",
+      "idempotency_key": "sdk-workflow-ingest-v1",
+      "path_parameters": [],
+      "request": {
+        "source_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7801",
+        "plan_digest": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "request_cbor_base64url": "omlzb3VyY2VfaWR4JDAxODkwZjQ3LThlN2QtN2I0Mi1hMWQyLTNjNGQ1ZTZmNzgwMWtwbGFuX2RpZ2VzdHhEMTIyMGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI",
+      "response": {
+        "revision": 1,
+        "snapshot_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7803",
+        "published_atoms": 1,
+        "tombstoned_atoms": 0,
+        "publication_digest": "1220cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "response_cbor_base64url": "pWhyZXZpc2lvbgFrc25hcHNob3RfaWR4JDAxODkwZjQ3LThlN2QtN2I0Mi1hMWQyLTNjNGQ1ZTZmNzgwM29wdWJsaXNoZWRfYXRvbXMBcHRvbWJzdG9uZWRfYXRvbXMAcnB1YmxpY2F0aW9uX2RpZ2VzdHhEMTIyMGNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M"
+    },
+    {
+      "operation_id": "createContextPlan",
+      "idempotency_key": "sdk-workflow-plan-v1",
+      "path_parameters": [],
+      "request": {
+        "contract": {
+          "schema_version": "cigar.context-contract.v1",
+          "job_goal": "Verify the shared SDK workflow fixture",
+          "purpose": "coding",
+          "operation_class": "code_change",
+          "principal_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7896",
+          "project_ids": [
+            "01890f47-8e7d-7b42-a1d2-3c4d5e6f7897"
+          ],
+          "requirements": [],
+          "budget": {
+            "total_input_tokens": 2000,
+            "output_reserve_tokens": 1000,
+            "lane_input_tokens": {
+              "rules": 1000,
+              "task": 1000
+            }
+          },
+          "target": {
+            "provider": "fixture",
+            "model_family": "fixture-model",
+            "tokenizer_fingerprint": "12207777777777777777777777777777777777777777777777777777777777777777",
+            "materializer_fingerprint": "12208888888888888888888888888888888888888888888888888888888888888888",
+            "max_context_tokens": 3000
+          },
+          "consistency": "strong",
+          "extensions": {}
+        }
+      },
+      "request_cbor_base64url": "oWhjb250cmFjdKtmYnVkZ2V0o3FsYW5lX2lucHV0X3Rva2Vuc6JkdGFzaxkD6GVydWxlcxkD6HJ0b3RhbF9pbnB1dF90b2tlbnMZB9B1b3V0cHV0X3Jlc2VydmVfdG9rZW5zGQPoZnRhcmdldKVocHJvdmlkZXJnZml4dHVyZWxtb2RlbF9mYW1pbHltZml4dHVyZS1tb2RlbHJtYXhfY29udGV4dF90b2tlbnMZC7h1dG9rZW5pemVyX2ZpbmdlcnByaW50eEQxMjIwNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N3gYbWF0ZXJpYWxpemVyX2ZpbmdlcnByaW50eEQxMjIwODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4OGdwdXJwb3NlZmNvZGluZ2hqb2JfZ29hbHgmVmVyaWZ5IHRoZSBzaGFyZWQgU0RLIHdvcmtmbG93IGZpeHR1cmVqZXh0ZW5zaW9uc6BrY29uc2lzdGVuY3lmc3Ryb25na3Byb2plY3RfaWRzgXgkMDE4OTBmNDctOGU3ZC03YjQyLWExZDItM2M0ZDVlNmY3ODk3bHByaW5jaXBhbF9pZHgkMDE4OTBmNDctOGU3ZC03YjQyLWExZDItM2M0ZDVlNmY3ODk2bHJlcXVpcmVtZW50c4Buc2NoZW1hX3ZlcnNpb254GWNpZ2FyLmNvbnRleHQtY29udHJhY3QudjFvb3BlcmF0aW9uX2NsYXNza2NvZGVfY2hhbmdl",
+      "response": {
+        "plan": {
+          "schema_version": "cigar.context-plan.v1",
+          "plan_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7802",
+          "contract_digest": "12202fba1534ccaabc58ee1b8a9a550256385bb1b1741d05e0b4b12ed7922296390e",
+          "catalog_watermark": "1220dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "total_input_tokens": 2000,
+          "lanes": [
+            {
+              "kind": "rules",
+              "budget_tokens": 1000,
+              "candidate_versions": []
+            },
+            {
+              "kind": "task",
+              "budget_tokens": 1000,
+              "candidate_versions": []
+            }
+          ],
+          "dispositions": [],
+          "extensions": {}
+        },
+        "bundle_id": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067",
+        "manifest_digest": "12209331ff79dd161de4760fb85a69885c123ff60aa511835a54f9f8467a50898ce3"
+      },
+      "response_cbor_base64url": "o2RwbGFuqGVsYW5lc4KjZGtpbmRlcnVsZXNtYnVkZ2V0X3Rva2VucxkD6HJjYW5kaWRhdGVfdmVyc2lvbnOAo2RraW5kZHRhc2ttYnVkZ2V0X3Rva2VucxkD6HJjYW5kaWRhdGVfdmVyc2lvbnOAZ3BsYW5faWR4JDAxODkwZjQ3LThlN2QtN2I0Mi1hMWQyLTNjNGQ1ZTZmNzgwMmpleHRlbnNpb25zoGxkaXNwb3NpdGlvbnOAbnNjaGVtYV92ZXJzaW9udWNpZ2FyLmNvbnRleHQtcGxhbi52MW9jb250cmFjdF9kaWdlc3R4RDEyMjAyZmJhMTUzNGNjYWFiYzU4ZWUxYjhhOWE1NTAyNTYzODViYjFiMTc0MWQwNWUwYjRiMTJlZDc5MjIyOTYzOTBlcWNhdGFsb2dfd2F0ZXJtYXJreEQxMjIwZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZHJ0b3RhbF9pbnB1dF90b2tlbnMZB9BpYnVuZGxlX2lkeEQxMjIwNmZmMTg2ZmEwOTk2OWExNTE3MzNjY2Q0NjQ2NjdkODFlNThjZjBmYjlhYzk3NjFiYjlmNjcxNTlhMDFiMDA2N29tYW5pZmVzdF9kaWdlc3R4RDEyMjA5MzMxZmY3OWRkMTYxZGU0NzYwZmI4NWE2OTg4NWMxMjNmZjYwYWE1MTE4MzVhNTRmOWY4NDY3YTUwODk4Y2Uz"
+    },
+    {
+      "operation_id": "compileContextBundle",
+      "idempotency_key": "sdk-workflow-compile-v1",
+      "path_parameters": [],
+      "request": {
+        "plan_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7802"
+      },
+      "request_cbor_base64url": "oWdwbGFuX2lkeCQwMTg5MGY0Ny04ZTdkLTdiNDItYTFkMi0zYzRkNWU2Zjc4MDI",
+      "response": {
+        "schema_version": "cigar.context-bundle.v1",
+        "bundle_id": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067",
+        "contract_digest": "12202fba1534ccaabc58ee1b8a9a550256385bb1b1741d05e0b4b12ed7922296390e",
+        "manifest_digest": "12209331ff79dd161de4760fb85a69885c123ff60aa511835a54f9f8467a50898ce3",
+        "blocks": [],
+        "total_tokens": 0,
+        "extensions": {}
+      },
+      "response_cbor_base64url": "p2ZibG9ja3OAaWJ1bmRsZV9pZHhEMTIyMDZmZjE4NmZhMDk5NjlhMTUxNzMzY2NkNDY0NjY3ZDgxZTU4Y2YwZmI5YWM5NzYxYmI5ZjY3MTU5YTAxYjAwNjdqZXh0ZW5zaW9uc6BsdG90YWxfdG9rZW5zAG5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWJ1bmRsZS52MW9jb250cmFjdF9kaWdlc3R4RDEyMjAyZmJhMTUzNGNjYWFiYzU4ZWUxYjhhOWE1NTAyNTYzODViYjFiMTc0MWQwNWUwYjRiMTJlZDc5MjIyOTYzOTBlb21hbmlmZXN0X2RpZ2VzdHhEMTIyMDkzMzFmZjc5ZGQxNjFkZTQ3NjBmYjg1YTY5ODg1YzEyM2ZmNjBhYTUxMTgzNWE1NGY5Zjg0NjdhNTA4OThjZTM"
+    },
+    {
+      "operation_id": "getContextBundleManifest",
+      "idempotency_key": null,
+      "path_parameters": [
+        {
+          "name": "bundle_id",
+          "value": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067"
+        }
+      ],
+      "request": {
+        "bundle_id": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067"
+      },
+      "request_cbor_base64url": "oWlidW5kbGVfaWR4RDEyMjA2ZmYxODZmYTA5OTY5YTE1MTczM2NjZDQ2NDY2N2Q4MWU1OGNmMGZiOWFjOTc2MWJiOWY2NzE1OWEwMWIwMDY3",
+      "response": {
+        "schema_version": "cigar.selection-manifest.v1",
+        "manifest_id": "12209331ff79dd161de4760fb85a69885c123ff60aa511835a54f9f8467a50898ce3",
+        "contract_digest": "12202fba1534ccaabc58ee1b8a9a550256385bb1b1741d05e0b4b12ed7922296390e",
+        "entries": [],
+        "extensions": {}
+      },
+      "response_cbor_base64url": "pWdlbnRyaWVzgGpleHRlbnNpb25zoGttYW5pZmVzdF9pZHhEMTIyMDkzMzFmZjc5ZGQxNjFkZTQ3NjBmYjg1YTY5ODg1YzEyM2ZmNjBhYTUxMTgzNWE1NGY5Zjg0NjdhNTA4OThjZTNuc2NoZW1hX3ZlcnNpb254G2NpZ2FyLnNlbGVjdGlvbi1tYW5pZmVzdC52MW9jb250cmFjdF9kaWdlc3R4RDEyMjAyZmJhMTUzNGNjYWFiYzU4ZWUxYjhhOWE1NTAyNTYzODViYjFiMTc0MWQwNWUwYjRiMTJlZDc5MjIyOTYzOTBl"
+    }
+  ]
+}

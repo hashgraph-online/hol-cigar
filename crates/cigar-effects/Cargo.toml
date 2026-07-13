@@ -1,0 +1,31 @@
+[package]
+name = "cigar-effects"
+description = "Intent-first CIGAR effect journal and connector state machines"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+cigar-canon.workspace = true
+cigar-protocol.workspace = true
+cigar-store.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,22 @@
+{
+  "schema_version": "cigar.third-party-license-policy.v1",
+  "project_license": "Apache-2.0",
+  "project_license_file": "packaging/licenses/Apache-2.0.txt",
+  "notice_file": "NOTICE",
+  "accepted_expressions": [
+    "0BSD", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-1-Clause", "BSD-2-Clause", "BSD-3-Clause",
+    "BSL-1.0", "CC0-1.0", "CDLA-Permissive-2.0", "ISC", "MIT", "MIT-0", "MPL-2.0", "OpenSSL",
+    "LLVM-exception", "PSF-2.0", "Unicode-3.0", "Unicode-DFS-2016", "Unlicense", "Zlib"
+  ],
+  "review_required": [
+    "AGPL-1.0-only", "AGPL-1.0-or-later", "AGPL-3.0-only", "AGPL-3.0-or-later",
+    "BUSL-1.1", "Commons-Clause", "GPL-1.0-only", "GPL-2.0-only", "GPL-3.0-only",
+    "LGPL-2.0-only", "LGPL-2.1-only", "LGPL-3.0-only", "SSPL-1.0", "unknown", "unlicensed"
+  ],
+  "requirements": [
+    "Every final artifact carries the project license and NOTICE.",
+    "An exact dependency inventory is generated from locked inputs and reconciled with the final artifact.",
+    "License expressions outside accepted_expressions require a recorded legal review.",
+    "Missing or ambiguous license metadata fails release verification."
+  ]
+}

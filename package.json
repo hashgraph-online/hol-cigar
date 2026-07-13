@@ -1,0 +1,9 @@
+{
+  "name": "cigar-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": "10.34.5"
+  }
+}

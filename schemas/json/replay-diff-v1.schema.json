@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReplayDiff",
+  "description": "Separated semantic and observational replay differences.",
+  "type": "object",
+  "properties": {
+    "compiler_deterministic": {
+      "description": "Whether compiler determinism held independently of provider variance.",
+      "type": "boolean"
+    },
+    "components": {
+      "description": "Runtime component fingerprint comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "decision_id": {
+      "description": "Original decision identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "effect_plan": {
+      "description": "Effect-plan comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "execution_id": {
+      "description": "New replay execution identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "materialization": {
+      "description": "Materialized byte comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "observations": {
+      "description": "Provider/tool observation comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "output_claims": {
+      "description": "Output claim comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.replay-diff.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "semantic_context": {
+      "description": "Semantic context comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    },
+    "verification": {
+      "description": "Verification result comparison.",
+      "$ref": "#/$defs/DiffStatus"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "execution_id",
+    "semantic_context",
+    "materialization",
+    "components",
+    "output_claims",
+    "verification",
+    "effect_plan",
+    "observations",
+    "compiler_deterministic"
+  ],
+  "$defs": {
+    "DiffStatus": {
+      "description": "Closed comparison result for one replay dimension.",
+      "oneOf": [
+        {
+          "description": "Dimension is semantically equal.",
+          "type": "string",
+          "const": "equal"
+        },
+        {
+          "description": "Dimension differs.",
+          "type": "string",
+          "const": "different"
+        },
+        {
+          "description": "Dimension could not be compared due to incomplete evidence.",
+          "type": "string",
+          "const": "unavailable"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "docs-archive-v1",
+  "formats": ["tar.gz"],
+  "allow": [
+    "RELEASE-METADATA.json", "README.md", "LICENSE", "NOTICE", "docs/**", "packaging/artifact-matrix.v1.json",
+    "packaging/qualification-gaps.v1.json", "packaging/licenses/**", "packaging/schemas/**", "schemas/generated-manifest.json",
+    "schemas/json/**", "schemas/openapi/**", "schemas/proto/**", "sdk/README.md", "sdk/*/README.md"
+  ],
+  "deny": ["**/.DS_Store", "**/.git/**", "**/.env*", "**/*.key", "**/*.pem"],
+  "required": [
+    "RELEASE-METADATA.json", "docs/README.md", "docs/site/index.md", "NOTICE", "packaging/licenses/Apache-2.0.txt",
+    "packaging/schemas/release-trust-policy.v1.schema.json", "packaging/schemas/signature-envelope.v1.schema.json",
+    "schemas/openapi/cigar-v1.json", "schemas/proto/cigar_service.proto", "sdk/rust/README.md",
+    "sdk/typescript/README.md", "sdk/python/README.md", "sdk/go/README.md"
+  ],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644"],
+  "max_entries": 10000,
+  "max_member_bytes": 8388608,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": []
+}

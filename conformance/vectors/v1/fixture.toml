@@ -1,0 +1,44 @@
+fixture_id = "cigar-v1-conformance"
+semantic_version = "1.0.0"
+source_revision = "cigar-v1.0-conformance-2026-07-13"
+expected_snapshot_digest = "sha256:9d85b11e33dd68cd531efd993c871c26066d642a3e905c0c62383d3f775cd035"
+fixed_time = "2026-07-10T00:00:00Z"
+id_seed = "cigar-all-profiles-conformance-v1"
+random_seed = 20260710
+locale = "C"
+timezone = "UTC"
+unicode_form = "NFC"
+permitted_atoms = ["ContextContract.record.minimal", "ContextBundle.record.minimal"]
+prohibited_atoms = ["semantic.unknown_discriminant"]
+mandatory_atoms = ["ContextBundle.record.minimal"]
+stale_atoms = ["json.trailing"]
+contradicted_atoms = ["json.duplicate"]
+secret_canaries = ["synthetic-canary-core-v1"]
+expected_reason_codes = ["INVALID_ARGUMENT", "UNSUPPORTED_SCHEMA"]
+expected_external_calls = []
+minimum_implementation = "0.1.0"
+compatibility_behavior = "required cases in all eight v1 profiles fail closed; unknown mandatory selectors are rejected"
+
+[fingerprints]
+schema = "sha256:9d85b11e33dd68cd531efd993c871c26066d642a3e905c0c62383d3f775cd035"
+tokenizer = "sha256:4ae74872d9faa5aa6f78c5088a0301054cb6f5cda86b5ba882610f637faf288c"
+policy = "sha256:67f86b33bdda0a232b1d6a0c538a768607868b33ebf8317a6c64a0a1fc4df7dc"
+parser = "sha256:b52107765f46299bc02aa7b742ea7ed76699bebcfaa890cf5d5491378ae7e4c2"
+index = "sha256:b81830696dbb7d3c022c1a3237083640510d117a7c0d652e4386c41c2921f447"
+compiler = "sha256:d428e12501ca65d4ca11f62125f0698e89d9679ba30b70b028d3167f990d4e10"
+transform = "sha256:2893b420ac07d5e13259b121c6b643c934344c9062c0b4c47d83c8f8d431944b"
+materializer = "sha256:2deb4c5c1dd177585f783d56d6170d5db05637c205163249e6e7698aa83c7db4"
+
+[expected_digests]
+bundle = "122057c842fc7702a85a2a558ead8a1ebae11717bf977bf9c7faa5a56cc8e46c2c6e"
+manifest = "122002cee050ce3ad2b3df2a9826e3eb405da24e475b93060d24ad71a370920c9e56"
+delta = "122078c97a7883effeda6a9c1d08c06d164168ddb29e565e182df46516548e3827dd"
+handoff = "1220e4793d118b6d350577f1e950db3d7e4e0c89ba84bc5220a415a66653c20f3f70"
+decision = "122015832143a5992068612409e9081083722e35e4c92c2dfad6b3f5b4d25e558c2b"
+journal = "1220e909c038c74af8b844517acac73eebe654b1fe8006857df3b611c827609e2e93"
+
+[expected_tokens_by_materializer]
+json = 10
+markdown = 10
+claude_mcp = 10
+fact_set = 10

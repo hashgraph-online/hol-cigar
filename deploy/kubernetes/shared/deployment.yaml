@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cigard
+  namespace: cigar-shared
+  labels: { app.kubernetes.io/name: cigard, app.kubernetes.io/part-of: cigar }
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: cigard }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: cigard, app.kubernetes.io/part-of: cigar }
+    spec:
+      serviceAccountName: cigard
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: prepare-owner-only-files
+          image: busybox@sha256:222ad6d973c0d198014546a65cd02c5fdedcc172123c5b4c2bf0af636550bd94
+          command: ["/bin/sh", "-euc"]
+          args:
+            - |
+              umask 077
+              cp /raw-runtime/postgres-runtime-url /prepared/postgres-runtime-url
+              cp /raw-runtime/object-access-key /prepared/object-access-key
+              cp /raw-runtime/object-secret-key /prepared/object-secret-key
+              cp /raw-runtime/object-session-token /prepared/object-session-token
+              cp /raw-runtime/object-blinding-key /prepared/object-blinding-key
+              cp /raw-runtime/keystore-passphrase /prepared/keystore-passphrase
+              cp /raw-tls/tls.crt /prepared/tls.crt
+              cp /raw-tls/tls.key /prepared/tls.key
+              cp /raw-tls/ca.crt /prepared/client-ca.crt
+              cp /raw-postgres-tls/ca.crt /prepared-postgres-tls/postgres-ca.crt
+              cp /raw-runtime/keystore.cigar /state/keystore.cigar
+              cp /raw-runtime/cursor.key /state/cursor.key
+              mkdir -p /state/project /state/unused-shared-blobs /state/unused-shared-blob-keys /runtime
+              chmod 0600 /prepared/*
+              chmod 0600 /prepared-postgres-tls/postgres-ca.crt
+              chmod 0400 /state/keystore.cigar /state/cursor.key
+              chmod 0700 /state/project /state/unused-shared-blobs /state/unused-shared-blob-keys /runtime
+              test ! -L /effect-checkpoints
+              test -d /effect-checkpoints
+              test "$(stat -c %u /effect-checkpoints)" = "65532"
+              test "$(stat -c %a /effect-checkpoints)" = "700"
+              test ! -L /effect-checkpoints/checkpoints.json
+              test -f /effect-checkpoints/checkpoints.json
+              test -s /effect-checkpoints/checkpoints.json
+              test "$(stat -c %u /effect-checkpoints/checkpoints.json)" = "65532"
+              test "$(stat -c %a /effect-checkpoints/checkpoints.json)" = "600"
+              test "$(stat -c %h /effect-checkpoints/checkpoints.json)" = "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          volumeMounts:
+            - { name: raw-runtime, mountPath: /raw-runtime, readOnly: true }
+            - { name: raw-tls, mountPath: /raw-tls, readOnly: true }
+            - { name: raw-postgres-tls, mountPath: /raw-postgres-tls, readOnly: true }
+            - { name: prepared-secrets, mountPath: /prepared }
+            - { name: prepared-postgres-tls, mountPath: /prepared-postgres-tls }
+            - { name: state, mountPath: /state }
+            - { name: runtime, mountPath: /runtime }
+            - { name: effect-checkpoints, mountPath: /effect-checkpoints }
+      containers:
+        - name: cigard
+          image: cigar-daemon:wp18
+          args: ["serve", "--config", "/etc/cigar/cigard.toml"]
+          ports:
+            - { name: https, containerPort: 7443, protocol: TCP }
+            - { name: grpc, containerPort: 7444, protocol: TCP }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          startupProbe:
+            httpGet: { scheme: HTTPS, path: /livez, port: https }
+            periodSeconds: 2
+            failureThreshold: 60
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet: { scheme: HTTPS, path: /readyz, port: https }
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: { scheme: HTTPS, path: /livez, port: https }
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
+          volumeMounts:
+            - { name: config, mountPath: /etc/cigar/cigard.toml, subPath: cigard.toml, readOnly: true }
+            - { name: trusted, mountPath: /etc/cigar/trusted, readOnly: true }
+            - { name: prepared-secrets, mountPath: /run/secrets/cigar, readOnly: true }
+            - { name: prepared-postgres-tls, mountPath: /run/secrets/postgres, readOnly: true }
+            - { name: state, mountPath: /var/lib/cigar }
+            - { name: effect-checkpoints, mountPath: /var/lib/cigar-effect-checkpoints }
+            - { name: runtime, mountPath: /run/cigar }
+      volumes:
+        - name: config
+          configMap: { name: cigar-shared-config, defaultMode: 0444 }
+        - name: trusted
+          secret: { secretName: cigar-shared-trusted, defaultMode: 0444 }
+        - name: raw-runtime
+          secret: { secretName: cigar-shared-runtime, defaultMode: 0440 }
+        - name: raw-tls
+          secret: { secretName: cigar-shared-tls, defaultMode: 0440 }
+        - name: raw-postgres-tls
+          secret: { secretName: cigar-postgres-tls, defaultMode: 0440 }
+        - name: prepared-secrets
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        - name: prepared-postgres-tls
+          emptyDir: { medium: Memory, sizeLimit: 4Mi }
+        - name: state
+          emptyDir: { sizeLimit: 1Gi }
+        - name: effect-checkpoints
+          persistentVolumeClaim: { claimName: cigar-effect-checkpoints-rwx }
+        - name: runtime
+          emptyDir: { medium: Memory, sizeLimit: 64Mi }

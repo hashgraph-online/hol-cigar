@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceSnapshot",
+  "description": "Atomic connector snapshot from which catalog records are published.",
+  "type": "object",
+  "properties": {
+    "captured_at": {
+      "description": "UTC observation time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "complete": {
+      "description": "Whether the connector completed without omissions.",
+      "type": "boolean"
+    },
+    "entry_count": {
+      "description": "Number of source entries represented by the manifest.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "manifest_digest": {
+      "description": "Digest over the connector snapshot manifest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.source-snapshot.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "snapshot_id": {
+      "description": "Unique immutable snapshot identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "source_revision": {
+      "description": "Connector-specific immutable revision.",
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 1
+    },
+    "source_uri": {
+      "description": "Connector root URI.",
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\x00-\\x20]+$"
+    },
+    "total_bytes": {
+      "description": "Exact aggregate byte count represented by the manifest.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "source_uri",
+    "source_revision",
+    "captured_at",
+    "manifest_digest",
+    "entry_count",
+    "total_bytes",
+    "complete",
+    "extensions"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    }
+  }
+}

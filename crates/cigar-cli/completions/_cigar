@@ -1,0 +1,73 @@
+#compdef cigar
+
+_cigar() {
+  local -a commands
+  commands=(
+    'init:initialize local administration state'
+    'source:manage and refresh sources'
+    'ingest:ingest an accepted source plan'
+    'status:show readiness'
+    'context:plan compile and inspect context'
+    'project:manage project eligibility and links'
+    'focus:manage active context spaces'
+    'space:fork publish and inspect spaces'
+    'handoff:create accept and merge handoffs'
+    'effect:prepare authorize dispatch and reconcile effects'
+    'replay:reconstruct run and compare replay jobs'
+    'policy:check and explain policy'
+    'backup:create verify and restore backups'
+    'gc:plan and run garbage collection'
+    'diagnostics:create a content-free support bundle'
+    'doctor:show actionable diagnostics'
+    'serve:run the installed daemon'
+    'mcp:run the installed MCP adapter'
+    'plugin:manage the Claude Code adapter through public plugin surfaces'
+    'release:verify an offline release'
+    'completion:emit shell completion'
+    'man:emit the manual page'
+    'help:show help'
+    'version:show build metadata'
+  )
+  _arguments -C \
+    '--output[output format]:format:(text json)' \
+    '--deadline[bounded deadline]:duration' \
+    '--config[explicit configuration]:path:_files' \
+    '--target[execution target]:target:(embedded local remote)' \
+    '--embedded[select embedded target]' \
+    '--local[select local target]' \
+    '--remote[select remote target]:url' \
+    '--endpoint[override endpoint]:url' \
+    '--authorization-file[authorization file]:path:_files' \
+    '--input[strict JSON input]:path:_files' \
+    '--dry-run[preview mutation]' \
+    '--yes[confirm mutation]' \
+    '--non-interactive[disable prompts]' \
+    '--quiet[disable progress]' \
+    '--color[color mode]:mode:(auto always never)' \
+    '--unicode[Unicode mode]:mode:(auto always never)' \
+    '--security[run local security diagnostics]' \
+    '--deep[verify hashes journals and projections]' \
+    '1:command:->command' \
+    '*::argument:->args'
+  case "$state:$words[1]" in
+    command:*) _describe 'command' commands ;;
+    args:source) _values 'source command' add list refresh inspect remove ;;
+    args:context) _values 'context command' plan compile explain diff revalidate materialize ;;
+    args:project) _values 'project command' list attach detach switch link unlink ;;
+    args:focus) _values 'focus command' new switch checkpoint close ;;
+    args:space) _values 'space command' fork publish log conflicts ;;
+    args:handoff) _values 'handoff command' create preview inspect accept revoke merge ;;
+    args:effect) _values 'effect command' prepare approve dispatch list inspect reconcile compensate ;;
+    args:replay) _values 'replay command' reconstruct run compare completeness ;;
+    args:policy) _values 'policy command' check explain ;;
+    args:backup) _values 'backup command' create verify restore ;;
+    args:gc) _values 'gc command' plan run ;;
+    args:diagnostics) _values 'diagnostics command' bundle ;;
+    args:mcp) _values 'mcp command' serve ;;
+    args:plugin) _values 'plugin command' install uninstall doctor ;;
+    args:release) _values 'release command' verify ;;
+    args:completion) _values 'shell' bash zsh fish ;;
+  esac
+}
+
+_cigar "$@"

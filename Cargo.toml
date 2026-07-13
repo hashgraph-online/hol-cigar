@@ -1,0 +1,162 @@
+[workspace]
+resolver = "3"
+exclude = ["vendor/aws-creds-0.39.1", "vendor/rust-s3-0.37.2"]
+members = [
+  "crates/cigar-aws-creds",
+  "crates/cigar-rust-s3",
+  "crates/cigar-protocol",
+  "crates/cigar-canon",
+  "crates/cigar-crypto",
+  "crates/cigar-policy",
+  "crates/cigar-store",
+  "crates/cigar-catalog",
+  "crates/cigar-code-intel",
+  "crates/cigar-retrieval",
+  "crates/cigar-compiler",
+  "crates/cigar-space",
+  "crates/cigar-effects",
+  "crates/cigar-replay",
+  "crates/cigar-observe",
+  "crates/cigar-extension-host",
+  "crates/cigar-api",
+  "crates/cigar-daemon",
+  "crates/cigar-cli",
+  "crates/cigar-claude-hook",
+  "crates/cigar-mcp",
+  "crates/cigar-testkit",
+  "crates/cigar-sim",
+  "crates/cigar-windows-ipc",
+  "crates/xtask",
+  "conformance/runner",
+  "sdk/rust",
+]
+default-members = ["crates/cigar-cli", "crates/cigar-daemon", "crates/cigar-mcp"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "Apache-2.0"
+repository = "https://github.com/CIGAR/cigar"
+homepage = "https://github.com/CIGAR/cigar"
+authors = ["CIGAR contributors"]
+
+[workspace.dependencies]
+axum = { version = "=0.8.9" }
+axum-server = { version = "=0.8.0", default-features = false, features = ["tls-rustls-no-provider"] }
+base64 = { version = "=0.22.1" }
+cap-fs-ext = { version = "=4.0.2" }
+cap-std = { version = "=4.0.2" }
+argon2 = { version = "=0.5.3" }
+chacha20poly1305 = { version = "=0.11.0", features = ["zeroize"] }
+ciborium = { version = "=0.2.2" }
+cigar-api = { version = "=0.1.0", path = "crates/cigar-api" }
+cigar-protocol = { version = "=0.1.0", path = "crates/cigar-protocol" }
+cigar-canon = { version = "=0.1.0", path = "crates/cigar-canon" }
+cigar-catalog = { version = "=0.1.0", path = "crates/cigar-catalog" }
+cigar-code-intel = { version = "=0.1.0", path = "crates/cigar-code-intel" }
+cigar-compiler = { version = "=0.1.0", path = "crates/cigar-compiler" }
+cigar-crypto = { version = "=0.1.0", path = "crates/cigar-crypto" }
+cigar-effects = { version = "=0.1.0", path = "crates/cigar-effects" }
+cigar-mcp = { version = "=0.1.0", path = "crates/cigar-mcp" }
+cigar-policy = { version = "=0.1.0", path = "crates/cigar-policy" }
+cigar-replay = { version = "=0.1.0", path = "crates/cigar-replay" }
+cigar-retrieval = { version = "=0.1.0", path = "crates/cigar-retrieval" }
+cigar-space = { version = "=0.1.0", path = "crates/cigar-space" }
+cigar-testkit = { version = "=0.1.0", path = "crates/cigar-testkit" }
+cigar-store = { version = "=0.1.0", path = "crates/cigar-store" }
+futures-core = { version = "=0.3.32" }
+flate2 = { version = "=1.1.9" }
+schemars = { version = "=1.2.1", features = ["derive"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150" }
+quick-xml = { version = "=0.41.0" }
+reqwest = { version = "=0.13.4", default-features = false, features = ["rustls-no-provider"] }
+time = { version = "=0.3.53", features = ["formatting", "parsing"] }
+tempfile = { version = "=3.27.0" }
+toml = { version = "=1.1.2" }
+tree-sitter = { version = "=0.26.10" }
+tree-sitter-c = { version = "=0.24.2" }
+tree-sitter-cpp = { version = "=0.23.4" }
+tree-sitter-go = { version = "=0.25.0" }
+tree-sitter-java = { version = "=0.23.5" }
+tree-sitter-javascript = { version = "=0.25.0" }
+tree-sitter-python = { version = "=0.25.0" }
+tree-sitter-rust = { version = "=0.24.2" }
+tree-sitter-typescript = { version = "=0.23.2" }
+prost = { version = "=0.14.4" }
+postgres = { version = "=0.19.14" }
+r2d2 = { version = "=0.8.10" }
+r2d2_postgres = { version = "=0.18.2" }
+s3 = { package = "cigar-rust-s3", version = "=0.37.2-cigar.1", path = "crates/cigar-rust-s3", default-features = false, features = ["sync-rustls-tls"] }
+rustix = { version = "=1.1.4", features = ["process"] }
+rusqlite = { version = "=0.39.0", features = ["backup", "bundled"] }
+rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+ed25519-dalek = { version = "=3.0.0" }
+fallible-iterator = { version = "=0.2.0" }
+getrandom = { version = "=0.4.3" }
+hmac = { version = "=0.13.0" }
+keyring = { version = "=4.1.4" }
+opentelemetry = { version = "=0.32.0", default-features = false, features = ["metrics", "trace"] }
+opentelemetry-otlp = { version = "=0.32.0", default-features = false, features = ["grpc-tonic", "metrics", "tls-ring", "trace"] }
+opentelemetry_sdk = { version = "=0.32.1", default-features = false, features = ["metrics", "trace"] }
+sha2 = { version = "=0.11.0" }
+tokio = { version = "=1.52.3", features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-rustls = { version = "=0.26.4", default-features = false, features = ["logging", "ring", "tls12"] }
+tokio-postgres-rustls = { version = "=0.14.0", default-features = false, features = ["ring"] }
+tokio-stream = { version = "=0.1.18", features = ["net"] }
+tonic = { version = "=0.14.6", features = ["gzip", "tls-ring"] }
+tonic-prost = { version = "=0.14.6" }
+tower = { version = "=0.5.3", features = ["limit", "util"] }
+tower-http = { version = "=0.7.0", features = ["limit"] }
+unicode-normalization = { version = "=0.1.25" }
+x509-parser = { version = "=0.18.1" }
+wasmtime = { version = "=44.0.3", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
+wasmtime-wasi = { version = "=44.0.3", default-features = false, features = ["p2"] }
+wat = { version = "=1.245.1", default-features = false, features = ["component-model"] }
+webpki-roots = { version = "=1.0.8" }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
+yaml_serde = { version = "=0.10.4" }
+zeroize = { version = "=1.9.0" }
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+warnings = "deny"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"
+
+# Local qualification resolves the not-yet-published registry chain from the exact reviewed source
+# tree. Cargo strips these workspace patches from every `.crate`; normalized package manifests keep
+# exact crates.io names and versions, so registry consumers cannot substitute upstream S3 packages.
+[patch.crates-io]
+cigar-api = { path = "crates/cigar-api" }
+cigar-aws-creds = { path = "crates/cigar-aws-creds" }
+cigar-canon = { path = "crates/cigar-canon" }
+cigar-catalog = { path = "crates/cigar-catalog" }
+cigar-code-intel = { path = "crates/cigar-code-intel" }
+cigar-compiler = { path = "crates/cigar-compiler" }
+cigar-crypto = { path = "crates/cigar-crypto" }
+cigar-daemon = { path = "crates/cigar-daemon" }
+cigar-effects = { path = "crates/cigar-effects" }
+cigar-policy = { path = "crates/cigar-policy" }
+cigar-protocol = { path = "crates/cigar-protocol" }
+cigar-replay = { path = "crates/cigar-replay" }
+cigar-retrieval = { path = "crates/cigar-retrieval" }
+cigar-rust-s3 = { path = "crates/cigar-rust-s3" }
+cigar-space = { path = "crates/cigar-space" }
+cigar-store = { path = "crates/cigar-store" }
+cigar-testkit = { path = "crates/cigar-testkit" }
+cigar-windows-ipc = { path = "crates/cigar-windows-ipc" }

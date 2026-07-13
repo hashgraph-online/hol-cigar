@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.benchmark-baselines.v1",
+  "baselines": [
+    {"baseline_id": "full-transcript-project", "class": "raw", "description": "Full permitted transcript or project content."},
+    {"baseline_id": "fixed-window", "class": "window", "description": "Fixed recent-context window at the pinned token budget."},
+    {"baseline_id": "native-memory", "class": "strong", "description": "Pinned provider-native memory and compaction."},
+    {"baseline_id": "transcript-summary", "class": "strong", "description": "Deterministic transcript summary at the same output budget."},
+    {"baseline_id": "lexical-top-k-rag", "class": "strong", "description": "Pinned lexical top-k retrieval."},
+    {"baseline_id": "semantic-top-k-rag", "class": "strong", "description": "Pinned semantic top-k retrieval with frozen embeddings."},
+    {"baseline_id": "human-oracle", "class": "oracle", "description": "Adjudicated critical context selected before hidden task execution."}
+  ],
+  "ablations": [
+    "cigar-without-temporal",
+    "cigar-without-policy-filter",
+    "cigar-without-graph",
+    "cigar-without-delta",
+    "cigar-without-handoff-packaging"
+  ]
+}

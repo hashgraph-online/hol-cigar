@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/release-build.v1.schema.json",
+  "title": "CIGAR release build manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "product_version", "context_abi", "source_date_epoch", "source", "artifacts"],
+  "properties": {
+    "schema_version": {"enum": ["cigar.local-archive-build.v1", "cigar.release-build.v1"]},
+    "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+    "context_abi": {"const": "cigar.context.v1"},
+    "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "source": {"$ref": "#/$defs/source"},
+    "artifacts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "path", "sha256", "bytes", "contract"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+          "path": {"$ref": "#/$defs/safePath"},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "contract": {"$ref": "#/$defs/safePath"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "safePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "tree_sha256", "committed", "clean"],
+      "properties": {
+        "revision": {"type": "string", "minLength": 1},
+        "tree_sha256": {"$ref": "#/$defs/sha256"},
+        "committed": {"type": "boolean"},
+        "clean": {"type": "boolean"}
+      }
+    }
+  }
+}

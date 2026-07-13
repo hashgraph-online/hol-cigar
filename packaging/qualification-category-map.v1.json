@@ -1,0 +1,52 @@
+{
+  "schema_version": "cigar.qualification-category-map.v1",
+  "qualifications": {
+    "archive-contract": {"category": "package", "check": "archive-contract"},
+    "benchmark": {"category": "benchmark", "check": "benchmark-thresholds"},
+    "cargo-package": {"category": "package", "check": "cargo-package"},
+    "clean-install": {"category": "install", "check": "clean-install"},
+    "conformance": {"category": "conformance", "check": "conformance-profile"},
+    "docs": {"category": "docs", "check": "published-docs"},
+    "go-list": {"category": "package", "check": "go-list"},
+    "go-vet": {"category": "package", "check": "go-vet"},
+    "image-scan": {"category": "security", "check": "image-layer-scan"},
+    "installed-artifact": {"category": "install", "check": "installed-artifact"},
+    "license": {"category": "license", "check": "license-review"},
+    "long-path": {"category": "install", "check": "long-path"},
+    "multiarch": {"category": "package", "check": "multiarch-index"},
+    "no-egress": {"category": "offline", "check": "no-egress"},
+    "non-admin": {"category": "install", "check": "non-admin"},
+    "non-root": {"category": "install", "check": "non-root-container"},
+    "notarization": {"category": "package", "check": "notarization"},
+    "npm-pack": {"category": "package", "check": "npm-pack"},
+    "offline": {"category": "offline", "check": "offline-operation"},
+    "plugin-validator": {"category": "package", "check": "plugin-validator"},
+    "platform-signing": {"category": "package", "check": "platform-signing"},
+    "provenance": {"category": "provenance", "check": "slsa-provenance"},
+    "reproducibility": {"category": "reproducibility", "check": "two-builder-payload-match"},
+    "sbom": {"requirements": [
+      {"category": "sbom-spdx", "check": "spdx-final-artifact"},
+      {"category": "sbom-cyclonedx", "check": "cyclonedx-final-artifact"}
+    ]},
+    "security-scan": {"category": "security", "check": "final-artifact-scan"},
+    "signature": {"category": "signature", "check": "detached-signature"},
+    "twine-check": {"category": "package", "check": "twine-check"},
+    "unprivileged": {"category": "install", "check": "unprivileged"},
+    "upgrade": {"category": "upgrade", "check": "retained-upgrade"},
+    "version-abi-consistency": {"category": "toolchain", "check": "version-abi-consistency"},
+    "wheel-matrix": {"category": "package", "check": "wheel-matrix"}
+  },
+  "universal_requirements": [
+    {"category": "security", "check": "final-artifact-scan"},
+    {"category": "operations", "check": "live-exercises"}
+  ],
+  "additional_requirements": [
+    {"artifact_kind": "binary-archive", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "cargo-crate", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "npm-package", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "python-sdist", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "python-wheel", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "go-module", "category": "uninstall", "check": "clean-uninstall"},
+    {"artifact_kind": "plugin-archive", "category": "uninstall", "check": "clean-uninstall"}
+  ]
+}

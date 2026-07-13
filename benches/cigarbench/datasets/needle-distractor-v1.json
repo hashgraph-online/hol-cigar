@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "needle-distractor-v1",
+  "fixed_seed": 20005,
+  "source_revision": "synthetic-needle-v1",
+  "task": "Locate the exact invariant and its negative test among similarly named distractors.",
+  "critical_context": ["invariant/durable-before-send", "test/remote-accept-before-receipt"],
+  "prohibited_context": ["example/non-durable-send", "archive/legacy-retry"],
+  "expected_outcome": ["both critical spans recalled", "distractors rejected", "provenance exact"],
+  "canary": "BENCH_CANARY_NEEDLE_B17508"
+}

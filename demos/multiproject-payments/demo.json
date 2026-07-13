@@ -1,0 +1,44 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "multi-project-isolation",
+  "title": "Multi-project isolation and focus switching",
+  "fixed_seed": 41002,
+  "fixture": "fixture.json",
+  "fixture_digest": "12203846561ae3a8f6226f4178b4795746ccc55cea7732e5a869e1c4c46526192115",
+  "driver": "driver.py",
+  "driver_digest": "12207cae56779476a71dd694381a247e21ef48e2a7a58d51a8a832738ddc749e5d7e",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "four-project-workspace", "network-disabled", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "unattached-project-hidden", "forbidden-project-hidden", "old-focus-detail-removed",
+    "resume-uses-current-revision", "filesystem-authority-unchanged"
+  ],
+  "checks": [
+    {
+      "check_id": "focus-switch-resume",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "space", "offline_focus_branches_checkpoint_switch_and_resume_exactly"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["old-focus-detail-removed", "resume-uses-current-revision"]
+    },
+    {
+      "check_id": "project-links-hidden-capped",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "space", "project_links_are_directional_hidden_and_contribution_capped"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["unattached-project-hidden", "forbidden-project-hidden", "filesystem-authority-unchanged"]
+    },
+    {
+      "check_id": "scoped-events-hide-projects",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "space", "event_cursor_reconnect_duplicate_slow_page_priority_and_scope_are_exact"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": []
+    }
+  ],
+  "teardown": ["remove-isolated-home", "remove-workspace", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario multi-project-isolation --output-dir reports/demos",
+  "canary_ids": ["hr-private"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

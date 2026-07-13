@@ -1,0 +1,35 @@
+{
+  "schema_version": "cigar.sdk-quickstarts.v1",
+  "fixture": "demos/sdk-clients/workflow-fixture-v1.json",
+  "expected_bundle_id": "12206ff186fa09969a151733ccd464667d81e58cf0fb9ac9761bb9f67159a01b0067",
+  "quickstarts": [
+    {
+      "language": "rust",
+      "mode": "embedded-recorded",
+      "working_directory": ".",
+      "prepare": [],
+      "command": ["cargo", "run", "--manifest-path", "demos/sdk-clients/rust-workflow/Cargo.toml", "--offline", "--quiet"]
+    },
+    {
+      "language": "typescript",
+      "mode": "http-client-recorded",
+      "working_directory": ".",
+      "prepare": ["pnpm", "--dir", "sdk/typescript", "run", "build"],
+      "command": ["node", "demos/sdk-clients/typescript-workflow.mjs"]
+    },
+    {
+      "language": "python",
+      "mode": "async-http-client-recorded",
+      "working_directory": ".",
+      "prepare": [],
+      "command": ["uv", "run", "--offline", "--frozen", "--project", "sdk/python", "python", "demos/sdk-clients/python-workflow.py"]
+    },
+    {
+      "language": "go",
+      "mode": "grpc-client-recorded",
+      "working_directory": "demos/sdk-clients/go-workflow",
+      "prepare": [],
+      "command": ["go", "run", "."]
+    }
+  ]
+}

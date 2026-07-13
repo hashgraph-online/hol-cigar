@@ -1,0 +1,31 @@
+[package]
+name = "cigar-windows-ipc"
+description = "Audited Windows local IPC and credential ACL adapter for CIGAR"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[target.'cfg(windows)'.dependencies]
+tokio.workspace = true
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_SystemServices"] }
+
+[lints.rust]
+missing_docs = "deny"
+warnings = "deny"
+# The PRD permits unsafe Rust only in an explicitly audited platform adapter. Every unsafe block
+# in this crate is paired with a local safety proof and the public surface remains safe.
+unsafe_code = "allow"
+
+[lints.clippy]
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"

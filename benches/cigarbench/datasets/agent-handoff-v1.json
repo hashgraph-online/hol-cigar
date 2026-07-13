@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "agent-handoff-v1",
+  "fixed_seed": 20003,
+  "source_revision": "synthetic-handoff-v1",
+  "task": "Delegate test research with read-only authority and merge a typed evidence-backed result.",
+  "critical_context": ["handoff/scope", "handoff/acceptance", "handoff/result-proof"],
+  "prohibited_context": ["parent/full-transcript", "capability/write-overlay"],
+  "expected_outcome": ["grant attenuated", "first action useful", "result merged as typed evidence"],
+  "canary": "BENCH_CANARY_HANDOFF_9B53E0"
+}

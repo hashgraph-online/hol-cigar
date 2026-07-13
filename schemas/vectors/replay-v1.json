@@ -1,0 +1,107 @@
+{
+  "schema_version": "cigar.replay-vector.v1",
+  "digest_algorithm": "sha256-multihash-raw-v1",
+  "observation_framing": "u32be-length-prefixed-v1",
+  "retained": {
+    "bundle_bytes_base64url": "eyJibG9ja3MiOlt7ImJvZHkiOiJyZXRhaW5lZCBjYWbDqSBldmlkZW5jZSIsImlkIjoiYmxvY2stMDEifV0sImJ1bmRsZV9sYWJlbCI6ImZpeHR1cmUtYnVuZGxlIiwic2NoZW1hX3ZlcnNpb24iOiJjaWdhci5jb250ZXh0LWJ1bmRsZS5maXh0dXJlLnYxIn0",
+    "invocation_bytes_base64url": "eyJjb25zdW1lciI6ImRldGVybWluaXN0aWMtZml4dHVyZS12MSIsImlucHV0IjoiU3VtbWFyaXplIHJldGFpbmVkIGNhZsOpIGV2aWRlbmNlLiIsInRvb2xzIjpbeyJuYW1lIjoibG9va3VwIiwicGFyYW1ldGVycyI6eyJxdWVyeSI6ImJsb2NrLTAxIn19XX0",
+    "recorded_observation_bytes_base64url": [
+      "eyJraW5kIjoiY29uc3VtZXIiLCJzZXF1ZW5jZSI6MSwidmFsdWUiOiJwbGFuLXJlYWR5In0",
+      "eyJraW5kIjoidG9vbCIsInNlcXVlbmNlIjoyLCJ2YWx1ZSI6InJldGFpbmVkLWV2aWRlbmNlIn0",
+      "eyJraW5kIjoiY29ubmVjdG9yIiwic2VxdWVuY2UiOjMsInZhbHVlIjoic2ltdWxhdGVkLW5vLWRpc3BhdGNoIn0"
+    ]
+  },
+  "required_dependencies": [
+    "source",
+    "blob",
+    "policy",
+    "index",
+    "manifest",
+    "bundle",
+    "tokenizer",
+    "adapter",
+    "consumer",
+    "tool_schema",
+    "environment"
+  ],
+  "retained_artifacts": [
+    {
+      "kind": "source",
+      "bytes_base64url": "eyJpZCI6InNvdXJjZS0wMSIsImNvbnRlbnQiOiJyZXRhaW5lZCBjYWbDqSBldmlkZW5jZSJ9",
+      "digest_multihash": "1220671bc7c0f58b97f9454e184db79198c80d769f9d7895ff5c9c399d68ace9c4cb"
+    },
+    {
+      "kind": "blob",
+      "bytes_base64url": "eyJpZCI6ImJsb2ItMDEiLCJieXRlcyI6InJldGFpbmVkIn0",
+      "digest_multihash": "1220d76f41121d464a3ca625ae0004798a15a6435b64c8fd9632c868fa3b48d24f48"
+    },
+    {
+      "kind": "policy",
+      "bytes_base64url": "eyJpZCI6InBvbGljeS0wMSIsInJldmlzaW9uIjo3fQ",
+      "digest_multihash": "12203810e2ea5a9484bf953cc39e84ee38dc5235a07c1efd0c1ff8a38824124287ed"
+    },
+    {
+      "kind": "index",
+      "bytes_base64url": "eyJpZCI6ImluZGV4LTAxIiwid2F0ZXJtYXJrIjoiY29tbWl0LTQyIn0",
+      "digest_multihash": "1220b8b352ce1c0db67070f4a3b78e5966174dec4e166dc87f661f3b68d8184b1e71"
+    },
+    {
+      "kind": "manifest",
+      "bytes_base64url": "eyJpZCI6Im1hbmlmZXN0LTAxIiwiYnVuZGxlIjoiZml4dHVyZS1idW5kbGUifQ",
+      "digest_multihash": "12201089e3951bf1efb850341db1a8eb539b5340ca81aeed6588c514010e0e3e5b99"
+    },
+    {
+      "kind": "bundle",
+      "bytes_base64url": "eyJibG9ja3MiOlt7ImJvZHkiOiJyZXRhaW5lZCBjYWbDqSBldmlkZW5jZSIsImlkIjoiYmxvY2stMDEifV0sImJ1bmRsZV9sYWJlbCI6ImZpeHR1cmUtYnVuZGxlIiwic2NoZW1hX3ZlcnNpb24iOiJjaWdhci5jb250ZXh0LWJ1bmRsZS5maXh0dXJlLnYxIn0",
+      "digest_multihash": "1220aaac06a3388202a1de76e7681595326f93cf694741d54b5b5658cd4e5721200e"
+    },
+    {
+      "kind": "tokenizer",
+      "bytes_base64url": "eyJpZCI6InRva2VuaXplci0wMSIsImZpbmdlcnByaW50IjoidG9rLXYxIn0",
+      "digest_multihash": "1220be0665155ed1798c17a612a741e31c6d38e3d172948cdd1eec3b0ca87e2af89f"
+    },
+    {
+      "kind": "adapter",
+      "bytes_base64url": "eyJpZCI6ImFkYXB0ZXItMDEiLCJmaW5nZXJwcmludCI6ImFkYXB0ZXItdjEifQ",
+      "digest_multihash": "12203a2c637077b637e50325134951f1bbae1e1bbb440dca573fe7c523435dfe3ba7"
+    },
+    {
+      "kind": "consumer",
+      "bytes_base64url": "eyJpZCI6ImNvbnN1bWVyLTAxIiwiZmluZ2VycHJpbnQiOiJjb25zdW1lci12MSJ9",
+      "digest_multihash": "1220dd68687fc64588cc45a84d26c70364d157b9e968b17f5e866405de4a8f312504"
+    },
+    {
+      "kind": "tool_schema",
+      "bytes_base64url": "eyJpZCI6InRvb2wtc2NoZW1hLTAxIiwibmFtZSI6Imxvb2t1cCJ9",
+      "digest_multihash": "122090bfc73e696ecb0e5acd70d522f5d68bef8f1d3136d88e9541e98e59a5e25379"
+    },
+    {
+      "kind": "environment",
+      "bytes_base64url": "eyJpZCI6ImVudmlyb25tZW50LTAxIiwicGxhdGZvcm0iOiJmaXh0dXJlIn0",
+      "digest_multihash": "1220208c515d08b5ffc62b34568d5bc531884af2f50b8d43111d70b790724999de80"
+    }
+  ],
+  "missing_artifact_probe": {
+    "kind": "source",
+    "expected_complete": false,
+    "expected_missing_dependencies": ["source"]
+  },
+  "tampered_artifact_probe": {
+    "kind": "consumer",
+    "replacement_bytes_base64url": "eyJpZCI6ImNvbnN1bWVyLTAxIiwiZmluZ2VycHJpbnQiOiJ0YW1wZXJlZC12MSJ9",
+    "expected_accepted": false,
+    "expected_missing_dependencies": ["consumer"]
+  },
+  "empty_recorded_response_probe": {
+    "bytes_base64url": "",
+    "digest_multihash": "1220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "expected_accepted": true
+  },
+  "expected": {
+    "bundle_digest_multihash": "1220aaac06a3388202a1de76e7681595326f93cf694741d54b5b5658cd4e5721200e",
+    "invocation_digest_multihash": "1220427dbdc6bd7bae9a33dd4e9230fa4d55a566b903c953982dfce9b7aa490de82c",
+    "observation_digest_multihash": "12208d4c87c7ff3cc4b832eb8ecb94a1182ac92fcb509a70c50efc614e8bbc574607",
+    "complete": true,
+    "missing_dependencies": []
+  }
+}

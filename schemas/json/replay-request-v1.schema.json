@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReplayRequest",
+  "description": "Request for one replay operation.",
+  "type": "object",
+  "properties": {
+    "authorized_effect_intents": {
+      "description": "New separately authorized effect intents permitted only in live mode.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 36,
+        "minLength": 36,
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      },
+      "maxItems": 10000
+    },
+    "decision_id": {
+      "description": "Source decision identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "live_authorization_digest": {
+      "description": "Explicit live rerun authorization digest, required only for live mode.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "mode": {
+      "description": "Replay mode.",
+      "$ref": "#/$defs/ReplayMode"
+    },
+    "request_id": {
+      "description": "Unique request identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requested_by": {
+      "description": "Authenticated requester.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.replay-request.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "simulate_effects": {
+      "description": "Whether all effects remain simulated.",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "decision_id",
+    "mode",
+    "requested_by",
+    "simulate_effects",
+    "authorized_effect_intents"
+  ],
+  "$defs": {
+    "ReplayMode": {
+      "description": "Closed replay execution mode.",
+      "oneOf": [
+        {
+          "description": "Verify retained source, policy, index, manifest, and bundle evidence.",
+          "type": "string",
+          "const": "evidence_reproduction"
+        },
+        {
+          "description": "Reconstruct exact declared invocation without invoking dependencies.",
+          "type": "string",
+          "const": "invocation_reproduction"
+        },
+        {
+          "description": "Substitute recorded observations under denied egress.",
+          "type": "string",
+          "const": "observational"
+        },
+        {
+          "description": "Invoke configured dependencies as a new explicitly authorized execution.",
+          "type": "string",
+          "const": "live_comparison"
+        }
+      ]
+    }
+  }
+}

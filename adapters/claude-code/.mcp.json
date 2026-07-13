@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "cigar": {
+      "command": "cigar-mcp",
+      "args": [
+        "serve"
+      ],
+      "env": {
+        "CIGAR_CLAUDE_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
+        "CIGAR_CLAUDE_PLUGIN_DATA": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  }
+}

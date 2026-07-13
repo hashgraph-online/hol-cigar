@@ -1,0 +1,8 @@
+{
+  "name": "CIGAR development",
+  "dockerComposeFile": "../deploy/compose/development.yaml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose"
+}
+

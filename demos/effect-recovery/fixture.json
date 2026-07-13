@@ -1,0 +1,24 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "effect-crash-recovery",
+  "fixed_seed": 41004,
+  "fixed_time": "2026-01-15T12:03:00Z",
+  "flow": ["prepare-intent", "authorize-effect", "inject-failure", "restart-worker", "reconcile-unknown", "create-compensation-child"],
+  "connector": "demo-issue-service",
+  "idempotency_key": "demo-effect-41004",
+  "failure_points": [
+    "before-dispatch",
+    "after-durable-dispatch-before-send",
+    "after-remote-acceptance-before-receipt",
+    "during-response-parse",
+    "during-reconciliation"
+  ],
+  "expected": {
+    "prepared_before_send": true,
+    "possible_remote_commit_state": "unknown",
+    "logical_remote_mutations": 1,
+    "non_idempotent_unknown_auto_retry": false,
+    "compensation_is_linked_child": true
+  },
+  "secret_canary": "DEMO_CANARY_EFFECT_SECRET_460A3D"
+}

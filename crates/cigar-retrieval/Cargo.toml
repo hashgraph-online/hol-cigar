@@ -1,0 +1,24 @@
+[package]
+name = "cigar-retrieval"
+description = "Authorized deterministic CIGAR retrieval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+cigar-protocol.workspace = true
+cigar-store.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+cigar-testkit.workspace = true
+serde_json.workspace = true

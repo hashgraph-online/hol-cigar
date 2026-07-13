@@ -1,0 +1,22 @@
+{
+  "schema_version": "cigar.benchmark-environment.v1",
+  "cpu": {"logical_cores": 1, "machine": "fixture", "processor": "deterministic"},
+  "memory_bytes": 1073741824,
+  "os": {"system": "fixture", "release": "v1", "version": "recorded"},
+  "filesystem": "fixture-memory",
+  "storage": "fixture-memory",
+  "power_mode": "fixture-fixed",
+  "background_load": "none-recorded",
+  "toolchains": {"python": "3.14", "rustc": "fixture", "cargo": "fixture"},
+  "compiler_flags": {"RUSTFLAGS": "", "CFLAGS": "", "CXXFLAGS": ""},
+  "build_digest": "12201111111111111111111111111111111111111111111111111111111111111111",
+  "dataset_digest": "12201dfd8522b1070aa0121fff4685999302287cffd7c4a708d67faf1d5f322a77a6",
+  "dataset_shape": {"atoms": 1000, "edges": 2500, "blob_bytes": 1048576},
+  "index_state": "warm",
+  "tokenizer": "cigar-byte-v1",
+  "policy": "cigar-policy-v1",
+  "warmup_runs": 1,
+  "concurrency": 1,
+  "external_latency_included": false,
+  "environment_digest": "1220c7cd29dd88623feb851966717a01622e11f34ca2ef418b444193b685748d4a9f"
+}

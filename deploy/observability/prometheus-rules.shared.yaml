@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cigar-shared
+spec:
+  groups:
+    - name: cigar-shared-integrity
+      rules:
+        - alert: CigarWorkerQueueSaturated
+          expr: cigar_worker_queue_depth / clamp_min(cigar_worker_queue_capacity, 1) > 0.9
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: A bounded CIGAR worker queue remains above 90 percent.
+        - alert: CigarWorkerQueueRejected
+          expr: increase(cigar_worker_queue_rejections_total[5m]) > 0
+          for: 0m
+          labels: { severity: critical }
+          annotations:
+            summary: CIGAR rejected work at a bounded queue boundary.
+        - alert: CigarWorkerQueueOldestAgeHigh
+          expr: cigar_worker_queue_oldest_age_seconds > 300
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: CIGAR durable work has been queued for more than five minutes.
+        - alert: CigarListenerFailure
+          expr: increase(cigar_daemon_listener_failures_total[5m]) > 0
+          for: 0m
+          labels: { severity: critical }
+          annotations:
+            summary: A CIGAR listener failed or exited unexpectedly.

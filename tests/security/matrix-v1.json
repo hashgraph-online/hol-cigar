@@ -1,0 +1,97 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "security",
+  "description": "Fail-closed authorization, parser, storage, effect, replay, extension, daemon, and transport security gates.",
+  "cases": [
+    {
+      "id": "SEC-API-001",
+      "title": "Hostile HTTP and gRPC framing, bounds, duplicate fields, cancellation, and slow bodies fail closed.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-api", "--test", "transport_conformance"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["SEC-INPUT-001", "SEC-RESOURCE-001", "VER-CANCEL-001"]
+    },
+    {
+      "id": "SEC-CATALOG-001",
+      "title": "Catalog discovery resists traversal, links, ignore bypass, identity races, and unbounded Git children.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-catalog", "--lib"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["SEC-FILESYSTEM-001", "SEC-LIMITS-001", "CAT-BOUNDARY-001"]
+    },
+    {
+      "id": "SEC-CLI-001",
+      "title": "CLI configuration provenance, bearer credentials, diagnostics, and administrative paths remain content-safe.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-cli", "--lib"],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["SEC-SECRETS-001", "SEC-CONFIG-001", "OPS-DOCTOR-001"]
+    },
+    {
+      "id": "SEC-DAEMON-001",
+      "title": "Production authentication, tenant scope, authority identities, durable seals, and readiness fail closed.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-daemon", "--lib"],
+      "timeout_seconds": 2400,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["SEC-AUTHN-001", "SEC-TENANT-001", "SEC-INTEGRITY-001", "SRV-READY-001"]
+    },
+    {
+      "id": "SEC-EFFECT-001",
+      "title": "Effect authorization, exact identity, durable authenticity, fencing, reconciliation, and compensation are enforced.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_effects"],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["EFX-AUTH-001", "EFX-FENCE-001", "EFX-INTEGRITY-001", "EFX-UNKNOWN-001"]
+    },
+    {
+      "id": "SEC-EXTENSION-001",
+      "title": "Extension activation, framing, brokers, subprocesses, and WASI components cannot escape declared authority.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-extension-host", "--lib"],
+      "timeout_seconds": 2400,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos"],
+      "requirements": ["EXT-AUTH-001", "EXT-SANDBOX-001", "EXT-RESOURCE-001", "EXT-TRANSCRIPT-001"]
+    },
+    {
+      "id": "SEC-POLICY-001",
+      "title": "Policy lattices, attenuation, revocation, outage, redaction, and bounded caches fail closed.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-policy", "--test", "policy"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["POL-AUTHZ-001", "POL-ATTENUATION-001", "POL-REVOCATION-001", "POL-REDACTION-001"]
+    },
+    {
+      "id": "SEC-REPLAY-001",
+      "title": "Replay rejects tampering, exact-source substitution, stale live authority, and unsafe effect dispatch.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-replay", "--test", "wp13_replay_modes"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["RPL-INTEGRITY-001", "RPL-AUTH-001", "RPL-EFFECT-001"]
+    },
+    {
+      "id": "SEC-REPLAY-002",
+      "title": "Non-live replay succeeds while an operating-system boundary denies all network egress.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-replay", "--test", "wp13_no_egress"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["RPL-NO-EGRESS-001", "VER-HERMETIC-001"]
+    },
+    {
+      "id": "SEC-STORE-001",
+      "title": "Encrypted blobs, backups, migrations, projections, permissions, and integrity checks reject corruption.",
+      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib"],
+      "timeout_seconds": 2400,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["STORE-INTEGRITY-001", "STORE-BLOB-001", "STORE-MIGRATION-001", "STORE-BACKUP-001"]
+    }
+  ]
+}

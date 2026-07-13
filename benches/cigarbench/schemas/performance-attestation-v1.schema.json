@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/performance-attestation-v1.schema.json",
+  "title": "CIGAR performance evidence attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "key_id",
+    "role",
+    "algorithm",
+    "manifest_digest",
+    "sample_stream_digest",
+    "terminal_sample_id",
+    "sample_count",
+    "tag"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "cigar.performance-attestation.v1"
+    },
+    "key_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "role": {
+      "const": "independent_performance_evaluator"
+    },
+    "algorithm": {
+      "const": "hmac-sha256"
+    },
+    "manifest_digest": {
+      "type": "string",
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "sample_stream_digest": {
+      "type": "string",
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "terminal_sample_id": {
+      "type": "string",
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "sample_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

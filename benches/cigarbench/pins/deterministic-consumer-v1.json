@@ -1,0 +1,13 @@
+{
+  "model": "deterministic-recorded-v1",
+  "runtime": "cigarbench-stdlib-v1",
+  "tools": "none-offline",
+  "repository": "cigarbench-synthetic-v1",
+  "output_budget": 6000,
+  "sampling": "deterministic-zero",
+  "tokenizer": "cigar-byte-v1",
+  "source": "fixture-manifest-v1",
+  "adapter": "recorded-consumer-v1",
+  "compiler": "cigar-compiler-balanced-v1",
+  "consumer_artifact": "1220edab1be992b70f2cb83f6fbdc9ad920aed658c5712066981f114fc4a2f245dd7"
+}

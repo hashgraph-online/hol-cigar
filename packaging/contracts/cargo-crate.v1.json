@@ -1,0 +1,27 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "cargo-crate-v1",
+  "formats": ["tar.gz"],
+  "allow": [
+    "cigar-sdk-0.1.0/Cargo.toml", "cigar-sdk-0.1.0/Cargo.toml.orig", "cigar-sdk-0.1.0/Cargo.lock", "cigar-sdk-0.1.0/README.md",
+    "cigar-sdk-0.1.0/.cargo_vcs_info.json", "cigar-sdk-0.1.0/LICENSE", "cigar-sdk-0.1.0/NOTICE", "cigar-sdk-0.1.0/release.json",
+    "cigar-sdk-0.1.0/src/**"
+  ],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/target/**", "**/tests/**", "**/*.profraw"],
+  "required": [
+    "cigar-sdk-0.1.0/Cargo.toml", "cigar-sdk-0.1.0/Cargo.toml.orig", "cigar-sdk-0.1.0/Cargo.lock", "cigar-sdk-0.1.0/README.md",
+    "cigar-sdk-0.1.0/.cargo_vcs_info.json", "cigar-sdk-0.1.0/LICENSE", "cigar-sdk-0.1.0/NOTICE", "cigar-sdk-0.1.0/release.json",
+    "cigar-sdk-0.1.0/src/lib.rs"
+  ],
+  "required_patterns": ["cigar-sdk-0.1.0/src/*.rs"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "cigar-sdk-0.1.0/release.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "cigar-sdk-0.1.0/release.json", "format": "json", "json_pointer": "/context_abi"}
+}

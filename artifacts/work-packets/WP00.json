@@ -1,0 +1,59 @@
+{
+  "packet": "WP00",
+  "source_commit": "workspace:63f58248e71762b8279b4380f54c949c6201b4afa69c0312d55c7b3beef28082",
+  "prerequisites": [],
+  "owned_paths": [
+    "Cargo.toml",
+    "rust-toolchain.toml",
+    ".github/workflows",
+    "crates/xtask",
+    "crates/*/Cargo.toml",
+    "IMPLEMENTATION_STATUS.md",
+    "docs/execution"
+  ],
+  "commands": [
+    "cargo xtask bootstrap",
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask lint",
+    "cargo xtask test unit",
+    "cargo xtask test property",
+    "cargo xtask docs --check",
+    "cargo deny check",
+    "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/lcov.info",
+    "docker compose -f deploy/compose/development.yaml config -q",
+    "CIGAR_SOURCE_REVISION=workspace-qualification cargo run --release --package cigar-cli",
+    "CIGAR_SOURCE_REVISION=workspace-qualification cargo run --release --package cigar-daemon",
+    "CIGAR_SOURCE_REVISION=workspace-qualification cargo run --release --package cigar-mcp"
+  ],
+  "tests": [
+    { "id": "WP00-GENERATED-STALE", "result": "pass" },
+    { "id": "WP00-ARCH-FORBIDDEN-EDGE", "result": "pass" },
+    { "id": "WP00-DEPENDENCY-UNPINNED", "result": "pass" },
+    { "id": "WP00-LINT-WARNING-DOCS", "result": "pass" },
+    { "id": "WP00-LINT-PLACEHOLDER", "result": "pass" },
+    { "id": "WP00-BOOTSTRAP-MISSING-TOOL", "result": "pass" },
+    { "id": "WP00-BUILD-METADATA", "result": "pass" }
+  ],
+  "metrics": {
+    "nextest_passed": 7,
+    "nextest_skipped": 0,
+    "deployable_binaries_with_stable_json": 3,
+    "lcov_lines": 774
+  },
+  "artifacts": [
+    {
+      "path": "schemas/generated-manifest.json",
+      "sha256": "b9235a55b5e32823c20c16403d77330ae742757f2bd6c6972ac20a51e1caff11"
+    },
+    {
+      "path": "reports/lcov.info",
+      "sha256": "1b747be51804f5d340287ff235772f80d311650b245ea11ee71856f79a00a48e"
+    }
+  ],
+  "known_limitations": [
+    "Product-capability commands owned by WP01-WP22 intentionally return typed command failures until implemented."
+  ],
+  "status": "complete"
+}
+

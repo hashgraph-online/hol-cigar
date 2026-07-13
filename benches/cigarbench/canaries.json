@@ -1,0 +1,14 @@
+{
+  "schema_version": "cigar.canary-registry.v1",
+  "canaries": [
+    {"id": "longrepo", "value": "BENCH_CANARY_LONGREPO_7F13C2"},
+    {"id": "multiproject", "value": "BENCH_CANARY_MULTIPROJECT_8A42D1"},
+    {"id": "handoff", "value": "BENCH_CANARY_HANDOFF_9B53E0"},
+    {"id": "temporal", "value": "BENCH_CANARY_TEMPORAL_A064F9"},
+    {"id": "needle", "value": "BENCH_CANARY_NEEDLE_B17508"},
+    {"id": "policy", "value": "BENCH_CANARY_POLICY_C28617"},
+    {"id": "effect", "value": "BENCH_CANARY_EFFECT_D39726"},
+    {"id": "replay", "value": "BENCH_CANARY_REPLAY_E4A835"},
+    {"id": "catalog", "value": "BENCH_CANARY_CATALOG_F5B944"}
+  ]
+}

@@ -1,0 +1,347 @@
+{
+  "errors": [
+    {
+      "code": 1000,
+      "disclose_identity": false,
+      "grpc": "INVALID_ARGUMENT",
+      "http": 400,
+      "message": "request argument is invalid",
+      "name": "INVALID_ARGUMENT",
+      "remediation": "correct the request using the published schema",
+      "retry": "never"
+    },
+    {
+      "code": 1001,
+      "disclose_identity": false,
+      "grpc": "RESOURCE_EXHAUSTED",
+      "http": 400,
+      "message": "a published resource limit was exceeded",
+      "name": "LIMIT_EXCEEDED",
+      "remediation": "reduce the bounded request size",
+      "retry": "never"
+    },
+    {
+      "code": 1002,
+      "disclose_identity": false,
+      "grpc": "INVALID_ARGUMENT",
+      "http": 400,
+      "message": "schema version is unsupported",
+      "name": "UNSUPPORTED_SCHEMA",
+      "remediation": "use a supported protocol schema",
+      "retry": "never"
+    },
+    {
+      "code": 1100,
+      "disclose_identity": false,
+      "grpc": "UNAUTHENTICATED",
+      "http": 401,
+      "message": "principal is not authenticated",
+      "name": "UNKNOWN_PRINCIPAL",
+      "remediation": "authenticate using a configured identity provider",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1101,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "capability does not authorize this operation",
+      "name": "INVALID_CAPABILITY",
+      "remediation": "request a valid attenuated capability",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1102,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "capability has expired",
+      "name": "CAPABILITY_EXPIRED",
+      "remediation": "request a current attenuated capability",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1200,
+      "disclose_identity": false,
+      "grpc": "UNAVAILABLE",
+      "http": 503,
+      "message": "source is temporarily unavailable",
+      "name": "SOURCE_UNAVAILABLE",
+      "remediation": "retry after source recovery",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1201,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 503,
+      "message": "source snapshot is incomplete",
+      "name": "SNAPSHOT_INCOMPLETE",
+      "remediation": "repeat ingestion after the source is stable",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1202,
+      "disclose_identity": false,
+      "grpc": "DATA_LOSS",
+      "http": 500,
+      "message": "integrity verification failed",
+      "name": "INTEGRITY_FAILURE",
+      "remediation": "quarantine the record and inspect correlation logs",
+      "retry": "never"
+    },
+    {
+      "code": 1300,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 503,
+      "message": "index watermark is stale",
+      "name": "INDEX_STALE",
+      "remediation": "wait for the required catalog watermark",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1301,
+      "disclose_identity": false,
+      "grpc": "UNAVAILABLE",
+      "http": 503,
+      "message": "required index is unavailable",
+      "name": "INDEX_UNAVAILABLE",
+      "remediation": "restore the index or select an authorized fallback",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1302,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 503,
+      "message": "requested consistency cannot be satisfied",
+      "name": "CONSISTENCY_UNSATISFIED",
+      "remediation": "wait for the requested watermark",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1400,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "current policy denied the operation",
+      "name": "POLICY_DENIED",
+      "remediation": "request authorized scope or purpose",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1401,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "processor constraints denied the operation",
+      "name": "PROCESSOR_DENIED",
+      "remediation": "select an authorized processor",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1402,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "instruction authority is insufficient",
+      "name": "INSTRUCTION_AUTHORITY_DENIED",
+      "remediation": "use an authorized instruction source",
+      "retry": "never"
+    },
+    {
+      "code": 1500,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 422,
+      "message": "required context cannot fit the declared budget",
+      "name": "BUDGET_UNSATISFIABLE",
+      "remediation": "increase the budget or narrow requirements",
+      "retry": "never"
+    },
+    {
+      "code": 1501,
+      "disclose_identity": false,
+      "grpc": "NOT_FOUND",
+      "http": 404,
+      "message": "required authorized context is missing",
+      "name": "MISSING_REQUIRED_CONTEXT",
+      "remediation": "ingest or authorize the required context",
+      "retry": "never"
+    },
+    {
+      "code": 1502,
+      "disclose_identity": false,
+      "grpc": "ABORTED",
+      "http": 409,
+      "message": "critical semantic conflict remains unresolved",
+      "name": "UNRESOLVED_CRITICAL_CONFLICT",
+      "remediation": "resolve the conflict using typed evidence",
+      "retry": "never"
+    },
+    {
+      "code": 1600,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 400,
+      "message": "delta base does not match provider-present state",
+      "name": "DELTA_BASE_MISMATCH",
+      "remediation": "request a full bundle or matching delta",
+      "retry": "never"
+    },
+    {
+      "code": 1601,
+      "disclose_identity": false,
+      "grpc": "ABORTED",
+      "http": 409,
+      "message": "bundle was invalidated",
+      "name": "BUNDLE_INVALIDATED",
+      "remediation": "compile a new bundle from current inputs",
+      "retry": "safe"
+    },
+    {
+      "code": 1700,
+      "disclose_identity": false,
+      "grpc": "ABORTED",
+      "http": 409,
+      "message": "expected revision does not match",
+      "name": "REVISION_CONFLICT",
+      "remediation": "reload current state and merge explicitly",
+      "retry": "safe"
+    },
+    {
+      "code": 1701,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 409,
+      "message": "handoff has expired",
+      "name": "HANDOFF_EXPIRED",
+      "remediation": "create a new handoff capsule",
+      "retry": "never"
+    },
+    {
+      "code": 1702,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "handoff recipient does not match",
+      "name": "HANDOFF_RECIPIENT_MISMATCH",
+      "remediation": "use a capsule addressed to the authenticated recipient",
+      "retry": "never"
+    },
+    {
+      "code": 1800,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 403,
+      "message": "effect requires approval",
+      "name": "APPROVAL_REQUIRED",
+      "remediation": "obtain approval bound to the exact intent",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1801,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 403,
+      "message": "approval is stale",
+      "name": "APPROVAL_STALE",
+      "remediation": "obtain a new approval for current semantics",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 1802,
+      "disclose_identity": false,
+      "grpc": "ABORTED",
+      "http": 409,
+      "message": "external effect outcome is unknown",
+      "name": "EFFECT_UNKNOWN",
+      "remediation": "reconcile before any retry",
+      "retry": "after_reconciliation"
+    },
+    {
+      "code": 1803,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 403,
+      "message": "effect cannot be safely retried",
+      "name": "UNSAFE_RETRY",
+      "remediation": "reconcile or resolve manually",
+      "retry": "after_reconciliation"
+    },
+    {
+      "code": 1900,
+      "disclose_identity": false,
+      "grpc": "FAILED_PRECONDITION",
+      "http": 503,
+      "message": "replay evidence is incomplete",
+      "name": "REPLAY_INCOMPLETE",
+      "remediation": "restore the listed dependencies",
+      "retry": "never"
+    },
+    {
+      "code": 1901,
+      "disclose_identity": false,
+      "grpc": "NOT_FOUND",
+      "http": 404,
+      "message": "required dependency is unavailable",
+      "name": "DEPENDENCY_UNAVAILABLE",
+      "remediation": "restore the named dependency",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 1902,
+      "disclose_identity": false,
+      "grpc": "PERMISSION_DENIED",
+      "http": 403,
+      "message": "live operation requires explicit authorization",
+      "name": "LIVE_AUTHORIZATION_REQUIRED",
+      "remediation": "authorize a new live execution",
+      "retry": "after_reauthorization"
+    },
+    {
+      "code": 2000,
+      "disclose_identity": false,
+      "grpc": "RESOURCE_EXHAUSTED",
+      "http": 429,
+      "message": "request rate limit was reached",
+      "name": "RATE_LIMITED",
+      "remediation": "retry after the declared delay",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 2001,
+      "disclose_identity": false,
+      "grpc": "DEADLINE_EXCEEDED",
+      "http": 504,
+      "message": "request deadline elapsed",
+      "name": "DEADLINE_EXCEEDED",
+      "remediation": "retry only if the operation is safe",
+      "retry": "safe"
+    },
+    {
+      "code": 2002,
+      "disclose_identity": false,
+      "grpc": "UNAVAILABLE",
+      "http": 503,
+      "message": "dependency is degraded",
+      "name": "DEPENDENCY_DEGRADED",
+      "remediation": "retry after dependency recovery",
+      "retry": "after_backoff"
+    },
+    {
+      "code": 2099,
+      "disclose_identity": false,
+      "grpc": "INTERNAL",
+      "http": 500,
+      "message": "internal service error",
+      "name": "INTERNAL",
+      "remediation": "report the correlation identifier",
+      "retry": "never"
+    }
+  ],
+  "generator": "cargo xtask generate",
+  "schema_version": 1,
+  "status": "v1-codes-frozen-mappings-await-wp02-generation"
+}

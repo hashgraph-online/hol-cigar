@@ -1,0 +1,43 @@
+{
+  "schema_version": "cigar.reproducibility-policy.v1",
+  "environment": {
+    "SOURCE_DATE_EPOCH": "required-from-candidate-commit",
+    "TZ": "UTC",
+    "LC_ALL": "C",
+    "LANG": "C",
+    "PYTHONHASHSEED": "0",
+    "NO_COLOR": "1"
+  },
+  "archive": {
+    "ordering": "utf8-bytewise-path",
+    "owner": 0,
+    "group": 0,
+    "file_modes": ["0644", "0755"],
+    "directory_mode": "0755",
+    "timestamps": "SOURCE_DATE_EPOCH",
+    "symlinks": "forbidden",
+    "line_endings": "LF",
+    "gzip_filename": "empty",
+    "gzip_level": 9
+  },
+  "rust": {
+    "locked": true,
+    "release_flags": ["--locked"],
+    "remap_source_paths": true,
+    "incremental": false
+  },
+  "comparison": {
+    "builders": 2,
+    "empty_caches": true,
+    "input": "signed-source-archive",
+    "algorithm": "sha256",
+    "compare": "unsigned-payload",
+    "signed_envelope_must_bind_payload": true
+  },
+  "required_external_inputs": [
+    "immutable native builder image digests for each supported target",
+    "Apple signing and notarization identity for macOS envelopes",
+    "Windows code-signing identity for Windows envelopes",
+    "approved release Ed25519 signing identity and independently distributed trusted roots"
+  ]
+}

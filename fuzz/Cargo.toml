@@ -1,0 +1,126 @@
+[package]
+name = "cigar-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+cigar-canon = { path = "../crates/cigar-canon" }
+cigar-catalog = { path = "../crates/cigar-catalog" }
+cigar-code-intel = { path = "../crates/cigar-code-intel" }
+cigar-compiler = { path = "../crates/cigar-compiler" }
+cigar-effects = { path = "../crates/cigar-effects" }
+cigar-extension-host = { path = "../crates/cigar-extension-host" }
+cigar-mcp = { path = "../crates/cigar-mcp" }
+cigar-policy = { path = "../crates/cigar-policy" }
+cigar-protocol = { path = "../crates/cigar-protocol" }
+cigar-replay = { path = "../crates/cigar-replay" }
+cigar-store = { path = "../crates/cigar-store" }
+libfuzzer-sys = "=0.4.13"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+sha2 = "=0.11.0"
+
+[[bin]]
+name = "canonical_json_cbor"
+path = "fuzz_targets/canonical_json_cbor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "public_record_decoders"
+path = "fuzz_targets/public_record_decoders.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "identity_normalization"
+path = "fuzz_targets/identity_normalization.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "policy_parse_evaluate"
+path = "fuzz_targets/policy_parse_evaluate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "contract_compiler_candidates"
+path = "fuzz_targets/contract_compiler_candidates.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "delta_roundtrip"
+path = "fuzz_targets/delta_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "manifest_explanation_redaction"
+path = "fuzz_targets/manifest_explanation_redaction.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "handoff_accept_merge"
+path = "fuzz_targets/handoff_accept_merge.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "materializer_budget"
+path = "fuzz_targets/materializer_budget.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "effect_journal_recovery"
+path = "fuzz_targets/effect_journal_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "replay_envelopes"
+path = "fuzz_targets/replay_envelopes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extension_frames"
+path = "fuzz_targets/extension_frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_messages"
+path = "fuzz_targets/mcp_messages.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "builtin_source_parsers"
+path = "fuzz_targets/builtin_source_parsers.rs"
+test = false
+doc = false
+bench = false

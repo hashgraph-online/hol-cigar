@@ -1,0 +1,117 @@
+.TH CIGAR 1 "2026-07-12" "CIGAR 0.1.0" "User Commands"
+.SH NAME
+cigar \- deterministic context, coordination, effect, and replay client
+.SH SYNOPSIS
+.B cigar
+[global options] command [subcommand] [resource-id]
+.SH DESCRIPTION
+CIGAR compiles each API-backed command into the frozen operation identifier
+and canonical request envelope.
+Mutations require explicit confirmation and support dry run.
+.SH GLOBAL OPTIONS
+.TP
+.BI --output " text|json"
+Select human or versioned JSON output.
+.TP
+.BI --deadline " Nms|Ns|Nm"
+Bound the complete operation.
+.TP
+.BI --target " embedded|local|remote"
+Select an explicit execution target.
+.TP
+.B --dry-run
+Validate and authorize a mutation without committing it.
+.TP
+.B --yes
+Confirm a reviewed state change.
+.TP
+.B --non-interactive
+Disable prompting; unconfirmed mutations fail.
+.TP
+.B --security
+Run the bounded local security checks supported by
+.BR doctor .
+.TP
+.B --deep
+Run the complete content-integrity and projection checks supported by
+.BR doctor .
+.SH COMMANDS
+.TP
+.B init
+Initialize atomic local administration state.
+.TP
+.B source add|list|refresh|inspect|remove
+Manage local CLI source references and run frozen production discovery/status
+operations.
+.TP
+.B ingest
+Ingest an accepted discovery plan.
+.TP
+.B status
+Report structured target readiness.
+.TP
+.B context plan|compile|explain|diff|revalidate|materialize
+Plan, compile, compare, explain, validate, or materialize context.
+.TP
+.B project list|attach|detach|switch|link|unlink
+Manage project eligibility and explicit disclosure links.
+.TP
+.B focus new|switch|checkpoint|close
+Manage the active context space.
+.TP
+.B space fork|publish|log|conflicts
+Operate and inspect durable context spaces.
+.TP
+.B handoff create|preview|inspect|accept|revoke|merge
+Operate governed handoff capsules.
+.TP
+.B effect prepare|approve|dispatch|list|inspect|reconcile|compensate
+Operate the durable effect journal.
+Dispatch and compensation require confirmation.
+.TP
+.B replay reconstruct|run|compare|completeness
+Reconstruct and evaluate replay jobs.
+.TP
+.B policy check|explain
+Evaluate or explain the explicit local production policy profile.
+.TP
+.B backup create|verify|restore
+Create or verify a signed production archive, or restore it to an explicit
+empty target.
+Create and verify take one archive path; restore takes the archive and target
+paths.
+.TP
+.B gc plan|run
+Plan or execute bounded, repository-owned encrypted-blob mark-and-sweep.
+Physical deletion requires a versioned JSON policy document proving expired
+retention and replay windows, no legal hold, a completed backup policy, and a
+positive bounded file limit.
+.TP
+.BI "diagnostics bundle " archive
+Create a deterministic, content-free support archive containing only bounded
+build, configuration, platform, inventory, and diagnostic metadata.
+.TP
+.B doctor [--security] [--deep]
+Report actionable component diagnostics. Security mode validates protected
+local configuration and durable-store settings; deep mode additionally verifies
+retained snapshots, journals, blobs, indexes, and exact SQL and full-text
+projections without emitting stored content.
+.TP
+.B serve
+Run the installed daemon with the configured production file.
+.TP
+.B mcp serve
+Run the installed stdio MCP adapter.
+.TP
+.B plugin install|uninstall|doctor claude-code
+Preview, install, remove, or diagnose the user-scoped Claude Code adapter
+through documented Claude plugin commands. Uninstall preserves portable CIGAR
+catalog data.
+.TP
+.B release verify
+Delegate offline release verification to the authoritative installed task.
+.SH SECURITY
+Authorization material is read from a bounded regular file and is never emitted.
+JSON errors contain only stable public codes, messages, and remediation.
+.SH SEE ALSO
+cigard(1)

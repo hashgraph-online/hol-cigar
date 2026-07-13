@@ -1,0 +1,20 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "prompt-injection-defense",
+  "fixed_seed": 41006,
+  "fixed_time": "2026-01-15T12:05:00Z",
+  "flow": ["ingest-hostile-documents", "classify-instruction-authority", "compile-governed-context", "inspect-explanation", "scan-observable-output"],
+  "documents": [
+    {"path": "docs/hostile.md", "authority": "data", "content_class": "fake-policy-and-exfiltration"},
+    {"path": "src/hidden.txt", "authority": "data", "content_class": "hidden-prompt"},
+    {"path": ".cigar/instructions.md", "authority": "project", "content_class": "approved-instruction"}
+  ],
+  "expected": {
+    "hostile_content_grants_tools": false,
+    "hostile_content_becomes_instruction": false,
+    "secret_exposed": false,
+    "approved_instruction_exact": true,
+    "approved_instruction_mandatory": true
+  },
+  "secret_canary": "DEMO_CANARY_PROMPT_SECRET_682C5F"
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": "cigar.docs-site.v1",
+  "product_version": "0.1.0",
+  "context_abi": "cigar.context.v1",
+  "version_selectors": ["0.1", "latest"],
+  "include": [
+    "docs/README.md", "docs/site/**", "docs/guides/**", "docs/reference/**", "docs/operations/**",
+    "docs/runbooks/**", "docs/troubleshooting/**", "docs/demos/**", "docs/release/**"
+  ],
+  "assets": [
+    "demos/agent-handoff/demo.json", "demos/claude-code/demo.json",
+    "demos/effect-recovery/demo.json", "demos/multiproject-payments/demo.json",
+    "demos/prompt-injection-defense/demo.json", "demos/quickstart/demo.json",
+    "demos/replay-comparison/demo.json",
+    "packaging/artifact-matrix.v1.json", "packaging/qualification-gaps.v1.json",
+    "packaging/schemas/release-trust-policy.v1.schema.json",
+    "packaging/schemas/signature-envelope.v1.schema.json", "schemas/openapi/cigar-v1.json",
+    "schemas/openapi/error-registry-v1.json", "schemas/proto/cigar_service.proto",
+    "schemas/proto/context_abi.proto", "schemas/vectors/replay-v1.json"
+  ],
+  "required_pages": [
+    "docs/site/index.md", "docs/guides/quickstart.md", "docs/guides/install.md", "docs/guides/concepts.md",
+    "docs/guides/workflows.md", "docs/guides/handoffs-effects-replay.md", "docs/guides/claude-code.md",
+    "docs/guides/deployment.md", "docs/guides/sdks.md", "docs/reference/public-api.md",
+    "docs/reference/cli.md", "docs/reference/configuration-errors-metrics-extensions.md",
+    "docs/operations/index.md", "docs/operations/security-hardening.md", "docs/operations/daemon-lifecycle.md",
+    "docs/operations/transport-identity.md", "docs/operations/key-management.md",
+    "docs/operations/capacity-and-queue-age.md", "docs/operations/blob-corruption.md",
+    "docs/operations/revocation-propagation.md", "docs/operations/degraded-compiler.md",
+    "docs/operations/sdk-compatibility.md", "docs/troubleshooting/index.md",
+    "docs/troubleshooting/performance.md", "docs/demos/index.md", "docs/release/verification.md"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "@cigar/sdk",
+  "version": "0.1.0",
+  "description": "CIGAR v1 TypeScript SDK",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CIGAR/cigar.git",
+    "directory": "sdk/typescript"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.10.0 <25"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/",
+    "fixtures/",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "@bufbuild/protobuf": "2.12.1"
+  },
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "2.12.1",
+    "@types/node": "24.10.0",
+    "typescript": "7.0.2"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "generate:check": "python3 ../generate_clients.py --check",
+    "build": "pnpm run clean && tsc && node tools/inline-sources.mjs && node -e \"require('node:fs').copyFileSync('release.json','dist/release.json')\"",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run build && node --test dist/tests/*.test.js",
+    "prepack": "pnpm run build && node -e \"require('node:fs').rmSync('dist/tests',{recursive:true,force:true})\"",
+    "qualify:bundle": "pnpm run build && node dist/examples/verify-shared-bundle.js",
+    "vectors": "node src/verify-vectors.ts ../../schemas/vectors/canonical-v1.json",
+    "replay": "node src/verify-replay.ts ../../schemas/vectors/replay-v1.json",
+    "pack:check": "pnpm run build && node tests/install.mjs"
+  }
+}

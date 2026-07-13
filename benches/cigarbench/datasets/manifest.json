@@ -1,0 +1,95 @@
+{
+  "schema_version": "cigar.benchmark-datasets.v1",
+  "datasets": [
+    {
+      "dataset_id": "longrepo-change-v1",
+      "version": "1.0.0",
+      "stratum": "LongRepo-Change",
+      "task_id": "retry-accounting-change",
+      "fixture": "longrepo-change-v1.json",
+      "fixture_digest": "1220669e1b7dc9bb5740d58ae7d18107d1adc20116ce7f99b062a386a14fe235772e",
+      "license": "Apache-2.0",
+      "canary_ids": ["longrepo"]
+    },
+    {
+      "dataset_id": "multiproject-switch-v1",
+      "version": "1.0.0",
+      "stratum": "MultiProject-Switch",
+      "task_id": "focus-switch-resume",
+      "fixture": "multiproject-switch-v1.json",
+      "fixture_digest": "1220c9c721170c4bc79362841bafdc6cebcd46e28235da567243492ef04a8f4eac33",
+      "license": "Apache-2.0",
+      "canary_ids": ["multiproject"]
+    },
+    {
+      "dataset_id": "agent-handoff-v1",
+      "version": "1.0.0",
+      "stratum": "Agent-Handoff",
+      "task_id": "readonly-research-handoff",
+      "fixture": "agent-handoff-v1.json",
+      "fixture_digest": "1220c31aeb9c7e00db902e9a88078b3dfac78c8ef74bc27f8c32a12dbd4c81d67a1e",
+      "license": "Apache-2.0",
+      "canary_ids": ["handoff"]
+    },
+    {
+      "dataset_id": "temporal-truth-v1",
+      "version": "1.0.0",
+      "stratum": "Temporal-Truth",
+      "task_id": "late-correction-selection",
+      "fixture": "temporal-truth-v1.json",
+      "fixture_digest": "122079cd24fb2ba6615fc8086a26aed26cfef14c2a91fac3af7daf2a382c90df29c1",
+      "license": "Apache-2.0",
+      "canary_ids": ["temporal"]
+    },
+    {
+      "dataset_id": "needle-distractor-v1",
+      "version": "1.0.0",
+      "stratum": "Needle-and-Distractor",
+      "task_id": "durable-before-send",
+      "fixture": "needle-distractor-v1.json",
+      "fixture_digest": "1220df8d5b83dde3e69d66189f3d3214792f69c45bcc047869a2f2d5577508fc6dde",
+      "license": "Apache-2.0",
+      "canary_ids": ["needle"]
+    },
+    {
+      "dataset_id": "policy-boundary-v1",
+      "version": "1.0.0",
+      "stratum": "PolicyBoundary",
+      "task_id": "tenant-purpose-boundary",
+      "fixture": "policy-boundary-v1.json",
+      "fixture_digest": "12203ab43502854550ce7e1ce7770b7bddfed304092cdb58a8da4ba6ad9f11cce997",
+      "license": "Apache-2.0",
+      "canary_ids": ["policy"]
+    },
+    {
+      "dataset_id": "effect-crash-v1",
+      "version": "1.0.0",
+      "stratum": "EffectCrash",
+      "task_id": "accept-before-receipt-recovery",
+      "fixture": "effect-crash-v1.json",
+      "fixture_digest": "1220e3224e0e2f24babdfcdc0bdeb3876bd25a7fc5f76710da4a35ff5de4ae292cd4",
+      "license": "Apache-2.0",
+      "canary_ids": ["effect"]
+    },
+    {
+      "dataset_id": "crossruntime-replay-v1",
+      "version": "1.0.0",
+      "stratum": "CrossRuntime-Replay",
+      "task_id": "sdk-evidence-reproduction",
+      "fixture": "crossruntime-replay-v1.json",
+      "fixture_digest": "1220e65403ee344947a48c43fc025e543c6a83278e0129f27948de192f4863dff6f5",
+      "license": "Apache-2.0",
+      "canary_ids": ["replay"]
+    },
+    {
+      "dataset_id": "catalog-mutation-v1",
+      "version": "1.0.0",
+      "stratum": "CatalogMutation",
+      "task_id": "invalidation-delta",
+      "fixture": "catalog-mutation-v1.json",
+      "fixture_digest": "122043927c6701bf2163e5e487681af815235e94b300f3ae4246782b0959a1ae5b15",
+      "license": "Apache-2.0",
+      "canary_ids": ["catalog"]
+    }
+  ]
+}

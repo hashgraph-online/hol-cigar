@@ -1,0 +1,34 @@
+{
+  "schema_version": "cigar.fuzz-campaign.v1",
+  "minimum_clean_cpu_seconds_per_target": 604800,
+  "smoke_seconds_per_target": 60,
+  "maximum_input_bytes": 1048576,
+  "timeout_seconds": 10,
+  "rss_limit_mib": 2048,
+  "sanitizers": ["address"],
+  "supplemental_memory_model": {
+    "engine": "miri",
+    "flags": [
+      "-Zmiri-strict-provenance",
+      "-Zmiri-symbolic-alignment-check"
+    ],
+    "manifest": "tests/miri/Cargo.toml",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "targets": [
+    "builtin_source_parsers",
+    "canonical_json_cbor",
+    "contract_compiler_candidates",
+    "delta_roundtrip",
+    "effect_journal_recovery",
+    "extension_frames",
+    "handoff_accept_merge",
+    "identity_normalization",
+    "manifest_explanation_redaction",
+    "materializer_budget",
+    "mcp_messages",
+    "policy_parse_evaluate",
+    "public_record_decoders",
+    "replay_envelopes"
+  ]
+}

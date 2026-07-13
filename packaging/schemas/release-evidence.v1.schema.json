@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/release-evidence.v1.schema.json",
+  "title": "CIGAR release evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "product_version", "context_abi", "source", "source_date_epoch", "build", "artifacts", "evidence", "signatures"],
+  "properties": {
+    "schema_version": {"const": "cigar.release-evidence.v1"},
+    "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+    "context_abi": {"const": "cigar.context.v1"},
+    "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "tree_sha256", "committed", "clean"],
+      "properties": {
+        "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+        "tree_sha256": {"$ref": "#/$defs/sha256"},
+        "committed": {"const": true},
+        "clean": {"const": true}
+      }
+    },
+    "build": {"$ref": "#/$defs/fileReference"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evidence"}
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/fileReference"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "safePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+    "fileReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "sha256", "bytes", "contract", "status"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "contract": {"$ref": "#/$defs/safePath"},
+        "status": {"const": "passed"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "source_revision", "status", "artifact_ids", "metrics", "path", "sha256", "bytes"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "category": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+        "status": {"const": "passed"},
+        "artifact_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}
+        },
+        "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

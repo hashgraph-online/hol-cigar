@@ -1,0 +1,26 @@
+[package]
+name = "cigar-extension-host"
+description = "Capability-limited CIGAR extension host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cigar-canon.workspace = true
+cigar-crypto.workspace = true
+cigar-protocol.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+wasmtime.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+wat.workspace = true

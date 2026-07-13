@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "crossruntime-replay-v1",
+  "fixed_seed": 20008,
+  "source_revision": "synthetic-replay-v1",
+  "task": "Reproduce a retained decision through a second SDK without network or connector dispatch.",
+  "critical_context": ["replay/canonical-bundle", "replay/decision-capture", "replay/observation-digest"],
+  "prohibited_context": ["replay/live-provider-call", "replay/effect-dispatch"],
+  "expected_outcome": ["bundle identity equal", "evidence reproduction exact", "external call count zero"],
+  "canary": "BENCH_CANARY_REPLAY_E4A835"
+}

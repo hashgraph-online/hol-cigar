@@ -1,0 +1,60 @@
+CIGAR command-line interface
+
+Usage: cigar [GLOBAL OPTIONS] <command> [subcommand] [resource-id]
+
+Commands:
+  cigar init
+  cigar source add | list | refresh | inspect | remove
+  cigar ingest
+  cigar status
+  cigar context plan | compile | explain | diff | revalidate | materialize
+  cigar project list | attach | detach | switch | link | unlink
+  cigar focus new | switch | checkpoint | close
+  cigar space fork | publish | log | conflicts
+  cigar handoff create | preview | inspect | accept | revoke | merge
+  cigar effect prepare | approve | dispatch | list | inspect | reconcile | compensate
+  cigar replay reconstruct | run | compare | completeness
+  cigar policy check | explain
+  cigar backup create <archive>
+  cigar backup verify <archive>
+  cigar backup restore <archive> <empty-target>
+  cigar gc plan [--input <gc-policy.json>]
+  cigar gc run --input <gc-policy.json>
+  cigar diagnostics bundle <content-free-support.tar>
+  cigar doctor [--security] [--deep]
+  cigar serve
+  cigar mcp serve
+  cigar plugin install claude-code
+  cigar plugin uninstall claude-code
+  cigar plugin doctor claude-code
+  cigar release verify
+  cigar completion <bash|zsh|fish>
+  cigar man
+
+Global options:
+  --output <text|json>                 Select human or versioned machine output
+  --deadline <Nms|Ns|Nm>              Bound the complete command (maximum 5m)
+  --config <path>                     Add an explicit CLI configuration layer
+  --target <embedded|local|remote>    Select the execution target explicitly
+  --embedded | --local | --remote URL Target shortcuts
+  --endpoint <URL>                    Override the selected target endpoint
+  --authorization-file <path>         Read authorization without exposing it in argv
+  --input <path>                      Strict JSON operation request document
+  --idempotency-key <key>             Reuse an exact mutation reservation
+  --expected-revision <revision>      Bind an optimistic mutation
+  --page-cursor <cursor>              Continue a bounded listing
+  --page-size <1..1000>               Bound one page
+  --dry-run                           Validate and authorize without committing
+  --yes                               Confirm a reviewed state change
+  --non-interactive                   Disable all prompts
+  --quiet                             Disable progress
+  --color <auto|always|never>         Control optional color
+  --unicode <auto|always|never>       Control status glyphs
+  --width <20..1000>                  Bound human layout
+  --explain-config                    Print effective values and their sources
+  --security                          Run local security diagnostics
+  --deep                              Verify hashes, journals, and projections
+
+Mutations require --yes unless --dry-run is used. JSON is emitted only on stdout;
+progress is emitted only to an interactive stderr. Secrets are accepted only through files.
+Local source/project/focus references do not rewrite the daemon's trusted production registries.

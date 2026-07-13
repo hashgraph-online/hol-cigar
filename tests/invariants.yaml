@@ -1,0 +1,221 @@
+schema_version: cigar.invariants.v1
+requirement_registry: conformance/profiles/requirements-v1.json
+invariants:
+  - id: INV-CORE-CANONICAL-V1
+    title: Core canonicalization, digest, error, and differential behavior is portable and fail-closed
+    critical: true
+    process_boundary_required: true
+    normative_requirements:
+      - VER-EVIDENCE-001
+      - VER-DETERMINISM-001
+      - VER-JSON-OUTPUT-001
+      - VER-CANON-ROUNDTRIP-001
+      - VER-CANON-DIGEST-001
+      - VER-CANON-DOMAIN-001
+      - VER-CANON-FAIL-CLOSED-001
+      - VER-CANON-DIFFERENTIAL-001
+      - CONF-PROFILES-001
+      - CONF-REQUIRED-NOSKIP-001
+    profiles:
+      - cigar-core-v1
+    fixtures:
+      - conformance/vectors/v1/core-v1.json
+      - conformance/expected/cigar-core-v1.txt
+    release_threshold:
+      metric: required_case_pass_fraction
+      comparator: equal
+      value: 1.0
+    evidence:
+      - reports/conformance-result.v1.json
+    tests:
+      - id: CONF-G001
+        type: golden
+        file: conformance/runner/tests/conformance.rs
+        name: reference_core_profile_passes_and_verifies
+        command: cargo test -p cigar-conformance --test conformance reference_core_profile_passes_and_verifies
+        status: active
+      - id: CONF-N001
+        type: negative
+        file: conformance/runner/tests/conformance.rs
+        name: intentionally_faulty_implementations_fail_hard_invariants
+        command: cargo test -p cigar-conformance --test conformance intentionally_faulty_implementations_fail_hard_invariants
+        status: active
+      - id: CONF-P001
+        type: property
+        file: conformance/runner/tests/conformance.rs
+        name: result_verifier_rejects_every_single_field_tamper
+        command: cargo test -p cigar-conformance --test conformance result_verifier_rejects_every_single_field_tamper
+        status: active
+      - id: CONF-X001
+        type: process_boundary
+        file: conformance/runner/tests/conformance.rs
+        name: every_case_uses_a_fresh_process_and_namespace
+        command: cargo test -p cigar-conformance --test conformance every_case_uses_a_fresh_process_and_namespace
+        status: active
+
+  - id: INV-CONFORMANCE-RUNNER-V1
+    title: Runner binds artifacts, enforces resource isolation, and detects transport faults
+    critical: true
+    process_boundary_required: true
+    normative_requirements:
+      - VER-HERMETIC-001
+      - VER-FIXTURE-IMMUTABILITY-001
+      - CONF-RUNNER-TRANSPORTS-001
+      - CONF-RESULT-SCHEMA-001
+      - CONF-DIGEST-BINDING-001
+      - CONF-ISOLATION-001
+      - CONF-FAULT-DETECTION-001
+      - CONF-FRESH-NAMESPACE-001
+      - CONF-OFFLINE-ARCHIVE-001
+    profiles:
+      - cigar-core-v1
+    fixtures:
+      - conformance/vectors/v1/core-v1.json
+    release_threshold:
+      metric: undetected_fault_count
+      comparator: equal
+      value: 0.0
+    evidence:
+      - reports/conformance-result.v1.json
+    tests:
+      - id: RUN-G001
+        type: golden
+        file: conformance/runner/tests/conformance.rs
+        name: reference_core_profile_passes_and_verifies
+        command: cargo test -p cigar-conformance --test conformance reference_core_profile_passes_and_verifies
+        status: active
+      - id: RUN-N001
+        type: negative
+        file: conformance/runner/tests/conformance.rs
+        name: vector_mutation_is_detected_and_fails_the_run
+        command: cargo test -p cigar-conformance --test conformance vector_mutation_is_detected_and_fails_the_run
+        status: active
+      - id: RUN-P001
+        type: property
+        file: conformance/runner/tests/conformance.rs
+        name: result_verifier_rejects_every_single_field_tamper
+        command: cargo test -p cigar-conformance --test conformance result_verifier_rejects_every_single_field_tamper
+        status: active
+      - id: RUN-X001
+        type: process_boundary
+        file: conformance/runner/tests/conformance.rs
+        name: timeout_crash_malformed_and_output_flood_are_distinct_failures
+        command: cargo test -p cigar-conformance --test conformance timeout_crash_malformed_and_output_flood_are_distinct_failures
+        status: active
+      - id: RUN-C001
+        type: contract
+        file: conformance/runner/tests/conformance.rs
+        name: strict_sandbox_blocks_network_and_filesystem_escape
+        command: cargo test -p cigar-conformance --test conformance strict_sandbox_blocks_network_and_filesystem_escape
+        status: active
+      - id: RUN-C002
+        type: contract
+        file: conformance/runner/tests/conformance.rs
+        name: executable_sdk_http_unix_and_grpc_transports_share_the_protocol
+        command: cargo test -p cigar-conformance --test conformance executable_sdk_http_unix_and_grpc_transports_share_the_protocol
+        status: active
+
+  - id: INV-PRODUCTION-PROFILES-V1
+    title: Every non-core profile executes production-backed positive and fail-closed negative cases
+    critical: true
+    process_boundary_required: true
+    normative_requirements:
+      - CONF-CATALOG-PRODUCTION-001
+      - CONF-CATALOG-FAILCLOSED-001
+      - CONF-COMPILER-PRODUCTION-001
+      - CONF-COMPILER-FAILCLOSED-001
+      - CONF-HANDOFF-PRODUCTION-001
+      - CONF-HANDOFF-FAILCLOSED-001
+      - CONF-EFFECT-PRODUCTION-001
+      - CONF-EFFECT-FAILCLOSED-001
+      - CONF-REPLAY-PRODUCTION-001
+      - CONF-REPLAY-FAILCLOSED-001
+      - CONF-SERVICE-PRODUCTION-001
+      - CONF-SERVICE-FAILCLOSED-001
+      - CONF-RUNTIME-CLAUDE-PRODUCTION-001
+      - CONF-RUNTIME-CLAUDE-FAILCLOSED-001
+    profiles:
+      - cigar-catalog-v1
+      - cigar-compiler-v1
+      - cigar-handoff-v1
+      - cigar-effect-v1
+      - cigar-replay-v1
+      - cigar-service-v1
+      - cigar-runtime-claude-code-v1
+    fixtures:
+      - conformance/vectors/v1/core-v1.json
+      - conformance/expected/cigar-catalog-v1.txt
+      - conformance/expected/cigar-compiler-v1.txt
+      - conformance/expected/cigar-handoff-v1.txt
+      - conformance/expected/cigar-effect-v1.txt
+      - conformance/expected/cigar-replay-v1.txt
+      - conformance/expected/cigar-service-v1.txt
+      - conformance/expected/cigar-runtime-claude-code-v1.txt
+    release_threshold:
+      metric: required_case_pass_fraction
+      comparator: equal
+      value: 1.0
+    evidence:
+      - reports/conformance-result.v1.json
+    tests:
+      - id: PROFILES-G001
+        type: golden
+        file: conformance/runner/tests/conformance.rs
+        name: reference_all_production_profiles_pass_positive_and_negative_cases
+        command: cargo test -p cigar-conformance --test conformance reference_all_production_profiles_pass_positive_and_negative_cases
+        status: active
+      - id: PROFILES-N001
+        type: negative
+        file: conformance/runner/tests/conformance.rs
+        name: every_profile_rejects_wrong_and_skipped_adapters
+        command: cargo test -p cigar-conformance --test conformance every_profile_rejects_wrong_and_skipped_adapters
+        status: active
+      - id: PROFILES-P001
+        type: property
+        file: conformance/runner/tests/conformance.rs
+        name: all_profile_result_verifier_rejects_case_tamper
+        command: cargo test -p cigar-conformance --test conformance all_profile_result_verifier_rejects_case_tamper
+        status: active
+      - id: PROFILES-X001
+        type: process_boundary
+        file: conformance/runner/tests/conformance.rs
+        name: reference_all_production_profiles_pass_positive_and_negative_cases
+        command: cargo test -p cigar-conformance --test conformance reference_all_production_profiles_pass_positive_and_negative_cases
+        status: active
+
+  - id: INV-NORMATIVE-TRACEABILITY-V1
+    title: Every registered normative requirement maps to active executable evidence
+    critical: true
+    process_boundary_required: false
+    normative_requirements:
+      - VER-TRACEABILITY-001
+      - VER-TRACEABILITY-002
+    profiles:
+      - cigar-core-v1
+    fixtures:
+      - conformance/profiles/requirements-v1.json
+    release_threshold:
+      metric: mapped_requirement_fraction
+      comparator: equal
+      value: 1.0
+    evidence:
+      - reports/invariant-traceability.v1.json
+    tests:
+      - id: TRACE-G001
+        type: golden
+        file: conformance/runner/tests/traceability.rs
+        name: repository_traceability_manifest_is_complete
+        command: cargo test -p cigar-conformance --test traceability repository_traceability_manifest_is_complete
+        status: active
+      - id: TRACE-N001
+        type: negative
+        file: conformance/runner/tests/traceability.rs
+        name: traceability_rejects_unmapped_nonexistent_skipped_and_quarantined_tests
+        command: cargo test -p cigar-conformance --test traceability traceability_rejects_unmapped_nonexistent_skipped_and_quarantined_tests
+        status: active
+      - id: TRACE-P001
+        type: property
+        file: conformance/runner/tests/traceability.rs
+        name: traceability_rejects_each_removed_requirement_mapping
+        command: cargo test -p cigar-conformance --test traceability traceability_rejects_each_removed_requirement_mapping
+        status: active

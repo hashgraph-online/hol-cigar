@@ -1,0 +1,320 @@
+{
+  "schema_version": "cigar.claude-code-package.v1",
+  "files": [
+    {
+      "path": ".claude-plugin/plugin.json",
+      "sha256": "0576671e2c3889d54bc7b394eca5aa14d49d9726cd9b63cf8944ed8c384593ec",
+      "bytes": 514
+    },
+    {
+      "path": ".mcp.json",
+      "sha256": "4c88452347dfc1aa4f6c64a1925e42187a1d5cf01a9b5e50f7094805595cdceb",
+      "bytes": 262
+    },
+    {
+      "path": "README.md",
+      "sha256": "8a978f998a056c67239aff35e74bec7c5ef6da3452d7ae1412a2187a1210ddb9",
+      "bytes": 6570
+    },
+    {
+      "path": "agents/context-curator.md",
+      "sha256": "9f2d7a11800405de7ee6bd8dd3ddc6dbbbaf494f38906e7c8ecf2a68b665ba29",
+      "bytes": 496
+    },
+    {
+      "path": "agents/effect-reviewer.md",
+      "sha256": "6ad5afc21ffb0851d67d2c6b096a8609ca4057232211f3826515b882f1530d09",
+      "bytes": 408
+    },
+    {
+      "path": "agents/handoff-curator.md",
+      "sha256": "407a657321955ffee3830b8880b06c73275f81407b447eba4b0e0948907085f4",
+      "bytes": 429
+    },
+    {
+      "path": "compatibility.json",
+      "sha256": "6dc2c190b07b57ae6a7946d9d71b3a46b1700b08ef5111b898b8a79fda89fd62",
+      "bytes": 249
+    },
+    {
+      "path": "hooks/hooks.json",
+      "sha256": "3937c63618ce797aae56d98142f9be84d9aebf2ab336c4a97a51dd631e0968e8",
+      "bytes": 7131
+    },
+    {
+      "path": "schemas/hook-fixture.schema.json",
+      "sha256": "58f1691b955e49c88697c7d2ff9f664e2df85b1869d71482f3b6fd65b403df0b",
+      "bytes": 1543
+    },
+    {
+      "path": "skills/checkpoint/SKILL.md",
+      "sha256": "76c8e815f6fe19c835d685da2267db1e333fd676dccd6b7b17663bccef39bbde",
+      "bytes": 574
+    },
+    {
+      "path": "skills/compile/SKILL.md",
+      "sha256": "e9214903350a699f0d1c55225109106fab978de20c0b1a6819b8475a26e67379",
+      "bytes": 871
+    },
+    {
+      "path": "skills/effect/SKILL.md",
+      "sha256": "e97863a35e4420dfffe960851526905c9c0c8e496e8e590f3a7d7fedc9cae217",
+      "bytes": 745
+    },
+    {
+      "path": "skills/handoff/SKILL.md",
+      "sha256": "77a11a7129e43198a0be816de57394b92a0ad1e983fc2fec3c076ef4c1202103",
+      "bytes": 605
+    },
+    {
+      "path": "skills/why/SKILL.md",
+      "sha256": "95c73b11cddccfbfe903a40d885f72b22464a916b3246d047065de5ef2d1b96a",
+      "bytes": 902
+    },
+    {
+      "path": "tests/README.md",
+      "sha256": "d59b944fd450c34d4a7f6453084c19e43074e0978682034eea31c71cf359c3c8",
+      "bytes": 1282
+    },
+    {
+      "path": "tests/fake-cigar.cmd",
+      "sha256": "c73d4bda48e9a2e09ae2bd44d85391c004f7ab3fbf270a8ad3ba6f348917bd30",
+      "bytes": 1480
+    },
+    {
+      "path": "tests/fake-cigar.sh",
+      "sha256": "abe8d56c839096fc171b911f726e62e3bda001625f8251346582cad4f07cee6b",
+      "bytes": 1480
+    },
+    {
+      "path": "tests/fixtures/events/config-change.json",
+      "sha256": "98697baa7a708942be56ea7b69e5dc14c909a9ad9c2d6f985707c784d6fb19ca",
+      "bytes": 299
+    },
+    {
+      "path": "tests/fixtures/events/cwd-changed.json",
+      "sha256": "dd910d416969f28b2ddc97f44da85377478b836c485d8d9943c05df34fecc271",
+      "bytes": 296
+    },
+    {
+      "path": "tests/fixtures/events/elicitation-result.json",
+      "sha256": "a047698c976c8cdb92215bcaa3ea70ad31de91aeb2d7b37e7582e8dc51d53999",
+      "bytes": 357
+    },
+    {
+      "path": "tests/fixtures/events/elicitation.json",
+      "sha256": "2f22a6bc2050655d55ab1a46a29890a7124e165e80f9bafa64a778c2fd6b8cf4",
+      "bytes": 325
+    },
+    {
+      "path": "tests/fixtures/events/file-changed.json",
+      "sha256": "79408ebf19653beac690dd45c6e3f1958902e9bb8a3f3d0f577a5214e1cefb49",
+      "bytes": 280
+    },
+    {
+      "path": "tests/fixtures/events/instructions-loaded.json",
+      "sha256": "c5925aff3c673d8caa40dd4faf78effb30866587853d04412ba8a3dc4a1d9023",
+      "bytes": 323
+    },
+    {
+      "path": "tests/fixtures/events/message-display.json",
+      "sha256": "423f11400250c0aa45f44299043fdd0f01ad043574941fa44be703ced63b213a",
+      "bytes": 253
+    },
+    {
+      "path": "tests/fixtures/events/notification.json",
+      "sha256": "be2d637a2f876941ae4e19ee73d1d8463e81369fba8ebb337367abc958b6f232",
+      "bytes": 311
+    },
+    {
+      "path": "tests/fixtures/events/permission-denied.json",
+      "sha256": "0620ed36be8d0daab1fb41f414b91b6c5f23794a860d7d64caa0887d5c648886",
+      "bytes": 351
+    },
+    {
+      "path": "tests/fixtures/events/permission-request.json",
+      "sha256": "dd7b43a21bebffcabb0121149004ef46a9237a2e77a21ab597d51505895e85ad",
+      "bytes": 326
+    },
+    {
+      "path": "tests/fixtures/events/post-compact.json",
+      "sha256": "849e2ca1ad237443c577e6daa619e8863bc45fad26067cfdac5106d5cf5b2491",
+      "bytes": 278
+    },
+    {
+      "path": "tests/fixtures/events/post-tool-batch.json",
+      "sha256": "7a89f8944cca215b351a58837c6dc4bf0283dc9a97638c6e40da94a9419c917b",
+      "bytes": 451
+    },
+    {
+      "path": "tests/fixtures/events/post-tool-use-failure.json",
+      "sha256": "b5f61179a5879f4e4da702c5a692e0e7f405699c448fbc5025329c013b1c9688",
+      "bytes": 407
+    },
+    {
+      "path": "tests/fixtures/events/post-tool-use.json",
+      "sha256": "0814f0517bc0d2d1fe567b548d5cebccb1a6657463e953459f92e44fce7dd076",
+      "bytes": 400
+    },
+    {
+      "path": "tests/fixtures/events/pre-compact.json",
+      "sha256": "3e789b0b8abed25d07fd149a292ad0f0e4d1ff947ee6b0f8cffcb355d10d8016",
+      "bytes": 287
+    },
+    {
+      "path": "tests/fixtures/events/pre-tool-use.json",
+      "sha256": "550363d0011b76200d62c652c674a98d52b3bf2747052649f3134877ea3bea6e",
+      "bytes": 340
+    },
+    {
+      "path": "tests/fixtures/events/session-end.json",
+      "sha256": "0139d3b4247f7893a0e4db544c782a4e1bceee56ff9a102917bc3230d3c176ff",
+      "bytes": 221
+    },
+    {
+      "path": "tests/fixtures/events/session-start.json",
+      "sha256": "80a2b732879b5f6d735c04bebdf065d2a91f9dffb80b2b9ebb41167b13919d98",
+      "bytes": 193
+    },
+    {
+      "path": "tests/fixtures/events/setup.json",
+      "sha256": "0130fc91c1737ff0769d9f91473579b1e7b995932ed053b5562258557235825b",
+      "bytes": 216
+    },
+    {
+      "path": "tests/fixtures/events/stop-failure.json",
+      "sha256": "ba81940e4ba12a9a85562cbf70d62d9d333c3f8e943e125d2008f0309be01881",
+      "bytes": 277
+    },
+    {
+      "path": "tests/fixtures/events/stop.json",
+      "sha256": "3fed7d7b6f7bad2b80c962e0d379dad42fe372c6da6394fba7a1ef1f3918f404",
+      "bytes": 223
+    },
+    {
+      "path": "tests/fixtures/events/subagent-start.json",
+      "sha256": "a918b59375a8934a3f066b3a12d9a7c17b1c6337550bb02b756cc46ebe7a830d",
+      "bytes": 263
+    },
+    {
+      "path": "tests/fixtures/events/subagent-stop.json",
+      "sha256": "2109a9a69ced0e61db7789004fea31c6744360b7bde8b2008ebb0287bd83d935",
+      "bytes": 291
+    },
+    {
+      "path": "tests/fixtures/events/task-completed.json",
+      "sha256": "60df6afb4728b58330c7fd5282860b674e0ebe02fa1b11f1f41422a9638d0312",
+      "bytes": 266
+    },
+    {
+      "path": "tests/fixtures/events/task-created.json",
+      "sha256": "ab05375265c8b4c0c1539416e22ff8ff8eb32716f8bf17438df87910b245e5a4",
+      "bytes": 316
+    },
+    {
+      "path": "tests/fixtures/events/teammate-idle.json",
+      "sha256": "7da321f25f4a22172060dd4d4ff9bd516fd2de4fe29b160c84869be65bb0ea25",
+      "bytes": 272
+    },
+    {
+      "path": "tests/fixtures/events/user-prompt-expansion.json",
+      "sha256": "015b2c4d6213cf5b6050fe759e9ad20bc8d7d38163b5ec9a120d9a6a9f000641",
+      "bytes": 290
+    },
+    {
+      "path": "tests/fixtures/events/user-prompt-submit.json",
+      "sha256": "61eac8f29062ea16a8b538adcf9ec7f2498f44258d527f5a9a40db7599cf0af1",
+      "bytes": 264
+    },
+    {
+      "path": "tests/fixtures/events/worktree-create.json",
+      "sha256": "8fb10dc0f9d70d694940562f3c3c205a17fa2d92d7e147ba7752d589963f4124",
+      "bytes": 234
+    },
+    {
+      "path": "tests/fixtures/events/worktree-remove.json",
+      "sha256": "3247d08902a80ee3f4907aeadc8e6759d7360dee62878fc3943393cdf5ea947f",
+      "bytes": 260
+    },
+    {
+      "path": "tests/fixtures/invalid/malformed.json",
+      "sha256": "3ee2ea52fb4cd216ed980cc7d76e52984b7330683ecc61529bbefe2b591c5880",
+      "bytes": 227
+    },
+    {
+      "path": "tests/fixtures/scenarios/governed-effect.json",
+      "sha256": "90f6da9f8cb7ebb26e3003f8d8a370c1c3ad960710bdfa3d7ae46bacf83f474d",
+      "bytes": 364
+    },
+    {
+      "path": "tests/generate-oversized.ps1",
+      "sha256": "d8f2129b21926b4b70485efe4115dab966415808851f44f72180ee03d2953eae",
+      "bytes": 288
+    },
+    {
+      "path": "tests/generate-oversized.sh",
+      "sha256": "6a159c06ce0091133bf015f6369f0429949eb70afdb6751104de945018c73f26",
+      "bytes": 325
+    },
+    {
+      "path": "tests/generate-package-manifest.py",
+      "sha256": "6caef52326fb36bbf3a43d00cbd13954cdb0493b6d97a9ef3f09ccec03cd4424",
+      "bytes": 1235
+    },
+    {
+      "path": "tests/measure_prompt.py",
+      "sha256": "8fa8bcbb82b8d6379b4e3c707d9058e88cae587ed8390d18961b2a33871bac73",
+      "bytes": 2573
+    },
+    {
+      "path": "tests/public-surface-smoke.ps1",
+      "sha256": "7f9e311f62b80b73c319850e3bc01b74346afe405573068c7187d12602032ce4",
+      "bytes": 1228
+    },
+    {
+      "path": "tests/public-surface-smoke.sh",
+      "sha256": "a5c1290af8f211b792f4789b95e4c1e1eb0b5140288a84b56f0eefeb97c48b5b",
+      "bytes": 871
+    },
+    {
+      "path": "tests/run-fixture-demo.ps1",
+      "sha256": "266712eba39c74ff8f56d6e8ea90d90d3afcba38523908fd331fc5436e434ece",
+      "bytes": 5212
+    },
+    {
+      "path": "tests/run-fixture-demo.sh",
+      "sha256": "96aaf5c35752b82a2eeed427303fcb4dd8953c101ba2d58371b2d777226367e9",
+      "bytes": 3667
+    },
+    {
+      "path": "tests/static-private-path-scan.ps1",
+      "sha256": "e7182669c2284cf92cc86f01f2e2067974ec429e7875e430241ce3e503c53177",
+      "bytes": 2012
+    },
+    {
+      "path": "tests/static-private-path-scan.sh",
+      "sha256": "4fba9c4faa0c75c1fcb18ab078aba1ce53a7b8a21c5c654b08b080a93e12abb4",
+      "bytes": 143
+    },
+    {
+      "path": "tests/static_private_path_scan.py",
+      "sha256": "92f9576b83caa1d5e29920330fe75454ea59a60a514b222c7f5c50e3e3e47793",
+      "bytes": 2451
+    },
+    {
+      "path": "tests/validate-package.ps1",
+      "sha256": "2fd8b616da57d69d8c0f2e91e1e29c86772e1d4c1f2a89b3eac63ee5c1ebf2eb",
+      "bytes": 5620
+    },
+    {
+      "path": "tests/validate-package.sh",
+      "sha256": "034a386c1197fe1683dfc462e8e197a68fed0bc6d3cc8b5b979e0c5e28fcae6d",
+      "bytes": 247
+    },
+    {
+      "path": "tests/validate_package.py",
+      "sha256": "6424d2edc5023f6f79fc78d13751119c0e6a16cd8e104730c11a40ee13a848ca",
+      "bytes": 8967
+    }
+  ]
+}

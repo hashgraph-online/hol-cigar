@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cigard-migrate
+  namespace: cigar-shared
+  labels: { app.kubernetes.io/name: cigard-migrate, app.kubernetes.io/part-of: cigar }
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: cigard-migrate, app.kubernetes.io/part-of: cigar }
+    spec:
+      restartPolicy: Never
+      serviceAccountName: cigard
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: prepare-migrator-credential
+          image: busybox@sha256:222ad6d973c0d198014546a65cd02c5fdedcc172123c5b4c2bf0af636550bd94
+          command: ["/bin/sh", "-euc"]
+          args: ["umask 077; cp /raw/postgres-migrator-url /prepared/postgres-migrator-url; cp /raw-postgres-tls/ca.crt /prepared-postgres-tls/postgres-ca.crt; chmod 0600 /prepared/postgres-migrator-url /prepared-postgres-tls/postgres-ca.crt"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          volumeMounts:
+            - { name: raw-migrator, mountPath: /raw, readOnly: true }
+            - { name: raw-postgres-tls, mountPath: /raw-postgres-tls, readOnly: true }
+            - { name: prepared-migrator, mountPath: /prepared }
+            - { name: prepared-postgres-tls, mountPath: /prepared-postgres-tls }
+      containers:
+        - name: migrate
+          image: cigar-daemon:wp18
+          args: ["migrate", "--config", "/etc/cigar/cigard.toml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/cigar/cigard.toml, subPath: cigard.toml, readOnly: true }
+            - { name: prepared-migrator, mountPath: /run/secrets/migrator, readOnly: true }
+            - { name: prepared-postgres-tls, mountPath: /run/secrets/postgres, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: cigar-shared-config, defaultMode: 0444 }
+        - name: raw-migrator
+          secret: { secretName: cigar-shared-migrator, defaultMode: 0440 }
+        - name: raw-postgres-tls
+          secret: { secretName: cigar-postgres-tls, defaultMode: 0440 }
+        - name: prepared-migrator
+          emptyDir: { medium: Memory, sizeLimit: 64Ki }
+        - name: prepared-postgres-tls
+          emptyDir: { medium: Memory, sizeLimit: 4Mi }

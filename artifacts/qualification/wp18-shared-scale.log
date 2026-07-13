@@ -1,0 +1,127 @@
+ Network cigar-wp18-scale-77427-76818_default Creating 
+ Network cigar-wp18-scale-77427-76818_default Created 
+ Volume cigar-wp18-scale-77427-76818_postgres-shared Creating 
+ Volume cigar-wp18-scale-77427-76818_postgres-shared Created 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Creating 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Created 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Starting 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Started 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Waiting 
+ Container cigar-wp18-scale-77427-76818-postgres-1 Healthy 
+WP18 scale source digest: 12203b80500eca294fe7a4a41c135253489646f4d0cda8bfbfbc730fd1961bc81c12
+WP18 scale gate requires exactly 10,000,000 physical production projection rows.
+[1m[92m   Compiling[0m cigar-store v0.1.0 (/Users/construct/Documents/GitHub/CIGAR/cigar-honey/crates/cigar-store)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 30.93s
+[1m[92m     Running[0m tests/postgres_scale.rs (target/release/deps/postgres_scale-7105b5ed862dd2d6)
+
+running 1 test
+wp18-scale: physically inserted 1000/10000000 atoms
+wp18-scale: physically inserted 10000/10000000 atoms
+wp18-scale: physically inserted 100000/10000000 atoms
+wp18-scale: physically inserted 200000/10000000 atoms
+wp18-scale: physically inserted 300000/10000000 atoms
+wp18-scale: physically inserted 400000/10000000 atoms
+wp18-scale: physically inserted 500000/10000000 atoms
+wp18-scale: physically inserted 600000/10000000 atoms
+test postgres_production_projection_physically_qualifies_ten_million_valid_atoms has been running for over 60 seconds
+wp18-scale: physically inserted 700000/10000000 atoms
+wp18-scale: physically inserted 800000/10000000 atoms
+wp18-scale: physically inserted 900000/10000000 atoms
+wp18-scale: physically inserted 1000000/10000000 atoms
+wp18-scale: physically inserted 1100000/10000000 atoms
+wp18-scale: physically inserted 1200000/10000000 atoms
+wp18-scale: physically inserted 1300000/10000000 atoms
+wp18-scale: physically inserted 1400000/10000000 atoms
+wp18-scale: physically inserted 1500000/10000000 atoms
+wp18-scale: physically inserted 1600000/10000000 atoms
+wp18-scale: physically inserted 1700000/10000000 atoms
+wp18-scale: physically inserted 1800000/10000000 atoms
+wp18-scale: physically inserted 1900000/10000000 atoms
+wp18-scale: physically inserted 2000000/10000000 atoms
+wp18-scale: physically inserted 2100000/10000000 atoms
+wp18-scale: physically inserted 2200000/10000000 atoms
+wp18-scale: physically inserted 2300000/10000000 atoms
+wp18-scale: physically inserted 2400000/10000000 atoms
+wp18-scale: physically inserted 2500000/10000000 atoms
+wp18-scale: physically inserted 2600000/10000000 atoms
+wp18-scale: physically inserted 2700000/10000000 atoms
+wp18-scale: physically inserted 2800000/10000000 atoms
+wp18-scale: physically inserted 2900000/10000000 atoms
+wp18-scale: physically inserted 3000000/10000000 atoms
+wp18-scale: physically inserted 3100000/10000000 atoms
+wp18-scale: physically inserted 3200000/10000000 atoms
+wp18-scale: physically inserted 3300000/10000000 atoms
+wp18-scale: physically inserted 3400000/10000000 atoms
+wp18-scale: physically inserted 3500000/10000000 atoms
+wp18-scale: physically inserted 3600000/10000000 atoms
+wp18-scale: physically inserted 3700000/10000000 atoms
+wp18-scale: physically inserted 3800000/10000000 atoms
+wp18-scale: physically inserted 3900000/10000000 atoms
+wp18-scale: physically inserted 4000000/10000000 atoms
+wp18-scale: physically inserted 4100000/10000000 atoms
+wp18-scale: physically inserted 4200000/10000000 atoms
+wp18-scale: physically inserted 4300000/10000000 atoms
+wp18-scale: physically inserted 4400000/10000000 atoms
+wp18-scale: physically inserted 4500000/10000000 atoms
+wp18-scale: physically inserted 4600000/10000000 atoms
+wp18-scale: physically inserted 4700000/10000000 atoms
+wp18-scale: physically inserted 4800000/10000000 atoms
+wp18-scale: physically inserted 4900000/10000000 atoms
+wp18-scale: physically inserted 5000000/10000000 atoms
+wp18-scale: physically inserted 5100000/10000000 atoms
+wp18-scale: physically inserted 5200000/10000000 atoms
+wp18-scale: physically inserted 5300000/10000000 atoms
+wp18-scale: physically inserted 5400000/10000000 atoms
+wp18-scale: physically inserted 5500000/10000000 atoms
+wp18-scale: physically inserted 5600000/10000000 atoms
+wp18-scale: physically inserted 5700000/10000000 atoms
+wp18-scale: physically inserted 5800000/10000000 atoms
+wp18-scale: physically inserted 5900000/10000000 atoms
+wp18-scale: physically inserted 6000000/10000000 atoms
+wp18-scale: physically inserted 6100000/10000000 atoms
+wp18-scale: physically inserted 6200000/10000000 atoms
+wp18-scale: physically inserted 6300000/10000000 atoms
+wp18-scale: physically inserted 6400000/10000000 atoms
+wp18-scale: physically inserted 6500000/10000000 atoms
+wp18-scale: physically inserted 6600000/10000000 atoms
+wp18-scale: physically inserted 6700000/10000000 atoms
+wp18-scale: physically inserted 6800000/10000000 atoms
+wp18-scale: physically inserted 6900000/10000000 atoms
+wp18-scale: physically inserted 7000000/10000000 atoms
+wp18-scale: physically inserted 7100000/10000000 atoms
+wp18-scale: physically inserted 7200000/10000000 atoms
+wp18-scale: physically inserted 7300000/10000000 atoms
+wp18-scale: physically inserted 7400000/10000000 atoms
+wp18-scale: physically inserted 7500000/10000000 atoms
+wp18-scale: physically inserted 7600000/10000000 atoms
+wp18-scale: physically inserted 7700000/10000000 atoms
+wp18-scale: physically inserted 7800000/10000000 atoms
+wp18-scale: physically inserted 7900000/10000000 atoms
+wp18-scale: physically inserted 8000000/10000000 atoms
+wp18-scale: physically inserted 8100000/10000000 atoms
+wp18-scale: physically inserted 8200000/10000000 atoms
+wp18-scale: physically inserted 8300000/10000000 atoms
+wp18-scale: physically inserted 8400000/10000000 atoms
+wp18-scale: physically inserted 8500000/10000000 atoms
+wp18-scale: physically inserted 8600000/10000000 atoms
+wp18-scale: physically inserted 8700000/10000000 atoms
+wp18-scale: physically inserted 8800000/10000000 atoms
+wp18-scale: physically inserted 8900000/10000000 atoms
+wp18-scale: physically inserted 9000000/10000000 atoms
+wp18-scale: physically inserted 9100000/10000000 atoms
+wp18-scale: physically inserted 9200000/10000000 atoms
+wp18-scale: physically inserted 9300000/10000000 atoms
+wp18-scale: physically inserted 9400000/10000000 atoms
+wp18-scale: physically inserted 9500000/10000000 atoms
+wp18-scale: physically inserted 9600000/10000000 atoms
+wp18-scale: physically inserted 9700000/10000000 atoms
+wp18-scale: physically inserted 9800000/10000000 atoms
+wp18-scale: physically inserted 9900000/10000000 atoms
+wp18-scale: physically inserted 10000000/10000000 atoms
+wp18-scale: final 256 correctness samples p95=4330us p99=6508us
+wp18-scale: qualified 10000000 production rows; receipt=/Users/construct/Documents/GitHub/CIGAR/cigar-honey/artifacts/qualification/wp18-shared-scale.json
+test postgres_production_projection_physically_qualifies_ten_million_valid_atoms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 699.62s
+
+WP18 live 10M production atom projection qualification passed.

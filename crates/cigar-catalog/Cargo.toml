@@ -1,0 +1,28 @@
+[package]
+name = "cigar-catalog"
+description = "CIGAR source snapshot, atom, provenance, and invalidation catalog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+cap-fs-ext.workspace = true
+cap-std.workspace = true
+cigar-canon.workspace = true
+cigar-crypto.workspace = true
+cigar-protocol.workspace = true
+cigar-store.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EffectAttempt",
+  "description": "Durable fenced connector dispatch attempt.",
+  "type": "object",
+  "properties": {
+    "attempt_id": {
+      "description": "Unique attempt identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "attempt_number": {
+      "description": "One-based attempt number.",
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 1
+    },
+    "deadline": {
+      "description": "Dispatch deadline.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "effect_id": {
+      "description": "Logical effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "fencing_token": {
+      "description": "Monotonic fencing token.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 1
+    },
+    "request_digest": {
+      "description": "Exact request digest committed before dispatch.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.effect-attempt.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "started_at": {
+      "description": "Claimed time.",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "effect_id",
+    "attempt_number",
+    "fencing_token",
+    "request_digest",
+    "started_at",
+    "deadline"
+  ]
+}

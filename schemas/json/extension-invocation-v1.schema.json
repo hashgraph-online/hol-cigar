@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtensionInvocationV1",
+  "description": "Exact invocation delivered to one activated extension.",
+  "type": "object",
+  "properties": {
+    "authorized_capabilities": {
+      "description": "Sorted effective broker capabilities for this invocation.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExtensionHostCapability"
+      },
+      "maxItems": 32
+    },
+    "deadline_at": {
+      "description": "Exclusive invocation wall deadline.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "deterministic_clock": {
+      "description": "Invocation-fixed clock, present exactly when clock capability is granted.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "deterministic_random_seed": {
+      "description": "Invocation-fixed seed, empty exactly when random capability is absent.",
+      "type": "string",
+      "maxLength": 86
+    },
+    "effective_limits": {
+      "description": "Effective hard limits after intersecting manifest and operator ceilings.",
+      "$ref": "#/$defs/ExtensionLimits"
+    },
+    "extension_id": {
+      "description": "Activated extension identity.",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)*$"
+    },
+    "extension_version": {
+      "description": "Activated extension version.",
+      "$ref": "#/$defs/ExtensionSemanticVersion"
+    },
+    "handles": {
+      "description": "Sorted opaque handles scoped to this invocation.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "contentEncoding": "base64url",
+        "maxLength": 43,
+        "minLength": 43
+      },
+      "maxItems": 1024
+    },
+    "input": {
+      "description": "Exact protected input bytes.",
+      "type": "string",
+      "maxLength": 89478486
+    },
+    "input_digest": {
+      "description": "Digest of exact input bytes.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "input_schema_digest": {
+      "description": "Exact input schema digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "invocation_id": {
+      "description": "Unique invocation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "issued_at": {
+      "description": "Invocation issuance time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "kind": {
+      "description": "Role invoked for this request.",
+      "$ref": "#/$defs/ExtensionKind"
+    },
+    "manifest_digest": {
+      "description": "Exact activated signature-excluded manifest digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "operation": {
+      "description": "Normalized operation selector.",
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 1
+    },
+    "schema_version": {
+      "description": "Must be `cigar.extension-invocation.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "extension_id",
+    "extension_version",
+    "manifest_digest",
+    "kind",
+    "operation",
+    "input_schema_digest",
+    "input_digest",
+    "input",
+    "authorized_capabilities",
+    "handles",
+    "deterministic_random_seed",
+    "effective_limits",
+    "issued_at",
+    "deadline_at"
+  ],
+  "$defs": {
+    "ExtensionComputeBudget": {
+      "description": "Backend-specific compute ceiling.",
+      "oneOf": [
+        {
+          "description": "Deterministic WASM fuel units.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "fuel"
+            },
+            "units": {
+              "description": "Nonzero fuel ceiling.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "units"
+          ]
+        },
+        {
+          "description": "Native or remote CPU-time ceiling.",
+          "type": "object",
+          "properties": {
+            "duration": {
+              "description": "Nonzero CPU duration.",
+              "type": "integer",
+              "format": "uint64",
+              "maximum": 315576000000000000,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "cpu_time"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "duration"
+          ]
+        }
+      ]
+    },
+    "ExtensionHostCapability": {
+      "description": "Closed host authorities that an extension may request.",
+      "oneOf": [
+        {
+          "description": "Read content through an opaque source handle.",
+          "type": "string",
+          "const": "source_read"
+        },
+        {
+          "description": "Read content through an opaque blob handle.",
+          "type": "string",
+          "const": "blob_read"
+        },
+        {
+          "description": "Advance a bounded host-owned iterator.",
+          "type": "string",
+          "const": "bounded_iterator"
+        },
+        {
+          "description": "Read an invocation-fixed deterministic clock.",
+          "type": "string",
+          "const": "deterministic_clock"
+        },
+        {
+          "description": "Read from an invocation-fixed deterministic random stream.",
+          "type": "string",
+          "const": "deterministic_random"
+        },
+        {
+          "description": "Emit bounded structured trace events.",
+          "type": "string",
+          "const": "structured_tracing"
+        },
+        {
+          "description": "Observe invocation cancellation.",
+          "type": "string",
+          "const": "cancellation"
+        },
+        {
+          "description": "Request brokered network I/O to an allowlisted endpoint.",
+          "type": "string",
+          "const": "network"
+        },
+        {
+          "description": "Read through a declared filesystem preopen.",
+          "type": "string",
+          "const": "filesystem_read"
+        },
+        {
+          "description": "Write through a declared filesystem preopen.",
+          "type": "string",
+          "const": "filesystem_write"
+        },
+        {
+          "description": "Forward an opaque secret handle to a final host-owned boundary.",
+          "type": "string",
+          "const": "secret_handle"
+        }
+      ]
+    },
+    "ExtensionKind": {
+      "description": "Closed v1 extension roles.",
+      "oneOf": [
+        {
+          "description": "Discovers or reads a governed source.",
+          "type": "string",
+          "const": "source_connector"
+        },
+        {
+          "description": "Converts source content into immutable atoms.",
+          "type": "string",
+          "const": "atomizer"
+        },
+        {
+          "description": "Produces authorized retrieval candidates.",
+          "type": "string",
+          "const": "retriever"
+        },
+        {
+          "description": "Produces one bounded ranking feature.",
+          "type": "string",
+          "const": "ranking_feature"
+        },
+        {
+          "description": "Produces an evidence-carrying representation transform.",
+          "type": "string",
+          "const": "transform"
+        },
+        {
+          "description": "Verifies a summary against declared evidence.",
+          "type": "string",
+          "const": "summary_verifier"
+        },
+        {
+          "description": "Counts or encodes tokens under one fingerprint.",
+          "type": "string",
+          "const": "tokenizer"
+        },
+        {
+          "description": "Renders a semantic bundle for a consumer.",
+          "type": "string",
+          "const": "materializer"
+        },
+        {
+          "description": "Supplies a policy decision through the trusted policy boundary.",
+          "type": "string",
+          "const": "policy_provider"
+        },
+        {
+          "description": "Implements a storage backend behind trusted repository traits.",
+          "type": "string",
+          "const": "storage_backend"
+        },
+        {
+          "description": "Performs one authorized effect connector operation.",
+          "type": "string",
+          "const": "effect_connector"
+        },
+        {
+          "description": "Reconciles an ambiguous external effect.",
+          "type": "string",
+          "const": "reconciler"
+        }
+      ]
+    },
+    "ExtensionLimits": {
+      "description": "Complete bounded resource profile for one extension invocation.",
+      "type": "object",
+      "properties": {
+        "compute": {
+          "description": "Fuel or CPU-time ceiling.",
+          "$ref": "#/$defs/ExtensionComputeBudget"
+        },
+        "max_concurrency": {
+          "description": "Maximum simultaneous invocations.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "max_host_calls": {
+          "description": "Maximum brokered calls during one invocation.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_input_bytes": {
+          "description": "Maximum exact input bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_memory_bytes": {
+          "description": "Maximum guest memory bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_output_bytes": {
+          "description": "Maximum exact output bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "max_recursion_depth": {
+          "description": "Maximum guest recursion depth.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "wall_deadline": {
+          "description": "Maximum elapsed wall time.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 315576000000000000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "max_memory_bytes",
+        "compute",
+        "wall_deadline",
+        "max_input_bytes",
+        "max_output_bytes",
+        "max_concurrency",
+        "max_recursion_depth",
+        "max_host_calls"
+      ]
+    },
+    "ExtensionSemanticVersion": {
+      "description": "Unambiguous integer semantic version used by extension compatibility ranges.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Semantic major version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Semantic minor version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "patch": {
+          "description": "Semantic patch version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "major",
+        "minor",
+        "patch"
+      ]
+    }
+  }
+}

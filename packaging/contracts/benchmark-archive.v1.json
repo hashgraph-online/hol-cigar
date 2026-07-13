@@ -1,0 +1,16 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "benchmark-archive-v1",
+  "formats": ["tar.gz"],
+  "allow": ["RELEASE-METADATA.json", "LICENSE", "NOTICE", "baselines/**", "benches/**", "packaging/licenses/**"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/target/**"],
+  "required": ["RELEASE-METADATA.json", "benches/cigarbench/datasets/manifest.json", "baselines/cigarbench/manifest.json", "packaging/licenses/Apache-2.0.txt"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 20000,
+  "max_member_bytes": 67108864,
+  "max_total_bytes": 536870912,
+  "content_scan": true,
+  "content_scan_exemptions": []
+}

@@ -1,0 +1,109 @@
+{
+  "packet": "WP15",
+  "source_commit": "workspace:69a5714f68adddcee7c2e8fdb90814bbb30d76f225d201f959df658961525bb2",
+  "prerequisites": [
+    "WP14"
+  ],
+  "owned_paths": [
+    "crates/cigar-cli"
+  ],
+  "commands": [
+    "cargo install --path crates/cigar-cli --root /tmp/cigar-wp15-final-install.SILxNL --locked --force",
+    "CIGAR_CLI_E2E_BINARY=/tmp/cigar-wp15-final-install.SILxNL/bin/cigar cargo test -p cigar-cli --test process_ux -- --test-threads=1",
+    "cargo test -p cigar-cli --all-targets -- --test-threads=1",
+    "cargo clippy -p cigar-cli --all-targets -- -D warnings",
+    "RUSTDOCFLAGS='-D warnings' cargo doc -p cigar-cli --no-deps",
+    "cargo fmt --package cigar-cli -- --check",
+    "bash -n crates/cigar-cli/completions/cigar.bash",
+    "zsh -n crates/cigar-cli/completions/_cigar",
+    "fish -n crates/cigar-cli/completions/cigar.fish (Fish 4.0.2 in Alpine 3.22)",
+    "mandoc -Tlint crates/cigar-cli/man/cigar.1"
+  ],
+  "tests": [
+    {
+      "id": "WP15-COMMAND-CATALOG",
+      "result": "pass",
+      "section_15_commands": 56,
+      "unique": true,
+      "contract_backed": true
+    },
+    {
+      "id": "WP15-PACKAGE-TESTS",
+      "result": "pass",
+      "unit": 22,
+      "installed_binary_process": 6,
+      "failed": 0
+    },
+    {
+      "id": "WP15-INSTALLED-E2E",
+      "result": "pass",
+      "init_through_replay_and_effect_recovery": true,
+      "pty_confirmation_and_progress": true,
+      "http_interrupt": true,
+      "delegated_admin_interrupt_and_child_reap": true,
+      "deadline_atomicity": true,
+      "release_and_mcp_exact_delegation": true
+    },
+    {
+      "id": "WP15-SHELL-ASSETS",
+      "result": "pass",
+      "installed_output_matches_package": true,
+      "bash": "pass",
+      "zsh": "pass",
+      "fish_4_0_2": "pass",
+      "mandoc": "pass"
+    },
+    {
+      "id": "WP15-QUALITY",
+      "result": "pass",
+      "format": "pass",
+      "clippy_warnings": 0,
+      "rustdoc_warnings": 0
+    }
+  ],
+  "metrics": {
+    "installed_binary_sha256": "2b3a806158268543d3f32d600879b1b8719bd0d515efe9d0f4e1458fe12c2d5f",
+    "installed_binary_bytes": 22191760,
+    "commands": 56,
+    "tests_passed": 28,
+    "tests_failed": 0
+  },
+  "artifacts": [
+    {
+      "path": "crates/cigar-cli/Cargo.toml",
+      "sha256": "3e1da82ebb7886b42a83c70e8d7f67a60f809bd0459f485b799d7aa30204c7a1"
+    },
+    {
+      "path": "crates/cigar-cli/src/lib.rs",
+      "sha256": "85934a967eb3aeff7f2aa9c41d4a90326e9c58c7d23878b8e78a483b21114748"
+    },
+    {
+      "path": "crates/cigar-cli/src/main.rs",
+      "sha256": "48d63be1b8dae23cfebc2b7efc12048a24407a66b6071be0ee52b4abfbb2578d"
+    },
+    {
+      "path": "crates/cigar-cli/tests/process_ux.rs",
+      "sha256": "713edd6d9ff44d2b52b02b74feb9dd01137491b55f9be235e8156060df1fdb1c"
+    },
+    {
+      "path": "crates/cigar-cli/completions/cigar.bash",
+      "sha256": "9a6b8b402857b1ab6dd1982b71dda4222d1702beec1ceda6eb9ee65a8da5c3af"
+    },
+    {
+      "path": "crates/cigar-cli/completions/_cigar",
+      "sha256": "63e9c97e10b0694b7a4c34f6a940f5764b79de2f3dab8dd890c96941a2112b09"
+    },
+    {
+      "path": "crates/cigar-cli/completions/cigar.fish",
+      "sha256": "52831cbab91ac1dd087c25b94d79fd24cd26c63f076650a44abc77c801e8bb03"
+    },
+    {
+      "path": "crates/cigar-cli/man/cigar.1",
+      "sha256": "0081cc3419766a31e153e02415e8ad5edfe1cb8eeb7e45be431acdd08a9b8f0d"
+    }
+  ],
+  "known_limitations": [
+    "The CLI release-verify and MCP serve entry points delegate to their exact package boundaries; the referenced release engine and MCP adapter are completed and qualified by WP21 and WP17 respectively."
+  ],
+  "status": "complete"
+}

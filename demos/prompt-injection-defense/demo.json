@@ -1,0 +1,44 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "prompt-injection-defense",
+  "title": "Prompt-injection and secret-canary defense",
+  "fixed_seed": 41006,
+  "fixture": "fixture.json",
+  "fixture_digest": "12206f307204e8f9dbb5d4b0764880ea6400c171261bdc7723f4122d499dfe16f7da",
+  "driver": "driver.py",
+  "driver_digest": "122055bfed32a2a4b5a77c6d0f29e314bd5a57564caf004d54e4ba663603db23da0e",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "hostile-document-fixtures", "network-disabled", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "hostile-content-remains-data", "hostile-content-cannot-grant-tools", "secret-canary-not-exposed",
+    "approved-instruction-exact", "approved-instruction-mandatory", "explanation-disclosure-governed"
+  ],
+  "checks": [
+    {
+      "check_id": "payload-cannot-self-promote",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-policy", "--test", "policy", "payload_text_cannot_self_promote_instruction_authority"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["hostile-content-remains-data", "hostile-content-cannot-grant-tools", "approved-instruction-exact", "approved-instruction-mandatory"]
+    },
+    {
+      "check_id": "secrets-quarantined-before-inclusion",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-catalog", "preview_scans_secrets_before_inclusion_and_reads_exact_ranges"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["secret-canary-not-exposed"]
+    },
+    {
+      "check_id": "materializers-contain-injection",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-compiler", "--test", "materialization_delta_cache", "all_materializers_preserve_blocks_and_contain_delimiter_bidi_attacks"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["explanation-disclosure-governed"]
+    }
+  ],
+  "teardown": ["remove-isolated-home", "remove-hostile-fixtures", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario prompt-injection-defense --output-dir reports/demos",
+  "canary_ids": ["prompt-secret"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

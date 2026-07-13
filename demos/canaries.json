@@ -1,0 +1,12 @@
+{
+  "schema_version": "cigar.demo-canaries.v1",
+  "canaries": [
+    {"id": "offline-context", "value": "DEMO_CANARY_OFFLINE_CONTEXT_13D07A"},
+    {"id": "hr-private", "value": "DEMO_CANARY_HR_PRIVATE_24E18B"},
+    {"id": "parent-transcript", "value": "DEMO_CANARY_PARENT_TRANSCRIPT_35F29C"},
+    {"id": "effect-secret", "value": "DEMO_CANARY_EFFECT_SECRET_460A3D"},
+    {"id": "replay-secret", "value": "DEMO_CANARY_REPLAY_SECRET_571B4E"},
+    {"id": "prompt-secret", "value": "DEMO_CANARY_PROMPT_SECRET_682C5F"},
+    {"id": "claude-secret", "value": "DEMO_CANARY_CLAUDE_SECRET_793D60"}
+  ]
+}

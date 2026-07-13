@@ -1,0 +1,12 @@
+{
+  "session_id": "fixture-effect-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__plugin_cigar_cigar__effect_commit",
+  "tool_input": {
+    "effect_id": "effect-fixture-1"
+  },
+  "tool_use_id": "toolu_fixture_effect"
+}

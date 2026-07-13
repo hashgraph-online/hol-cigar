@@ -1,0 +1,39 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "source-archive-v1",
+  "formats": ["tar.gz"],
+  "allow": [
+    "RELEASE-METADATA.json", ".cargo/**", ".config/**", ".devcontainer/**", ".github/**", ".dockerignore", ".gitignore",
+    ".gitleaks.toml", "Cargo.toml", "Cargo.lock", "IMPLEMENTATION_STATUS.md", "README.md", "LICENSE", "NOTICE", "SECURITY.md",
+    "clippy.toml", "deny.toml", "go.work", "justfile", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+    "prd.md", "pyproject.toml", "rust-toolchain.toml", "rustfmt.toml", "support.toml", "uv.lock", "adapters/**",
+    "analysis/**", "baselines/**", "benches/**", "conformance/**", "connectors/**", "crates/**", "demos/**", "deploy/**",
+    "docs/**", "fuzz/**", "migrations/**", "packaging/**", "schemas/**", "scripts/**", "sdk/**", "spec/**", "tests/**",
+    "tools/**", "vendor/**"
+  ],
+  "deny": [
+    ".git/**", "**/.git/**", "**/.env", "**/.env.*", "**/.npmrc", "**/.pypirc", "**/.netrc",
+    "**/.aws/**", "**/id_rsa", "**/id_ed25519", "**/*.pem", "**/*.key", "**/.DS_Store",
+    "**/__pycache__/**", "**/*.pyc", "**/*.profraw", "**/*.profdata", "**/node_modules/**", "**/target/**",
+    "target/**", "**/.mypy_cache/**", "**/.pytest_cache/**", "**/.ruff_cache/**", "**/.tmp/**", "**/.venv/**",
+    "**/.coverage", "**/htmlcov/**", ".mypy_cache/**", ".pytest_cache/**", ".ruff_cache/**", ".tmp/**", ".venv/**",
+    "artifacts/**", "findings/**", "reports/**"
+  ],
+  "required": [
+    "RELEASE-METADATA.json", "Cargo.toml", "Cargo.lock", "README.md", "NOTICE", "SECURITY.md",
+    "packaging/licenses/Apache-2.0.txt", "packaging/licenses/third-party-policy.v1.json",
+    "packaging/licenses/third-party-inventory.v1.json"
+  ],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 20000,
+  "max_member_bytes": 67108864,
+  "max_total_bytes": 268435456,
+  "content_scan": true,
+  "content_scan_exemptions": [
+    {"pattern": "crates/cigar-catalog/src/secret.rs", "reason": "audited synthetic secret-scanner fixtures"},
+    {"pattern": "scripts/release/release_lib.py", "reason": "the scanner contains its own detection signatures"},
+    {"pattern": "vendor/**", "reason": "pinned upstream source contains documented example credentials"}
+  ]
+}

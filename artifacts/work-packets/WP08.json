@@ -1,0 +1,80 @@
+{
+  "packet": "WP08",
+  "source_commit": "workspace:ad54b65e2b583d8f1072949f30031de4809299781cd3775a6d5d421e24de2cac",
+  "prerequisites": ["WP01", "WP02", "WP05", "WP06", "WP07"],
+  "owned_paths": [
+    "crates/cigar-compiler",
+    "docs/reference/deterministic-compiler.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-compiler --all-targets",
+    "cargo clippy -p cigar-compiler --all-targets --all-features -- -D warnings",
+    "CIGAR_PERFORMANCE_GATES=1 cargo test -p cigar-compiler --test compiler -- --nocapture",
+    "cargo llvm-cov -p cigar-compiler --all-targets --lcov --output-path reports/wp08-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP08-WORKSPACE-NEXTEST", "result": "pass", "count": 160, "skipped": 0 },
+    { "id": "WP08-GOLDEN", "result": "pass", "plan_id": "89c22906-ee10-723b-9ce2-fa1b019c2f18", "manifest_id": "122078ff8edd59dc1df3ae28f591de9058b9eaab4562d92fcc7529213822d2bfdad8", "bundle_id": "12205febd5bb06ffbc44147cf0126543ded08d3b90c9169a16d992c3b14c59074e85" },
+    { "id": "WP08-DETERMINISM", "result": "pass", "permutations_equal": true, "parallel_workers": 8, "parallel_differences": 0 },
+    { "id": "WP08-BRUTE-FORCE-ORACLE", "result": "pass", "small_set_optimum_equal": true },
+    { "id": "WP08-MANDATORY", "result": "pass", "include_or_error_percent": 100.0, "minimum_required_tokens_exact": true },
+    { "id": "WP08-BUDGETS", "result": "pass", "generated_budget_cases": 401, "violations": 0 },
+    { "id": "WP08-PINNING", "result": "pass", "all_component_pins": true, "semantic_contract_fingerprint": true },
+    { "id": "WP08-CONFLICTS", "result": "pass", "critical_equal_rank_rejected": true, "dependency_cycles_rejected": true },
+    { "id": "WP08-PACKING", "result": "pass", "checked_cross_multiplication": true, "one_for_two_swap": true, "profile_versioned": true },
+    { "id": "WP08-DISPOSITIONS", "result": "pass", "reason_codes_covered": 11, "redacted_explanation": true },
+    { "id": "WP08-ADVERSARIAL-RANKER", "result": "pass", "out_of_range_features_rejected": true },
+    { "id": "WP08-PROVENANCE", "result": "pass", "manifest_complete": true, "dependency_closure_complete": true, "invalidation_registered": true },
+    { "id": "WP08-NO-EGRESS", "result": "pass", "model_calls": 0, "network_calls": 0 },
+    { "id": "WP08-MATERIALIZATION-BUDGET", "result": "pass", "materializations": 1000000, "compliant": 1000000 },
+    { "id": "WP08-COMPILE-LATENCY", "result": "pass", "source_catalog_atoms": 1000000, "projected_candidates": 1000, "samples": 30, "p50_ms": 67, "p95_ms": 69, "p99_ms": 70 }
+  ],
+  "metrics": {
+    "nextest_passed": 160,
+    "nextest_skipped": 0,
+    "wp08_scoped_tests": 10,
+    "mandatory_include_or_error_percent": 100.0,
+    "disposition_reason_codes": 11,
+    "parallel_workers": 8,
+    "parallel_differences": 0,
+    "generated_budget_cases": 401,
+    "budget_violations": 0,
+    "materializations": 1000000,
+    "materialization_budget_compliance_percent": 100.0,
+    "compile_source_catalog_atoms": 1000000,
+    "compile_projected_candidates": 1000,
+    "compile_samples": 30,
+    "compile_p50_milliseconds": 67,
+    "compile_p95_milliseconds": 69,
+    "compile_p99_milliseconds": 70,
+    "model_calls": 0,
+    "network_calls": 0,
+    "lcov_lines_found": 1168,
+    "lcov_lines_hit": 914,
+    "lcov_line_percent": 78.25
+  },
+  "artifacts": [
+    { "path": "Cargo.toml", "sha256": "8e1a42266c3fb134b789795ce0354cb68dff2af99668ea9f5fb55091a2253700" },
+    { "path": "Cargo.lock", "sha256": "a43659ea911f6f4a2d50f1fd8a8731fdfbd0e3279e2d37bab6cd34276fd9584f" },
+    { "path": "crates/cigar-compiler/Cargo.toml", "sha256": "d2d43587e10204af83632a2226555756f063b2cb5f6b0fa13146ccda4b616f79" },
+    { "path": "crates/cigar-compiler/README.md", "sha256": "bf18ecbe4bb1f2e14d6ec55a380d0f22eec158d7b9a2e5a764e4ce1f32a78b06" },
+    { "path": "crates/cigar-compiler/src/lib.rs", "sha256": "3f4b304d4f3b3795c7fe0195cf616394f92f45c4b1e012889c6e078f3a79ef54" },
+    { "path": "crates/cigar-compiler/src/contract.rs", "sha256": "4ea4df19fa216590be55988ab5a766eb06caa61bd16cccb90f362ddcb73ed00d" },
+    { "path": "crates/cigar-compiler/src/compiler.rs", "sha256": "40e61276908fcf4622f66f15b59fabfb9c36e80bc387e4d8320d0f3d9495ee70" },
+    { "path": "crates/cigar-compiler/tests/compiler.rs", "sha256": "e671cce5d518db963296dbc2f2d2d19c16acab613e946d646a50037ef0f78c6b" },
+    { "path": "docs/reference/deterministic-compiler.md", "sha256": "bb8090c059d680bc029a47897859d9e8747fbceefe431441686778e99d4bfe2c" },
+    { "path": "reports/wp08-lcov.info", "sha256": "c5a03fb098ed1fd30513e9b612e7ba687fdb0000df3a0f78a25a7ec64da4d2f7" }
+  ],
+  "known_limitations": [
+    "The compile latency gate uses the bounded 1,000-candidate projection produced from the declared 1M-atom catalog profile; the integrated 1M-atom/10M-edge installed-daemon load curve is repeated in WP19-WP20.",
+    "WP08 consumes exact target token counts in representation variants; tokenizer implementations, provider framing, materializers, caches, and deltas are owned by WP09."
+  ],
+  "status": "complete"
+}

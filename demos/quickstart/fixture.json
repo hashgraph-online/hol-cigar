@@ -1,0 +1,25 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "offline-context-compiler",
+  "fixed_seed": 41001,
+  "fixed_time": "2026-01-15T12:00:00Z",
+  "flow": ["initialize-preview", "ingest-offline", "compile-contract", "inspect-lanes", "mutate-source", "compile-delta", "explain-delta"],
+  "repository_generator": {
+    "file_count": 120,
+    "families": ["source", "tests", "architecture-decisions", "issue-excerpts", "stale-alternatives", "distractors"],
+    "newline": "lf",
+    "unicode_form": "NFC"
+  },
+  "goal": "Fix the duplicate retry race and add a regression test",
+  "budget_tokens": 6000,
+  "baseline_physical_tokens": 18400,
+  "maximum_compiled_physical_tokens": 11040,
+  "expected": {
+    "strong_index_watermark": true,
+    "selected_provenance_rate": 1.0,
+    "superseded_decision_selected": false,
+    "delta_roundtrip": true,
+    "minimum_reduction_percent": 40
+  },
+  "secret_canary": "DEMO_CANARY_OFFLINE_CONTEXT_13D07A"
+}

@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DecisionRecord",
+  "description": "Observable, evidence-backed decision record; hidden reasoning is intentionally absent.",
+  "type": "object",
+  "properties": {
+    "asserted_claims": {
+      "description": "Sorted asserted-claim record digests.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "bundle_id": {
+      "description": "Context bundle identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "completed_at": {
+      "description": "Execution completion.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "consumer_fingerprint": {
+      "description": "Consumer implementation fingerprint.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "decision_id": {
+      "description": "Content-derived decision identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "effects": {
+      "description": "Sorted logical effect identities.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 36,
+        "minLength": 36,
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      },
+      "maxItems": 10000
+    },
+    "evidence": {
+      "description": "Sorted evidence record digests.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "materialization_digest": {
+      "description": "Exact materialization digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "outcome": {
+      "description": "Observed outcome.",
+      "$ref": "#/$defs/DecisionOutcome"
+    },
+    "output_artifacts": {
+      "description": "Sorted output artifact records.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "plan_digest": {
+      "description": "Digest of the full plan.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "plan_id": {
+      "description": "Planner output identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "runtime_fingerprint": {
+      "description": "Runtime implementation fingerprint.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.decision-record.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "started_at": {
+      "description": "Execution start.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "task_digest": {
+      "description": "Digest of the observable task statement.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "uncertainty": {
+      "description": "Sorted uncertainty record digests.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    },
+    "usage": {
+      "description": "Exact usage accounting.",
+      "$ref": "#/$defs/UsageRecord"
+    },
+    "verification_receipts": {
+      "description": "Sorted verification receipt identities.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "task_digest",
+    "plan_id",
+    "plan_digest",
+    "bundle_id",
+    "materialization_digest",
+    "runtime_fingerprint",
+    "consumer_fingerprint",
+    "output_artifacts",
+    "asserted_claims",
+    "evidence",
+    "uncertainty",
+    "verification_receipts",
+    "effects",
+    "usage",
+    "started_at",
+    "completed_at",
+    "outcome",
+    "extensions"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "DecisionOutcome": {
+      "description": "Closed observed decision outcome.",
+      "oneOf": [
+        {
+          "description": "Declared job completed and verification passed.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Job failed or verification contradicted its claims.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Some declared work remains incomplete.",
+          "type": "string",
+          "const": "partial"
+        },
+        {
+          "description": "Execution was cancelled before completion.",
+          "type": "string",
+          "const": "cancelled"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "UsageRecord": {
+      "description": "Exact integer consumer usage; monetary values use integer micros.",
+      "type": "object",
+      "properties": {
+        "cached_input_tokens": {
+          "description": "Provider-reported cached input tokens.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cost_micros": {
+          "description": "Cost in millionths of the configured currency unit.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "input_tokens": {
+          "description": "Physical input tokens.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "description": "Physical output tokens.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cached_input_tokens",
+        "cost_micros"
+      ]
+    }
+  }
+}

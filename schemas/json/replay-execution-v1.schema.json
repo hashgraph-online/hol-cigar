@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReplayExecution",
+  "description": "One new replay execution; never mutates the source decision.",
+  "type": "object",
+  "properties": {
+    "completed_at": {
+      "description": "Completion time when terminal.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "completeness": {
+      "description": "Dependency completeness.",
+      "$ref": "#/$defs/ReplayCompleteness"
+    },
+    "effect_dispatch_permitted": {
+      "description": "Whether newly authorized effect dispatch was enabled.",
+      "type": "boolean"
+    },
+    "egress_permitted": {
+      "description": "Whether network egress was enabled.",
+      "type": "boolean"
+    },
+    "execution_id": {
+      "description": "Unique execution identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "mode": {
+      "description": "Executed mode.",
+      "$ref": "#/$defs/ReplayMode"
+    },
+    "observation_digest": {
+      "description": "Recorded or live observation digest when available.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "reconstructed_input_digest": {
+      "description": "Reconstructed consumer input digest when available.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "request_id": {
+      "description": "Source request identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.replay-execution.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "started_at": {
+      "description": "Start time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "description": "Execution status.",
+      "$ref": "#/$defs/ReplayStatus"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "request_id",
+    "mode",
+    "status",
+    "completeness",
+    "egress_permitted",
+    "effect_dispatch_permitted",
+    "started_at"
+  ],
+  "$defs": {
+    "DependencyKind": {
+      "description": "Dependency categories reported by replay completeness.",
+      "oneOf": [
+        {
+          "description": "Source snapshot or atom.",
+          "type": "string",
+          "const": "source"
+        },
+        {
+          "description": "Protected blob.",
+          "type": "string",
+          "const": "blob"
+        },
+        {
+          "description": "Policy snapshot.",
+          "type": "string",
+          "const": "policy"
+        },
+        {
+          "description": "Index generation.",
+          "type": "string",
+          "const": "index"
+        },
+        {
+          "description": "Selection manifest.",
+          "type": "string",
+          "const": "manifest"
+        },
+        {
+          "description": "Context bundle.",
+          "type": "string",
+          "const": "bundle"
+        },
+        {
+          "description": "Tokenizer implementation.",
+          "type": "string",
+          "const": "tokenizer"
+        },
+        {
+          "description": "Provider adapter.",
+          "type": "string",
+          "const": "adapter"
+        },
+        {
+          "description": "Consumer runtime.",
+          "type": "string",
+          "const": "consumer"
+        },
+        {
+          "description": "Tool schema.",
+          "type": "string",
+          "const": "tool_schema"
+        },
+        {
+          "description": "Declared environment component.",
+          "type": "string",
+          "const": "environment"
+        }
+      ]
+    },
+    "ReplayCompleteness": {
+      "description": "Explicit available and missing replay dependencies.",
+      "type": "object",
+      "properties": {
+        "available": {
+          "description": "Sorted available dependency categories.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DependencyKind"
+          },
+          "maxItems": 10000
+        },
+        "missing": {
+          "description": "Sorted missing dependency categories.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DependencyKind"
+          },
+          "maxItems": 10000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "missing"
+      ]
+    },
+    "ReplayMode": {
+      "description": "Closed replay execution mode.",
+      "oneOf": [
+        {
+          "description": "Verify retained source, policy, index, manifest, and bundle evidence.",
+          "type": "string",
+          "const": "evidence_reproduction"
+        },
+        {
+          "description": "Reconstruct exact declared invocation without invoking dependencies.",
+          "type": "string",
+          "const": "invocation_reproduction"
+        },
+        {
+          "description": "Substitute recorded observations under denied egress.",
+          "type": "string",
+          "const": "observational"
+        },
+        {
+          "description": "Invoke configured dependencies as a new explicitly authorized execution.",
+          "type": "string",
+          "const": "live_comparison"
+        }
+      ]
+    },
+    "ReplayStatus": {
+      "description": "Closed replay execution status.",
+      "oneOf": [
+        {
+          "description": "Execution is currently running.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "Requested replay completed.",
+          "type": "string",
+          "const": "complete"
+        },
+        {
+          "description": "Replay failed validation or execution.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Replay stopped due to missing dependencies.",
+          "type": "string",
+          "const": "incomplete"
+        }
+      ]
+    }
+  }
+}

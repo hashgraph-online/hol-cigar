@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EffectReceipt",
+  "description": "Protected connector receipt for one fenced attempt.",
+  "type": "object",
+  "properties": {
+    "attempt_id": {
+      "description": "Source attempt identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "effect_id": {
+      "description": "Logical effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "observed_at": {
+      "description": "Observation time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "outcome": {
+      "description": "Definitive or ambiguous outcome.",
+      "$ref": "#/$defs/ReceiptOutcome"
+    },
+    "protected_response": {
+      "description": "Protected raw response reference when available.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BlobRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "receipt_id": {
+      "description": "Unique receipt identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "remote_operation_id": {
+      "description": "Remote operation identifier when available.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "response_digest": {
+      "description": "Normalized response digest when available.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.effect-receipt.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "verification_digest": {
+      "description": "Verification evidence digest.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "effect_id",
+    "attempt_id",
+    "outcome",
+    "observed_at"
+  ],
+  "$defs": {
+    "BlobRef": {
+      "description": "Reference to encrypted content-addressed payload bytes.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Exact content digest.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "media_type": {
+          "description": "Payload media type.",
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
+        },
+        "size_bytes": {
+          "description": "Plaintext payload size before encryption.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "digest",
+        "size_bytes",
+        "media_type"
+      ]
+    },
+    "ReceiptOutcome": {
+      "description": "Closed receipt outcome after a dispatch observation.",
+      "oneOf": [
+        {
+          "description": "Remote mutation and response are confirmed successful.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Remote rejection or failure is definitive.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Request may have executed but cannot yet be proven.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    }
+  }
+}

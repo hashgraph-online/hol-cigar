@@ -1,0 +1,44 @@
+.git/
+target/
+node_modules/
+.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.DS_Store
+*.log
+coverage/
+
+# Local daemon state, generated evidence, and release packages are never inputs.
+.cigar/
+**/.cigar/
+.tmp/
+**/.tmp/
+reports/
+artifacts/packages/
+
+# Local environment and credential stores. Keep documented, non-secret examples.
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+**/.aws/
+**/.ssh/
+**/.gnupg/
+**/.netrc
+**/.npmrc
+**/.pypirc
+**/.cargo/credentials
+**/.cargo/credentials.toml
+
+# Common private-key containers. Certificate fixtures remain available to builds.
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/id_rsa
+**/id_rsa.*
+**/id_ed25519
+**/id_ed25519.*

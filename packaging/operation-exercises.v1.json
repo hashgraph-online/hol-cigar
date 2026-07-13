@@ -1,0 +1,45 @@
+{
+  "schema_version": "cigar.operation-exercises.v1",
+  "exercises": [
+    {
+      "id": "backup",
+      "document": "docs/runbooks/shared-backup-restore.md",
+      "required_terms": ["signed CIGAR inventory", "pg_export_snapshot()", "streaming offline archive verification", "content-free verification receipt"]
+    },
+    {
+      "id": "restore",
+      "document": "docs/runbooks/shared-backup-restore.md",
+      "required_terms": ["new empty database", "distinct destination identities", "replay-completeness checks", "rollback window"]
+    },
+    {
+      "id": "key-rotation",
+      "document": "docs/operations/key-rotation.md",
+      "required_terms": ["## Preconditions", "## Exercise", "## Stop conditions and evidence", "historical decrypt/verify key"]
+    },
+    {
+      "id": "migration",
+      "document": "docs/runbooks/shared-rolling-migration.md",
+      "required_terms": ["restorable database/object backup", "append-only and checksum-verified", "maxUnavailable: 0", "Schema rollback"]
+    },
+    {
+      "id": "index-rebuild",
+      "document": "docs/operations/index-rebuild.md",
+      "required_terms": ["## Preconditions", "## Exercise", "## Stop conditions and rollback", "never exceed it"]
+    },
+    {
+      "id": "unknown-effect",
+      "document": "docs/operations/unknown-effect.md",
+      "required_terms": ["## Preconditions", "## Exercise", "## Stop conditions", "keep the state unknown"]
+    },
+    {
+      "id": "journal-quarantine",
+      "document": "docs/operations/journal-quarantine.md",
+      "required_terms": ["## Preconditions", "## Exercise", "## Stop conditions", "never rewrite history in place"]
+    },
+    {
+      "id": "adapter-disable",
+      "document": "docs/operations/adapter-disable.md",
+      "required_terms": ["## Preconditions", "## Exercise", "## Stop conditions", "fail closed before adapter code"]
+    }
+  ]
+}

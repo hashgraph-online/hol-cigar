@@ -1,0 +1,70 @@
+{
+  "packet": "WP01",
+  "source_commit": "workspace:630da74e0bc2d604dc33287997d94968198afdc6886f0d47e2cf4c3e3de57a58",
+  "prerequisites": ["WP00"],
+  "owned_paths": [
+    "crates/cigar-protocol",
+    "crates/cigar-testkit",
+    "spec/context-abi",
+    "spec/errors/catalog.yaml",
+    "schemas/json",
+    "schemas/proto/context_abi.proto",
+    "schemas/fixtures/wp01",
+    "sdk/typescript/src/generated",
+    "sdk/python/src/cigar_sdk/generated",
+    "sdk/go/gen/contextv1"
+  ],
+  "commands": [
+    "cargo xtask bootstrap",
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask lint",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "protoc --descriptor_set_out=.tmp/context-abi.pb --proto_path=schemas/proto schemas/proto/context_abi.proto",
+    "corepack pnpm --filter @cigar/sdk typecheck",
+    "uv run --project sdk/python python -c 'from cigar_sdk.generated import context_abi_pb2'",
+    "go test ./... (working directory sdk/go)",
+    "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/wp01-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP01-SEMANTIC-UNIT", "result": "pass", "count": 43 },
+    { "id": "WP01-FIXTURE-MATRIX", "result": "pass", "count": 342 },
+    { "id": "WP01-ENUM-UNION-COVERAGE", "result": "pass", "families": 37 },
+    { "id": "WP01-REQUIRED-CONSTRUCTORS", "result": "pass", "types": 52 },
+    { "id": "WP01-SCHEMA-BOUNDS", "result": "pass" },
+    { "id": "WP01-GENERATION-REPRODUCIBILITY", "result": "pass" },
+    { "id": "WP01-MULTILANGUAGE-WIRE-COMPILE", "result": "pass", "languages": ["rust", "typescript", "python", "go"] },
+    { "id": "WP01-PORTABLE-DEPENDENCY-ALLOWLIST", "result": "pass" }
+  ],
+  "metrics": {
+    "nextest_passed": 53,
+    "nextest_skipped": 0,
+    "fixtures_total": 342,
+    "fixtures_valid": 295,
+    "fixtures_invalid": 47,
+    "record_fixtures": 50,
+    "fixture_targets": 96,
+    "json_schemas": 36,
+    "protobuf_messages": 62,
+    "protobuf_enums": 31,
+    "reference_documents": 7,
+    "lcov_lines_found": 6010,
+    "lcov_lines_hit": 3733,
+    "lcov_line_percent": 62.11
+  },
+  "artifacts": [
+    { "path": "schemas/generated-manifest.json", "sha256": "f0d2a0ca86a1064b67c75a6b778e8491fe611dc3cf9960828d97df0243bb6f1f" },
+    { "path": "schemas/fixtures/wp01/manifest.json", "sha256": "f0d16da650500fe0136d3e66cdd65ca8f30a435e7871d82e718140b5d6502fa1" },
+    { "path": "schemas/proto/context_abi.proto", "sha256": "a2d234526f4e04ce6487c7685dfb563a8d96b6e39490da1c60c5821cece48a34" },
+    { "path": "crates/cigar-protocol/src/generated/cigar/context/v1/cigar.context.v1.rs", "sha256": "ad8a9cc45f107d7c3f88728113532e9eabe255805ebce5d4859d5dac4538af22" },
+    { "path": "sdk/typescript/src/generated/context_abi_pb.ts", "sha256": "083d12e329ecf573edee373dd6c035bef4991eec52cdcc1fb4f26097ebb9f3e6" },
+    { "path": "sdk/python/src/cigar_sdk/generated/context_abi_pb2.py", "sha256": "b8d85090fb5a510f2cb58f685e1bbce27e18affd9a90d50396a84f6b3e0a6da2" },
+    { "path": "sdk/go/gen/contextv1/context_abi.pb.go", "sha256": "129957561284adcb94c75d5a8c7b01e3f2d72075959eb6646b9ccb9907c1348b" },
+    { "path": "reports/wp01-lcov.info", "sha256": "6103a155f7420f17fa526ddd603a83c0e97d698935f716c5e4285f1b2f4eb225" }
+  ],
+  "known_limitations": [
+    "Canonical CBOR, cryptographic identities, and generated transport error registries are intentionally owned by WP02."
+  ],
+  "status": "complete"
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/release-metadata.v1.schema.json",
+  "title": "CIGAR archive release metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_id", "product_version", "context_abi", "source_date_epoch", "source", "input_tree_sha256", "input_file_count", "contract", "contract_sha256"],
+  "properties": {
+    "schema_version": {"const": "cigar.release-metadata.v1"},
+    "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "product_version": {"type": "string", "minLength": 1},
+    "context_abi": {"const": "cigar.context.v1"},
+    "source_date_epoch": {"type": "integer", "minimum": 0},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "tree_sha256", "committed", "clean"],
+      "properties": {
+        "revision": {"type": "string", "minLength": 1},
+        "tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "committed": {"type": "boolean"}, "clean": {"type": "boolean"}
+      }
+    },
+    "input_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_file_count": {"type": "integer", "minimum": 1},
+    "contract": {"type": "string", "minLength": 1},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

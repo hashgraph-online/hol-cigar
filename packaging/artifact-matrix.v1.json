@@ -1,0 +1,170 @@
+{
+  "schema_version": "cigar.artifact-matrix.v1",
+  "product": "cigar",
+  "product_version": "0.1.0",
+  "context_abi": "cigar.context.v1",
+  "release_state": "development",
+  "artifacts": [
+    {
+      "id": "source",
+      "kind": "source-archive",
+      "filename": "cigar-0.1.0-source.tar.gz",
+      "contract": "contracts/source-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "reproducibility", "sbom", "license", "signature", "provenance"]
+    },
+    {
+      "id": "docs",
+      "kind": "documentation-archive",
+      "filename": "cigar-0.1.0-docs.tar.gz",
+      "contract": "contracts/docs-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "docs", "sbom", "license", "signature"]
+    },
+    {
+      "id": "schemas",
+      "kind": "schema-archive",
+      "filename": "cigar-0.1.0-schemas.tar.gz",
+      "contract": "contracts/schemas-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "conformance", "sbom", "license", "signature"]
+    },
+    {
+      "id": "conformance",
+      "kind": "conformance-archive",
+      "filename": "cigar-0.1.0-conformance.tar.gz",
+      "contract": "contracts/conformance-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "conformance", "sbom", "license", "signature"]
+    },
+    {
+      "id": "benchmarks",
+      "kind": "benchmark-fixture-archive",
+      "filename": "cigar-0.1.0-benchmarks.tar.gz",
+      "contract": "contracts/benchmark-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "benchmark", "sbom", "license", "signature"]
+    },
+    {
+      "id": "licenses",
+      "kind": "license-archive",
+      "filename": "cigar-0.1.0-licenses.tar.gz",
+      "contract": "contracts/license-archive.v1.json",
+      "producer": "python3 scripts/release/build_archives.py",
+      "required_for_release": true,
+      "qualification": ["archive-contract", "sbom", "license", "signature"]
+    },
+    {
+      "id": "cli-daemon-linux-x86_64-gnu",
+      "kind": "binary-archive",
+      "filename": "cigar-0.1.0-x86_64-unknown-linux-gnu.tar.gz",
+      "contract": "contracts/binary-archive.v1.json",
+      "platform": "x86_64-unknown-linux-gnu",
+      "required_for_release": true,
+      "qualification": ["installed-artifact", "unprivileged", "offline", "upgrade", "sbom", "license", "signature"]
+    },
+    {
+      "id": "cli-daemon-linux-aarch64-gnu",
+      "kind": "binary-archive",
+      "filename": "cigar-0.1.0-aarch64-unknown-linux-gnu.tar.gz",
+      "contract": "contracts/binary-archive.v1.json",
+      "platform": "aarch64-unknown-linux-gnu",
+      "required_for_release": true,
+      "qualification": ["installed-artifact", "unprivileged", "offline", "upgrade", "sbom", "license", "signature"]
+    },
+    {
+      "id": "cli-daemon-macos-x86_64",
+      "kind": "binary-archive",
+      "filename": "cigar-0.1.0-x86_64-apple-darwin.tar.gz",
+      "contract": "contracts/binary-archive.v1.json",
+      "platform": "x86_64-apple-darwin",
+      "required_for_release": true,
+      "qualification": ["installed-artifact", "unprivileged", "offline", "upgrade", "sbom", "license", "signature", "platform-signing", "notarization"]
+    },
+    {
+      "id": "cli-daemon-macos-aarch64",
+      "kind": "binary-archive",
+      "filename": "cigar-0.1.0-aarch64-apple-darwin.tar.gz",
+      "contract": "contracts/binary-archive.v1.json",
+      "platform": "aarch64-apple-darwin",
+      "required_for_release": true,
+      "qualification": ["installed-artifact", "unprivileged", "offline", "upgrade", "sbom", "license", "signature", "platform-signing", "notarization"]
+    },
+    {
+      "id": "cli-daemon-windows-x86_64",
+      "kind": "binary-archive",
+      "filename": "cigar-0.1.0-x86_64-pc-windows-msvc.zip",
+      "contract": "contracts/binary-archive.v1.json",
+      "platform": "x86_64-pc-windows-msvc",
+      "required_for_release": true,
+      "qualification": ["installed-artifact", "non-admin", "offline", "long-path", "upgrade", "sbom", "license", "signature", "platform-signing"]
+    },
+    {
+      "id": "typescript-sdk",
+      "kind": "npm-package",
+      "filename": "cigar-sdk-0.1.0.tgz",
+      "contract": "contracts/npm-package.v1.json",
+      "ecosystem": "npm",
+      "required_for_release": true,
+      "qualification": ["npm-pack", "clean-install", "offline", "version-abi-consistency", "sbom", "license", "signature"]
+    },
+    {
+      "id": "rust-sdk-crate",
+      "kind": "cargo-crate",
+      "filename": "cigar-sdk-0.1.0.crate",
+      "contract": "contracts/cargo-crate.v1.json",
+      "ecosystem": "crates.io",
+      "required_for_release": true,
+      "qualification": ["cargo-package", "clean-install", "offline", "version-abi-consistency", "sbom", "license", "signature"]
+    },
+    {
+      "id": "python-sdk-sdist",
+      "kind": "python-sdist",
+      "filename": "cigar_sdk-0.1.0.tar.gz",
+      "contract": "contracts/python-sdist.v1.json",
+      "ecosystem": "python",
+      "required_for_release": true,
+      "qualification": ["twine-check", "clean-install", "offline", "version-abi-consistency", "sbom", "license", "signature"]
+    },
+    {
+      "id": "python-sdk-wheel",
+      "kind": "python-wheel",
+      "filename": "cigar_sdk-0.1.0-py3-none-any.whl",
+      "contract": "contracts/python-wheel.v1.json",
+      "ecosystem": "python",
+      "required_for_release": true,
+      "qualification": ["wheel-matrix", "clean-install", "offline", "version-abi-consistency", "sbom", "license", "signature"]
+    },
+    {
+      "id": "go-sdk",
+      "kind": "go-module",
+      "filename": "cigar-go-sdk-0.1.0.zip",
+      "contract": "contracts/go-module.v1.json",
+      "ecosystem": "go",
+      "required_for_release": true,
+      "qualification": ["go-list", "go-vet", "clean-install", "offline", "version-abi-consistency", "sbom", "license", "signature"]
+    },
+    {
+      "id": "claude-code-plugin",
+      "kind": "plugin-archive",
+      "filename": "cigar-claude-code-0.1.0.tar.gz",
+      "contract": "contracts/plugin-archive.v1.json",
+      "required_for_release": true,
+      "qualification": ["plugin-validator", "clean-install", "offline", "sbom", "license", "signature"]
+    },
+    {
+      "id": "shared-oci",
+      "kind": "oci-index",
+      "filename": "cigar-cigard-0.1.0.oci.tar",
+      "contract": "contracts/oci-image.v1.json",
+      "platform": "linux/amd64,linux/arm64",
+      "required_for_release": true,
+      "qualification": ["non-root", "multiarch", "no-egress", "image-scan", "sbom", "license", "signature", "provenance"]
+    }
+  ]
+}

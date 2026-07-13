@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lease",
+  "description": "Optimistically revised lease over one immutable resource identity.",
+  "type": "object",
+  "properties": {
+    "acquired_at": {
+      "description": "Acquisition time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "expected_revision": {
+      "description": "Expected revision for the next mutation.",
+      "$ref": "#/$defs/ExpectedRevision"
+    },
+    "expires_at": {
+      "description": "Exclusive expiry.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "holder_id": {
+      "description": "Current holder principal.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "kind": {
+      "description": "Lease type.",
+      "$ref": "#/$defs/LeaseKind"
+    },
+    "lease_id": {
+      "description": "Unique lease identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "resource_id": {
+      "description": "Immutable leased resource identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.lease.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "state": {
+      "description": "Current lifecycle state.",
+      "$ref": "#/$defs/LeaseState"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lease_id",
+    "resource_id",
+    "holder_id",
+    "kind",
+    "state",
+    "acquired_at",
+    "expires_at",
+    "expected_revision"
+  ],
+  "$defs": {
+    "ExpectedRevision": {
+      "description": "Optimistic concurrency revision required by public mutations.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "LeaseKind": {
+      "description": "Closed lease resource types requiring exact-base merge.",
+      "oneOf": [
+        {
+          "description": "Exclusive task mutation lease.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Exclusive decision resolution lease.",
+          "type": "string",
+          "const": "decision"
+        },
+        {
+          "description": "Exclusive effect reconciliation lease.",
+          "type": "string",
+          "const": "effect_reconciliation"
+        },
+        {
+          "description": "Exclusive publication lease.",
+          "type": "string",
+          "const": "publication"
+        }
+      ]
+    },
+    "LeaseState": {
+      "description": "Closed lease lifecycle.",
+      "oneOf": [
+        {
+          "description": "Lease may currently authorize its bounded operation.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "Holder explicitly released the lease.",
+          "type": "string",
+          "const": "released"
+        },
+        {
+          "description": "Lease passed its expiry.",
+          "type": "string",
+          "const": "expired"
+        },
+        {
+          "description": "Authority explicitly revoked the lease.",
+          "type": "string",
+          "const": "revoked"
+        }
+      ]
+    }
+  }
+}

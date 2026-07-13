@@ -1,0 +1,1 @@
+{"context_abi":"cigar.context.v1","name":"cigar-rust-s3","schema_version":"cigar.patched-dependency-release.v1","upstream":{"name":"rust-s3","version":"0.37.2"},"version":"0.37.2-cigar.1"}

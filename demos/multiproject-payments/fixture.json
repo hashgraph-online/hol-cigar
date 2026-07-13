@@ -1,0 +1,21 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "multi-project-isolation",
+  "fixed_seed": 41002,
+  "fixed_time": "2026-01-15T12:01:00Z",
+  "flow": ["link-permitted-dependencies", "focus-checkout", "focus-payments", "focus-ledger", "resume-checkout"],
+  "projects": [
+    {"id": "checkout-web", "attached": true, "permitted": true},
+    {"id": "payments-api", "attached": true, "permitted": true},
+    {"id": "ledger-service", "attached": true, "permitted": true},
+    {"id": "hr-private", "attached": false, "permitted": false}
+  ],
+  "focus_sequence": ["checkout-web", "payments-api", "ledger-service", "checkout-web"],
+  "expected": {
+    "visible_projects": ["checkout-web", "payments-api", "ledger-service"],
+    "forbidden_candidate_count": 0,
+    "resumed_revision_is_current": true,
+    "filesystem_authority_changed": false
+  },
+  "secret_canary": "DEMO_CANARY_HR_PRIVATE_24E18B"
+}

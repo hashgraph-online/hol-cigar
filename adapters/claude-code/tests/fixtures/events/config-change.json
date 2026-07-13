@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "ConfigChange",
+  "source": "project_settings",
+  "file_path": "/workspace/cigar-fixture/.claude/settings.json"
+}

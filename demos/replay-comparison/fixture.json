@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "cross-runtime-replay",
+  "fixed_seed": 41005,
+  "fixed_time": "2026-01-15T12:04:00Z",
+  "flow": ["compile-semantic-bundle", "materialize-two-targets", "capture-decision", "reproduce-other-sdk", "compare-evidence", "create-separate-live-draft"],
+  "producer_runtime": "rust",
+  "reproducer_runtimes": ["typescript", "python", "go"],
+  "mode": "evidence_reproduction",
+  "expected": {
+    "semantic_bundle_identity_equal": true,
+    "materialization_difference_recorded": true,
+    "evidence_reproduction_exact": true,
+    "network_calls": 0,
+    "connector_calls": 0,
+    "live_execution_reuses_execution_id": false
+  },
+  "secret_canary": "DEMO_CANARY_REPLAY_SECRET_571B4E"
+}

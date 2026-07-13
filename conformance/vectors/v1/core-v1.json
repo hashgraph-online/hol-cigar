@@ -1,0 +1,347 @@
+{
+  "schema_version": "cigar.conformance.vectors.v1",
+  "vector_set": "cigar-v1.0-conformance-2026-07-13",
+  "source_vector": "schemas/vectors/canonical-v1.json",
+  "source_vector_sha256": "9d85b11e33dd68cd531efd993c871c26066d642a3e905c0c62383d3f775cd035",
+  "profiles": [
+    "cigar-core-v1",
+    "cigar-catalog-v1",
+    "cigar-compiler-v1",
+    "cigar-handoff-v1",
+    "cigar-effect-v1",
+    "cigar-replay-v1",
+    "cigar-service-v1",
+    "cigar-runtime-claude-code-v1"
+  ],
+  "limits": {
+    "max_cases": 256,
+    "max_request_bytes": 1048576,
+    "max_response_bytes": 65536,
+    "max_diagnostic_bytes": 512,
+    "max_case_timeout_ms": 10000,
+    "max_total_timeout_ms": 180000,
+    "max_memory_bytes": 268435456,
+    "max_file_bytes": 1048576,
+    "max_processes": 32
+  },
+  "cases": [
+    {
+      "id": "CORE-CANON-001",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "canonicalize_json",
+      "timeout_ms": 5000,
+      "input": {
+        "domain": "atom",
+        "normalization": "none",
+        "json_input": "\"instruction\""
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "1220e76d14455f390432ae81cb4ec53ba92d7ec514430a26d02bf8cbc1572d9f7835"
+      }
+    },
+    {
+      "id": "CORE-CANON-002",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "canonicalize_json",
+      "timeout_ms": 5000,
+      "input": {
+        "domain": "atom",
+        "normalization": "nfc:/human_text",
+        "json_input": "{\"human_text\":\"e\\u0301\"}"
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "1220f9fdfe3c53b2771544e0e5bf5d0daea624c64d58563c50ce3964db104d9d2878"
+      }
+    },
+    {
+      "id": "CORE-CANON-003",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "canonicalize_json",
+      "timeout_ms": 5000,
+      "input": {
+        "domain": "bundle",
+        "normalization": "none",
+        "json_input": "{\"budget\":{\"lane_input_tokens\":{\"rules\":1000,\"task\":1000},\"output_reserve_tokens\":1000,\"total_input_tokens\":2000},\"consistency\":\"strong\",\"extensions\":{},\"job_goal\":\"Implement verified change\",\"operation_class\":\"code_change\",\"principal_id\":\"01890f47-8e7d-7b42-a1d2-3c4d5e6f7896\",\"project_ids\":[\"01890f47-8e7d-7b42-a1d2-3c4d5e6f7897\"],\"purpose\":\"coding\",\"requirements\":[],\"schema_version\":\"cigar.context-contract.v1\",\"target\":{\"materializer_fingerprint\":\"12208888888888888888888888888888888888888888888888888888888888888888\",\"max_context_tokens\":3000,\"model_family\":\"fixture-model\",\"provider\":\"fixture\",\"tokenizer_fingerprint\":\"12207777777777777777777777777777777777777777777777777777777777777777\"}}"
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "1220a5a000159f8e4a0a9eec860c1eca6ceb54d589f73af64348e2909178d99e8599"
+      }
+    },
+    {
+      "id": "CORE-BUNDLE-001",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "canonicalize_json",
+      "timeout_ms": 5000,
+      "input": {
+        "domain": "receipt",
+        "normalization": "none",
+        "json_input": "{\"blocks\":[{\"block_id\":\"12201111111111111111111111111111111111111111111111111111111111111111\",\"content_digest\":\"12202222222222222222222222222222222222222222222222222222222222222222\",\"lane\":\"evidence\",\"provenance\":[\"12203333333333333333333333333333333333333333333333333333333333333333\"],\"representation\":\"exact\",\"token_count\":10}],\"bundle_id\":\"1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"contract_digest\":\"1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"extensions\":{},\"manifest_digest\":\"1220cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schema_version\":\"cigar.context-bundle.v1\",\"total_tokens\":10}"
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "122057c842fc7702a85a2a558ead8a1ebae11717bf977bf9c7faa5a56cc8e46c2c6e"
+      }
+    },
+    {
+      "id": "CORE-REJECT-001",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "reject_json",
+      "timeout_ms": 5000,
+      "input": {
+        "json_input": "{\"a\":1,\"a\":2}"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:8b136cccbef3a14675b24ae9b3923f0a6d69c314daf63e358939339a4bb70d24"
+      }
+    },
+    {
+      "id": "CORE-REJECT-002",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "reject_json",
+      "timeout_ms": 5000,
+      "input": {
+        "json_input": "{\"a\":1.5}"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:0f9eb98b4cd0a68fc93ce2a587d2bf3a341758b0e41e72e97865f940aa92966f"
+      }
+    },
+    {
+      "id": "CORE-REJECT-003",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "reject_cbor",
+      "timeout_ms": 5000,
+      "input": {
+        "cbor_hex": "1800"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:ac6c30c318e2f3cb7a997968f9858a807afd7af2e9cbd4f2187312edbfa90ebd"
+      }
+    },
+    {
+      "id": "CORE-REJECT-004",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "unsupported_domain",
+      "timeout_ms": 5000,
+      "input": {
+        "domain": "caller-invented-v2"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:0d250abf198d499232f5286c86b4027c1a1006277b189b4b010d6c092734051e"
+      }
+    },
+    {
+      "id": "CORE-ERROR-001",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "public_error",
+      "timeout_ms": 5000,
+      "input": {
+        "code": 1002
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:4cc799337e5463fbb25c2a86b8c508aee2ecb639e362ec764482b52808a75986"
+      }
+    },
+    {
+      "id": "CORE-DIFFERENTIAL-001",
+      "profile": "cigar-core-v1",
+      "required": true,
+      "operation": "differential_records",
+      "timeout_ms": 10000,
+      "input": {
+        "algorithm": "cigar-differential-record-v1",
+        "count": 100000,
+        "domain": "atom"
+      },
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:17f45f2224c49d72ab25b252cd0b262671b8664b2709dd97be6107a43c8d66a9"
+      }
+    },
+    {
+      "id": "CATALOG-PRODUCTION-001",
+      "profile": "cigar-catalog-v1",
+      "required": true,
+      "operation": "catalog_project_invalidation",
+      "timeout_ms": 5000,
+      "input": {"fixture": "catalog-project-invalidation-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:041fda7ee0d8d1ebd0176f93d98c645dfaf5ebfc2ac4bb415c77eac2132ad0ec"
+      }
+    },
+    {
+      "id": "CATALOG-REJECT-001",
+      "profile": "cigar-catalog-v1",
+      "required": true,
+      "operation": "catalog_cycle_rejection",
+      "timeout_ms": 5000,
+      "input": {"fixture": "catalog-cycle-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:2b16be90476f8717f214893a7a4909c0d5bedab25ddaecc71b5e7119068c42e0"
+      }
+    },
+    {
+      "id": "COMPILER-PRODUCTION-001",
+      "profile": "cigar-compiler-v1",
+      "required": true,
+      "operation": "compiler_deterministic_bundle",
+      "timeout_ms": 5000,
+      "input": {"fixture": "compiler-baseline-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:11733539e13b8daff930cb69825ec8e245463505d393745241d592829a425a20"
+      }
+    },
+    {
+      "id": "COMPILER-REJECT-001",
+      "profile": "cigar-compiler-v1",
+      "required": true,
+      "operation": "compiler_budget_rejection",
+      "timeout_ms": 5000,
+      "input": {"fixture": "compiler-mandatory-overflow-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:0e8f50d6192605d931b93200e2dde9595407501c878804c9ff26532bafdedc60"
+      }
+    },
+    {
+      "id": "HANDOFF-PRODUCTION-001",
+      "profile": "cigar-handoff-v1",
+      "required": true,
+      "operation": "handoff_signed_attenuation",
+      "timeout_ms": 5000,
+      "input": {"fixture": "handoff-signed-attenuation-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:57d2471d87d8897417d5bb37960f64992f63cedddbd8d3561e619f80b9c983d7"
+      }
+    },
+    {
+      "id": "HANDOFF-REJECT-001",
+      "profile": "cigar-handoff-v1",
+      "required": true,
+      "operation": "handoff_expiry_rejection",
+      "timeout_ms": 5000,
+      "input": {"fixture": "handoff-expired-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:33c8a9a8d5544887eda1c287ecab50cacb3eb268ea2d8b8629e96dca5433861e"
+      }
+    },
+    {
+      "id": "EFFECT-PRODUCTION-001",
+      "profile": "cigar-effect-v1",
+      "required": true,
+      "operation": "effect_durable_dispatch",
+      "timeout_ms": 5000,
+      "input": {"fixture": "effect-durable-dispatch-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:279f619565588836b5b9d1dd7698292e16d9331ba4bb5877bd761043d3b6674d"
+      }
+    },
+    {
+      "id": "EFFECT-REJECT-001",
+      "profile": "cigar-effect-v1",
+      "required": true,
+      "operation": "effect_idempotency_collision",
+      "timeout_ms": 5000,
+      "input": {"fixture": "effect-same-key-different-intent-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:57a7d451a70341501dc515ec644b40f1179a7e34f0338d4305016ec3faf777a0"
+      }
+    },
+    {
+      "id": "REPLAY-PRODUCTION-001",
+      "profile": "cigar-replay-v1",
+      "required": true,
+      "operation": "replay_recorded_provider",
+      "timeout_ms": 5000,
+      "input": {"fixture": "replay-recorded-provider-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:7c361d1840c31a585e807b5263a6f25e22effcfec1216a7824155a1ef65b1f97"
+      }
+    },
+    {
+      "id": "REPLAY-REJECT-001",
+      "profile": "cigar-replay-v1",
+      "required": true,
+      "operation": "replay_request_mismatch",
+      "timeout_ms": 5000,
+      "input": {"fixture": "replay-request-mismatch-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:47112aae69909b9ae85ef0e420d38ae417dbf8dd46c126139297936e35cd8b29"
+      }
+    },
+    {
+      "id": "SERVICE-PRODUCTION-001",
+      "profile": "cigar-service-v1",
+      "required": true,
+      "operation": "service_cursor_roundtrip",
+      "timeout_ms": 5000,
+      "input": {"fixture": "service-cursor-roundtrip-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:36b9afde6c71ac9db746f56804eef49cfdc3214f744272b76dee44621a2b86ca"
+      }
+    },
+    {
+      "id": "SERVICE-REJECT-001",
+      "profile": "cigar-service-v1",
+      "required": true,
+      "operation": "service_cursor_tamper",
+      "timeout_ms": 5000,
+      "input": {"fixture": "service-cursor-tamper-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:aa2c6c8a3bc6e55bd6de0ac8423cbdbbfc379119d9209dc75526e7be110369ee"
+      }
+    },
+    {
+      "id": "RUNTIME-PRODUCTION-001",
+      "profile": "cigar-runtime-claude-code-v1",
+      "required": true,
+      "operation": "claude_mcp_initialize",
+      "timeout_ms": 5000,
+      "input": {"fixture": "claude-mcp-initialize-v1"},
+      "expected": {
+        "outcome": "success",
+        "public_digest": "sha256:68cdc1bc6cdc64db3806e8d53fe62b52cbe4964053c90ff97a1ddae1a4e84507"
+      }
+    },
+    {
+      "id": "RUNTIME-REJECT-001",
+      "profile": "cigar-runtime-claude-code-v1",
+      "required": true,
+      "operation": "claude_mcp_preinit_rejection",
+      "timeout_ms": 5000,
+      "input": {"fixture": "claude-mcp-preinit-v1"},
+      "expected": {
+        "outcome": "rejected",
+        "public_digest": "sha256:0e2688bb06bc5eea116d9494838903aa7869c49f1b0a8a52b007791523dc0ee8"
+      }
+    }
+  ]
+}

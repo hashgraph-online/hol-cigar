@@ -1,0 +1,71 @@
+{
+  "packet": "WP06",
+  "source_commit": "workspace:70f560f14b656b6247e48a77a1e8f8874cfa15263358cd26c839a6457a19a42b",
+  "prerequisites": ["WP03", "WP05"],
+  "owned_paths": [
+    "crates/cigar-retrieval",
+    "docs/reference/retrieval-indexes.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-retrieval --all-targets",
+    "cargo clippy -p cigar-retrieval --all-targets --all-features -- -D warnings",
+    "CIGAR_PERFORMANCE_GATES=1 cargo test -p cigar-retrieval one_million_candidate_feature_stress_is_exact_and_bounded -- --nocapture",
+    "cargo llvm-cov -p cigar-retrieval --all-targets --lcov --output-path reports/wp06-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP06-WORKSPACE-NEXTEST", "result": "pass", "count": 139, "skipped": 0 },
+    { "id": "WP06-GENERATION", "result": "pass", "rebuild_root_stable": true, "atomic_activation": true, "active_delete_denied": true },
+    { "id": "WP06-WORKER", "result": "pass", "causal_watermark": true, "activation_before_advance": true, "retry_idempotent": true },
+    { "id": "WP06-CONSISTENCY", "result": "pass", "strong_fail_closed": true, "bounded_lag_exact": true, "deadline_and_cancellation": true },
+    { "id": "WP06-CORRUPTION", "result": "pass", "quarantine_unservable": true, "outbox_order_checked": true, "vector_bounds_checked": true },
+    { "id": "WP06-AUTHORIZATION", "result": "pass", "tenant_project_purpose_processor": true, "classification_authority": true, "bitemporal": true, "active_only": true },
+    { "id": "WP06-NONINTERFERENCE", "result": "pass", "denied_candidates": 0, "denied_vector_versions": 0, "caller_log_canary_leaks": 0 },
+    { "id": "WP06-QUERY-PLAN", "result": "pass", "independent_caps": true, "query_fingerprints": true, "stage_deadlines": true, "blocking_semantics": true },
+    { "id": "WP06-GRAPH", "result": "pass", "cycle_terminates": true, "depth_bound_exact": true, "unauthorized_bridge_blocked": true },
+    { "id": "WP06-FEATURES", "result": "pass", "balanced_v1_exact": true, "tie_order_exact": true, "integer_quantization": true },
+    { "id": "WP06-VECTOR", "result": "pass", "processor_denial": true, "fingerprint_bound": true, "authorized_versions_only": true, "disabled_and_outage_fallback": true },
+    { "id": "WP06-REBUILD-SEMANTICS", "result": "pass", "candidate_set_preserved": true, "watermark_changed": true }
+  ],
+  "metrics": {
+    "nextest_passed": 139,
+    "nextest_skipped": 0,
+    "wp06_scoped_tests": 12,
+    "required_projection_families": 11,
+    "candidate_stress_count": 1000000,
+    "candidate_stress_elapsed_milliseconds": 337,
+    "candidate_stress_checksum": 6755055165950,
+    "candidate_stress_minimum_score": 6580000,
+    "candidate_stress_maximum_score": 6930110,
+    "unauthorized_candidate_count": 0,
+    "unauthorized_vector_version_count": 0,
+    "caller_log_canary_leaks": 0,
+    "lcov_lines_found": 2009,
+    "lcov_lines_hit": 1784,
+    "lcov_line_percent": 88.80
+  },
+  "artifacts": [
+    { "path": "crates/cigar-retrieval/Cargo.toml", "sha256": "95295cde9566006841f6bc64e002407f8cfe1a2e16928bbd218b0048cb7351fc" },
+    { "path": "crates/cigar-retrieval/README.md", "sha256": "d29c26deec3b37a56a320d7ff33a4908ff62a8c8cfc994cdd1502061eef0a9e4" },
+    { "path": "crates/cigar-retrieval/src/lib.rs", "sha256": "d0890373f4fbc5a577a0a953a2dd233c6d08f02cbb918adba780990f64ba7702" },
+    { "path": "crates/cigar-retrieval/src/contract.rs", "sha256": "50a60165b609aee0df5f91a6aea25d3b6bf53a18c9edf0d1cb3afb91b49b9648" },
+    { "path": "crates/cigar-retrieval/src/executor.rs", "sha256": "9a5ff8b198a3857c3194b06e7eb0f235f733a76593919eb3c49a8d8e71a7e3da" },
+    { "path": "crates/cigar-retrieval/src/index.rs", "sha256": "76330ad5142846358c36e00425f3c08ea72c489170e8a42707ce3d38fbc34a39" },
+    { "path": "crates/cigar-retrieval/src/planner.rs", "sha256": "5eeb98d9cf0f3384aa55419f0f1b5a0e22441445257985eae84a39afc068371c" },
+    { "path": "crates/cigar-retrieval/src/vector.rs", "sha256": "53604d6c743eaa908884bfbe524bc2bb7569c69b163271f8ea79c8585afdefbb" },
+    { "path": "crates/cigar-retrieval/src/worker.rs", "sha256": "b7e95c019317fe769c17ccab862ed1aacd11f9ee0624d04c27f2ad9f19aef8d5" },
+    { "path": "docs/reference/retrieval-indexes.md", "sha256": "1b312e86d5750ed4160ca7c35af42b34539591d7f0101fa08a8a19b86cf06c70" },
+    { "path": "reports/wp06-lcov.info", "sha256": "7664331b3bbfb9a6a52459de9ac025b29c8e790b605ccf7e779011042d768deb" }
+  ],
+  "known_limitations": [
+    "The hermetic v1 reference manager is in-memory; daemon-owned durable/local FTS and shared deployment backends can implement the same immutable generation and Retriever contracts without changing candidate semantics.",
+    "Strong retrieval fails closed with INDEX_STALE when the active generation is behind; a daemon may wait for its worker until the same request deadline before returning that error."
+  ],
+  "status": "complete"
+}

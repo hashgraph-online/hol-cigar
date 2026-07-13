@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/policy/policy-profile-v1.schema.json",
+  "title": "CIGAR Policy Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "revision", "protected", "rules"],
+  "properties": {
+    "schema_version": { "const": "cigar.policy-profile.v1" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "protected": { "type": "boolean" },
+    "rules": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "uuid_v7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bounded_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "resource": {
+      "enum": ["partition", "metadata", "content", "processor", "bundle", "handoff", "effect"]
+    },
+    "action": {
+      "enum": ["deny", "quarantine", "require_refresh", "redact", "require_approval", "allow"]
+    },
+    "classification": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "priority", "depends_on", "resources", "principal_ids", "tenant_ids",
+        "project_ids", "purposes", "processors", "action", "redaction_paths", "conditions"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/bounded_text" },
+        "priority": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "depends_on": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/bounded_text" } },
+        "resources": { "type": "array", "maxItems": 7, "uniqueItems": true, "items": { "$ref": "#/$defs/resource" } },
+        "principal_ids": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid_v7" } },
+        "tenant_ids": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid_v7" } },
+        "project_ids": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/uuid_v7" } },
+        "purposes": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/bounded_text" } },
+        "processors": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/bounded_text" } },
+        "classification_at_least": { "$ref": "#/$defs/classification" },
+        "action": { "$ref": "#/$defs/action" },
+        "redaction_paths": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "type": "string", "minLength": 2, "maxLength": 512, "pattern": "^/" } },
+        "conditions": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "$ref": "#/$defs/bounded_text" } }
+      }
+    }
+  }
+}

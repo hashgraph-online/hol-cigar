@@ -1,0 +1,7 @@
+packages:
+  - sdk/typescript
+  - adapters/claude-code
+
+blockExoticSubdeps: true
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade

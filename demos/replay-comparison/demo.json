@@ -1,0 +1,44 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "cross-runtime-replay",
+  "title": "Cross-runtime observational replay",
+  "fixed_seed": 41005,
+  "fixture": "fixture.json",
+  "fixture_digest": "1220d6fb2302b2b9523b6ac4cfcc31a558de3b7b6d8f1578cca80b20551d71a8bb02",
+  "driver": "driver.py",
+  "driver_digest": "1220e59cfd91498a98474b4723eddc5eb7506709af57810532f6a68cf29a2c0916b7",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "recorded-consumer", "network-deny-transport", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "semantic-bundle-digest-identical", "target-difference-recorded", "evidence-reproduction-exact",
+    "observational-replay-no-egress", "live-comparison-has-separate-execution"
+  ],
+  "checks": [
+    {
+      "check_id": "non-live-retained-only",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-replay", "--test", "wp13_replay_modes", "exact_non_live_modes_use_only_retained_bytes_and_recorded_boundaries"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["target-difference-recorded", "evidence-reproduction-exact", "live-comparison-has-separate-execution"]
+    },
+    {
+      "check_id": "os-level-no-egress",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-replay", "--test", "wp13_no_egress", "os_level_no_egress_is_enforced"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["observational-replay-no-egress"]
+    },
+    {
+      "check_id": "cross-sdk-reproduction",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-replay", "--test", "wp13_cross_sdk", "rust_and_every_sdk_reproduce_exact_replay_vector"],
+      "timeout_seconds": 900,
+      "minimum_passed_tests": 1,
+      "assertions": ["semantic-bundle-digest-identical"]
+    }
+  ],
+  "teardown": ["remove-isolated-home", "remove-replay-capture", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario cross-runtime-replay --output-dir reports/demos",
+  "canary_ids": ["replay-secret"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

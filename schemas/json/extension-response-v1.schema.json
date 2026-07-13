@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtensionResponseV1",
+  "description": "Terminal extension response with protected bytes and no free-form error reflection.",
+  "type": "object",
+  "properties": {
+    "completed_at": {
+      "description": "Response completion time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "host_call_count": {
+      "description": "Number of completed broker calls.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "invocation_id": {
+      "description": "Source invocation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "outcome": {
+      "description": "Terminal outcome.",
+      "$ref": "#/$defs/ExtensionResponseOutcome"
+    },
+    "output": {
+      "description": "Exact protected successful output bytes.",
+      "type": "string",
+      "maxLength": 89478486
+    },
+    "output_digest": {
+      "description": "Digest of exact successful output bytes.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "output_schema_digest": {
+      "description": "Output schema for a successful response.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.extension-response.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "outcome",
+    "output",
+    "host_call_count",
+    "completed_at"
+  ],
+  "$defs": {
+    "ExtensionResponseOutcome": {
+      "description": "Closed terminal extension outcomes.",
+      "oneOf": [
+        {
+          "description": "Extension returned a valid semantic output.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Extension rejected the declared operation without executing it.",
+          "type": "string",
+          "const": "rejected"
+        },
+        {
+          "description": "Extension failed or crashed before producing a valid output.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Invocation observed cancellation.",
+          "type": "string",
+          "const": "cancelled"
+        }
+      ]
+    }
+  }
+}

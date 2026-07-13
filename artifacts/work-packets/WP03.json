@@ -1,0 +1,55 @@
+{
+  "packet": "WP03",
+  "source_commit": "workspace:82a51cadf3c06a501ecf2a97cd70c0f3a809d353dbf5b1bb7dc40cc4c6048005",
+  "prerequisites": ["WP01", "WP02"],
+  "owned_paths": [
+    "crates/cigar-store",
+    "docs/reference/store-contracts.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask test conformance",
+    "cargo xtask docs --check",
+    "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/wp03-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP03-WORKSPACE-NEXTEST", "result": "pass", "count": 79, "skipped": 0 },
+    { "id": "WP03-REPOSITORY-CONFORMANCE", "result": "pass", "public_methods": 19, "invariants": 13 },
+    { "id": "WP03-ATOMICITY", "result": "pass", "cases": ["commit", "drop", "injected_abort", "cancelled", "invalid"] },
+    { "id": "WP03-MVCC", "result": "pass", "cases": ["repeatable_snapshot", "historical_revision", "mixed_cursor_rejection"] },
+    { "id": "WP03-CONCURRENCY", "result": "pass", "writers": 2, "successful": 1, "revision_conflicts": 1 },
+    { "id": "WP03-TENANT-SCOPE", "result": "pass" },
+    { "id": "WP03-IDEMPOTENCY", "result": "pass", "request_digest_bound": true },
+    { "id": "WP03-OUTBOX-CAUSALITY", "result": "pass" },
+    { "id": "WP03-DERIVATION-ACYCLICITY", "result": "pass" },
+    { "id": "WP03-MIGRATION-METADATA", "result": "pass" }
+  ],
+  "metrics": {
+    "nextest_passed": 79,
+    "nextest_skipped": 0,
+    "repository_methods_exercised": 19,
+    "repository_invariants_checked": 13,
+    "concurrent_writers": 2,
+    "lcov_lines_found": 9333,
+    "lcov_lines_hit": 6124,
+    "lcov_line_percent": 65.62
+  },
+  "artifacts": [
+    { "path": "crates/cigar-store/src/lib.rs", "sha256": "83a367fbe09df280686e9f74b764fdbf194918819c846db85ed427beeb4db46b" },
+    { "path": "crates/cigar-store/src/model.rs", "sha256": "cf2a6d51cc8112cfb99cda3faf6399d8d492de5b974a604a1b2e878bf5ae528c" },
+    { "path": "crates/cigar-store/src/memory.rs", "sha256": "39f517eca4d1c6f3f049e37543c5be505b7a4fee4b5be90bb48f2c1926990705" },
+    { "path": "crates/cigar-store/src/migration.rs", "sha256": "fde72f8ab53674a91d50c4e3f9b9a0cd32f1112039fba63fe742b62e24a07fbb" },
+    { "path": "crates/cigar-store/src/conformance.rs", "sha256": "531416773d03890d62f3b1514841a9feb09bcf9f1d58b889d441e627a5e7d247" },
+    { "path": "docs/reference/store-contracts.md", "sha256": "9af145e3c53a7e1f12b0a36cceb186b474f68ea7de5e84786dc9a29583e4628f" },
+    { "path": "reports/wp03-lcov.info", "sha256": "0b90b33a5102b7d8b63176c00b52a136c4ea47fb0e68db090712f16752842961" }
+  ],
+  "known_limitations": [
+    "The in-memory implementation is a whole-state MVCC behavioral oracle; SQLite, encrypted local blobs, durability failpoints, backup, and recovery are explicitly owned by WP04."
+  ],
+  "status": "complete"
+}

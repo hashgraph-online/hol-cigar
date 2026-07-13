@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/sbom-artifacts.v1.schema.json",
+  "title": "CIGAR SBOM artifact binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifacts", "component_count"],
+  "properties": {
+    "schema_version": {"const": "cigar.sbom-artifacts.v1"},
+    "artifacts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "sha256", "bytes"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\\u0000-\u001f\u007f]+$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "component_count": {"type": "integer", "minimum": 1}
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "packet": "WP18",
+  "source_commit": "workspace:f75daa0889ae18f09513cc21c2b89464b3c6d75897a1819614442933d82fbfd1",
+  "prerequisites": [
+    "WP03",
+    "WP12",
+    "WP14"
+  ],
+  "owned_paths": [
+    "crates/cigar-store/src/postgres.rs",
+    "crates/cigar-store/src/object.rs",
+    "crates/cigar-store/src/blob.rs",
+    "crates/cigar-store/tests/postgres_shared.rs",
+    "crates/cigar-store/tests/postgres_failover.rs",
+    "crates/cigar-store/tests/postgres_scale.rs",
+    "migrations/postgres",
+    "deploy/compose/shared.yaml",
+    "deploy/compose/failover",
+    "deploy/kubernetes/shared",
+    "deploy/observability",
+    "docs/runbooks/shared-backup-restore.md",
+    "tools/qualify-shared-profile.sh",
+    "tools/qualify-shared-scale.sh",
+    "tools/wp18-failover/qualify.sh"
+  ],
+  "commands": [
+    "cargo test -p cigar-store --all-targets --locked --offline",
+    "cargo clippy -p cigar-store --all-targets --locked --offline -- -D warnings",
+    "RUSTDOCFLAGS='-D warnings' cargo doc -p cigar-store --no-deps --locked --offline",
+    "cargo test -p cigar-daemon --test deployment_assets --locked --offline",
+    "tools/qualify-shared-profile.sh",
+    "tools/wp18-failover/qualify.sh",
+    "tools/qualify-shared-scale.sh",
+    "cargo fmt --all -- --check",
+    "cargo metadata --locked --offline --no-deps --format-version 1"
+  ],
+  "tests": [
+    {
+      "id": "WP18-SHARED-CONFORMANCE",
+      "result": "pass",
+      "source": "workspace:8cddfacb43cb3f81d4737d27f021a2ed6764629ee639372e6a30f7926d8d76b9",
+      "repository_differential_sqlite": true,
+      "serialization_clients": 64,
+      "serialization_atomic_winners": 1,
+      "forced_rls": true,
+      "shared_wakeups": true,
+      "outbox_and_claims": true,
+      "rolling_adjacent_migration": true,
+      "object_publication_faults_atomic": true
+    },
+    {
+      "id": "WP18-BACKUP-RESTORE",
+      "result": "pass",
+      "migration_sequence": 4,
+      "exported_snapshot_pg_dump": true,
+      "opaque_archive_streamed_exactly_once": true,
+      "signed_s3_backup_prefix": true,
+      "fresh_database_and_object_namespace": true,
+      "physical_basebackup_manifest_verified": true,
+      "capture_gc_exclusion": true,
+      "durable_timestamp_roots": true,
+      "historical_state_and_key_roots": true,
+      "tampered_archive_rejected": true,
+      "extra_tenant_rejected": true,
+      "same_count_projection_corruption_rejected": true,
+      "deleted_historical_state_rejected": true,
+      "unavailable_historical_key_rejected": true,
+      "public_restore_receipt_forgeable": false
+    },
+    {
+      "id": "WP18-OBJECT-STORAGE",
+      "result": "pass",
+      "s3_compatible_live": true,
+      "conditional_cas": true,
+      "partial_upload_atomic": true,
+      "missing_object_fail_closed": true,
+      "expired_credentials_fail_closed": true,
+      "fresh_namespace_exact_restore": true,
+      "runtime_immutable_delete_denied": true,
+      "metadata_to_unavailable_committed_blob": false
+    },
+    {
+      "id": "WP18-FAILOVER",
+      "result": "pass",
+      "source": "workspace:sha256:b7aef1dbdb4d825d09a650690be0628bc58a68006c1ae1d99e4dbcec4f27c0f0",
+      "production_phases": 3,
+      "timeline_before": 1,
+      "timeline_after": 2,
+      "replica_lag_ack_blocked": true,
+      "acknowledged_write_loss": 0,
+      "effect_idempotent_replay": true,
+      "skip_locked_claims_exactly_once": true,
+      "duplicate_revisions": 0,
+      "duplicate_effects": 0,
+      "duplicate_claims": 0,
+      "former_primary_rejoined": true,
+      "physical_restore_source_timeline": 2,
+      "physical_restore_timeline": 3,
+      "physical_source_revision": 2,
+      "physical_restored_revision": 2,
+      "physical_semantic_root_exact": true,
+      "cleanup_complete": true
+    },
+    {
+      "id": "WP18-SCALE",
+      "result": "pass",
+      "source_digest": "12203b80500eca294fe7a4a41c135253489646f4d0cda8bfbfbc730fd1961bc81c12",
+      "physical_rows": 10000000,
+      "correctness_samples": 256,
+      "canonical_dataset_digest": "1220b85f7e33b0ead4bc28afe24c4eddb93e64e3e4eed7f9b4291cd42c063c85fe30",
+      "public_commit_atomic_projection": true,
+      "public_rebuild_verified": true,
+      "forced_rls_isolation_verified": true,
+      "immutable_collision_rejected": true,
+      "transaction_failpoint_rolled_back": true,
+      "unexpected_batch_failures": 0,
+      "unexpected_query_failures": 0
+    },
+    {
+      "id": "WP18-DEPLOYMENT",
+      "result": "pass",
+      "compose": true,
+      "kubernetes": true,
+      "oidc_mtls_profile": true,
+      "runtime_migrator_backup_authority_separated": true,
+      "security_definer_gc_guard_verified": true,
+      "observability": true,
+      "runbook": true,
+      "asset_tests": 7
+    },
+    {
+      "id": "WP18-QUALITY",
+      "result": "pass",
+      "store_tests": 48,
+      "clippy_warnings": 0,
+      "rustdoc_warnings": 0,
+      "format": "pass",
+      "locked_offline_metadata": "pass",
+      "independent_high_gap_reaudit": "pass"
+    }
+  ],
+  "metrics": {
+    "scale_elapsed_millis": 699582,
+    "scale_database_size_bytes": 18411673279,
+    "scale_curve": [
+      {
+        "rows": 1000,
+        "rows_per_second": 29382,
+        "query_p50_micros": 2010,
+        "query_p95_micros": 3205,
+        "query_p99_micros": 3973
+      },
+      {
+        "rows": 10000,
+        "rows_per_second": 27692,
+        "query_p50_micros": 2012,
+        "query_p95_micros": 3011,
+        "query_p99_micros": 3438
+      },
+      {
+        "rows": 100000,
+        "rows_per_second": 21775,
+        "query_p50_micros": 3372,
+        "query_p95_micros": 4290,
+        "query_p99_micros": 4586
+      },
+      {
+        "rows": 1000000,
+        "rows_per_second": 10320,
+        "query_p50_micros": 2053,
+        "query_p95_micros": 4616,
+        "query_p99_micros": 4719
+      },
+      {
+        "rows": 10000000,
+        "rows_per_second": 15140,
+        "query_p50_micros": 3642,
+        "query_p95_micros": 5728,
+        "query_p99_micros": 7864
+      }
+    ],
+    "final_semantic_sample_p95_micros": 4330,
+    "final_semantic_sample_p99_micros": 6508,
+    "failover_backup_wal_start": "0/4000028",
+    "failover_backup_wal_end": "0/4000120",
+    "failover_restored_replay_lsn": "0/5000000"
+  },
+  "artifacts": [
+    {
+      "path": "artifacts/qualification/wp18-shared-profile.json",
+      "sha256": "287d79a848e3225c6d113442ff488e8532a2a2aea464466fe59f1cb885563399"
+    },
+    {
+      "path": "artifacts/qualification/wp18-shared-profile.log",
+      "sha256": "e4598d0b4612d000a9c2b40b71856405f25c6f1cd0661e2d7f6767d23a181c56"
+    },
+    {
+      "path": "artifacts/qualification/wp18-failover.json",
+      "sha256": "06352e355095951dd9deccc26158fd089076cfb9a79e969b1bbdab14b5a68c7c"
+    },
+    {
+      "path": "artifacts/qualification/wp18-failover.log",
+      "sha256": "d2d434ab14413785478ad83ba6c9587dd8edb79f85381067b9d580c76cab736d"
+    },
+    {
+      "path": "artifacts/qualification/wp18-shared-scale.json",
+      "sha256": "6dcc6609a5e56d6bde2a081b32057abc0bfa6759d3e8862edf728c3eacf5eab1"
+    },
+    {
+      "path": "artifacts/qualification/wp18-shared-scale.log",
+      "sha256": "681aadc88025705554064b5ef565ff7d8a291c3904869dc222280ba83fc97774"
+    },
+    {
+      "path": "crates/cigar-store/src/postgres.rs",
+      "sha256": "d0c3f5438701b7f29f8535b1c13691329cbdde880f3feb625665b80f359c020d"
+    },
+    {
+      "path": "crates/cigar-store/src/object.rs",
+      "sha256": "17f9780edf155594878945c6321ab1e0baf4f29adefe961b5ac063ea399fdca4"
+    },
+    {
+      "path": "migrations/postgres/0004_gc_revision_guard.sql",
+      "sha256": "d8046497216d4e9becd619f51fd231aa39b8419444574fa229a657a5a62ed0b7"
+    }
+  ],
+  "known_limitations": [
+    "Checked-in Compose credentials are development-only. Production OIDC, TLS, PostgreSQL, object, backup, GC, and signing identities are externally provisioned and intentionally absent from the repository."
+  ],
+  "status": "complete"
+}

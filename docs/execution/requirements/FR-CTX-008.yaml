@@ -1,0 +1,22 @@
+id: FR-CTX-008
+title: Deterministic bundle identity
+criticality: safety_critical
+source: CIGAR-v1-execution-spec
+implementation:
+  - crates/cigar-compiler/src/compile.rs
+  - crates/cigar-canon/src/bundle.rs
+tests:
+  - id: CTX-G001
+    type: golden
+    command: cargo xtask test vectors --case deterministic-bundle
+  - id: CTX-P001
+    type: property
+    command: cargo xtask test property --case compile-permutation
+  - id: CTX-X001
+    type: cross_platform
+    command: cargo xtask test compatibility --case bundle-digest
+evidence:
+  metric: deterministic_digest_equivalence
+  threshold: 1.0
+release_blocking: true
+

@@ -1,0 +1,61 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cigard-default-deny
+  namespace: cigar-shared
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cigard-allow-bounded-boundaries
+  namespace: cigar-shared
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: cigard }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { cigar.dev/client-access: "true" }
+      ports:
+        - { protocol: TCP, port: 7443 }
+        - { protocol: TCP, port: 7444 }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { cigar.dev/dependency-access: "true" }
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 4317 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cigard-migration-egress
+  namespace: cigar-shared
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: cigard-migrate }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { cigar.dev/dependency-access: "true" }
+      ports:
+        - { protocol: TCP, port: 5432 }

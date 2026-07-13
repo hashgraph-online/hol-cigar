@@ -1,0 +1,5 @@
+cigar-aws-creds
+
+This package is a security-reviewed distribution of aws-creds 0.39.1 from the rust-s3 project.
+The original work is Copyright (c) 2016 Drazen Urch and is distributed under the MIT License.
+CIGAR packaging and security modifications are Copyright 2026 CIGAR contributors.

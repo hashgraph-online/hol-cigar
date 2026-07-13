@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "python-wheel-v1",
+  "formats": ["wheel"],
+  "allow": ["cigar_sdk/**", "cigar_sdk-0.1.0.dist-info/**"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/__pycache__/**", "**/tests/**", "**/*.pyc"],
+  "required": ["cigar_sdk/release.json", "cigar_sdk-0.1.0.dist-info/METADATA", "cigar_sdk-0.1.0.dist-info/RECORD", "cigar_sdk-0.1.0.dist-info/WHEEL"],
+  "required_patterns": ["cigar_sdk-0.1.0.dist-info/licenses/*"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "cigar_sdk/release.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "cigar_sdk/release.json", "format": "json", "json_pointer": "/context_abi"}
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/release-verification.v1.schema.json",
+  "title": "CIGAR offline release verification report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "product_version", "context_abi", "source_revision", "artifact_count", "evidence_count", "signature_count", "trusted_key_ids", "trust_policy_sha256", "verification_time"],
+  "properties": {
+    "schema_version": {"const": "cigar.release-verification.v1"},
+    "status": {"const": "passed"},
+    "product_version": {"type": "string", "minLength": 1},
+    "context_abi": {"const": "cigar.context.v1"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "artifact_count": {"type": "integer", "minimum": 1},
+    "evidence_count": {"type": "integer", "minimum": 1},
+    "signature_count": {"type": "integer", "minimum": 1},
+    "trusted_key_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+    "trust_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "verification_time": {"type": "integer", "minimum": 0, "maximum": 253402300799}
+  }
+}

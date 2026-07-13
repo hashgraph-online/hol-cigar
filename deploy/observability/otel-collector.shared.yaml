@@ -1,0 +1,55 @@
+# Collector-side example. Mount real TLS material and replace the exporter endpoint.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: /run/secrets/otel/tls.crt
+          key_file: /run/secrets/otel/tls.key
+          client_ca_file: /run/secrets/otel/cigar-client-ca.crt
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+    send_batch_max_size: 4096
+  attributes/content_free:
+    actions:
+      - { key: http.request.body, action: delete }
+      - { key: http.response.body, action: delete }
+      - { key: db.statement, action: delete }
+      - { key: url.full, action: delete }
+      - { key: user.id, action: delete }
+
+exporters:
+  otlp/backend:
+    endpoint: telemetry-backend.example.invalid:4317
+    tls:
+      ca_file: /run/secrets/otel/backend-ca.crt
+    sending_queue:
+      enabled: true
+      queue_size: 4096
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 60s
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/content_free, batch]
+      exporters: [otlp/backend]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/content_free, batch]
+      exporters: [otlp/backend]

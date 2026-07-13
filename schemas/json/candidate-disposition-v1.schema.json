@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateDisposition",
+  "description": "Deterministic disposition of one retrieval candidate.",
+  "oneOf": [
+    {
+      "description": "Selected into a specific lane with a fixed-point score.",
+      "type": "object",
+      "properties": {
+        "lane": {
+          "description": "Selected lane.",
+          "$ref": "#/$defs/LaneKind"
+        },
+        "score": {
+          "description": "Deterministic score in millionths.",
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 1000000,
+          "minimum": 0
+        },
+        "state": {
+          "type": "string",
+          "const": "selected"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "lane",
+        "score"
+      ]
+    },
+    {
+      "description": "Excluded with a stable reason.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Primary exclusion reason.",
+          "$ref": "#/$defs/DispositionReason"
+        },
+        "state": {
+          "type": "string",
+          "const": "excluded"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason"
+      ]
+    },
+    {
+      "description": "Redacted while preserving safe explanation that a candidate existed.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Primary redaction reason.",
+          "$ref": "#/$defs/DispositionReason"
+        },
+        "state": {
+          "type": "string",
+          "const": "redacted"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason"
+      ]
+    },
+    {
+      "description": "Required selector had no authorized matching candidate.",
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "required_missing"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ]
+    }
+  ],
+  "$defs": {
+    "DispositionReason": {
+      "description": "Stable exclusion and non-selection reason codes.",
+      "oneOf": [
+        {
+          "description": "Candidate was outside the authorized scope.",
+          "type": "string",
+          "const": "scope_denied"
+        },
+        {
+          "description": "Purpose did not authorize candidate use.",
+          "type": "string",
+          "const": "purpose_denied"
+        },
+        {
+          "description": "Candidate was temporally ineligible.",
+          "type": "string",
+          "const": "temporal_mismatch"
+        },
+        {
+          "description": "Candidate trust or authority was insufficient.",
+          "type": "string",
+          "const": "trust_insufficient"
+        },
+        {
+          "description": "Instruction authority was insufficient.",
+          "type": "string",
+          "const": "instruction_authority_denied"
+        },
+        {
+          "description": "Processor constraints were not satisfied.",
+          "type": "string",
+          "const": "processor_denied"
+        },
+        {
+          "description": "Integrity verification failed.",
+          "type": "string",
+          "const": "integrity_failed"
+        },
+        {
+          "description": "A higher-ranked candidate displaced this one under budget.",
+          "type": "string",
+          "const": "budget_displaced"
+        },
+        {
+          "description": "Candidate was superseded or tombstoned.",
+          "type": "string",
+          "const": "lifecycle_ineligible"
+        },
+        {
+          "description": "Candidate conflicted with a mandatory higher-authority item.",
+          "type": "string",
+          "const": "conflict_lost"
+        },
+        {
+          "description": "Required context could not be found.",
+          "type": "string",
+          "const": "required_missing"
+        }
+      ]
+    },
+    "LaneKind": {
+      "description": "Standard deterministic context lanes.",
+      "oneOf": [
+        {
+          "description": "Non-bypassable rules and instructions.",
+          "type": "string",
+          "const": "rules"
+        },
+        {
+          "description": "Current task statement and exact constraints.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Source, documentation, and verification evidence.",
+          "type": "string",
+          "const": "evidence"
+        },
+        {
+          "description": "Prior decisions and relevant history.",
+          "type": "string",
+          "const": "history"
+        },
+        {
+          "description": "Tool contracts and capability descriptions.",
+          "type": "string",
+          "const": "tools"
+        }
+      ]
+    }
+  }
+}

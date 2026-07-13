@@ -1,0 +1,58 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "multi-agent-handoff",
+  "title": "Scoped multi-agent handoff",
+  "fixed_seed": 41003,
+  "fixture": "fixture.json",
+  "fixture_digest": "1220072e14cf546c8ef0678e33717de1fc3067a3248669cd07899ff99214450cadea",
+  "driver": "driver.py",
+  "driver_digest": "1220aeb03d6b19a3d82939fc5b1545f35534a3b8de049d08e87d5889ab0f182ab11e",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "deterministic-parent-and-children", "network-disabled", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "forbidden-access-denied-content-free", "write-grant-attenuation-rejected", "package-at-most-20-percent",
+    "first-action-useful", "result-is-typed-evidence", "optimistic-merge-exact"
+  ],
+  "checks": [
+    {
+      "check_id": "handoff-partial-acceptance",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "handoff", "partial_acceptance_reauthorizes_every_reference_and_compiles_recipient_bundle"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["forbidden-access-denied-content-free", "result-is-typed-evidence"]
+    },
+    {
+      "check_id": "handoff-never-amplifies",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "handoff", "generated_requested_capability_lattice_never_amplifies_authority"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["write-grant-attenuation-rejected"]
+    },
+    {
+      "check_id": "handoff-excludes-transcript",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "handoff", "capsule_contains_typed_references_and_excludes_parent_transcript"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["package-at-most-20-percent"]
+    },
+    {
+      "check_id": "handoff-outcome-gate",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "handoff", "reference_handoff_and_first_action_outcome_gate_passes"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["first-action-useful"]
+    },
+    {
+      "check_id": "handoff-result-optimistic-merge",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-space", "--test", "handoff", "child_result_enters_parent_overlay_without_granting_followup_authority_and_conflicts_typed"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["optimistic-merge-exact"]
+    }
+  ],
+  "teardown": ["remove-isolated-home", "remove-child-state", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario multi-agent-handoff --output-dir reports/demos",
+  "canary_ids": ["parent-transcript"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

@@ -1,0 +1,19 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolBatch",
+  "tool_results": [
+    {
+      "tool_use_id": "toolu_fixture_read",
+      "tool_name": "Read",
+      "status": "succeeded"
+    },
+    {
+      "tool_use_id": "toolu_fixture_search",
+      "tool_name": "Grep",
+      "status": "succeeded"
+    }
+  ]
+}

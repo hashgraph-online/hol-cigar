@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/provenance.v1.schema.json",
+  "title": "CIGAR in-toto provenance envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "properties": {
+    "_type": {"const": "https://in-toto.io/Statement/v1"},
+    "subject": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/subject"}
+    },
+    "predicateType": {"const": "https://slsa.dev/provenance/v1"},
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildDefinition", "runDetails"],
+      "properties": {
+        "buildDefinition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["buildType", "externalParameters", "internalParameters", "resolvedDependencies"],
+          "properties": {
+            "buildType": {"const": "https://cigar.invalid/build-types/release-archive/v1"},
+            "externalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["commands", "sourceDateEpoch", "sourceRevision", "sourceArchive", "workflowId"],
+              "properties": {
+                "commands": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+                "sourceDateEpoch": {"type": "integer", "minimum": 0},
+                "sourceRevision": {"type": "string", "minLength": 1},
+                "sourceArchive": {"$ref": "#/$defs/subject"},
+                "workflowId": {"type": "string", "minLength": 1}
+              }
+            },
+            "internalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["network", "locale", "timezone"],
+              "properties": {
+                "network": {"enum": ["disabled", "isolated", "unspecified"]},
+                "locale": {"type": "string", "minLength": 1},
+                "timezone": {"const": "UTC"}
+              }
+            },
+            "resolvedDependencies": {"type": "array", "items": {"$ref": "#/$defs/subject"}}
+          }
+        },
+        "runDetails": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["builder", "metadata"],
+          "properties": {
+            "builder": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {"id": {"type": "string", "minLength": 1}}
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["invocationId", "startedOnSourceDateEpoch", "finishedOnSourceDateEpoch"],
+              "properties": {
+                "invocationId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "startedOnSourceDateEpoch": {"type": "integer", "minimum": 0},
+                "finishedOnSourceDateEpoch": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "digest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256"],
+          "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+        }
+      }
+    }
+  }
+}

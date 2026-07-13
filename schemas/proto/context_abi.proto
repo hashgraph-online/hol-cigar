@@ -1,0 +1,903 @@
+syntax = "proto3";
+
+package cigar.context.v1;
+
+import "generated/error_codes.proto";
+
+option go_package = "github.com/CIGAR/cigar/sdk/go/gen/contextv1;contextv1";
+
+message ContextContract {
+  string schema_version = 1;
+  string job_goal = 2;
+  OperationClass operation_class = 3;
+  string principal_id = 4;
+  string purpose = 5;
+  optional string context_space_id = 6;
+  repeated string project_ids = 7;
+  TargetProfile target = 8;
+  Budget budget = 9;
+  repeated ContextRequirement requirements = 10;
+  ConsistencyMode consistency = 11;
+  optional uint64 maximum_staleness_nanos = 12;
+  map<string, bytes> canonical_extensions = 13;
+}
+
+enum OperationClass {
+  OPERATION_CLASS_UNSPECIFIED = 0;
+  OPERATION_CLASS_READ = 1;
+  OPERATION_CLASS_CODE_CHANGE = 2;
+  OPERATION_CLASS_ANALYSIS = 3;
+  OPERATION_CLASS_EXTERNAL_MUTATION = 4;
+}
+
+enum ConsistencyMode {
+  CONSISTENCY_MODE_UNSPECIFIED = 0;
+  CONSISTENCY_MODE_SNAPSHOT = 1;
+  CONSISTENCY_MODE_STRONG = 2;
+  CONSISTENCY_MODE_BOUNDED_STALENESS = 3;
+}
+
+enum LaneKind {
+  LANE_KIND_UNSPECIFIED = 0;
+  LANE_KIND_RULES = 1;
+  LANE_KIND_TASK = 2;
+  LANE_KIND_EVIDENCE = 3;
+  LANE_KIND_HISTORY = 4;
+  LANE_KIND_TOOLS = 5;
+}
+
+message LaneBudget {
+  LaneKind lane = 1;
+  uint32 input_tokens = 2;
+}
+
+message Budget {
+  uint32 total_input_tokens = 1;
+  uint32 output_reserve_tokens = 2;
+  repeated LaneBudget lanes = 3;
+}
+
+message TargetProfile {
+  string provider = 1;
+  string model_family = 2;
+  bytes tokenizer_fingerprint_multihash = 3;
+  bytes materializer_fingerprint_multihash = 4;
+  uint32 max_context_tokens = 5;
+}
+
+message ContextRequirement {
+  AtomKind semantic_type = 1;
+  oneof selector {
+    bytes exact_version_multihash = 2;
+    string query = 3;
+  }
+  uint32 minimum_authority = 4;
+  optional uint64 maximum_age_nanos = 5;
+  uint32 minimum_coverage_millionths = 6;
+  bool blocking = 7;
+}
+
+message ContextPlan {
+  string schema_version = 1;
+  string plan_id = 2;
+  bytes contract_digest_multihash = 3;
+  bytes catalog_watermark_multihash = 4;
+  uint32 total_input_tokens = 5;
+  repeated PlanLane lanes = 6;
+  repeated CandidateDispositionEntry dispositions = 7;
+  map<string, bytes> canonical_extensions = 8;
+}
+
+message PlanLane {
+  LaneKind kind = 1;
+  uint32 budget_tokens = 2;
+  repeated bytes candidate_version_multihashes = 3;
+}
+
+message CandidateDispositionEntry {
+  bytes version_multihash = 1;
+  CandidateDisposition disposition = 2;
+}
+
+message CandidateDisposition {
+  oneof state {
+    SelectedDisposition selected = 1;
+    ReasonDisposition excluded = 2;
+    ReasonDisposition redacted = 3;
+    bool required_missing = 4;
+  }
+}
+
+message SelectedDisposition {
+  LaneKind lane = 1;
+  uint32 score_millionths = 2;
+}
+
+message ReasonDisposition {
+  DispositionReason reason = 1;
+}
+
+enum DispositionReason {
+  DISPOSITION_REASON_UNSPECIFIED = 0;
+  DISPOSITION_REASON_SCOPE_DENIED = 1;
+  DISPOSITION_REASON_PURPOSE_DENIED = 2;
+  DISPOSITION_REASON_TEMPORAL_MISMATCH = 3;
+  DISPOSITION_REASON_TRUST_INSUFFICIENT = 4;
+  DISPOSITION_REASON_INSTRUCTION_AUTHORITY_DENIED = 5;
+  DISPOSITION_REASON_PROCESSOR_DENIED = 6;
+  DISPOSITION_REASON_INTEGRITY_FAILED = 7;
+  DISPOSITION_REASON_BUDGET_DISPLACED = 8;
+  DISPOSITION_REASON_LIFECYCLE_INELIGIBLE = 9;
+  DISPOSITION_REASON_CONFLICT_LOST = 10;
+  DISPOSITION_REASON_REQUIRED_MISSING = 11;
+}
+
+message ContextBlock {
+  bytes block_id_multihash = 1;
+  LaneKind lane = 2;
+  RepresentationKind representation = 3;
+  bytes content_digest_multihash = 4;
+  uint32 token_count = 5;
+  repeated bytes provenance_version_multihashes = 6;
+  optional bytes transform_receipt_multihash = 7;
+}
+
+enum RepresentationKind {
+  REPRESENTATION_KIND_UNSPECIFIED = 0;
+  REPRESENTATION_KIND_EXACT = 1;
+  REPRESENTATION_KIND_EXTRACTED = 2;
+  REPRESENTATION_KIND_SUMMARIZED = 3;
+  REPRESENTATION_KIND_REDACTED = 4;
+}
+
+message ContextBundle {
+  string schema_version = 1;
+  bytes bundle_id_multihash = 2;
+  bytes contract_digest_multihash = 3;
+  bytes manifest_digest_multihash = 4;
+  repeated ContextBlock blocks = 5;
+  uint32 total_tokens = 6;
+  map<string, bytes> canonical_extensions = 7;
+}
+
+message ManifestEntry {
+  bytes version_id_multihash = 1;
+  CandidateDisposition disposition = 2;
+  repeated DispositionReason reason_codes = 3;
+  bytes provenance_digest_multihash = 4;
+}
+
+message SelectionManifest {
+  string schema_version = 1;
+  bytes manifest_id_multihash = 2;
+  bytes contract_digest_multihash = 3;
+  repeated ManifestEntry entries = 4;
+  map<string, bytes> canonical_extensions = 5;
+}
+
+message MaterializedContext {
+  string schema_version = 1;
+  bytes bundle_id_multihash = 2;
+  string media_type = 3;
+  bytes content = 4;
+  uint32 token_count = 5;
+  bytes tokenizer_fingerprint_multihash = 6;
+  bytes materializer_fingerprint_multihash = 7;
+}
+
+message ContextDelta {
+  string schema_version = 1;
+  bytes base_bundle_id_multihash = 2;
+  bytes target_bundle_id_multihash = 3;
+  repeated ContextBlock added_blocks = 4;
+  repeated bytes removed_block_id_multihashes = 5;
+  uint32 resulting_tokens = 6;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_READ_CONTEXT = 1;
+  CAPABILITY_COMPILE_CONTEXT = 2;
+  CAPABILITY_WRITE_OVERLAY = 3;
+  CAPABILITY_PUBLISH_OVERLAY = 4;
+  CAPABILITY_CREATE_HANDOFF = 5;
+  CAPABILITY_ACCEPT_HANDOFF = 6;
+  CAPABILITY_INVOKE_TOOL = 7;
+  CAPABILITY_PROPOSE_EFFECT = 8;
+  CAPABILITY_APPROVE_EFFECT = 9;
+  CAPABILITY_RECONCILE_EFFECT = 10;
+}
+
+message CapabilityGrant {
+  string schema_version = 1;
+  string grant_id = 2;
+  string issuer_id = 3;
+  string subject_id = 4;
+  optional string parent_grant_id = 5;
+  repeated Capability capabilities = 6;
+  repeated string project_ids = 7;
+  repeated string processors = 8;
+  string not_before_rfc3339 = 9;
+  string expires_at_rfc3339 = 10;
+  uint32 delegation_depth = 11;
+  map<string, bytes> canonical_extensions = 12;
+}
+
+enum CoordinationEventKind {
+  COORDINATION_EVENT_KIND_UNSPECIFIED = 0;
+  COORDINATION_EVENT_KIND_CONTEXT_COMMITTED = 1;
+  COORDINATION_EVENT_KIND_ATOM_INVALIDATED = 2;
+  COORDINATION_EVENT_KIND_BUNDLE_INVALIDATED = 3;
+  COORDINATION_EVENT_KIND_TASK_CHECKPOINTED = 4;
+  COORDINATION_EVENT_KIND_HANDOFF_CREATED = 5;
+  COORDINATION_EVENT_KIND_HANDOFF_ACCEPTED = 6;
+  COORDINATION_EVENT_KIND_HANDOFF_REVOKED = 7;
+  COORDINATION_EVENT_KIND_AGENT_RESULT_PROPOSED = 8;
+  COORDINATION_EVENT_KIND_MERGE_CONFLICT_CREATED = 9;
+  COORDINATION_EVENT_KIND_EFFECT_STATE_CHANGED = 10;
+  COORDINATION_EVENT_KIND_POLICY_SNAPSHOT_CHANGED = 11;
+}
+
+message CoordinationEvent {
+  string event_id = 1;
+  CoordinationEventKind kind = 2;
+  bytes payload_digest_multihash = 3;
+}
+
+message ContextCommit {
+  string schema_version = 1;
+  bytes commit_id_multihash = 2;
+  string space_id = 3;
+  uint64 sequence = 4;
+  optional bytes parent_commit_id_multihash = 5;
+  string author_id = 6;
+  string purpose = 7;
+  repeated CoordinationEvent events = 8;
+  bytes root_digest_multihash = 9;
+  bytes policy_snapshot_digest_multihash = 10;
+  string committed_at_rfc3339 = 11;
+  map<string, bytes> canonical_extensions = 12;
+}
+
+enum OverlayMutationKind {
+  OVERLAY_MUTATION_KIND_UNSPECIFIED = 0;
+  OVERLAY_MUTATION_KIND_ATOM = 1;
+  OVERLAY_MUTATION_KIND_DECISION = 2;
+  OVERLAY_MUTATION_KIND_STATE = 3;
+  OVERLAY_MUTATION_KIND_ARTIFACT = 4;
+  OVERLAY_MUTATION_KIND_INSTRUCTION = 5;
+  OVERLAY_MUTATION_KIND_CAPABILITY = 6;
+  OVERLAY_MUTATION_KIND_LEASE = 7;
+  OVERLAY_MUTATION_KIND_EFFECT = 8;
+}
+
+message OverlayMutation {
+  OverlayMutationKind kind = 1;
+  bytes record_multihash = 2;
+}
+
+message Overlay {
+  string schema_version = 1;
+  string overlay_id = 2;
+  string space_id = 3;
+  bytes base_commit_id_multihash = 4;
+  string owner_id = 5;
+  string created_at_rfc3339 = 6;
+  string expires_at_rfc3339 = 7;
+  repeated OverlayMutation mutations = 8;
+  map<string, bytes> canonical_extensions = 9;
+}
+
+message RecipientSelector {
+  oneof selector {
+    string principal_id = 1;
+    string role = 2;
+  }
+}
+
+enum CoordinationTopic {
+  COORDINATION_TOPIC_UNSPECIFIED = 0;
+  COORDINATION_TOPIC_ATOM_INVALIDATION = 1;
+  COORDINATION_TOPIC_BUNDLE_INVALIDATION = 2;
+  COORDINATION_TOPIC_TASK_CHECKPOINT = 3;
+  COORDINATION_TOPIC_HANDOFF_REVOCATION = 4;
+  COORDINATION_TOPIC_EFFECT_STATE = 5;
+  COORDINATION_TOPIC_POLICY_SNAPSHOT = 6;
+}
+
+message HandoffReferences {
+  repeated bytes source_multihashes = 1;
+  repeated bytes state_multihashes = 2;
+  repeated bytes decision_multihashes = 3;
+  repeated bytes artifact_multihashes = 4;
+  repeated bytes uncertainty_multihashes = 5;
+  repeated bytes effect_multihashes = 6;
+}
+
+message HandoffCapsule {
+  string schema_version = 1;
+  string handoff_id = 2;
+  string issuer_id = 3;
+  RecipientSelector recipient = 4;
+  string task = 5;
+  repeated string acceptance_criteria = 6;
+  repeated string project_ids = 7;
+  repeated Capability delegated_capabilities = 8;
+  repeated Capability rejected_capabilities = 9;
+  Budget budget = 10;
+  repeated CoordinationTopic topics = 11;
+  HandoffReferences references = 12;
+  bytes bundle_id_multihash = 13;
+  string audience = 14;
+  string created_at_rfc3339 = 15;
+  string expires_at_rfc3339 = 16;
+  bytes nonce = 17;
+  bool reusable = 18;
+  string issuer_key_id = 19;
+  bytes signature = 20;
+  map<string, bytes> canonical_extensions = 21;
+}
+
+message HandoffAcceptance {
+  string schema_version = 1;
+  string acceptance_id = 2;
+  string handoff_id = 3;
+  string recipient_id = 4;
+  repeated Capability accepted_capabilities = 5;
+  repeated Capability rejected_capabilities = 6;
+  repeated bytes unavailable_reference_multihashes = 7;
+  bytes policy_digest_multihash = 8;
+  bytes bundle_id_multihash = 9;
+  string accepted_at_rfc3339 = 10;
+  bytes acknowledgement_digest_multihash = 11;
+}
+
+message ResultClaim {
+  string claim = 1;
+  repeated bytes evidence_multihashes = 2;
+}
+
+message HandoffDelta {
+  string schema_version = 1;
+  string delta_id = 2;
+  string handoff_id = 3;
+  bytes base_commit_id_multihash = 4;
+  string producer_id = 5;
+  repeated ResultClaim claims = 6;
+  repeated bytes decision_multihashes = 7;
+  repeated bytes artifact_multihashes = 8;
+  repeated bytes source_change_multihashes = 9;
+  repeated bytes verifier_receipt_multihashes = 10;
+  repeated string unresolved_questions = 11;
+  repeated string blockers = 12;
+  repeated bytes effect_reference_multihashes = 13;
+  repeated Capability requested_followup_capabilities = 14;
+  map<string, bytes> canonical_extensions = 15;
+}
+
+enum LeaseKind {
+  LEASE_KIND_UNSPECIFIED = 0;
+  LEASE_KIND_TASK = 1;
+  LEASE_KIND_DECISION = 2;
+  LEASE_KIND_EFFECT_RECONCILIATION = 3;
+  LEASE_KIND_PUBLICATION = 4;
+}
+
+enum LeaseState {
+  LEASE_STATE_UNSPECIFIED = 0;
+  LEASE_STATE_ACTIVE = 1;
+  LEASE_STATE_RELEASED = 2;
+  LEASE_STATE_EXPIRED = 3;
+  LEASE_STATE_REVOKED = 4;
+}
+
+message Lease {
+  string schema_version = 1;
+  string lease_id = 2;
+  bytes resource_id_multihash = 3;
+  string holder_id = 4;
+  LeaseKind kind = 5;
+  LeaseState state = 6;
+  string acquired_at_rfc3339 = 7;
+  string expires_at_rfc3339 = 8;
+  uint64 expected_revision = 9;
+}
+
+enum EffectState {
+  EFFECT_STATE_UNSPECIFIED = 0;
+  EFFECT_STATE_PREPARED = 1;
+  EFFECT_STATE_PENDING_APPROVAL = 2;
+  EFFECT_STATE_AUTHORIZED = 3;
+  EFFECT_STATE_DISPATCHING = 4;
+  EFFECT_STATE_SUCCEEDED = 5;
+  EFFECT_STATE_FAILED = 6;
+  EFFECT_STATE_UNKNOWN = 7;
+  EFFECT_STATE_AUTHORIZED_FOR_RETRY = 8;
+  EFFECT_STATE_MANUAL_RESOLUTION = 9;
+  EFFECT_STATE_REJECTED = 10;
+  EFFECT_STATE_EXPIRED = 11;
+  EFFECT_STATE_CANCELLED = 12;
+  EFFECT_STATE_COMPENSATION_PENDING = 13;
+  EFFECT_STATE_COMPENSATING = 14;
+  EFFECT_STATE_COMPENSATED = 15;
+  EFFECT_STATE_COMPENSATION_FAILED = 16;
+}
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_LOW = 1;
+  RISK_LEVEL_MEDIUM = 2;
+  RISK_LEVEL_HIGH = 3;
+  RISK_LEVEL_CRITICAL = 4;
+}
+
+enum RetryPolicyKind {
+  RETRY_POLICY_KIND_UNSPECIFIED = 0;
+  RETRY_POLICY_KIND_NEVER = 1;
+  RETRY_POLICY_KIND_SAME_KEY_IDEMPOTENT = 2;
+  RETRY_POLICY_KIND_RECONCILE_BEFORE_RETRY = 3;
+}
+
+message RetryPolicy {
+  RetryPolicyKind kind = 1;
+  optional uint32 max_attempts = 2;
+}
+
+message CompensationSpec {
+  string operation = 1;
+  bytes arguments_digest_multihash = 2;
+  BlobRef encrypted_arguments = 3;
+}
+
+message EffectIntent {
+  string schema_version = 1;
+  string effect_id = 2;
+  string connector = 3;
+  string operation = 4;
+  bytes arguments_digest_multihash = 5;
+  BlobRef encrypted_arguments = 6;
+  string target = 7;
+  repeated bytes precondition_multihashes = 8;
+  bytes result_schema_digest_multihash = 9;
+  RiskLevel risk = 10;
+  bytes source_decision_id_multihash = 11;
+  bytes bundle_id_multihash = 12;
+  Capability required_capability = 13;
+  string idempotency_scope = 14;
+  string idempotency_key = 15;
+  RetryPolicy retry_policy = 16;
+  string created_at_rfc3339 = 17;
+  string expires_at_rfc3339 = 18;
+  optional CompensationSpec compensation = 19;
+  map<string, bytes> canonical_extensions = 20;
+}
+
+enum ApprovalKind {
+  APPROVAL_KIND_UNSPECIFIED = 0;
+  APPROVAL_KIND_HUMAN = 1;
+  APPROVAL_KIND_POLICY = 2;
+}
+
+message EffectApproval {
+  string schema_version = 1;
+  string approval_id = 2;
+  string effect_id = 3;
+  bytes intent_digest_multihash = 4;
+  bytes target_digest_multihash = 5;
+  RiskLevel risk = 6;
+  bytes bundle_id_multihash = 7;
+  bytes conditions_digest_multihash = 8;
+  string approver_id = 9;
+  ApprovalKind kind = 10;
+  string approved_at_rfc3339 = 11;
+  string expires_at_rfc3339 = 12;
+}
+
+message EffectAttempt {
+  string schema_version = 1;
+  string attempt_id = 2;
+  string effect_id = 3;
+  uint32 attempt_number = 4;
+  uint64 fencing_token = 5;
+  bytes request_digest_multihash = 6;
+  string started_at_rfc3339 = 7;
+  string deadline_rfc3339 = 8;
+}
+
+enum ReceiptOutcome {
+  RECEIPT_OUTCOME_UNSPECIFIED = 0;
+  RECEIPT_OUTCOME_SUCCEEDED = 1;
+  RECEIPT_OUTCOME_FAILED = 2;
+  RECEIPT_OUTCOME_UNKNOWN = 3;
+}
+
+message EffectReceipt {
+  string schema_version = 1;
+  string receipt_id = 2;
+  string effect_id = 3;
+  string attempt_id = 4;
+  ReceiptOutcome outcome = 5;
+  optional string remote_operation_id = 6;
+  optional BlobRef protected_response = 7;
+  optional bytes response_digest_multihash = 8;
+  string observed_at_rfc3339 = 9;
+  optional bytes verification_digest_multihash = 10;
+}
+
+message EffectJournalEvent {
+  string schema_version = 1;
+  string event_id = 2;
+  string effect_id = 3;
+  uint64 sequence = 4;
+  uint64 expected_effect_version = 5;
+  EffectState from_state = 6;
+  EffectState to_state = 7;
+  string actor_id = 8;
+  bytes payload_digest_multihash = 9;
+  optional bytes previous_event_digest_multihash = 10;
+  bytes event_digest_multihash = 11;
+  string recorded_at_rfc3339 = 12;
+}
+
+enum ReconciliationOutcome {
+  RECONCILIATION_OUTCOME_UNSPECIFIED = 0;
+  RECONCILIATION_OUTCOME_CONFIRMED_SUCCESS = 1;
+  RECONCILIATION_OUTCOME_CONFIRMED_FAILURE = 2;
+  RECONCILIATION_OUTCOME_PROVEN_NOT_EXECUTED = 3;
+  RECONCILIATION_OUTCOME_INCONCLUSIVE = 4;
+  RECONCILIATION_OUTCOME_MANUAL = 5;
+}
+
+message ReconciliationReport {
+  string schema_version = 1;
+  string report_id = 2;
+  string effect_id = 3;
+  optional string attempt_id = 4;
+  ReconciliationOutcome outcome = 5;
+  repeated bytes evidence_digest_multihashes = 6;
+  string reconciled_at_rfc3339 = 7;
+  optional string certainty_window_end_rfc3339 = 8;
+}
+
+message CompensationLink {
+  string schema_version = 1;
+  string original_effect_id = 2;
+  string compensation_effect_id = 3;
+  bytes compensation_spec_digest_multihash = 4;
+  string created_at_rfc3339 = 5;
+}
+
+enum DecisionOutcome {
+  DECISION_OUTCOME_UNSPECIFIED = 0;
+  DECISION_OUTCOME_SUCCEEDED = 1;
+  DECISION_OUTCOME_FAILED = 2;
+  DECISION_OUTCOME_PARTIAL = 3;
+  DECISION_OUTCOME_CANCELLED = 4;
+}
+
+message UsageRecord {
+  uint64 input_tokens = 1;
+  uint64 output_tokens = 2;
+  uint64 cached_input_tokens = 3;
+  uint64 cost_micros = 4;
+}
+
+message DecisionRecord {
+  string schema_version = 1;
+  bytes decision_id_multihash = 2;
+  bytes task_digest_multihash = 3;
+  string plan_id = 4;
+  bytes plan_digest_multihash = 5;
+  bytes bundle_id_multihash = 6;
+  bytes materialization_digest_multihash = 7;
+  bytes runtime_fingerprint_multihash = 8;
+  bytes consumer_fingerprint_multihash = 9;
+  repeated bytes output_artifact_multihashes = 10;
+  repeated bytes asserted_claim_multihashes = 11;
+  repeated bytes evidence_multihashes = 12;
+  repeated bytes uncertainty_multihashes = 13;
+  repeated bytes verification_receipt_multihashes = 14;
+  repeated string effect_ids = 15;
+  UsageRecord usage = 16;
+  string started_at_rfc3339 = 17;
+  string completed_at_rfc3339 = 18;
+  DecisionOutcome outcome = 19;
+  map<string, bytes> canonical_extensions = 20;
+}
+
+enum ReplayMode {
+  REPLAY_MODE_UNSPECIFIED = 0;
+  REPLAY_MODE_EVIDENCE_REPRODUCTION = 1;
+  REPLAY_MODE_INVOCATION_REPRODUCTION = 2;
+  REPLAY_MODE_OBSERVATIONAL = 3;
+  REPLAY_MODE_LIVE_COMPARISON = 4;
+}
+
+message ReplayRequest {
+  string schema_version = 1;
+  string request_id = 2;
+  bytes decision_id_multihash = 3;
+  ReplayMode mode = 4;
+  string requested_by = 5;
+  optional bytes live_authorization_digest_multihash = 6;
+  bool simulate_effects = 7;
+  repeated string authorized_effect_intents = 8;
+}
+
+enum DependencyKind {
+  DEPENDENCY_KIND_UNSPECIFIED = 0;
+  DEPENDENCY_KIND_SOURCE = 1;
+  DEPENDENCY_KIND_BLOB = 2;
+  DEPENDENCY_KIND_POLICY = 3;
+  DEPENDENCY_KIND_INDEX = 4;
+  DEPENDENCY_KIND_MANIFEST = 5;
+  DEPENDENCY_KIND_BUNDLE = 6;
+  DEPENDENCY_KIND_TOKENIZER = 7;
+  DEPENDENCY_KIND_ADAPTER = 8;
+  DEPENDENCY_KIND_CONSUMER = 9;
+  DEPENDENCY_KIND_TOOL_SCHEMA = 10;
+  DEPENDENCY_KIND_ENVIRONMENT = 11;
+}
+
+message ReplayCompleteness {
+  repeated DependencyKind available = 1;
+  repeated DependencyKind missing = 2;
+}
+
+enum ReplayStatus {
+  REPLAY_STATUS_UNSPECIFIED = 0;
+  REPLAY_STATUS_RUNNING = 1;
+  REPLAY_STATUS_COMPLETE = 2;
+  REPLAY_STATUS_FAILED = 3;
+  REPLAY_STATUS_INCOMPLETE = 4;
+}
+
+message ReplayExecution {
+  string schema_version = 1;
+  string execution_id = 2;
+  string request_id = 3;
+  ReplayMode mode = 4;
+  ReplayStatus status = 5;
+  ReplayCompleteness completeness = 6;
+  optional bytes reconstructed_input_digest_multihash = 7;
+  optional bytes observation_digest_multihash = 8;
+  bool egress_permitted = 9;
+  bool effect_dispatch_permitted = 10;
+  string started_at_rfc3339 = 11;
+  optional string completed_at_rfc3339 = 12;
+}
+
+enum DiffStatus {
+  DIFF_STATUS_UNSPECIFIED = 0;
+  DIFF_STATUS_EQUAL = 1;
+  DIFF_STATUS_DIFFERENT = 2;
+  DIFF_STATUS_UNAVAILABLE = 3;
+}
+
+message ReplayDiff {
+  string schema_version = 1;
+  bytes decision_id_multihash = 2;
+  string execution_id = 3;
+  DiffStatus semantic_context = 4;
+  DiffStatus materialization = 5;
+  DiffStatus components = 6;
+  DiffStatus output_claims = 7;
+  DiffStatus verification = 8;
+  DiffStatus effect_plan = 9;
+  DiffStatus observations = 10;
+  bool compiler_deterministic = 11;
+}
+
+enum VerificationOutcome {
+  VERIFICATION_OUTCOME_UNSPECIFIED = 0;
+  VERIFICATION_OUTCOME_PASSED = 1;
+  VERIFICATION_OUTCOME_FAILED = 2;
+  VERIFICATION_OUTCOME_INDETERMINATE = 3;
+}
+
+message VerificationCheck {
+  string name = 1;
+  bytes evidence_digest_multihash = 2;
+  VerificationOutcome outcome = 3;
+}
+
+message VerificationReceipt {
+  string schema_version = 1;
+  bytes receipt_id_multihash = 2;
+  bytes verifier_fingerprint_multihash = 3;
+  bytes subject_digest_multihash = 4;
+  repeated VerificationCheck checks = 5;
+  VerificationOutcome outcome = 6;
+  string verified_at_rfc3339 = 7;
+}
+
+message PageCursor {
+  bytes opaque = 1;
+}
+
+message Problem {
+  string schema_version = 1;
+  ErrorCode code = 2;
+  uint32 http_status = 3;
+  RetryClass retry = 4;
+  string message = 5;
+  string remediation = 6;
+  string correlation_id = 7;
+  map<string, bytes> canonical_details = 8;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_HEALTHY = 1;
+  HEALTH_STATUS_DEGRADED = 2;
+  HEALTH_STATUS_UNHEALTHY = 3;
+}
+
+message ComponentHealth {
+  string name = 1;
+  HealthStatus status = 2;
+  optional ErrorCode reason = 3;
+}
+
+message HealthReport {
+  string schema_version = 1;
+  HealthStatus status = 2;
+  repeated ComponentHealth components = 3;
+  string observed_at_rfc3339 = 4;
+}
+
+message CompatibilityReport {
+  string schema_version = 1;
+  string protocol_min = 2;
+  string protocol_max = 3;
+  string writer_protocol = 4;
+  map<string, uint32> schema_majors = 5;
+  bool compatible = 6;
+  repeated ErrorCode reasons = 7;
+}
+
+message SourceSnapshot {
+  string schema_version = 1;
+  string snapshot_id = 2;
+  string source_uri = 3;
+  string source_revision = 4;
+  string captured_at_rfc3339 = 5;
+  bytes manifest_digest_multihash = 6;
+  uint64 entry_count = 7;
+  uint64 total_bytes = 8;
+  bool complete = 9;
+  map<string, bytes> canonical_extensions = 10;
+}
+
+message ContextEdge {
+  string schema_version = 1;
+  string edge_id = 2;
+  bytes from_version_multihash = 3;
+  bytes to_version_multihash = 4;
+  EdgeKind kind = 5;
+  bytes provenance_digest_multihash = 6;
+  Lifecycle lifecycle = 7;
+  optional string superseded_by = 8;
+  map<string, bytes> canonical_extensions = 9;
+}
+
+enum EdgeKind {
+  EDGE_KIND_UNSPECIFIED = 0;
+  EDGE_KIND_DEPENDS_ON = 1;
+  EDGE_KIND_DEFINES = 2;
+  EDGE_KIND_REFERENCES = 3;
+  EDGE_KIND_SUPERSEDES = 4;
+  EDGE_KIND_CONTRADICTS = 5;
+  EDGE_KIND_SUPPORTS = 6;
+  EDGE_KIND_DERIVED_FROM = 7;
+  EDGE_KIND_APPLIES_TO = 8;
+}
+
+// Transport representation only. Semantic validation remains in cigar-protocol.
+message ContextAtom {
+  string schema_version = 1;
+  string atom_id = 2;
+  string lineage_id = 3;
+  bytes version_multihash = 4;
+  bytes content_multihash = 5;
+  AtomKind kind = 6;
+  AtomPayload payload = 7;
+  SourceDescriptor source = 8;
+  ScopeEnvelope scope = 9;
+  TemporalEnvelope temporal = 10;
+  GovernanceEnvelope governance = 11;
+  QualityEnvelope quality = 12;
+  RetrievalEnvelope retrieval = 13;
+  Lifecycle lifecycle = 14;
+  optional bytes superseded_by_multihash = 15;
+  map<string, bytes> canonical_extensions = 16;
+}
+
+enum AtomKind {
+  ATOM_KIND_UNSPECIFIED = 0;
+  ATOM_KIND_INSTRUCTION = 1;
+  ATOM_KIND_SOURCE_CODE = 2;
+  ATOM_KIND_DOCUMENTATION = 3;
+  ATOM_KIND_DECISION = 4;
+  ATOM_KIND_CONVERSATION = 5;
+  ATOM_KIND_TOOL_RESULT = 6;
+  ATOM_KIND_SCHEMA = 7;
+  ATOM_KIND_POLICY = 8;
+  ATOM_KIND_TEST = 9;
+  ATOM_KIND_ARTIFACT = 10;
+}
+
+message AtomPayload {
+  oneof value {
+    string inline_text = 1;
+    bytes canonical_json = 2;
+    BlobRef blob = 3;
+  }
+}
+
+message BlobRef {
+  bytes digest_multihash = 1;
+  uint64 size_bytes = 2;
+  string media_type = 3;
+}
+
+message SourceDescriptor {
+  string uri = 1;
+  optional bytes relative_path = 2;
+  string revision = 3;
+  bytes snapshot_digest_multihash = 4;
+}
+
+message ScopeEnvelope {
+  string tenant_id = 1;
+  repeated string project_ids = 2;
+}
+
+message TemporalEnvelope {
+  string valid_from_rfc3339 = 1;
+  optional string valid_until_rfc3339 = 2;
+  string observed_at_rfc3339 = 3;
+}
+
+message GovernanceEnvelope {
+  Classification classification = 1;
+  repeated string allowed_purposes = 2;
+  repeated string processor_constraints = 3;
+  InstructionAuthority instruction_authority = 4;
+}
+
+enum Classification {
+  CLASSIFICATION_UNSPECIFIED = 0;
+  CLASSIFICATION_PUBLIC = 1;
+  CLASSIFICATION_INTERNAL = 2;
+  CLASSIFICATION_CONFIDENTIAL = 3;
+  CLASSIFICATION_RESTRICTED = 4;
+}
+
+enum InstructionAuthority {
+  INSTRUCTION_AUTHORITY_UNSPECIFIED = 0;
+  INSTRUCTION_AUTHORITY_DATA = 1;
+  INSTRUCTION_AUTHORITY_ADVISORY = 2;
+  INSTRUCTION_AUTHORITY_PROJECT = 3;
+  INSTRUCTION_AUTHORITY_SYSTEM = 4;
+}
+
+message QualityEnvelope {
+  uint32 confidence_millionths = 1;
+  uint32 coverage_millionths = 2;
+  uint32 authority = 3;
+}
+
+message RetrievalEnvelope {
+  repeated string exact_terms = 1;
+  bool lexical_enabled = 2;
+  bool embedding_eligible = 3;
+}
+
+enum Lifecycle {
+  LIFECYCLE_UNSPECIFIED = 0;
+  LIFECYCLE_ACTIVE = 1;
+  LIFECYCLE_SUPERSEDED = 2;
+  LIFECYCLE_TOMBSTONED = 3;
+  LIFECYCLE_QUARANTINED = 4;
+}

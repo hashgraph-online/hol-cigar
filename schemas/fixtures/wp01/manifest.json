@@ -1,0 +1,3060 @@
+{
+  "schema_version": 1,
+  "fixture_count": 342,
+  "fixtures": [
+    {
+      "id": "AtomKind.variant.instruction",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "instruction",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.source_code",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "source_code",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.documentation",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "documentation",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.decision",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "decision",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.conversation",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "conversation",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.tool_result",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "tool_result",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.schema",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "schema",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.policy",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "policy",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.test",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "test",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.variant.artifact",
+      "target": "AtomKind",
+      "category": "enum_variant",
+      "input": "artifact",
+      "expected_valid": true
+    },
+    {
+      "id": "AtomKind.invalid.unknown",
+      "target": "AtomKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "Classification.variant.public",
+      "target": "Classification",
+      "category": "enum_variant",
+      "input": "public",
+      "expected_valid": true
+    },
+    {
+      "id": "Classification.variant.internal",
+      "target": "Classification",
+      "category": "enum_variant",
+      "input": "internal",
+      "expected_valid": true
+    },
+    {
+      "id": "Classification.variant.confidential",
+      "target": "Classification",
+      "category": "enum_variant",
+      "input": "confidential",
+      "expected_valid": true
+    },
+    {
+      "id": "Classification.variant.restricted",
+      "target": "Classification",
+      "category": "enum_variant",
+      "input": "restricted",
+      "expected_valid": true
+    },
+    {
+      "id": "Classification.invalid.unknown",
+      "target": "Classification",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "InstructionAuthority.variant.data",
+      "target": "InstructionAuthority",
+      "category": "enum_variant",
+      "input": "data",
+      "expected_valid": true
+    },
+    {
+      "id": "InstructionAuthority.variant.advisory",
+      "target": "InstructionAuthority",
+      "category": "enum_variant",
+      "input": "advisory",
+      "expected_valid": true
+    },
+    {
+      "id": "InstructionAuthority.variant.project",
+      "target": "InstructionAuthority",
+      "category": "enum_variant",
+      "input": "project",
+      "expected_valid": true
+    },
+    {
+      "id": "InstructionAuthority.variant.system",
+      "target": "InstructionAuthority",
+      "category": "enum_variant",
+      "input": "system",
+      "expected_valid": true
+    },
+    {
+      "id": "InstructionAuthority.invalid.unknown",
+      "target": "InstructionAuthority",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "Lifecycle.variant.active",
+      "target": "Lifecycle",
+      "category": "enum_variant",
+      "input": "active",
+      "expected_valid": true
+    },
+    {
+      "id": "Lifecycle.variant.superseded",
+      "target": "Lifecycle",
+      "category": "enum_variant",
+      "input": "superseded",
+      "expected_valid": true
+    },
+    {
+      "id": "Lifecycle.variant.tombstoned",
+      "target": "Lifecycle",
+      "category": "enum_variant",
+      "input": "tombstoned",
+      "expected_valid": true
+    },
+    {
+      "id": "Lifecycle.variant.quarantined",
+      "target": "Lifecycle",
+      "category": "enum_variant",
+      "input": "quarantined",
+      "expected_valid": true
+    },
+    {
+      "id": "Lifecycle.invalid.unknown",
+      "target": "Lifecycle",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "EdgeKind.variant.depends_on",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "depends_on",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.defines",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "defines",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.references",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "references",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.supersedes",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "supersedes",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.contradicts",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "contradicts",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.supports",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "supports",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.derived_from",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "derived_from",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.variant.applies_to",
+      "target": "EdgeKind",
+      "category": "enum_variant",
+      "input": "applies_to",
+      "expected_valid": true
+    },
+    {
+      "id": "EdgeKind.invalid.unknown",
+      "target": "EdgeKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "DispositionReason.variant.scope_denied",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "scope_denied",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.purpose_denied",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "purpose_denied",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.temporal_mismatch",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "temporal_mismatch",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.trust_insufficient",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "trust_insufficient",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.instruction_authority_denied",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "instruction_authority_denied",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.processor_denied",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "processor_denied",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.integrity_failed",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "integrity_failed",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.budget_displaced",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "budget_displaced",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.lifecycle_ineligible",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "lifecycle_ineligible",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.conflict_lost",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "conflict_lost",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.variant.required_missing",
+      "target": "DispositionReason",
+      "category": "enum_variant",
+      "input": "required_missing",
+      "expected_valid": true
+    },
+    {
+      "id": "DispositionReason.invalid.unknown",
+      "target": "DispositionReason",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "RepresentationKind.variant.exact",
+      "target": "RepresentationKind",
+      "category": "enum_variant",
+      "input": "exact",
+      "expected_valid": true
+    },
+    {
+      "id": "RepresentationKind.variant.extracted",
+      "target": "RepresentationKind",
+      "category": "enum_variant",
+      "input": "extracted",
+      "expected_valid": true
+    },
+    {
+      "id": "RepresentationKind.variant.summarized",
+      "target": "RepresentationKind",
+      "category": "enum_variant",
+      "input": "summarized",
+      "expected_valid": true
+    },
+    {
+      "id": "RepresentationKind.variant.redacted",
+      "target": "RepresentationKind",
+      "category": "enum_variant",
+      "input": "redacted",
+      "expected_valid": true
+    },
+    {
+      "id": "RepresentationKind.invalid.unknown",
+      "target": "RepresentationKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "OperationClass.variant.read",
+      "target": "OperationClass",
+      "category": "enum_variant",
+      "input": "read",
+      "expected_valid": true
+    },
+    {
+      "id": "OperationClass.variant.code_change",
+      "target": "OperationClass",
+      "category": "enum_variant",
+      "input": "code_change",
+      "expected_valid": true
+    },
+    {
+      "id": "OperationClass.variant.analysis",
+      "target": "OperationClass",
+      "category": "enum_variant",
+      "input": "analysis",
+      "expected_valid": true
+    },
+    {
+      "id": "OperationClass.variant.external_mutation",
+      "target": "OperationClass",
+      "category": "enum_variant",
+      "input": "external_mutation",
+      "expected_valid": true
+    },
+    {
+      "id": "OperationClass.invalid.unknown",
+      "target": "OperationClass",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ConsistencyMode.variant.snapshot",
+      "target": "ConsistencyMode",
+      "category": "enum_variant",
+      "input": "snapshot",
+      "expected_valid": true
+    },
+    {
+      "id": "ConsistencyMode.variant.strong",
+      "target": "ConsistencyMode",
+      "category": "enum_variant",
+      "input": "strong",
+      "expected_valid": true
+    },
+    {
+      "id": "ConsistencyMode.variant.bounded_staleness",
+      "target": "ConsistencyMode",
+      "category": "enum_variant",
+      "input": "bounded_staleness",
+      "expected_valid": true
+    },
+    {
+      "id": "ConsistencyMode.invalid.unknown",
+      "target": "ConsistencyMode",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "LaneKind.variant.rules",
+      "target": "LaneKind",
+      "category": "enum_variant",
+      "input": "rules",
+      "expected_valid": true
+    },
+    {
+      "id": "LaneKind.variant.task",
+      "target": "LaneKind",
+      "category": "enum_variant",
+      "input": "task",
+      "expected_valid": true
+    },
+    {
+      "id": "LaneKind.variant.evidence",
+      "target": "LaneKind",
+      "category": "enum_variant",
+      "input": "evidence",
+      "expected_valid": true
+    },
+    {
+      "id": "LaneKind.variant.history",
+      "target": "LaneKind",
+      "category": "enum_variant",
+      "input": "history",
+      "expected_valid": true
+    },
+    {
+      "id": "LaneKind.variant.tools",
+      "target": "LaneKind",
+      "category": "enum_variant",
+      "input": "tools",
+      "expected_valid": true
+    },
+    {
+      "id": "LaneKind.invalid.unknown",
+      "target": "LaneKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "Capability.variant.read_context",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "read_context",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.compile_context",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "compile_context",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.write_overlay",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "write_overlay",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.publish_overlay",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "publish_overlay",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.create_handoff",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "create_handoff",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.accept_handoff",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "accept_handoff",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.invoke_tool",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "invoke_tool",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.propose_effect",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "propose_effect",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.approve_effect",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "approve_effect",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.variant.reconcile_effect",
+      "target": "Capability",
+      "category": "enum_variant",
+      "input": "reconcile_effect",
+      "expected_valid": true
+    },
+    {
+      "id": "Capability.invalid.unknown",
+      "target": "Capability",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "CoordinationEventKind.variant.context_committed",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "context_committed",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.atom_invalidated",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "atom_invalidated",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.bundle_invalidated",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "bundle_invalidated",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.task_checkpointed",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "task_checkpointed",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.handoff_created",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "handoff_created",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.handoff_accepted",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "handoff_accepted",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.handoff_revoked",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "handoff_revoked",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.agent_result_proposed",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "agent_result_proposed",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.merge_conflict_created",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "merge_conflict_created",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.effect_state_changed",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "effect_state_changed",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.variant.policy_snapshot_changed",
+      "target": "CoordinationEventKind",
+      "category": "enum_variant",
+      "input": "policy_snapshot_changed",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationEventKind.invalid.unknown",
+      "target": "CoordinationEventKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "CoordinationTopic.variant.atom_invalidation",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "atom_invalidation",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.variant.bundle_invalidation",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "bundle_invalidation",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.variant.task_checkpoint",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "task_checkpoint",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.variant.handoff_revocation",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "handoff_revocation",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.variant.effect_state",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "effect_state",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.variant.policy_snapshot",
+      "target": "CoordinationTopic",
+      "category": "enum_variant",
+      "input": "policy_snapshot",
+      "expected_valid": true
+    },
+    {
+      "id": "CoordinationTopic.invalid.unknown",
+      "target": "CoordinationTopic",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "LeaseKind.variant.task",
+      "target": "LeaseKind",
+      "category": "enum_variant",
+      "input": "task",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseKind.variant.decision",
+      "target": "LeaseKind",
+      "category": "enum_variant",
+      "input": "decision",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseKind.variant.effect_reconciliation",
+      "target": "LeaseKind",
+      "category": "enum_variant",
+      "input": "effect_reconciliation",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseKind.variant.publication",
+      "target": "LeaseKind",
+      "category": "enum_variant",
+      "input": "publication",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseKind.invalid.unknown",
+      "target": "LeaseKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "LeaseState.variant.active",
+      "target": "LeaseState",
+      "category": "enum_variant",
+      "input": "active",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseState.variant.released",
+      "target": "LeaseState",
+      "category": "enum_variant",
+      "input": "released",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseState.variant.expired",
+      "target": "LeaseState",
+      "category": "enum_variant",
+      "input": "expired",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseState.variant.revoked",
+      "target": "LeaseState",
+      "category": "enum_variant",
+      "input": "revoked",
+      "expected_valid": true
+    },
+    {
+      "id": "LeaseState.invalid.unknown",
+      "target": "LeaseState",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "EffectState.variant.prepared",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "prepared",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.pending_approval",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "pending_approval",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.authorized",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "authorized",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.dispatching",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "dispatching",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.succeeded",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "succeeded",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.failed",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "failed",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.unknown",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "unknown",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.authorized_for_retry",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "authorized_for_retry",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.manual_resolution",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "manual_resolution",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.rejected",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "rejected",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.expired",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "expired",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.cancelled",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "cancelled",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.compensation_pending",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "compensation_pending",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.compensating",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "compensating",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.compensated",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "compensated",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.variant.compensation_failed",
+      "target": "EffectState",
+      "category": "enum_variant",
+      "input": "compensation_failed",
+      "expected_valid": true
+    },
+    {
+      "id": "EffectState.invalid.unknown",
+      "target": "EffectState",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "RiskLevel.variant.low",
+      "target": "RiskLevel",
+      "category": "enum_variant",
+      "input": "low",
+      "expected_valid": true
+    },
+    {
+      "id": "RiskLevel.variant.medium",
+      "target": "RiskLevel",
+      "category": "enum_variant",
+      "input": "medium",
+      "expected_valid": true
+    },
+    {
+      "id": "RiskLevel.variant.high",
+      "target": "RiskLevel",
+      "category": "enum_variant",
+      "input": "high",
+      "expected_valid": true
+    },
+    {
+      "id": "RiskLevel.variant.critical",
+      "target": "RiskLevel",
+      "category": "enum_variant",
+      "input": "critical",
+      "expected_valid": true
+    },
+    {
+      "id": "RiskLevel.invalid.unknown",
+      "target": "RiskLevel",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ApprovalKind.variant.human",
+      "target": "ApprovalKind",
+      "category": "enum_variant",
+      "input": "human",
+      "expected_valid": true
+    },
+    {
+      "id": "ApprovalKind.variant.policy",
+      "target": "ApprovalKind",
+      "category": "enum_variant",
+      "input": "policy",
+      "expected_valid": true
+    },
+    {
+      "id": "ApprovalKind.invalid.unknown",
+      "target": "ApprovalKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ReceiptOutcome.variant.succeeded",
+      "target": "ReceiptOutcome",
+      "category": "enum_variant",
+      "input": "succeeded",
+      "expected_valid": true
+    },
+    {
+      "id": "ReceiptOutcome.variant.failed",
+      "target": "ReceiptOutcome",
+      "category": "enum_variant",
+      "input": "failed",
+      "expected_valid": true
+    },
+    {
+      "id": "ReceiptOutcome.variant.unknown",
+      "target": "ReceiptOutcome",
+      "category": "enum_variant",
+      "input": "unknown",
+      "expected_valid": true
+    },
+    {
+      "id": "ReceiptOutcome.invalid.unknown",
+      "target": "ReceiptOutcome",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ReconciliationOutcome.variant.confirmed_success",
+      "target": "ReconciliationOutcome",
+      "category": "enum_variant",
+      "input": "confirmed_success",
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationOutcome.variant.confirmed_failure",
+      "target": "ReconciliationOutcome",
+      "category": "enum_variant",
+      "input": "confirmed_failure",
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationOutcome.variant.proven_not_executed",
+      "target": "ReconciliationOutcome",
+      "category": "enum_variant",
+      "input": "proven_not_executed",
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationOutcome.variant.inconclusive",
+      "target": "ReconciliationOutcome",
+      "category": "enum_variant",
+      "input": "inconclusive",
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationOutcome.variant.manual",
+      "target": "ReconciliationOutcome",
+      "category": "enum_variant",
+      "input": "manual",
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationOutcome.invalid.unknown",
+      "target": "ReconciliationOutcome",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "DecisionOutcome.variant.succeeded",
+      "target": "DecisionOutcome",
+      "category": "enum_variant",
+      "input": "succeeded",
+      "expected_valid": true
+    },
+    {
+      "id": "DecisionOutcome.variant.failed",
+      "target": "DecisionOutcome",
+      "category": "enum_variant",
+      "input": "failed",
+      "expected_valid": true
+    },
+    {
+      "id": "DecisionOutcome.variant.partial",
+      "target": "DecisionOutcome",
+      "category": "enum_variant",
+      "input": "partial",
+      "expected_valid": true
+    },
+    {
+      "id": "DecisionOutcome.variant.cancelled",
+      "target": "DecisionOutcome",
+      "category": "enum_variant",
+      "input": "cancelled",
+      "expected_valid": true
+    },
+    {
+      "id": "DecisionOutcome.invalid.unknown",
+      "target": "DecisionOutcome",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ReplayMode.variant.evidence_reproduction",
+      "target": "ReplayMode",
+      "category": "enum_variant",
+      "input": "evidence_reproduction",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayMode.variant.invocation_reproduction",
+      "target": "ReplayMode",
+      "category": "enum_variant",
+      "input": "invocation_reproduction",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayMode.variant.observational",
+      "target": "ReplayMode",
+      "category": "enum_variant",
+      "input": "observational",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayMode.variant.live_comparison",
+      "target": "ReplayMode",
+      "category": "enum_variant",
+      "input": "live_comparison",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayMode.invalid.unknown",
+      "target": "ReplayMode",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "DependencyKind.variant.source",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "source",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.blob",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "blob",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.policy",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "policy",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.index",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "index",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.manifest",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "manifest",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.bundle",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "bundle",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.tokenizer",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "tokenizer",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.adapter",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "adapter",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.consumer",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "consumer",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.tool_schema",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "tool_schema",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.variant.environment",
+      "target": "DependencyKind",
+      "category": "enum_variant",
+      "input": "environment",
+      "expected_valid": true
+    },
+    {
+      "id": "DependencyKind.invalid.unknown",
+      "target": "DependencyKind",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ReplayStatus.variant.running",
+      "target": "ReplayStatus",
+      "category": "enum_variant",
+      "input": "running",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayStatus.variant.complete",
+      "target": "ReplayStatus",
+      "category": "enum_variant",
+      "input": "complete",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayStatus.variant.failed",
+      "target": "ReplayStatus",
+      "category": "enum_variant",
+      "input": "failed",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayStatus.variant.incomplete",
+      "target": "ReplayStatus",
+      "category": "enum_variant",
+      "input": "incomplete",
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayStatus.invalid.unknown",
+      "target": "ReplayStatus",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "DiffStatus.variant.equal",
+      "target": "DiffStatus",
+      "category": "enum_variant",
+      "input": "equal",
+      "expected_valid": true
+    },
+    {
+      "id": "DiffStatus.variant.different",
+      "target": "DiffStatus",
+      "category": "enum_variant",
+      "input": "different",
+      "expected_valid": true
+    },
+    {
+      "id": "DiffStatus.variant.unavailable",
+      "target": "DiffStatus",
+      "category": "enum_variant",
+      "input": "unavailable",
+      "expected_valid": true
+    },
+    {
+      "id": "DiffStatus.invalid.unknown",
+      "target": "DiffStatus",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "VerificationOutcome.variant.passed",
+      "target": "VerificationOutcome",
+      "category": "enum_variant",
+      "input": "passed",
+      "expected_valid": true
+    },
+    {
+      "id": "VerificationOutcome.variant.failed",
+      "target": "VerificationOutcome",
+      "category": "enum_variant",
+      "input": "failed",
+      "expected_valid": true
+    },
+    {
+      "id": "VerificationOutcome.variant.indeterminate",
+      "target": "VerificationOutcome",
+      "category": "enum_variant",
+      "input": "indeterminate",
+      "expected_valid": true
+    },
+    {
+      "id": "VerificationOutcome.invalid.unknown",
+      "target": "VerificationOutcome",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "RetryClass.variant.never",
+      "target": "RetryClass",
+      "category": "enum_variant",
+      "input": "never",
+      "expected_valid": true
+    },
+    {
+      "id": "RetryClass.variant.safe",
+      "target": "RetryClass",
+      "category": "enum_variant",
+      "input": "safe",
+      "expected_valid": true
+    },
+    {
+      "id": "RetryClass.variant.after_backoff",
+      "target": "RetryClass",
+      "category": "enum_variant",
+      "input": "after_backoff",
+      "expected_valid": true
+    },
+    {
+      "id": "RetryClass.variant.after_reauthorization",
+      "target": "RetryClass",
+      "category": "enum_variant",
+      "input": "after_reauthorization",
+      "expected_valid": true
+    },
+    {
+      "id": "RetryClass.variant.after_reconciliation",
+      "target": "RetryClass",
+      "category": "enum_variant",
+      "input": "after_reconciliation",
+      "expected_valid": true
+    },
+    {
+      "id": "RetryClass.invalid.unknown",
+      "target": "RetryClass",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "HealthStatus.variant.healthy",
+      "target": "HealthStatus",
+      "category": "enum_variant",
+      "input": "healthy",
+      "expected_valid": true
+    },
+    {
+      "id": "HealthStatus.variant.degraded",
+      "target": "HealthStatus",
+      "category": "enum_variant",
+      "input": "degraded",
+      "expected_valid": true
+    },
+    {
+      "id": "HealthStatus.variant.unhealthy",
+      "target": "HealthStatus",
+      "category": "enum_variant",
+      "input": "unhealthy",
+      "expected_valid": true
+    },
+    {
+      "id": "HealthStatus.invalid.unknown",
+      "target": "HealthStatus",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ValidationCode.variant.LIMIT_EXCEEDED",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "LIMIT_EXCEEDED",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.INVALID_SCHEMA",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "INVALID_SCHEMA",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.UNSUPPORTED_SCHEMA",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "UNSUPPORTED_SCHEMA",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.INVALID_IDENTITY",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "INVALID_IDENTITY",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.INVALID_EXTENSION_KEY",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "INVALID_EXTENSION_KEY",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.UNKNOWN_MANDATORY_EXTENSION",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "UNKNOWN_MANDATORY_EXTENSION",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.variant.INVALID_VALUE",
+      "target": "ValidationCode",
+      "category": "enum_variant",
+      "input": "INVALID_VALUE",
+      "expected_valid": true
+    },
+    {
+      "id": "ValidationCode.invalid.unknown",
+      "target": "ValidationCode",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "ErrorCode.variant.INVALID_ARGUMENT",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INVALID_ARGUMENT",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.LIMIT_EXCEEDED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "LIMIT_EXCEEDED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.UNSUPPORTED_SCHEMA",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "UNSUPPORTED_SCHEMA",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.UNKNOWN_PRINCIPAL",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "UNKNOWN_PRINCIPAL",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INVALID_CAPABILITY",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INVALID_CAPABILITY",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.CAPABILITY_EXPIRED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "CAPABILITY_EXPIRED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.SOURCE_UNAVAILABLE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "SOURCE_UNAVAILABLE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.SNAPSHOT_INCOMPLETE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "SNAPSHOT_INCOMPLETE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INTEGRITY_FAILURE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INTEGRITY_FAILURE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INDEX_STALE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INDEX_STALE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INDEX_UNAVAILABLE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INDEX_UNAVAILABLE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.CONSISTENCY_UNSATISFIED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "CONSISTENCY_UNSATISFIED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.POLICY_DENIED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "POLICY_DENIED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.PROCESSOR_DENIED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "PROCESSOR_DENIED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INSTRUCTION_AUTHORITY_DENIED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INSTRUCTION_AUTHORITY_DENIED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.BUDGET_UNSATISFIABLE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "BUDGET_UNSATISFIABLE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.MISSING_REQUIRED_CONTEXT",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "MISSING_REQUIRED_CONTEXT",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.UNRESOLVED_CRITICAL_CONFLICT",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "UNRESOLVED_CRITICAL_CONFLICT",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.DELTA_BASE_MISMATCH",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "DELTA_BASE_MISMATCH",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.BUNDLE_INVALIDATED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "BUNDLE_INVALIDATED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.REVISION_CONFLICT",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "REVISION_CONFLICT",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.HANDOFF_EXPIRED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "HANDOFF_EXPIRED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.HANDOFF_RECIPIENT_MISMATCH",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "HANDOFF_RECIPIENT_MISMATCH",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.APPROVAL_REQUIRED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "APPROVAL_REQUIRED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.APPROVAL_STALE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "APPROVAL_STALE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.EFFECT_UNKNOWN",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "EFFECT_UNKNOWN",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.UNSAFE_RETRY",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "UNSAFE_RETRY",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.REPLAY_INCOMPLETE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "REPLAY_INCOMPLETE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.DEPENDENCY_UNAVAILABLE",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "DEPENDENCY_UNAVAILABLE",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.LIVE_AUTHORIZATION_REQUIRED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "LIVE_AUTHORIZATION_REQUIRED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.RATE_LIMITED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "RATE_LIMITED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.DEADLINE_EXCEEDED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "DEADLINE_EXCEEDED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.DEPENDENCY_DEGRADED",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "DEPENDENCY_DEGRADED",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.variant.INTERNAL",
+      "target": "ErrorCode",
+      "category": "enum_variant",
+      "input": "INTERNAL",
+      "expected_valid": true
+    },
+    {
+      "id": "ErrorCode.invalid.unknown",
+      "target": "ErrorCode",
+      "category": "invalid_discriminant",
+      "input": "__unknown_variant__",
+      "expected_valid": false
+    },
+    {
+      "id": "AtomPayload.variant.inline_text",
+      "target": "AtomPayload",
+      "category": "union_variant",
+      "input": {
+        "type": "inline_text",
+        "value": "bounded"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "AtomPayload.variant.structured",
+      "target": "AtomPayload",
+      "category": "union_variant",
+      "input": {
+        "type": "structured",
+        "value": {
+          "type": "integer",
+          "value": 7
+        }
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "AtomPayload.variant.blob",
+      "target": "AtomPayload",
+      "category": "union_variant",
+      "input": {
+        "type": "blob",
+        "value": {
+          "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+          "media_type": "application/octet-stream",
+          "size_bytes": 7
+        }
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "AtomPayload.invalid.unknown",
+      "target": "AtomPayload",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "CandidateDisposition.variant.selected",
+      "target": "CandidateDisposition",
+      "category": "union_variant",
+      "input": {
+        "lane": "evidence",
+        "score": 500000,
+        "state": "selected"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CandidateDisposition.variant.excluded",
+      "target": "CandidateDisposition",
+      "category": "union_variant",
+      "input": {
+        "reason": "scope_denied",
+        "state": "excluded"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CandidateDisposition.variant.redacted",
+      "target": "CandidateDisposition",
+      "category": "union_variant",
+      "input": {
+        "reason": "purpose_denied",
+        "state": "redacted"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CandidateDisposition.variant.required_missing",
+      "target": "CandidateDisposition",
+      "category": "union_variant",
+      "input": {
+        "state": "required_missing"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CandidateDisposition.invalid.unknown",
+      "target": "CandidateDisposition",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "RequirementSelector.variant.exact",
+      "target": "RequirementSelector",
+      "category": "union_variant",
+      "input": {
+        "type": "exact",
+        "value": "12200000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RequirementSelector.variant.query",
+      "target": "RequirementSelector",
+      "category": "union_variant",
+      "input": {
+        "type": "query",
+        "value": "bounded query"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RequirementSelector.invalid.unknown",
+      "target": "RequirementSelector",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "OverlayMutation.variant.atom",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "atom"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.decision",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "decision"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.state",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "state"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.artifact",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "artifact"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.instruction",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "instruction"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.capability",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "capability"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.lease",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "lease"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.variant.effect",
+      "target": "OverlayMutation",
+      "category": "union_variant",
+      "input": {
+        "digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "type": "effect"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "OverlayMutation.invalid.unknown",
+      "target": "OverlayMutation",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "RecipientSelector.variant.principal",
+      "target": "RecipientSelector",
+      "category": "union_variant",
+      "input": {
+        "type": "principal",
+        "value": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RecipientSelector.variant.role",
+      "target": "RecipientSelector",
+      "category": "union_variant",
+      "input": {
+        "type": "role",
+        "value": "reviewer"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RecipientSelector.invalid.unknown",
+      "target": "RecipientSelector",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "RetryPolicy.variant.never",
+      "target": "RetryPolicy",
+      "category": "union_variant",
+      "input": {
+        "type": "never"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RetryPolicy.variant.same_key_idempotent",
+      "target": "RetryPolicy",
+      "category": "union_variant",
+      "input": {
+        "max_attempts": 3,
+        "type": "same_key_idempotent"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RetryPolicy.variant.reconcile_before_retry",
+      "target": "RetryPolicy",
+      "category": "union_variant",
+      "input": {
+        "type": "reconcile_before_retry"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RetryPolicy.invalid.unknown",
+      "target": "RetryPolicy",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "CanonicalValue.variant.boolean",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "boolean",
+        "value": true
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.variant.integer",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "integer",
+        "value": -7
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.variant.text",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "text",
+        "value": "bounded"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.variant.bytes",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "bytes",
+        "value": "AAE"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.variant.array",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "array",
+        "value": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.variant.object",
+      "target": "CanonicalValue",
+      "category": "union_variant",
+      "input": {
+        "type": "object",
+        "value": {}
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CanonicalValue.invalid.unknown",
+      "target": "CanonicalValue",
+      "category": "invalid_discriminant",
+      "input": {
+        "type": "__unknown_variant__"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "IdempotencyKey.boundary.0",
+      "target": "IdempotencyKey",
+      "category": "limit_minus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "IdempotencyKey.boundary.1",
+      "target": "IdempotencyKey",
+      "category": "maximum",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "IdempotencyKey.boundary.2",
+      "target": "IdempotencyKey",
+      "category": "limit_plus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": false
+    },
+    {
+      "id": "ExtensionKey.boundary.3",
+      "target": "ExtensionKey",
+      "category": "limit_minus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "ExtensionKey.boundary.4",
+      "target": "ExtensionKey",
+      "category": "maximum",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "ExtensionKey.boundary.5",
+      "target": "ExtensionKey",
+      "category": "limit_plus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": false
+    },
+    {
+      "id": "SourceUri.boundary.6",
+      "target": "SourceUri",
+      "category": "limit_minus_one",
+      "input": "x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "SourceUri.boundary.7",
+      "target": "SourceUri",
+      "category": "maximum",
+      "input": "x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "SourceUri.boundary.8",
+      "target": "SourceUri",
+      "category": "limit_plus_one",
+      "input": "x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": false
+    },
+    {
+      "id": "MediaType.boundary.9",
+      "target": "MediaType",
+      "category": "limit_minus_one",
+      "input": "a/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected_valid": true
+    },
+    {
+      "id": "MediaType.boundary.10",
+      "target": "MediaType",
+      "category": "maximum",
+      "input": "a/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected_valid": true
+    },
+    {
+      "id": "MediaType.boundary.11",
+      "target": "MediaType",
+      "category": "limit_plus_one",
+      "input": "a/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected_valid": false
+    },
+    {
+      "id": "SchemaVersion.boundary.12",
+      "target": "SchemaVersion",
+      "category": "limit_minus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.v1",
+      "expected_valid": true
+    },
+    {
+      "id": "SchemaVersion.boundary.13",
+      "target": "SchemaVersion",
+      "category": "maximum",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.v1",
+      "expected_valid": true
+    },
+    {
+      "id": "SchemaVersion.boundary.14",
+      "target": "SchemaVersion",
+      "category": "limit_plus_one",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.v1",
+      "expected_valid": false
+    },
+    {
+      "id": "DurationNanos.boundary.0",
+      "target": "DurationNanos",
+      "category": "limit_minus_one",
+      "input": 315575999999999999,
+      "expected_valid": true
+    },
+    {
+      "id": "DurationNanos.boundary.1",
+      "target": "DurationNanos",
+      "category": "maximum",
+      "input": 315576000000000000,
+      "expected_valid": true
+    },
+    {
+      "id": "DurationNanos.boundary.2",
+      "target": "DurationNanos",
+      "category": "limit_plus_one",
+      "input": 315576000000000001,
+      "expected_valid": false
+    },
+    {
+      "id": "FixedPoint.boundary.0",
+      "target": "FixedPoint",
+      "category": "limit_minus_one",
+      "input": 999999,
+      "expected_valid": true
+    },
+    {
+      "id": "FixedPoint.boundary.1",
+      "target": "FixedPoint",
+      "category": "maximum",
+      "input": 1000000,
+      "expected_valid": true
+    },
+    {
+      "id": "FixedPoint.boundary.2",
+      "target": "FixedPoint",
+      "category": "limit_plus_one",
+      "input": 1000001,
+      "expected_valid": false
+    },
+    {
+      "id": "RelativePath.boundary.0",
+      "target": "RelativePath",
+      "category": "limit_minus_one",
+      "input": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh",
+      "expected_valid": true
+    },
+    {
+      "id": "RelativePath.boundary.1",
+      "target": "RelativePath",
+      "category": "maximum",
+      "input": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ",
+      "expected_valid": true
+    },
+    {
+      "id": "RelativePath.boundary.2",
+      "target": "RelativePath",
+      "category": "limit_plus_one",
+      "input": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE",
+      "expected_valid": false
+    },
+    {
+      "id": "SchemaVersion.unsupported_major",
+      "target": "SchemaVersionV1",
+      "category": "unsupported_version",
+      "input": "context-atom.v2",
+      "expected_valid": false
+    },
+    {
+      "id": "ExtensionMap.unknown_optional",
+      "target": "ExtensionMap",
+      "category": "optional_extension",
+      "input": {
+        "vendor/example": {
+          "type": "integer",
+          "value": 1
+        }
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ExtensionMap.unknown_mandatory",
+      "target": "ExtensionMap",
+      "category": "mandatory_extension",
+      "input": {
+        "required/vendor-example": {
+          "type": "integer",
+          "value": 1
+        }
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "SourceSnapshot.record.minimal",
+      "target": "SourceSnapshot",
+      "category": "record_valid",
+      "input": {
+        "captured_at": "2026-07-10T00:00:00Z",
+        "complete": true,
+        "entry_count": 0,
+        "extensions": {},
+        "manifest_digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "schema_version": "cigar.source-snapshot.v1",
+        "snapshot_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+        "source_revision": "revision-1",
+        "source_uri": "file:///fixture",
+        "total_bytes": 0
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextEdge.record.minimal",
+      "target": "ContextEdge",
+      "category": "record_valid",
+      "input": {
+        "edge_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7891",
+        "extensions": {},
+        "from_version": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "depends_on",
+        "lifecycle": "active",
+        "provenance_digest": "12203333333333333333333333333333333333333333333333333333333333333333",
+        "schema_version": "cigar.edge.v1",
+        "to_version": "12202222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextAtomV1.record.minimal",
+      "target": "ContextAtomV1",
+      "category": "record_valid",
+      "input": {
+        "atom_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7892",
+        "content_digest": "12205555555555555555555555555555555555555555555555555555555555555555",
+        "extensions": {},
+        "governance": {
+          "allowed_purposes": [
+            "coding"
+          ],
+          "classification": "internal",
+          "instruction_authority": "data",
+          "processor_constraints": []
+        },
+        "kind": "documentation",
+        "lifecycle": "active",
+        "lineage_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+        "payload": {
+          "type": "inline_text",
+          "value": "safe fixture"
+        },
+        "quality": {
+          "authority": 1,
+          "confidence": 900000,
+          "coverage": 800000
+        },
+        "retrieval": {
+          "embedding_eligible": false,
+          "exact_terms": [
+            "cigar"
+          ],
+          "lexical_enabled": true
+        },
+        "schema_version": "cigar.atom.v1",
+        "scope": {
+          "project_ids": [
+            "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895"
+          ],
+          "tenant_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894"
+        },
+        "source": {
+          "revision": "revision-1",
+          "snapshot_digest": "12206666666666666666666666666666666666666666666666666666666666666666",
+          "uri": "file:///fixture/readme.md"
+        },
+        "temporal": {
+          "observed_at": "2026-07-10T00:00:01Z",
+          "valid_from": "2026-07-10T00:00:00Z"
+        },
+        "version_id": "12204444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextContract.record.minimal",
+      "target": "ContextContract",
+      "category": "record_valid",
+      "input": {
+        "budget": {
+          "lane_input_tokens": {
+            "rules": 1000,
+            "task": 1000
+          },
+          "output_reserve_tokens": 1000,
+          "total_input_tokens": 2000
+        },
+        "consistency": "strong",
+        "extensions": {},
+        "job_goal": "Implement verified change",
+        "operation_class": "code_change",
+        "principal_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7896",
+        "project_ids": [
+          "01890f47-8e7d-7b42-a1d2-3c4d5e6f7897"
+        ],
+        "purpose": "coding",
+        "requirements": [],
+        "schema_version": "cigar.context-contract.v1",
+        "target": {
+          "materializer_fingerprint": "12208888888888888888888888888888888888888888888888888888888888888888",
+          "max_context_tokens": 3000,
+          "model_family": "fixture-model",
+          "provider": "fixture",
+          "tokenizer_fingerprint": "12207777777777777777777777777777777777777777777777777777777777777777"
+        }
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "PlanLane.record.minimal",
+      "target": "PlanLane",
+      "category": "record_valid",
+      "input": {
+        "budget_tokens": 100,
+        "candidate_versions": [
+          "12209999999999999999999999999999999999999999999999999999999999999999"
+        ],
+        "kind": "evidence"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextPlan.record.minimal",
+      "target": "ContextPlan",
+      "category": "record_valid",
+      "input": {
+        "catalog_watermark": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "contract_digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "dispositions": [
+          [
+            "12209999999999999999999999999999999999999999999999999999999999999999",
+            {
+              "lane": "evidence",
+              "score": 500000,
+              "state": "selected"
+            }
+          ]
+        ],
+        "extensions": {},
+        "lanes": [
+          {
+            "budget_tokens": 100,
+            "candidate_versions": [
+              "12209999999999999999999999999999999999999999999999999999999999999999"
+            ],
+            "kind": "evidence"
+          }
+        ],
+        "plan_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7898",
+        "schema_version": "cigar.context-plan.v1",
+        "total_input_tokens": 100
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextBlock.record.minimal",
+      "target": "ContextBlock",
+      "category": "record_valid",
+      "input": {
+        "block_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "content_digest": "12202222222222222222222222222222222222222222222222222222222222222222",
+        "lane": "evidence",
+        "provenance": [
+          "12203333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "representation": "exact",
+        "token_count": 10
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextBundle.record.minimal",
+      "target": "ContextBundle",
+      "category": "record_valid",
+      "input": {
+        "blocks": [
+          {
+            "block_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+            "content_digest": "12202222222222222222222222222222222222222222222222222222222222222222",
+            "lane": "evidence",
+            "provenance": [
+              "12203333333333333333333333333333333333333333333333333333333333333333"
+            ],
+            "representation": "exact",
+            "token_count": 10
+          }
+        ],
+        "bundle_id": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "contract_digest": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "extensions": {},
+        "manifest_digest": "1220cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "schema_version": "cigar.context-bundle.v1",
+        "total_tokens": 10
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "SelectionManifest.record.minimal",
+      "target": "SelectionManifest",
+      "category": "record_valid",
+      "input": {
+        "contract_digest": "1220eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "entries": [
+          {
+            "disposition": {
+              "reason": "scope_denied",
+              "state": "excluded"
+            },
+            "provenance_digest": "12200000000000000000000000000000000000000000000000000000000000000000",
+            "reason_codes": [],
+            "version_id": "1220ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          }
+        ],
+        "extensions": {},
+        "manifest_id": "1220dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "schema_version": "cigar.selection-manifest.v1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "MaterializedContext.record.minimal",
+      "target": "MaterializedContext",
+      "category": "record_valid",
+      "input": {
+        "bundle_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "bytes": "YQ",
+        "materializer_fingerprint": "12203333333333333333333333333333333333333333333333333333333333333333",
+        "media_type": "text/plain",
+        "schema_version": "cigar.materialized-context.v1",
+        "token_count": 1,
+        "tokenizer_fingerprint": "12202222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextDelta.record.minimal",
+      "target": "ContextDelta",
+      "category": "record_valid",
+      "input": {
+        "added_blocks": [],
+        "base_bundle_id": "12204444444444444444444444444444444444444444444444444444444444444444",
+        "removed_block_ids": [],
+        "resulting_tokens": 0,
+        "schema_version": "cigar.context-delta.v1",
+        "target_bundle_id": "12205555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CapabilityGrant.record.minimal",
+      "target": "CapabilityGrant",
+      "category": "record_valid",
+      "input": {
+        "capabilities": [
+          "read_context"
+        ],
+        "delegation_depth": 1,
+        "expires_at": "2026-07-11T00:00:00Z",
+        "extensions": {},
+        "grant_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7899",
+        "issuer_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789a",
+        "not_before": "2026-07-10T00:00:00Z",
+        "processors": [
+          "local"
+        ],
+        "project_ids": [
+          "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c"
+        ],
+        "schema_version": "cigar.capability-grant.v1",
+        "subject_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789b"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextCommit.record.minimal",
+      "target": "ContextCommit",
+      "category": "record_valid",
+      "input": {
+        "author_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789e",
+        "commit_id": "12206666666666666666666666666666666666666666666666666666666666666666",
+        "committed_at": "2026-07-10T00:00:00Z",
+        "events": [
+          {
+            "event_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789f",
+            "kind": "task_checkpointed",
+            "payload_digest": "12207777777777777777777777777777777777777777777777777777777777777777"
+          }
+        ],
+        "extensions": {},
+        "policy_snapshot_digest": "12209999999999999999999999999999999999999999999999999999999999999999",
+        "purpose": "checkpoint",
+        "root_digest": "12208888888888888888888888888888888888888888888888888888888888888888",
+        "schema_version": "cigar.context-commit.v1",
+        "sequence": 1,
+        "space_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789d"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "Overlay.record.minimal",
+      "target": "Overlay",
+      "category": "record_valid",
+      "input": {
+        "base_commit_id": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "created_at": "2026-07-10T00:00:00Z",
+        "expires_at": "2026-07-10T00:00:02Z",
+        "extensions": {},
+        "mutations": [],
+        "overlay_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+        "owner_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7892",
+        "schema_version": "cigar.overlay.v1",
+        "space_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7891"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "HandoffCapsule.record.minimal",
+      "target": "HandoffCapsule",
+      "category": "record_valid",
+      "input": {
+        "acceptance_criteria": [
+          "All checks pass"
+        ],
+        "audience": "fixture-agent",
+        "budget": {
+          "lane_input_tokens": {
+            "task": 1000
+          },
+          "output_reserve_tokens": 500,
+          "total_input_tokens": 1000
+        },
+        "bundle_id": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-07-10T00:00:00Z",
+        "delegated_capabilities": [
+          "read_context"
+        ],
+        "expires_at": "2026-07-11T00:00:00Z",
+        "extensions": {},
+        "handoff_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+        "issuer_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894",
+        "issuer_key_id": "fixture-key",
+        "nonce": "AQEBAQ",
+        "project_ids": [
+          "01890f47-8e7d-7b42-a1d2-3c4d5e6f7896"
+        ],
+        "recipient": {
+          "type": "principal",
+          "value": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895"
+        },
+        "references": {
+          "artifacts": [],
+          "decisions": [],
+          "effects": [],
+          "sources": [],
+          "states": [],
+          "uncertainties": []
+        },
+        "rejected_capabilities": [
+          "approve_effect"
+        ],
+        "reusable": false,
+        "schema_version": "cigar.handoff.v1",
+        "signature": "AgICAg",
+        "task": "Verify fixture",
+        "topics": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "HandoffAcceptance.record.minimal",
+      "target": "HandoffAcceptance",
+      "category": "record_valid",
+      "input": {
+        "acceptance_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7897",
+        "accepted_at": "2026-07-10T00:00:01Z",
+        "accepted_capabilities": [
+          "read_context"
+        ],
+        "acknowledgement_digest": "1220eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "bundle_id": "1220dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "handoff_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+        "policy_digest": "1220cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "recipient_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895",
+        "rejected_capabilities": [],
+        "schema_version": "cigar.handoff-acceptance.v1",
+        "unavailable_references": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "HandoffDelta.record.minimal",
+      "target": "HandoffDelta",
+      "category": "record_valid",
+      "input": {
+        "artifacts": [],
+        "base_commit_id": "1220ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "blockers": [],
+        "claims": [],
+        "decisions": [],
+        "delta_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7898",
+        "effect_references": [],
+        "extensions": {},
+        "handoff_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+        "producer_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7899",
+        "requested_followup_capabilities": [],
+        "schema_version": "cigar.handoff-delta.v1",
+        "source_changes": [],
+        "unresolved_questions": [],
+        "verifier_receipts": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "Lease.record.minimal",
+      "target": "Lease",
+      "category": "record_valid",
+      "input": {
+        "acquired_at": "2026-07-10T00:00:00Z",
+        "expected_revision": 1,
+        "expires_at": "2026-07-10T00:00:02Z",
+        "holder_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789b",
+        "kind": "task",
+        "lease_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789a",
+        "resource_id": "12200000000000000000000000000000000000000000000000000000000000000000",
+        "schema_version": "cigar.lease.v1",
+        "state": "active"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "EffectIntent.record.minimal",
+      "target": "EffectIntent",
+      "category": "record_valid",
+      "input": {
+        "arguments_digest": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "bundle_id": "12205555555555555555555555555555555555555555555555555555555555555555",
+        "connector": "fixture",
+        "created_at": "2026-07-10T00:00:00Z",
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "encrypted_arguments": {
+          "digest": "12202222222222222222222222222222222222222222222222222222222222222222",
+          "media_type": "application/octet-stream",
+          "size_bytes": 1
+        },
+        "expires_at": "2026-07-10T00:00:02Z",
+        "extensions": {},
+        "idempotency_key": "fixture-key",
+        "idempotency_scope": "fixture-scope",
+        "operation": "create",
+        "preconditions": [],
+        "required_capability": "propose_effect",
+        "result_schema_digest": "12203333333333333333333333333333333333333333333333333333333333333333",
+        "retry_policy": {
+          "type": "never"
+        },
+        "risk": "low",
+        "schema_version": "cigar.effect-intent.v1",
+        "source_decision_id": "12204444444444444444444444444444444444444444444444444444444444444444",
+        "target": "fixture-target"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "EffectApproval.record.minimal",
+      "target": "EffectApproval",
+      "category": "record_valid",
+      "input": {
+        "approval_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789d",
+        "approved_at": "2026-07-10T00:00:00Z",
+        "approver_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789e",
+        "bundle_id": "12205555555555555555555555555555555555555555555555555555555555555555",
+        "conditions_digest": "12208888888888888888888888888888888888888888888888888888888888888888",
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "expires_at": "2026-07-10T00:00:02Z",
+        "intent_digest": "12206666666666666666666666666666666666666666666666666666666666666666",
+        "kind": "policy",
+        "risk": "low",
+        "schema_version": "cigar.effect-approval.v1",
+        "target_digest": "12207777777777777777777777777777777777777777777777777777777777777777"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "EffectAttempt.record.minimal",
+      "target": "EffectAttempt",
+      "category": "record_valid",
+      "input": {
+        "attempt_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789f",
+        "attempt_number": 1,
+        "deadline": "2026-07-10T00:00:02Z",
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "fencing_token": 1,
+        "request_digest": "12209999999999999999999999999999999999999999999999999999999999999999",
+        "schema_version": "cigar.effect-attempt.v1",
+        "started_at": "2026-07-10T00:00:00Z"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "EffectReceipt.record.minimal",
+      "target": "EffectReceipt",
+      "category": "record_valid",
+      "input": {
+        "attempt_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789f",
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "observed_at": "2026-07-10T00:00:01Z",
+        "outcome": "failed",
+        "receipt_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+        "schema_version": "cigar.effect-receipt.v1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "EffectJournalEvent.record.minimal",
+      "target": "EffectJournalEvent",
+      "category": "record_valid",
+      "input": {
+        "actor_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7892",
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "event_digest": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "event_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7891",
+        "expected_effect_version": 0,
+        "from_state": "prepared",
+        "payload_digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "recorded_at": "2026-07-10T00:00:00Z",
+        "schema_version": "cigar.effect-journal-event.v1",
+        "sequence": 1,
+        "to_state": "pending_approval"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ReconciliationReport.record.minimal",
+      "target": "ReconciliationReport",
+      "category": "record_valid",
+      "input": {
+        "effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789c",
+        "evidence_digests": [
+          "1220cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "outcome": "confirmed_failure",
+        "reconciled_at": "2026-07-10T00:00:01Z",
+        "report_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+        "schema_version": "cigar.reconciliation-report.v1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CompensationLink.record.minimal",
+      "target": "CompensationLink",
+      "category": "record_valid",
+      "input": {
+        "compensation_effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895",
+        "compensation_spec_digest": "1220dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "created_at": "2026-07-10T00:00:01Z",
+        "original_effect_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894",
+        "schema_version": "cigar.compensation-link.v1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "DecisionRecord.record.minimal",
+      "target": "DecisionRecord",
+      "category": "record_valid",
+      "input": {
+        "asserted_claims": [],
+        "bundle_id": "12204444444444444444444444444444444444444444444444444444444444444444",
+        "completed_at": "2026-07-10T00:00:01Z",
+        "consumer_fingerprint": "12207777777777777777777777777777777777777777777777777777777777777777",
+        "decision_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "effects": [],
+        "evidence": [],
+        "extensions": {},
+        "materialization_digest": "12205555555555555555555555555555555555555555555555555555555555555555",
+        "outcome": "succeeded",
+        "output_artifacts": [],
+        "plan_digest": "12203333333333333333333333333333333333333333333333333333333333333333",
+        "plan_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7896",
+        "runtime_fingerprint": "12206666666666666666666666666666666666666666666666666666666666666666",
+        "schema_version": "cigar.decision-record.v1",
+        "started_at": "2026-07-10T00:00:00Z",
+        "task_digest": "12202222222222222222222222222222222222222222222222222222222222222222",
+        "uncertainty": [],
+        "usage": {
+          "cached_input_tokens": 0,
+          "cost_micros": 0,
+          "input_tokens": 1,
+          "output_tokens": 1
+        },
+        "verification_receipts": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayRequest.record.minimal",
+      "target": "ReplayRequest",
+      "category": "record_valid",
+      "input": {
+        "authorized_effect_intents": [],
+        "decision_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "mode": "evidence_reproduction",
+        "request_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7897",
+        "requested_by": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7898",
+        "schema_version": "cigar.replay-request.v1",
+        "simulate_effects": true
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayCompleteness.record.minimal",
+      "target": "ReplayCompleteness",
+      "category": "record_valid",
+      "input": {
+        "available": [
+          "source"
+        ],
+        "missing": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayExecution.record.minimal",
+      "target": "ReplayExecution",
+      "category": "record_valid",
+      "input": {
+        "completeness": {
+          "available": [
+            "source"
+          ],
+          "missing": []
+        },
+        "effect_dispatch_permitted": false,
+        "egress_permitted": false,
+        "execution_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7899",
+        "mode": "evidence_reproduction",
+        "request_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7897",
+        "schema_version": "cigar.replay-execution.v1",
+        "started_at": "2026-07-10T00:00:00Z",
+        "status": "running"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ReplayDiff.record.minimal",
+      "target": "ReplayDiff",
+      "category": "record_valid",
+      "input": {
+        "compiler_deterministic": true,
+        "components": "equal",
+        "decision_id": "12201111111111111111111111111111111111111111111111111111111111111111",
+        "effect_plan": "equal",
+        "execution_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7899",
+        "materialization": "equal",
+        "observations": "equal",
+        "output_claims": "equal",
+        "schema_version": "cigar.replay-diff.v1",
+        "semantic_context": "equal",
+        "verification": "equal"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "VerificationReceipt.record.minimal",
+      "target": "VerificationReceipt",
+      "category": "record_valid",
+      "input": {
+        "checks": [
+          {
+            "evidence_digest": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "name": "checksum",
+            "outcome": "passed"
+          }
+        ],
+        "outcome": "passed",
+        "receipt_id": "12208888888888888888888888888888888888888888888888888888888888888888",
+        "schema_version": "cigar.verification-receipt.v1",
+        "subject_digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verified_at": "2026-07-10T00:00:01Z",
+        "verifier_fingerprint": "12209999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "Problem.record.minimal",
+      "target": "Problem",
+      "category": "record_valid",
+      "input": {
+        "code": "POLICY_DENIED",
+        "correlation_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f789a",
+        "details": {},
+        "http_status": 403,
+        "message": "request denied",
+        "remediation": "request authorized scope",
+        "retry": "after_reauthorization",
+        "schema_version": "cigar.problem.v1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "HealthReport.record.minimal",
+      "target": "HealthReport",
+      "category": "record_valid",
+      "input": {
+        "components": [],
+        "observed_at": "2026-07-10T00:00:01Z",
+        "schema_version": "cigar.health-report.v1",
+        "status": "healthy"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "CompatibilityReport.record.minimal",
+      "target": "CompatibilityReport",
+      "category": "record_valid",
+      "input": {
+        "compatible": true,
+        "protocol_max": "1.x",
+        "protocol_min": "1.0",
+        "reasons": [],
+        "schema_majors": {
+          "cigar.atom": 1
+        },
+        "schema_version": "cigar.compatibility-report.v1",
+        "writer_protocol": "1.0"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "RecordId.record.minimal",
+      "target": "RecordId",
+      "category": "record_valid",
+      "input": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+      "expected_valid": true
+    },
+    {
+      "id": "LineageId.record.minimal",
+      "target": "LineageId",
+      "category": "record_valid",
+      "input": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+      "expected_valid": true
+    },
+    {
+      "id": "ContextSpaceId.record.minimal",
+      "target": "ContextSpaceId",
+      "category": "record_valid",
+      "input": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7890",
+      "expected_valid": true
+    },
+    {
+      "id": "VersionId.record.minimal",
+      "target": "VersionId",
+      "category": "record_valid",
+      "input": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "ContentDigest.record.minimal",
+      "target": "ContentDigest",
+      "category": "record_valid",
+      "input": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_valid": true
+    },
+    {
+      "id": "PageCursor.record.minimal",
+      "target": "PageCursor",
+      "category": "record_valid",
+      "input": "YQ",
+      "expected_valid": true
+    },
+    {
+      "id": "IdempotencyKey.record.minimal",
+      "target": "IdempotencyKey",
+      "category": "record_valid",
+      "input": "fixture-key",
+      "expected_valid": true
+    },
+    {
+      "id": "ExpectedRevision.record.minimal",
+      "target": "ExpectedRevision",
+      "category": "record_valid",
+      "input": 1,
+      "expected_valid": true
+    },
+    {
+      "id": "BlobRef.record.minimal",
+      "target": "BlobRef",
+      "category": "record_valid",
+      "input": {
+        "digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/octet-stream",
+        "size_bytes": 1
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "SourceDescriptor.record.minimal",
+      "target": "SourceDescriptor",
+      "category": "record_valid",
+      "input": {
+        "revision": "revision-1",
+        "snapshot_digest": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "uri": "file:///fixture"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "TemporalEnvelope.record.minimal",
+      "target": "TemporalEnvelope",
+      "category": "record_valid",
+      "input": {
+        "observed_at": "2026-07-10T00:00:01Z",
+        "valid_from": "2026-07-10T00:00:00Z"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "GovernanceEnvelope.record.minimal",
+      "target": "GovernanceEnvelope",
+      "category": "record_valid",
+      "input": {
+        "allowed_purposes": [
+          "coding"
+        ],
+        "classification": "internal",
+        "instruction_authority": "data",
+        "processor_constraints": []
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "QualityEnvelope.record.minimal",
+      "target": "QualityEnvelope",
+      "category": "record_valid",
+      "input": {
+        "authority": 1,
+        "confidence": 900000,
+        "coverage": 800000
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "Budget.record.minimal",
+      "target": "Budget",
+      "category": "record_valid",
+      "input": {
+        "lane_input_tokens": {
+          "task": 100
+        },
+        "output_reserve_tokens": 50,
+        "total_input_tokens": 100
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "ContextRequirement.record.minimal",
+      "target": "ContextRequirement",
+      "category": "record_valid",
+      "input": {
+        "blocking": true,
+        "minimum_authority": 1,
+        "minimum_coverage": 500000,
+        "selector": {
+          "type": "query",
+          "value": "fixture"
+        },
+        "semantic_type": "documentation"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "TargetProfile.record.minimal",
+      "target": "TargetProfile",
+      "category": "record_valid",
+      "input": {
+        "materializer_fingerprint": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "max_context_tokens": 1000,
+        "model_family": "fixture-model",
+        "provider": "fixture",
+        "tokenizer_fingerprint": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected_valid": true
+    }
+  ]
+}

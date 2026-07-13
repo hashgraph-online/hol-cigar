@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "catalog-mutation-v1",
+  "fixed_seed": 20009,
+  "source_revision": "synthetic-catalog-mutation-v1",
+  "task": "Apply one source mutation, invalidate exactly affected artifacts, and compile a deterministic delta.",
+  "critical_context": ["catalog/new-version", "invalidation/dependent-bundle", "delta/base-binding"],
+  "prohibited_context": ["catalog/tombstoned-version", "delta/unaffected-removal"],
+  "expected_outcome": ["affected fanout exact", "unaffected records stable", "delta roundtrip exact"],
+  "canary": "BENCH_CANARY_CATALOG_F5B944"
+}

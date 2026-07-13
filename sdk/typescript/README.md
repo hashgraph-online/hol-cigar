@@ -1,0 +1,33 @@
+# `@cigar/sdk`
+
+The CIGAR v1 ESM client supports all 45 frozen HTTP operations, resumable SSE streams,
+bounded deadlines, abort signals, typed problems, pagination, idempotency-bound retries,
+and local bundle/delta verification. It has no install script and downloads no binaries.
+The exported `CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
+
+```ts
+import { CigarClient, createIdempotencyKey } from "@cigar/sdk";
+
+const client = new CigarClient({
+  baseUrl: "https://cigar.example",
+  bearerToken: process.env.CIGAR_TOKEN,
+});
+
+const result = await client.compileContextBundle({
+  payload: { plan_id: planId },
+  idempotencyKey: createIdempotencyKey("compile"),
+}, { timeoutMs: 15_000 });
+```
+
+Every mutating method preserves the caller's idempotency key across retry attempts.
+`dispatchEffect` is never retried automatically, even when a larger attempt count is configured.
+Use `for await` or `await using` with `subscribeSpaceEvents`; reconnections send the last
+verified event ID.
+
+Bearer providers receive the call's abort signal. Supplying a custom `fetch` requires
+`trustCustomFetch: true`; the SDK still requests `redirect: "error"`. Published source
+maps contain their exact source text, including declaration maps, and the package has no
+postinstall hook.
+
+Run `pnpm qualify:bundle` to verify the packaged cross-SDK fixture and print its semantic
+bundle ID.

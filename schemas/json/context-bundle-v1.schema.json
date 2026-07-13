@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextBundle",
+  "description": "Deterministically ordered bundle ready for materialization.",
+  "type": "object",
+  "properties": {
+    "blocks": {
+      "description": "Ordered blocks grouped by standard lane ordering.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContextBlock"
+      },
+      "maxItems": 10000
+    },
+    "bundle_id": {
+      "description": "Content-derived bundle identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "contract_digest": {
+      "description": "Normalized contract digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "manifest_digest": {
+      "description": "Selection manifest digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.context-bundle.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "total_tokens": {
+      "description": "Exact total physical tokens across blocks.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "contract_digest",
+    "manifest_digest",
+    "blocks",
+    "total_tokens",
+    "extensions"
+  ],
+  "$defs": {
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ContextBlock": {
+      "description": "One packed, provenance-complete semantic block.",
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "description": "Content-derived block identity.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "content_digest": {
+          "description": "Exact digest of rendered block content.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "lane": {
+          "description": "Destination lane.",
+          "$ref": "#/$defs/LaneKind"
+        },
+        "provenance": {
+          "description": "Sorted unique catalog versions that prove provenance.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 68,
+            "minLength": 68,
+            "pattern": "^1220[0-9a-f]{64}$"
+          },
+          "maxItems": 10000,
+          "minItems": 1
+        },
+        "representation": {
+          "description": "Representation kind.",
+          "$ref": "#/$defs/RepresentationKind"
+        },
+        "token_count": {
+          "description": "Exact physical tokens under the target tokenizer.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "transform_receipt": {
+          "description": "Evidence receipt for a non-exact transform.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "lane",
+        "representation",
+        "content_digest",
+        "token_count",
+        "provenance"
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "LaneKind": {
+      "description": "Standard deterministic context lanes.",
+      "oneOf": [
+        {
+          "description": "Non-bypassable rules and instructions.",
+          "type": "string",
+          "const": "rules"
+        },
+        {
+          "description": "Current task statement and exact constraints.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Source, documentation, and verification evidence.",
+          "type": "string",
+          "const": "evidence"
+        },
+        {
+          "description": "Prior decisions and relevant history.",
+          "type": "string",
+          "const": "history"
+        },
+        {
+          "description": "Tool contracts and capability descriptions.",
+          "type": "string",
+          "const": "tools"
+        }
+      ]
+    },
+    "RepresentationKind": {
+      "description": "Evidence-carrying representation selected for one context block.",
+      "oneOf": [
+        {
+          "description": "Exact source content.",
+          "type": "string",
+          "const": "exact"
+        },
+        {
+          "description": "Deterministically extracted source span.",
+          "type": "string",
+          "const": "extracted"
+        },
+        {
+          "description": "Evidence-backed deterministic summary.",
+          "type": "string",
+          "const": "summarized"
+        },
+        {
+          "description": "Redacted marker with no protected content.",
+          "type": "string",
+          "const": "redacted"
+        }
+      ]
+    }
+  }
+}

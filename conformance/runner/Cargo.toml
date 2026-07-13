@@ -1,0 +1,39 @@
+[package]
+name = "cigar-conformance"
+description = "Standalone bounded CIGAR conformance runner and result verifier"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cigar-canon.workspace = true
+cigar-api.workspace = true
+cigar-catalog.workspace = true
+cigar-compiler.workspace = true
+cigar-crypto.workspace = true
+cigar-effects.workspace = true
+cigar-mcp.workspace = true
+cigar-policy.workspace = true
+cigar-protocol.workspace = true
+cigar-replay.workspace = true
+cigar-retrieval.workspace = true
+cigar-space.workspace = true
+cigar-store.workspace = true
+getrandom.workspace = true
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+toml.workspace = true
+yaml_serde.workspace = true

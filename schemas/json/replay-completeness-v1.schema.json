@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReplayCompleteness",
+  "description": "Explicit available and missing replay dependencies.",
+  "type": "object",
+  "properties": {
+    "available": {
+      "description": "Sorted available dependency categories.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DependencyKind"
+      },
+      "maxItems": 10000
+    },
+    "missing": {
+      "description": "Sorted missing dependency categories.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DependencyKind"
+      },
+      "maxItems": 10000
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "available",
+    "missing"
+  ],
+  "$defs": {
+    "DependencyKind": {
+      "description": "Dependency categories reported by replay completeness.",
+      "oneOf": [
+        {
+          "description": "Source snapshot or atom.",
+          "type": "string",
+          "const": "source"
+        },
+        {
+          "description": "Protected blob.",
+          "type": "string",
+          "const": "blob"
+        },
+        {
+          "description": "Policy snapshot.",
+          "type": "string",
+          "const": "policy"
+        },
+        {
+          "description": "Index generation.",
+          "type": "string",
+          "const": "index"
+        },
+        {
+          "description": "Selection manifest.",
+          "type": "string",
+          "const": "manifest"
+        },
+        {
+          "description": "Context bundle.",
+          "type": "string",
+          "const": "bundle"
+        },
+        {
+          "description": "Tokenizer implementation.",
+          "type": "string",
+          "const": "tokenizer"
+        },
+        {
+          "description": "Provider adapter.",
+          "type": "string",
+          "const": "adapter"
+        },
+        {
+          "description": "Consumer runtime.",
+          "type": "string",
+          "const": "consumer"
+        },
+        {
+          "description": "Tool schema.",
+          "type": "string",
+          "const": "tool_schema"
+        },
+        {
+          "description": "Declared environment component.",
+          "type": "string",
+          "const": "environment"
+        }
+      ]
+    }
+  }
+}

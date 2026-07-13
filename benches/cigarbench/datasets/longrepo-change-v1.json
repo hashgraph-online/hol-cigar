@@ -1,0 +1,11 @@
+{
+  "schema_version": "cigar.benchmark-fixture.v1",
+  "dataset_id": "longrepo-change-v1",
+  "fixed_seed": 20001,
+  "source_revision": "synthetic-longrepo-v1",
+  "task": "Change retry accounting in a long-lived repository without reviving the superseded counter design.",
+  "critical_context": ["decision/current-retry-accounting", "src/retry/coordinator", "tests/retry-idempotency"],
+  "prohibited_context": ["decision/superseded-global-counter"],
+  "expected_outcome": ["current decision selected", "regression evidence cited", "superseded design absent"],
+  "canary": "BENCH_CANARY_LONGREPO_7F13C2"
+}

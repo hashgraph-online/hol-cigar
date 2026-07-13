@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "status": "frozen-v1",
+  "package": "cigar.v1",
+  "http_base": "/v1",
+  "operation_count": 45,
+  "services": [
+    {
+      "name": "CatalogService",
+      "operations": [
+        { "rpc": "DiscoverSources", "operation_id": "discoverSources", "http_method": "POST", "http_path": "/v1/sources:discover", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "IngestCatalog", "operation_id": "ingestCatalog", "http_method": "POST", "http_path": "/v1/catalog:ingest", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetSourceStatus", "operation_id": "getSourceStatus", "http_method": "GET", "http_path": "/v1/catalog/sources/{source_id}", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "QueryCatalog", "operation_id": "queryCatalog", "http_method": "POST", "http_path": "/v1/catalog:query", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "BatchAtoms", "operation_id": "batchAtoms", "http_method": "POST", "http_path": "/v1/catalog/atoms:batch", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "TombstoneAtom", "operation_id": "tombstoneAtom", "http_method": "POST", "http_path": "/v1/catalog/atoms/{atom_id}:tombstone", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "ContextService",
+      "operations": [
+        { "rpc": "CreateContextPlan", "operation_id": "createContextPlan", "http_method": "POST", "http_path": "/v1/context/plans", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "CompileContextBundle", "operation_id": "compileContextBundle", "http_method": "POST", "http_path": "/v1/context/bundles:compile", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "CompileContextDelta", "operation_id": "compileContextDelta", "http_method": "POST", "http_path": "/v1/context/deltas:compile", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetContextBundle", "operation_id": "getContextBundle", "http_method": "GET", "http_path": "/v1/context/bundles/{bundle_id}", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetContextBundleManifest", "operation_id": "getContextBundleManifest", "http_method": "GET", "http_path": "/v1/context/bundles/{bundle_id}/manifest", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "ExplainContextBundle", "operation_id": "explainContextBundle", "http_method": "POST", "http_path": "/v1/context/bundles/{bundle_id}:explain", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "MaterializeContextBundle", "operation_id": "materializeContextBundle", "http_method": "POST", "http_path": "/v1/context/bundles/{bundle_id}:materialize", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "RevalidateContextBundle", "operation_id": "revalidateContextBundle", "http_method": "POST", "http_path": "/v1/context/bundles/{bundle_id}:revalidate", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "SpaceService",
+      "operations": [
+        { "rpc": "CreateSpace", "operation_id": "createSpace", "http_method": "POST", "http_path": "/v1/spaces", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "ForkSpace", "operation_id": "forkSpace", "http_method": "POST", "http_path": "/v1/spaces/{space_id}:fork", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "PublishSpace", "operation_id": "publishSpace", "http_method": "POST", "http_path": "/v1/spaces/{space_id}:publish", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetSpaceLog", "operation_id": "getSpaceLog", "http_method": "GET", "http_path": "/v1/spaces/{space_id}/log", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "SubscribeSpaceEvents", "operation_id": "subscribeSpaceEvents", "http_method": "GET", "http_path": "/v1/spaces/{space_id}/events", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "server_stream", "auth_class": "tenant" },
+        { "rpc": "CreateSpaceCheckpoint", "operation_id": "createSpaceCheckpoint", "http_method": "POST", "http_path": "/v1/spaces/{space_id}/checkpoints", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "ListSpaceConflicts", "operation_id": "listSpaceConflicts", "http_method": "GET", "http_path": "/v1/spaces/{space_id}/conflicts", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "ResolveSpaceConflict", "operation_id": "resolveSpaceConflict", "http_method": "POST", "http_path": "/v1/spaces/{space_id}/conflicts/{conflict_id}:resolve", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "HandoffService",
+      "operations": [
+        { "rpc": "CreateHandoff", "operation_id": "createHandoff", "http_method": "POST", "http_path": "/v1/handoffs", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "PreviewHandoff", "operation_id": "previewHandoff", "http_method": "POST", "http_path": "/v1/handoffs/{handoff_id}:preview", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "AcceptHandoff", "operation_id": "acceptHandoff", "http_method": "POST", "http_path": "/v1/handoffs/{handoff_id}:accept", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "RevokeHandoff", "operation_id": "revokeHandoff", "http_method": "POST", "http_path": "/v1/handoffs/{handoff_id}:revoke", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "RecordHandoffResult", "operation_id": "recordHandoffResult", "http_method": "POST", "http_path": "/v1/handoffs/{handoff_id}/results", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "MergeHandoff", "operation_id": "mergeHandoff", "http_method": "POST", "http_path": "/v1/handoffs/{handoff_id}:merge", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "EffectService",
+      "operations": [
+        { "rpc": "PrepareEffect", "operation_id": "prepareEffect", "http_method": "POST", "http_path": "/v1/effects", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "AuthorizeEffect", "operation_id": "authorizeEffect", "http_method": "POST", "http_path": "/v1/effects/{effect_id}:authorize", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "DispatchEffect", "operation_id": "dispatchEffect", "http_method": "POST", "http_path": "/v1/effects/{effect_id}:dispatch", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetEffectStatus", "operation_id": "getEffectStatus", "http_method": "GET", "http_path": "/v1/effects/{effect_id}", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "ReconcileEffect", "operation_id": "reconcileEffect", "http_method": "POST", "http_path": "/v1/effects/{effect_id}:reconcile", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "CompensateEffect", "operation_id": "compensateEffect", "http_method": "POST", "http_path": "/v1/effects/{effect_id}:compensate", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "required", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "ReplayService",
+      "operations": [
+        { "rpc": "CreateReplay", "operation_id": "createReplay", "http_method": "POST", "http_path": "/v1/replays", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "RunObservationalReplay", "operation_id": "runObservationalReplay", "http_method": "POST", "http_path": "/v1/replays/{replay_id}:run", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "CompareLiveReplay", "operation_id": "compareLiveReplay", "http_method": "POST", "http_path": "/v1/replays/{replay_id}:compare", "mutation": true, "idempotency_requirement": "required", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" },
+        { "rpc": "GetReplayCompleteness", "operation_id": "getReplayCompleteness", "http_method": "GET", "http_path": "/v1/replays/{replay_id}/completeness", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "tenant" }
+      ]
+    },
+    {
+      "name": "OperationsService",
+      "operations": [
+        { "rpc": "GetLiveness", "operation_id": "getLiveness", "http_method": "GET", "http_path": "/livez", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "health" },
+        { "rpc": "GetReadiness", "operation_id": "getReadiness", "http_method": "GET", "http_path": "/readyz", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "health" },
+        { "rpc": "GetVersion", "operation_id": "getVersion", "http_method": "GET", "http_path": "/v1/version", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "anonymous" },
+        { "rpc": "GetCapabilities", "operation_id": "getCapabilities", "http_method": "GET", "http_path": "/v1/capabilities", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "anonymous" },
+        { "rpc": "GetConfiguration", "operation_id": "getConfiguration", "http_method": "GET", "http_path": "/v1/configuration", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "operator" },
+        { "rpc": "GetDiagnostics", "operation_id": "getDiagnostics", "http_method": "GET", "http_path": "/v1/diagnostics", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "operator" },
+        { "rpc": "GetMetrics", "operation_id": "getMetrics", "http_method": "GET", "http_path": "/metrics", "mutation": false, "idempotency_requirement": "not_applicable", "revision_requirement": "none", "stream_kind": "unary", "auth_class": "operator" }
+      ]
+    }
+  ]
+}

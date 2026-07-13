@@ -1,0 +1,36 @@
+title = "CIGAR secret-scanning policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore non-source build, dependency, coverage, and ephemeral test outputs."
+paths = [
+  '''(^|/)(?:target|node_modules|\.venv|dist|build|\.tmp|\.git|\.cigar|\.shared-secrets)(?:/|$)''',
+  '''^artifacts/packages(?:/|$)''',
+  '''^reports/.*\.(?:info|tmp)$''',
+]
+
+[[allowlists]]
+description = "The catalog detector corpus intentionally contains a synthetic generic API key."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^crates/cigar-catalog/src/secret\.rs$''']
+regexes = ['''b"api_key=abcdefgh12345678"''']
+
+[[allowlists]]
+description = "An effect fault-point enum name and event identifier are not credentials."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^crates/cigar-effects/src/fault\.rs$''']
+regexes = ['''SameKeyDifferentIntent.*effect\.v1\.key\.collision_returned''']
+
+[[allowlists]]
+description = "Cryptographic design prose in the PRD contains no credential value."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^prd\.md$''']
+regexes = ['''Implement strict JSON parsing.*key provider.*XChaCha20-Poly1305''']

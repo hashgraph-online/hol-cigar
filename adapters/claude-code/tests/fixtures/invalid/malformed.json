@@ -1,0 +1,6 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "this fixture is intentionally truncated"

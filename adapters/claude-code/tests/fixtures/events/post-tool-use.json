@@ -1,0 +1,15 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/workspace/cigar-fixture/src/lib.rs"
+  },
+  "tool_response": {
+    "summary": "fixture content"
+  },
+  "tool_use_id": "toolu_fixture_read"
+}

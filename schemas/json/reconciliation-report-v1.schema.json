@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReconciliationReport",
+  "description": "Evidence-bearing reconciliation report for an unknown effect.",
+  "type": "object",
+  "properties": {
+    "attempt_id": {
+      "description": "Source attempt when known.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "certainty_window_end": {
+      "description": "End of a connector certainty window when outcome remains inconclusive.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "effect_id": {
+      "description": "Logical effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidence_digests": {
+      "description": "Sorted unique evidence digests.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 256,
+      "minItems": 1
+    },
+    "outcome": {
+      "description": "Reconciliation conclusion.",
+      "$ref": "#/$defs/ReconciliationOutcome"
+    },
+    "reconciled_at": {
+      "description": "Observation time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "report_id": {
+      "description": "Unique report identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.reconciliation-report.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "effect_id",
+    "outcome",
+    "evidence_digests",
+    "reconciled_at"
+  ],
+  "$defs": {
+    "ReconciliationOutcome": {
+      "description": "Closed reconciliation conclusion.",
+      "oneOf": [
+        {
+          "description": "Remote mutation is confirmed successful.",
+          "type": "string",
+          "const": "confirmed_success"
+        },
+        {
+          "description": "Remote mutation is confirmed failed.",
+          "type": "string",
+          "const": "confirmed_failure"
+        },
+        {
+          "description": "Connector proved that no remote mutation occurred.",
+          "type": "string",
+          "const": "proven_not_executed"
+        },
+        {
+          "description": "Available evidence cannot resolve the outcome.",
+          "type": "string",
+          "const": "inconclusive"
+        },
+        {
+          "description": "Authorized human resolution was recorded.",
+          "type": "string",
+          "const": "manual"
+        }
+      ]
+    }
+  }
+}

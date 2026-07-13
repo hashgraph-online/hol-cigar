@@ -1,0 +1,328 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cigar-claude-hook",
+            "args": [
+              "run",
+              "--plugin-root",
+              "${CLAUDE_PLUGIN_ROOT}",
+              "--plugin-data",
+              "${CLAUDE_PLUGIN_DATA}"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "packet": "WP09",
+  "source_commit": "workspace:bda257e5a2f191aa8e46b37f60122b659de550fe2f9f192df1f8e9f0dbbf492f",
+  "prerequisites": ["WP08"],
+  "owned_paths": [
+    "crates/cigar-compiler/src/materializer.rs",
+    "crates/cigar-compiler/src/cache.rs",
+    "crates/cigar-compiler/src/delta.rs",
+    "crates/cigar-compiler/src/present.rs",
+    "crates/cigar-compiler/tests/materialization_delta_cache.rs",
+    "docs/reference/materialization-cache-deltas.md"
+  ],
+  "commands": [
+    "cargo xtask fmt --check",
+    "cargo xtask generate --check",
+    "cargo xtask vectors check",
+    "cargo xtask lint",
+    "cargo test --workspace --all-targets",
+    "cargo xtask test unit",
+    "cargo xtask docs",
+    "cargo test -p cigar-compiler --all-targets -- --nocapture",
+    "cargo clippy -p cigar-compiler --all-targets -- -D warnings",
+    "cargo llvm-cov -p cigar-compiler --all-targets --lcov --output-path reports/wp09-lcov.info"
+  ],
+  "tests": [
+    { "id": "WP09-WORKSPACE-NEXTEST", "result": "pass", "count": 170, "skipped": 0 },
+    { "id": "WP09-MATERIALIZATION-GOLDENS", "result": "pass", "profiles": 5, "semantic_blocks_preserved": true, "silent_truncations": 0 },
+    { "id": "WP09-DELIMITER-BIDI", "result": "pass", "raw_payload_interpolations": 0, "lane_escapes": 0 },
+    { "id": "WP09-TOKENIZER-DIFFERENTIAL", "result": "pass", "exact_interfaces_separate_from_estimates": true },
+    { "id": "WP09-CACHE-LAYERS", "result": "pass", "layers": ["atom", "transform", "retrieval", "plan", "bundle", "materialization"] },
+    { "id": "WP09-CACHE-GOVERNANCE", "result": "pass", "tenant_isolation": true, "disclosure_isolation": true, "policy_recheck": true, "revocation_recheck": true },
+    { "id": "WP09-CACHE-INTEGRITY", "result": "pass", "corruption_detected": true, "recomputed": true, "deterministic_eviction": true },
+    { "id": "WP09-DELTA", "result": "pass", "round_trip": true, "exact_digest": true, "wrong_base_rejected": true, "tamper_rejected": true, "target_change_rejected": true },
+    { "id": "WP09-PRESENT-STATE", "result": "pass", "compaction_invalidation": true, "target_invalidation": true, "policy_and_revocation_bound": true },
+    { "id": "WP09-OVERFLOW-REPAIR", "result": "pass", "exact_overflow_required": true },
+    { "id": "WP09-CACHE-HIT-LATENCY", "result": "pass", "payload_bytes": 4096, "samples": 2000, "p95_microseconds": 42, "target_microseconds": 15000 }
+  ],
+  "metrics": {
+    "nextest_passed": 170,
+    "nextest_skipped": 0,
+    "wp09_scoped_tests": 10,
+    "materializer_profiles": 5,
+    "materialization_golden_digests": {
+      "json": "12203b50d3cf1c508a1d8540a2c69c6eeee8426443c1764f96f8042f5cd57fda53fa",
+      "markdown": "122023b476a4c2a651cc4c7b08cef869f4c06cb2114ea60a9f89025a5ef832fcea3c",
+      "fact_set": "12205bf44fa32b4da1095ce6dd1da8f838bc9e816fae0dda7a6105c6b03bd943b69a",
+      "claude_prompt": "1220e1a9ed6364db8602b84697811afcc32da40ff5c05458db050f203cc992f7a903",
+      "mcp_resource": "122001e42c1735bc9a728423075564aad4adfae1cea032b78bc27d4af046ae99bd1b"
+    },
+    "semantic_blocks_preserved_percent": 100.0,
+    "raw_control_payload_interpolations": 0,
+    "cache_layers": 6,
+    "cache_hit_samples": 2000,
+    "cache_hit_p95_microseconds": 42,
+    "cache_hit_target_microseconds": 15000,
+    "lcov_lines_found": 1816,
+    "lcov_lines_hit": 1492,
+    "lcov_line_percent": 82.16
+  },
+  "artifacts": [
+    { "path": "Cargo.toml", "sha256": "8e1a42266c3fb134b789795ce0354cb68dff2af99668ea9f5fb55091a2253700" },
+    { "path": "Cargo.lock", "sha256": "6ce3456c93c029a3e436876f7accec5109fcf7538b02c6c5c3089956242610c2" },
+    { "path": "crates/cigar-compiler/Cargo.toml", "sha256": "83df5e3a90aaa28b28ab1324451d8a986fdd2decc278fd6044adae1151471f4d" },
+    { "path": "crates/cigar-compiler/README.md", "sha256": "7fcb1c83d284ab4c014233ea78f06856860413b9d607eaac6e573d30818ef3a4" },
+    { "path": "crates/cigar-compiler/src/lib.rs", "sha256": "071604d44a0947fb39bf26deb7612e7baa3e2aa4b92172d1aa6f14cbd8970bbc" },
+    { "path": "crates/cigar-compiler/src/cache.rs", "sha256": "3f630801005d1c40ae682a5977ab3af4d5c2973384925971628ecb0b6223e4cb" },
+    { "path": "crates/cigar-compiler/src/compiler.rs", "sha256": "40e61276908fcf4622f66f15b59fabfb9c36e80bc387e4d8320d0f3d9495ee70" },
+    { "path": "crates/cigar-compiler/src/contract.rs", "sha256": "4ea4df19fa216590be55988ab5a766eb06caa61bd16cccb90f362ddcb73ed00d" },
+    { "path": "crates/cigar-compiler/src/delta.rs", "sha256": "8b30ffc23ca3ea89e7183e3ff6ea8b6751a65c56276db5be27e1fe657dbcaa76" },
+    { "path": "crates/cigar-compiler/src/materializer.rs", "sha256": "4ea32858f06b2b865b3114d6548249131b5b0cb582ba16dac3303a22b7f7f8d1" },
+    { "path": "crates/cigar-compiler/src/present.rs", "sha256": "26875039bddb9ab6d222bf7220576e622a55de43aa996bb8a9e1bd6c78a542c7" },
+    { "path": "crates/cigar-compiler/tests/compiler.rs", "sha256": "e671cce5d518db963296dbc2f2d2d19c16acab613e946d646a50037ef0f78c6b" },
+    { "path": "crates/cigar-compiler/tests/materialization_delta_cache.rs", "sha256": "1f5430363de16e4448e2105eb000ea8ee9e5543ac008206786212124c6eabfac" },
+    { "path": "docs/reference/deterministic-compiler.md", "sha256": "bb8090c059d680bc029a47897859d9e8747fbceefe431441686778e99d4bfe2c" },
+    { "path": "docs/reference/materialization-cache-deltas.md", "sha256": "63a9672caf0fd67648943645a6d74fad30ebfb1c77ad52e42fafc5f59d53aa47" },
+    { "path": "reports/wp09-lcov.info", "sha256": "ba979e5f3be4501e49dfe2b93218d844af323adbbe2e6e9610cc1606d1d3530d" }
+  ],
+  "known_limitations": [
+    "The built-in exact byte and Unicode-scalar tokenizers are deterministic reference adapters; provider-specific tokenizer packages consume the same ExactTokenizer boundary when their runtime integrations are implemented.",
+    "The governed cache implementation is bounded in-process storage; shared persistent cache backends remain part of the shared deployment packet while preserving the same key and hit-recheck contract."
+  ],
+  "status": "complete"
+}

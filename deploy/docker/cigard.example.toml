@@ -1,0 +1,50 @@
+# This example is intentionally loopback-only. Shared deployments must provide
+# TLS certificate, private-key, and pinned OIDC configuration explicitly.
+mode = "local"
+state_directory = "/var/lib/cigar"
+runtime_directory = "/run/cigar"
+http_listen = "127.0.0.1:7443"
+grpc_listen = "127.0.0.1:7444"
+local_token_file = "/var/lib/cigar/local.token"
+request_deadline_ms = 30000
+shutdown_deadline_ms = 30000
+max_request_bytes = 16777216
+max_expansion_ratio = 32
+
+[workers]
+ingestion = 64
+indexing = 64
+invalidation = 256
+compilation = 32
+outbox = 256
+reconciliation = 128
+lease_cleanup = 32
+backup = 4
+garbage_collection = 16
+
+[production]
+project_directory = "/var/lib/cigar/project"
+metadata_database = "/var/lib/cigar/cigar.sqlite3"
+blob_directory = "/var/lib/cigar/blobs"
+blob_key_reference_directory = "/var/lib/cigar/blob-keys"
+keystore_file = "/var/lib/cigar/keystore.cigar"
+keystore_passphrase_file = "/run/secrets/cigar-keystore-passphrase"
+cursor_signing_key_file = "/var/lib/cigar/cursor.key"
+effect_checkpoint_file = "/var/lib/cigar-effect-checkpoints/checkpoints.json"
+policy_profile_file = "/etc/cigar/policy.json"
+authority_file = "/etc/cigar/authority.json"
+source_registry_file = "/etc/cigar/sources.json"
+effect_registry_file = "/etc/cigar/effects.json"
+
+[resources]
+global_request_concurrency = 1024
+per_tenant_request_concurrency = 128
+blocking_active = 32
+blocking_queued = 1024
+idempotency_wait_ms = 30000
+
+[telemetry]
+# Set to an HTTPS or loopback OTLP/gRPC collector to enable outbound export.
+# otlp_endpoint = "https://otel.example.internal:4317"
+export_timeout_ms = 5000
+metric_interval_ms = 30000

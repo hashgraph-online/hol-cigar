@@ -1,0 +1,52 @@
+[package]
+name = "cigar-sdk"
+description = "Production Rust SDK for embedded and remote CIGAR clients"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "Apache-2.0"
+repository = "https://github.com/CIGAR/cigar"
+readme = "README.md"
+homepage = "https://github.com/CIGAR/cigar"
+authors = ["CIGAR contributors"]
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE", "NOTICE", "release.json"]
+
+[features]
+default = ["embedded-daemon"]
+embedded-daemon = ["dep:cigar-daemon"]
+
+[dependencies]
+base64 = "=0.22.1"
+cigar-api = { version = "=0.1.0", path = "../../crates/cigar-api" }
+cigar-canon = { version = "=0.1.0", path = "../../crates/cigar-canon" }
+cigar-daemon = { version = "=0.1.0", path = "../../crates/cigar-daemon", optional = true }
+cigar-protocol = { version = "=0.1.0", path = "../../crates/cigar-protocol" }
+futures-core = "=0.3.32"
+futures-util = "=0.3.32"
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
+rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+sha2 = "=0.11.0"
+tokio = { version = "=1.52.3", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+zeroize = "=1.9.0"
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+warnings = "deny"
+
+[lints.clippy]
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"

@@ -1,0 +1,431 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextPlan",
+  "description": "Deterministic planner output before representation transforms and packing.",
+  "type": "object",
+  "properties": {
+    "catalog_watermark": {
+      "description": "Catalog/index watermark used for retrieval.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "contract_digest": {
+      "description": "Digest of the normalized input contract.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "dispositions": {
+      "description": "Sorted disposition table containing every considered candidate.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string",
+            "maxLength": 68,
+            "minLength": 68,
+            "pattern": "^1220[0-9a-f]{64}$"
+          },
+          {
+            "$ref": "#/$defs/CandidateDisposition"
+          }
+        ]
+      },
+      "maxItems": 10000
+    },
+    "extensions": {
+      "description": "Stable bounded extensions.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "lanes": {
+      "description": "Sorted unique lanes.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PlanLane"
+      },
+      "maxItems": 32,
+      "minItems": 1
+    },
+    "plan_id": {
+      "description": "Unique plan observation identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.context-plan.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "total_input_tokens": {
+      "description": "Exact aggregate input-token budget.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "contract_digest",
+    "catalog_watermark",
+    "total_input_tokens",
+    "lanes",
+    "dispositions",
+    "extensions"
+  ],
+  "$defs": {
+    "CandidateDisposition": {
+      "description": "Deterministic disposition of one retrieval candidate.",
+      "oneOf": [
+        {
+          "description": "Selected into a specific lane with a fixed-point score.",
+          "type": "object",
+          "properties": {
+            "lane": {
+              "description": "Selected lane.",
+              "$ref": "#/$defs/LaneKind"
+            },
+            "score": {
+              "description": "Deterministic score in millionths.",
+              "type": "integer",
+              "format": "uint32",
+              "maximum": 1000000,
+              "minimum": 0
+            },
+            "state": {
+              "type": "string",
+              "const": "selected"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "lane",
+            "score"
+          ]
+        },
+        {
+          "description": "Excluded with a stable reason.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "description": "Primary exclusion reason.",
+              "$ref": "#/$defs/DispositionReason"
+            },
+            "state": {
+              "type": "string",
+              "const": "excluded"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "description": "Redacted while preserving safe explanation that a candidate existed.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "description": "Primary redaction reason.",
+              "$ref": "#/$defs/DispositionReason"
+            },
+            "state": {
+              "type": "string",
+              "const": "redacted"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "description": "Required selector had no authorized matching candidate.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "required_missing"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "state"
+          ]
+        }
+      ]
+    },
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "DispositionReason": {
+      "description": "Stable exclusion and non-selection reason codes.",
+      "oneOf": [
+        {
+          "description": "Candidate was outside the authorized scope.",
+          "type": "string",
+          "const": "scope_denied"
+        },
+        {
+          "description": "Purpose did not authorize candidate use.",
+          "type": "string",
+          "const": "purpose_denied"
+        },
+        {
+          "description": "Candidate was temporally ineligible.",
+          "type": "string",
+          "const": "temporal_mismatch"
+        },
+        {
+          "description": "Candidate trust or authority was insufficient.",
+          "type": "string",
+          "const": "trust_insufficient"
+        },
+        {
+          "description": "Instruction authority was insufficient.",
+          "type": "string",
+          "const": "instruction_authority_denied"
+        },
+        {
+          "description": "Processor constraints were not satisfied.",
+          "type": "string",
+          "const": "processor_denied"
+        },
+        {
+          "description": "Integrity verification failed.",
+          "type": "string",
+          "const": "integrity_failed"
+        },
+        {
+          "description": "A higher-ranked candidate displaced this one under budget.",
+          "type": "string",
+          "const": "budget_displaced"
+        },
+        {
+          "description": "Candidate was superseded or tombstoned.",
+          "type": "string",
+          "const": "lifecycle_ineligible"
+        },
+        {
+          "description": "Candidate conflicted with a mandatory higher-authority item.",
+          "type": "string",
+          "const": "conflict_lost"
+        },
+        {
+          "description": "Required context could not be found.",
+          "type": "string",
+          "const": "required_missing"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "LaneKind": {
+      "description": "Standard deterministic context lanes.",
+      "oneOf": [
+        {
+          "description": "Non-bypassable rules and instructions.",
+          "type": "string",
+          "const": "rules"
+        },
+        {
+          "description": "Current task statement and exact constraints.",
+          "type": "string",
+          "const": "task"
+        },
+        {
+          "description": "Source, documentation, and verification evidence.",
+          "type": "string",
+          "const": "evidence"
+        },
+        {
+          "description": "Prior decisions and relevant history.",
+          "type": "string",
+          "const": "history"
+        },
+        {
+          "description": "Tool contracts and capability descriptions.",
+          "type": "string",
+          "const": "tools"
+        }
+      ]
+    },
+    "PlanLane": {
+      "description": "One standard lane in a deterministic context plan.",
+      "type": "object",
+      "properties": {
+        "budget_tokens": {
+          "description": "Exact token budget for this lane.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "candidate_versions": {
+          "description": "Sorted unique candidate semantic versions assigned to the lane.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 68,
+            "minLength": 68,
+            "pattern": "^1220[0-9a-f]{64}$"
+          },
+          "maxItems": 10000
+        },
+        "kind": {
+          "description": "Lane kind.",
+          "$ref": "#/$defs/LaneKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "budget_tokens",
+        "candidate_versions"
+      ]
+    }
+  }
+}

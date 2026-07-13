@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "oci-image-v1",
+  "formats": ["tar"],
+  "allow": ["blobs/sha256/**", "index.json", "oci-layout"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem"],
+  "required": ["index.json", "oci-layout"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 100000,
+  "max_member_bytes": 1073741824,
+  "max_total_bytes": 4294967296,
+  "max_layer_uncompressed_bytes": 2147483648,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "index.json", "format": "json", "json_pointer": "/manifests/0/annotations/org.opencontainers.image.version"},
+  "abi_binding": {"path_pattern": "index.json", "format": "json", "json_pointer": "/manifests/0/annotations/dev.cigar.context-abi"}
+}

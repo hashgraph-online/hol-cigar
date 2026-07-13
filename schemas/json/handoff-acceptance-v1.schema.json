@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HandoffAcceptance",
+  "description": "Persisted recipient-specific handoff acceptance receipt.",
+  "type": "object",
+  "properties": {
+    "acceptance_id": {
+      "description": "Unique acceptance identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "accepted_at": {
+      "description": "Acceptance time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "accepted_capabilities": {
+      "description": "Sorted capabilities accepted after current-policy reauthorization.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      },
+      "maxItems": 128
+    },
+    "acknowledgement_digest": {
+      "description": "Recipient acknowledgement digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "bundle_id": {
+      "description": "Recipient-specific bundle identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "handoff_id": {
+      "description": "Accepted capsule identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "policy_digest": {
+      "description": "Current policy decision digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "recipient_id": {
+      "description": "Actual authenticated recipient.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "rejected_capabilities": {
+      "description": "Sorted capabilities rejected at acceptance.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      },
+      "maxItems": 128
+    },
+    "schema_version": {
+      "description": "Must be `cigar.handoff-acceptance.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "unavailable_references": {
+      "description": "Sorted inaccessible references without content disclosure.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 68,
+        "minLength": 68,
+        "pattern": "^1220[0-9a-f]{64}$"
+      },
+      "maxItems": 10000
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "acceptance_id",
+    "handoff_id",
+    "recipient_id",
+    "accepted_capabilities",
+    "rejected_capabilities",
+    "unavailable_references",
+    "policy_digest",
+    "bundle_id",
+    "accepted_at",
+    "acknowledgement_digest"
+  ],
+  "$defs": {
+    "Capability": {
+      "description": "Closed capabilities that may be granted and attenuated.",
+      "oneOf": [
+        {
+          "description": "Observe authorized context records.",
+          "type": "string",
+          "const": "read_context"
+        },
+        {
+          "description": "Compile an authorized context bundle.",
+          "type": "string",
+          "const": "compile_context"
+        },
+        {
+          "description": "Propose private overlay mutations.",
+          "type": "string",
+          "const": "write_overlay"
+        },
+        {
+          "description": "Publish an overlay through optimistic merge.",
+          "type": "string",
+          "const": "publish_overlay"
+        },
+        {
+          "description": "Create a handoff capsule.",
+          "type": "string",
+          "const": "create_handoff"
+        },
+        {
+          "description": "Accept a handoff capsule.",
+          "type": "string",
+          "const": "accept_handoff"
+        },
+        {
+          "description": "Invoke a mediated tool.",
+          "type": "string",
+          "const": "invoke_tool"
+        },
+        {
+          "description": "Propose an external effect intent.",
+          "type": "string",
+          "const": "propose_effect"
+        },
+        {
+          "description": "Approve an external effect.",
+          "type": "string",
+          "const": "approve_effect"
+        },
+        {
+          "description": "Reconcile an unknown effect.",
+          "type": "string",
+          "const": "reconcile_effect"
+        }
+      ]
+    }
+  }
+}

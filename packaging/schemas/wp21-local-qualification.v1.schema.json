@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/wp21-local-qualification.v1.schema.json",
+  "title": "CIGAR WP21 bounded local qualification report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scope", "status", "release_ready", "source_date_epoch", "source", "checks", "release_blocking_gaps"],
+  "properties": {
+    "schema_version": {"const": "cigar.wp21-local-qualification.v1"},
+    "scope": {"const": "locally-testable-packaging-documentation-operations"},
+    "status": {"const": "passed-local-scope"}, "release_ready": {"const": false},
+    "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "tree_sha256", "committed", "clean"],
+      "properties": {
+        "revision": {"type": "string", "minLength": 1}, "tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "committed": {"type": "boolean"}, "clean": {"type": "boolean"}
+      }
+    },
+    "checks": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "status", "detail"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}, "status": {"const": "passed"},
+          "detail": {"type": "string", "minLength": 1, "maxLength": 2048}
+        }
+      }
+    },
+    "release_blocking_gaps": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}}
+  }
+}

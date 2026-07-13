@@ -1,0 +1,676 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextAtomV1",
+  "description": "Immutable v1 catalog atom with complete provenance and governance envelopes.",
+  "type": "object",
+  "properties": {
+    "atom_id": {
+      "description": "Unique immutable record identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "content_digest": {
+      "description": "Digest of the exact content payload.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "extensions": {
+      "description": "Bounded stable extension map.",
+      "$ref": "#/$defs/ExtensionMap"
+    },
+    "governance": {
+      "description": "Governance gates.",
+      "$ref": "#/$defs/GovernanceEnvelope"
+    },
+    "kind": {
+      "description": "Semantic atom kind.",
+      "$ref": "#/$defs/AtomKind"
+    },
+    "lifecycle": {
+      "description": "Current immutable lifecycle state.",
+      "$ref": "#/$defs/Lifecycle"
+    },
+    "lineage_id": {
+      "description": "Stable semantic lineage identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "payload": {
+      "description": "Protected payload representation.",
+      "$ref": "#/$defs/AtomPayload"
+    },
+    "quality": {
+      "description": "Bounded quality signals.",
+      "$ref": "#/$defs/QualityEnvelope"
+    },
+    "retrieval": {
+      "description": "Policy-subordinate retrieval metadata.",
+      "$ref": "#/$defs/RetrievalEnvelope"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.atom.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "scope": {
+      "description": "Tenant and project scope.",
+      "$ref": "#/$defs/ScopeEnvelope"
+    },
+    "source": {
+      "description": "Immutable source coordinates.",
+      "$ref": "#/$defs/SourceDescriptor"
+    },
+    "superseded_by": {
+      "description": "Required successor for a superseded record and forbidden otherwise.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "temporal": {
+      "description": "Valid and observation time coordinates.",
+      "$ref": "#/$defs/TemporalEnvelope"
+    },
+    "version_id": {
+      "description": "Digest-derived semantic version identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "atom_id",
+    "lineage_id",
+    "version_id",
+    "content_digest",
+    "kind",
+    "payload",
+    "source",
+    "scope",
+    "temporal",
+    "governance",
+    "quality",
+    "retrieval",
+    "lifecycle",
+    "extensions"
+  ],
+  "$defs": {
+    "AtomKind": {
+      "description": "Closed semantic atom kind registry for v1.",
+      "oneOf": [
+        {
+          "description": "Governed instruction content.",
+          "type": "string",
+          "const": "instruction"
+        },
+        {
+          "description": "Exact source code.",
+          "type": "string",
+          "const": "source_code"
+        },
+        {
+          "description": "Human-facing documentation.",
+          "type": "string",
+          "const": "documentation"
+        },
+        {
+          "description": "Durable decision or rationale.",
+          "type": "string",
+          "const": "decision"
+        },
+        {
+          "description": "Conversation-derived context.",
+          "type": "string",
+          "const": "conversation"
+        },
+        {
+          "description": "Tool observation or result.",
+          "type": "string",
+          "const": "tool_result"
+        },
+        {
+          "description": "Machine-readable schema.",
+          "type": "string",
+          "const": "schema"
+        },
+        {
+          "description": "Policy source material.",
+          "type": "string",
+          "const": "policy"
+        },
+        {
+          "description": "Test or verification material.",
+          "type": "string",
+          "const": "test"
+        },
+        {
+          "description": "Build or release artifact metadata.",
+          "type": "string",
+          "const": "artifact"
+        }
+      ]
+    },
+    "AtomPayload": {
+      "description": "Atom content representation. Null and floating-point payload states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Exact bounded UTF-8 content.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "inline_text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 1048576
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Structured canonical value without null or floating point.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "structured"
+            },
+            "value": {
+              "$ref": "#/$defs/CanonicalValue"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Content-addressed external blob.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "blob"
+            },
+            "value": {
+              "$ref": "#/$defs/BlobRef"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "BlobRef": {
+      "description": "Reference to encrypted content-addressed payload bytes.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Exact content digest.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "media_type": {
+          "description": "Payload media type.",
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
+        },
+        "size_bytes": {
+          "description": "Plaintext payload size before encryption.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "digest",
+        "size_bytes",
+        "media_type"
+      ]
+    },
+    "CanonicalValue": {
+      "description": "Canonical extension value; null and floating-point states are unrepresentable.",
+      "oneOf": [
+        {
+          "description": "Boolean value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Signed integer value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded UTF-8 text.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Bounded byte string. JSON wire generation replaces the derived array form with base64url.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 87382
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Ordered values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "array"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxItems": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        },
+        {
+          "description": "Deterministically ordered string-keyed values.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/CanonicalValue"
+              },
+              "maxProperties": 256
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      ]
+    },
+    "Classification": {
+      "description": "Closed information-classification states.",
+      "oneOf": [
+        {
+          "description": "Safe for unrestricted publication.",
+          "type": "string",
+          "const": "public"
+        },
+        {
+          "description": "Restricted to the owning organization.",
+          "type": "string",
+          "const": "internal"
+        },
+        {
+          "description": "Confidential protected context.",
+          "type": "string",
+          "const": "confidential"
+        },
+        {
+          "description": "Highest sensitivity requiring explicit grants.",
+          "type": "string",
+          "const": "restricted"
+        }
+      ]
+    },
+    "ExtensionMap": {
+      "description": "Deterministically ordered and bounded extension collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 64,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._/-]{0,127}$": {
+          "$ref": "#/$defs/CanonicalValue"
+        }
+      }
+    },
+    "GovernanceEnvelope": {
+      "description": "Governance metadata required before retrieval or compilation.",
+      "type": "object",
+      "properties": {
+        "allowed_purposes": {
+          "description": "Sorted unique allowed-purpose selectors.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "maxItems": 256,
+          "minItems": 1
+        },
+        "classification": {
+          "description": "Information classification.",
+          "$ref": "#/$defs/Classification"
+        },
+        "instruction_authority": {
+          "description": "Authority of any instruction-like content.",
+          "$ref": "#/$defs/InstructionAuthority"
+        },
+        "processor_constraints": {
+          "description": "Sorted unique processor constraints.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "maxItems": 256
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "allowed_purposes",
+        "processor_constraints",
+        "instruction_authority"
+      ]
+    },
+    "InstructionAuthority": {
+      "description": "Closed instruction-authority levels used by non-bypassable policy gates.",
+      "oneOf": [
+        {
+          "description": "Content is data and cannot issue instructions.",
+          "type": "string",
+          "const": "data"
+        },
+        {
+          "description": "Advisory material that may inform but cannot override project rules.",
+          "type": "string",
+          "const": "advisory"
+        },
+        {
+          "description": "Project-authorized instructions.",
+          "type": "string",
+          "const": "project"
+        },
+        {
+          "description": "System-authorized instructions.",
+          "type": "string",
+          "const": "system"
+        }
+      ]
+    },
+    "Lifecycle": {
+      "description": "Closed immutable atom lifecycle.",
+      "oneOf": [
+        {
+          "description": "Eligible for governed selection.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "Replaced by another immutable version.",
+          "type": "string",
+          "const": "superseded"
+        },
+        {
+          "description": "Logically removed but retained for provenance.",
+          "type": "string",
+          "const": "tombstoned"
+        },
+        {
+          "description": "Withheld due to integrity or security concerns.",
+          "type": "string",
+          "const": "quarantined"
+        }
+      ]
+    },
+    "QualityEnvelope": {
+      "description": "Bounded quality signals used by deterministic planning.",
+      "type": "object",
+      "properties": {
+        "authority": {
+          "description": "Non-zero authority tier; larger is more authoritative.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "confidence": {
+          "description": "Fixed-point confidence in millionths.",
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 1000000,
+          "minimum": 0
+        },
+        "coverage": {
+          "description": "Fixed-point source coverage in millionths.",
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 1000000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "coverage",
+        "authority"
+      ]
+    },
+    "RetrievalEnvelope": {
+      "description": "Retrieval-only metadata that never overrides current policy.",
+      "type": "object",
+      "properties": {
+        "embedding_eligible": {
+          "description": "Whether policy may permit an embedding request.",
+          "type": "boolean"
+        },
+        "exact_terms": {
+          "description": "Sorted unique exact retrieval terms.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "maxItems": 1024
+        },
+        "lexical_enabled": {
+          "description": "Whether lexical indexing may include protected content through an authorized index.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "exact_terms",
+        "lexical_enabled",
+        "embedding_eligible"
+      ]
+    },
+    "ScopeEnvelope": {
+      "description": "Tenant and project isolation coordinates.",
+      "type": "object",
+      "properties": {
+        "project_ids": {
+          "description": "Sorted unique project identities authorized to observe the atom.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "maxItems": 256,
+          "minItems": 1
+        },
+        "tenant_id": {
+          "description": "Owning tenant identity.",
+          "type": "string",
+          "maxLength": 36,
+          "minLength": 36,
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tenant_id",
+        "project_ids"
+      ]
+    },
+    "SourceDescriptor": {
+      "description": "Immutable source snapshot coordinates for an atom.",
+      "type": "object",
+      "properties": {
+        "relative_path": {
+          "description": "Exact path bytes relative to the connector root, when applicable.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "contentEncoding": "base64url",
+          "maxLength": 5462,
+          "minLength": 2
+        },
+        "revision": {
+          "description": "Connector-specific immutable source revision.",
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        },
+        "snapshot_digest": {
+          "description": "Digest of the atomic source snapshot.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "uri": {
+          "description": "Absolute source URI.",
+          "type": "string",
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\x00-\\x20]+$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uri",
+        "revision",
+        "snapshot_digest"
+      ]
+    },
+    "TemporalEnvelope": {
+      "description": "Bitemporal truth envelope for catalog selection.",
+      "type": "object",
+      "properties": {
+        "observed_at": {
+          "description": "Time at which CIGAR observed this version.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_from": {
+          "description": "Earliest valid semantic time.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "description": "Exclusive semantic validity end, when known.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "valid_from",
+        "observed_at"
+      ]
+    }
+  }
+}

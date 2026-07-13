@@ -1,0 +1,44 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "effect-crash-recovery",
+  "title": "Durable effect crash recovery",
+  "fixed_seed": 41004,
+  "fixture": "fixture.json",
+  "fixture_digest": "12205af03fe711a6c1897a27afddfd90f428ada4a6010c2110d618128ddb3a75961a",
+  "driver": "driver.py",
+  "driver_digest": "1220b65e0331c8a7dc133a01b78952bed4eabba51353fc15f5e9fb44846138a27dda",
+  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "recorded_mode": true,
+  "setup": ["isolated-home", "deterministic-issue-service", "loopback-only", "fixed-clock-and-seed"],
+  "expected_assertions": [
+    "prepared-intent-before-send", "remote-commit-becomes-unknown", "restart-recovers-journal",
+    "idempotency-yields-one-mutation", "unsafe-unknown-retry-blocked", "compensation-is-linked-child"
+  ],
+  "checks": [
+    {
+      "check_id": "sqlite-accept-before-receipt",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-effects", "--test", "wp12_sqlite", "remote_commit_before_sqlite_receipt_failure_recovers_without_duplicate"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["prepared-intent-before-send", "remote-commit-becomes-unknown", "restart-recovers-journal", "idempotency-yields-one-mutation"]
+    },
+    {
+      "check_id": "unknown-retry-safety",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-effects", "--test", "wp12_effects", "unknown_retry_requires_idempotency_or_proven_non_execution"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["unsafe-unknown-retry-blocked"]
+    },
+    {
+      "check_id": "compensation-linked-child",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-effects", "--test", "wp12_effects", "compensation_child_is_durably_reserved_to_exactly_one_original"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["compensation-is-linked-child"]
+    }
+  ],
+  "teardown": ["remove-isolated-home", "stop-issue-service", "remove-recorded-consumer-state"],
+  "ci_smoke_command": "python3 demos/run.py --scenario effect-crash-recovery --output-dir reports/demos",
+  "canary_ids": ["effect-secret"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

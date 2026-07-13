@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cigar-shared-config
+  namespace: cigar-shared
+immutable: true
+data:
+  cigard.toml: |
+    mode = "shared"
+    state_directory = "/var/lib/cigar"
+    runtime_directory = "/run/cigar"
+    http_listen = "0.0.0.0:7443"
+    grpc_listen = "0.0.0.0:7444"
+    request_deadline_ms = 30000
+    shutdown_deadline_ms = 30000
+    max_request_bytes = 16777216
+    max_expansion_ratio = 32
+
+    [tls]
+    certificate_chain = "/run/secrets/cigar/tls.crt"
+    private_key = "/run/secrets/cigar/tls.key"
+    client_ca = "/run/secrets/cigar/client-ca.crt"
+
+    [oidc]
+    issuer = "https://identity.example.invalid"
+    audience = "cigar-shared"
+    tenant_claim = "cigar_tenant"
+    jwks_max_age_seconds = 300
+    jwks_refresh_timeout_ms = 5000
+    clock_skew_seconds = 30
+    max_token_bytes = 16384
+
+    [workers]
+    ingestion = 64
+    indexing = 64
+    invalidation = 256
+    compilation = 32
+    outbox = 256
+    reconciliation = 128
+    lease_cleanup = 32
+    backup = 4
+    garbage_collection = 16
+
+    [production]
+    project_directory = "/var/lib/cigar/project"
+    metadata_database = "/var/lib/cigar/unused-shared-metadata.sqlite3"
+    blob_directory = "/var/lib/cigar/unused-shared-blobs"
+    blob_key_reference_directory = "/var/lib/cigar/unused-shared-blob-keys"
+    keystore_file = "/var/lib/cigar/keystore.cigar"
+    keystore_passphrase_file = "/run/secrets/cigar/keystore-passphrase"
+    cursor_signing_key_file = "/var/lib/cigar/cursor.key"
+    effect_checkpoint_file = "/var/lib/cigar-effect-checkpoints/checkpoints.json"
+    policy_profile_file = "/etc/cigar/trusted/policy.json"
+    authority_file = "/etc/cigar/trusted/authority.json"
+    source_registry_file = "/etc/cigar/trusted/sources.json"
+    effect_registry_file = "/etc/cigar/trusted/effects.json"
+
+    [shared_storage.postgres]
+    runtime_url_file = "/run/secrets/cigar/postgres-runtime-url"
+    migrator_url_file = "/run/secrets/migrator/postgres-migrator-url"
+    server_name = "postgres.cigar-dependencies.svc.cluster.local"
+    ca_certificate_file = "/run/secrets/postgres/postgres-ca.crt"
+    minimum_connections = 4
+    maximum_connections = 64
+    acquire_timeout_ms = 5000
+    statement_timeout_ms = 30000
+    lock_timeout_ms = 5000
+    idle_transaction_timeout_ms = 30000
+
+    [shared_storage.object]
+    endpoint = "https://objects.example.invalid"
+    region = "us-east-1"
+    bucket = "cigar-shared"
+    prefix = "cigar-v1"
+    path_style = false
+    access_key_file = "/run/secrets/cigar/object-access-key"
+    secret_key_file = "/run/secrets/cigar/object-secret-key"
+    security_token_file = "/run/secrets/cigar/object-session-token"
+    wrapping_keys_file = "/etc/cigar/trusted/object-wrapping-keys.json"
+    blinding_key_file = "/run/secrets/cigar/object-blinding-key"
+
+    [resources]
+    global_request_concurrency = 1024
+    per_tenant_request_concurrency = 128
+    blocking_active = 32
+    blocking_queued = 1024
+    idempotency_wait_ms = 30000
+
+    [telemetry]
+    otlp_endpoint = "https://telemetry.example.invalid:4317"
+    export_timeout_ms = 5000
+    metric_interval_ms = 30000

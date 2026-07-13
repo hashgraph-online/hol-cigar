@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EffectJournalEvent",
+  "description": "One append-only hash-chained state transition event.",
+  "type": "object",
+  "properties": {
+    "actor_id": {
+      "description": "Actor authorizing the transition.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "effect_id": {
+      "description": "Logical effect identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "event_digest": {
+      "description": "This complete event digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "event_id": {
+      "description": "Unique journal event identity.",
+      "type": "string",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "expected_effect_version": {
+      "description": "Expected prior effect version.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "from_state": {
+      "description": "Prior projection state.",
+      "$ref": "#/$defs/EffectState"
+    },
+    "payload_digest": {
+      "description": "Typed transition payload digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "previous_event_digest": {
+      "description": "Prior event digest; absent only for sequence one.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "recorded_at": {
+      "description": "Commit time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.effect-journal-event.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "sequence": {
+      "description": "One-based event sequence.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 1
+    },
+    "to_state": {
+      "description": "Resulting projection state.",
+      "$ref": "#/$defs/EffectState"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "effect_id",
+    "sequence",
+    "expected_effect_version",
+    "from_state",
+    "to_state",
+    "actor_id",
+    "payload_digest",
+    "event_digest",
+    "recorded_at"
+  ],
+  "$defs": {
+    "EffectState": {
+      "description": "Closed effect journal projection states.",
+      "oneOf": [
+        {
+          "description": "Durable intent exists and no external action occurred.",
+          "type": "string",
+          "const": "prepared"
+        },
+        {
+          "description": "Intent is waiting for required approval.",
+          "type": "string",
+          "const": "pending_approval"
+        },
+        {
+          "description": "Current policy, capability, and approval authorize dispatch.",
+          "type": "string",
+          "const": "authorized"
+        },
+        {
+          "description": "An approved worker owns a durable fenced attempt.",
+          "type": "string",
+          "const": "dispatching"
+        },
+        {
+          "description": "Connector and verification confirm success.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Connector or reconciliation confirms failure.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Remote execution outcome is ambiguous.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "Reconciliation proved that another same-key attempt is safe.",
+          "type": "string",
+          "const": "authorized_for_retry"
+        },
+        {
+          "description": "A human or authoritative external record resolved ambiguity.",
+          "type": "string",
+          "const": "manual_resolution"
+        },
+        {
+          "description": "Approval was explicitly rejected.",
+          "type": "string",
+          "const": "rejected"
+        },
+        {
+          "description": "Approval or intent expired before dispatch.",
+          "type": "string",
+          "const": "expired"
+        },
+        {
+          "description": "Intent was cancelled before an irreversible transition.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "Compensation was requested for a succeeded effect.",
+          "type": "string",
+          "const": "compensation_pending"
+        },
+        {
+          "description": "A fenced compensation attempt is in flight.",
+          "type": "string",
+          "const": "compensating"
+        },
+        {
+          "description": "Compensation is confirmed complete.",
+          "type": "string",
+          "const": "compensated"
+        },
+        {
+          "description": "Compensation is confirmed failed.",
+          "type": "string",
+          "const": "compensation_failed"
+        }
+      ]
+    }
+  }
+}

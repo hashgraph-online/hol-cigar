@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/install-qualification.v1.schema.json",
+  "title": "CIGAR installed artifact qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "artifact_id", "artifact_sha256", "artifact_bytes", "package_contract_sha256", "product_version", "context_abi", "source_revision", "target", "qualification_driver", "driver_receipt_sha256", "installed_binary_sha256", "unprivileged", "no_compiler_path", "no_egress", "path_cases", "checks", "uninstalled", "state_retained"],
+  "properties": {
+    "schema_version": {"const": "cigar.install-qualification.v1"},
+    "status": {"const": "passed"},
+    "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact_bytes": {"type": "integer", "minimum": 1},
+    "package_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "product_version": {"type": "string", "minLength": 1},
+    "context_abi": {"const": "cigar.context.v1"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "target": {"type": "string", "pattern": "^[a-z0-9_]+-[a-z0-9_.-]+$"},
+    "qualification_driver": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[^/\\\\\u0000-\u001f\u007f]{1,255}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "driver_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "installed_binary_sha256": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cigar", "cigard"],
+      "properties": {
+        "cigar": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigard": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "unprivileged": {"const": true},
+    "no_compiler_path": {"const": true},
+    "no_egress": {"const": true},
+    "path_cases": {"type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["spaces", "unicode", "long", "read-only-parent", "non-admin"]}},
+    "checks": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}},
+    "uninstalled": {"const": true},
+    "state_retained": {"const": true}
+  }
+}

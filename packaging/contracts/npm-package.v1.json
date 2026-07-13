@@ -1,0 +1,22 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "npm-package-v1",
+  "formats": ["tar.gz"],
+  "allow": [
+    "package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE",
+    "package/dist/**", "package/fixtures/**"
+  ],
+  "deny": ["**/.git/**", "**/.env*", "**/.npmrc", "**/*.key", "**/*.pem", "**/node_modules/**", "**/src/**", "**/tests/**", "**/*.tsbuildinfo"],
+  "required": ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE", "package/dist/release.json"],
+  "required_patterns": ["package/dist/*.js", "package/dist/*.d.ts"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 10000,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 67108864,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "package/package.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "package/dist/release.json", "format": "json", "json_pointer": "/context_abi"}
+}

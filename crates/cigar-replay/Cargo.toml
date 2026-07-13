@@ -1,0 +1,22 @@
+[package]
+name = "cigar-replay"
+description = "CIGAR decision records and replay modes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+cigar-canon.workspace = true
+cigar-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

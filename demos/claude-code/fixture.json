@@ -1,0 +1,20 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "claude-code-experience",
+  "fixed_seed": 41007,
+  "fixed_time": "2026-01-15T12:06:00Z",
+  "flow": [
+    "install", "session-start", "task-prompt", "context-delta", "file-read",
+    "subagent-handoff", "compaction", "resume", "effect-prepare", "session-end", "uninstall"
+  ],
+  "expected": {
+    "bootstrap_max_tokens": 500,
+    "duplicate_injection_count": 0,
+    "mcp_output_bounded": true,
+    "checkpoints_exact": true,
+    "degraded_marker_visible": true,
+    "manifest_inspectable": true,
+    "uninstall_byte_preserving": true
+  },
+  "secret_canary": "DEMO_CANARY_CLAUDE_SECRET_793D60"
+}

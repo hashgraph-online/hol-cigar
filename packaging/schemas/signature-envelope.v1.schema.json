@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/signature-envelope.v1.schema.json",
+  "title": "CIGAR detached signature envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "algorithm", "key_id", "signer_principal", "purpose", "signed_at", "payload", "signature_base64"],
+  "properties": {
+    "schema_version": {"const": "cigar.signature-envelope.v1"},
+    "algorithm": {"const": "Ed25519"},
+    "key_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "signer_principal": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+    "purpose": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$"},
+    "signed_at": {"type": "integer", "minimum": 0, "maximum": 253402300799},
+    "expires_at": {"type": "integer", "minimum": 0, "maximum": 253402300799},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "bytes"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\.\\.).+$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "signature_base64": {"type": "string", "minLength": 1}
+  }
+}

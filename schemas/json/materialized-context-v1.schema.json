@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MaterializedContext",
+  "description": "Provider-ready bytes with exact tokenizer and materializer evidence.",
+  "type": "object",
+  "properties": {
+    "bundle_id": {
+      "description": "Source bundle identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "bytes": {
+      "description": "Provider-ready bytes encoded as unpadded base64url in JSON.",
+      "type": "string",
+      "maxLength": 89478486,
+      "minLength": 2
+    },
+    "materializer_fingerprint": {
+      "description": "Materializer fingerprint used for rendering.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "media_type": {
+      "description": "Target media type.",
+      "type": "string",
+      "maxLength": 255,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.materialized-context.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "token_count": {
+      "description": "Exact physical tokens under the recorded tokenizer.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "tokenizer_fingerprint": {
+      "description": "Tokenizer fingerprint used for accounting.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "media_type",
+    "bytes",
+    "token_count",
+    "tokenizer_fingerprint",
+    "materializer_fingerprint"
+  ]
+}

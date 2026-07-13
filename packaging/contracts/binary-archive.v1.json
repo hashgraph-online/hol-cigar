@@ -1,0 +1,18 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "binary-archive-v1",
+  "formats": ["tar.gz", "zip"],
+  "allow": ["RELEASE-METADATA.json", "bin/cigar", "bin/cigard", "bin/cigar.exe", "bin/cigard.exe", "share/man/man1/cigar.1", "completions/**", "LICENSE", "NOTICE", "SHA256SUMS"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.pdb", "**/*.dSYM/**", "**/*.rlib", "**/*.rmeta", "**/*.key", "**/*.pem"],
+  "required_any": [["bin/cigar", "bin/cigar.exe"], ["bin/cigard", "bin/cigard.exe"]],
+  "required": ["RELEASE-METADATA.json", "NOTICE", "LICENSE", "SHA256SUMS"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 2048,
+  "max_member_bytes": 268435456,
+  "max_total_bytes": 536870912,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "checksum_manifest": {"path": "SHA256SUMS", "scope": "all-payload-files"}
+}

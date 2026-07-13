@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationReceipt",
+  "description": "Evidence-bearing verification receipt over one semantic subject.",
+  "type": "object",
+  "properties": {
+    "checks": {
+      "description": "Ordered named checks.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/VerificationCheck"
+      },
+      "maxItems": 10000,
+      "minItems": 1
+    },
+    "outcome": {
+      "description": "Aggregate outcome consistent with every check.",
+      "$ref": "#/$defs/VerificationOutcome"
+    },
+    "receipt_id": {
+      "description": "Content-derived receipt identity.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "description": "Must be `cigar.verification-receipt.v1`.",
+      "type": "string",
+      "maxLength": 71,
+      "minLength": 4,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*\\.v[1-9][0-9]{0,4}$"
+    },
+    "subject_digest": {
+      "description": "Verified semantic subject digest.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "verified_at": {
+      "description": "Verification time.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "verifier_fingerprint": {
+      "description": "Verifier implementation fingerprint.",
+      "type": "string",
+      "maxLength": 68,
+      "minLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "verifier_fingerprint",
+    "subject_digest",
+    "checks",
+    "outcome",
+    "verified_at"
+  ],
+  "$defs": {
+    "VerificationCheck": {
+      "description": "One named verification check with evidence digest.",
+      "type": "object",
+      "properties": {
+        "evidence_digest": {
+          "description": "Check-specific evidence digest.",
+          "type": "string",
+          "maxLength": 68,
+          "minLength": 68,
+          "pattern": "^1220[0-9a-f]{64}$"
+        },
+        "name": {
+          "description": "Bounded check identifier.",
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        },
+        "outcome": {
+          "description": "Check result.",
+          "$ref": "#/$defs/VerificationOutcome"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "evidence_digest",
+        "outcome"
+      ]
+    },
+    "VerificationOutcome": {
+      "description": "Closed verification check outcome.",
+      "oneOf": [
+        {
+          "description": "Check passed.",
+          "type": "string",
+          "const": "passed"
+        },
+        {
+          "description": "Check failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Check could not reach a conclusion.",
+          "type": "string",
+          "const": "indeterminate"
+        }
+      ]
+    }
+  }
+}

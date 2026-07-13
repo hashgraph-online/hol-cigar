@@ -1,0 +1,122 @@
+{
+  "schema_version": "cigar.wp20-local-qualification.v1",
+  "packet": "WP20",
+  "scope": "locally-testable-source-demos-and-benchmark-harness",
+  "status": "passed-local-scope",
+  "wp20_exit_satisfied": false,
+  "release_ready": false,
+  "source_binding": {
+    "committed_candidate": false,
+    "reason": "unborn_repository_has_no_HEAD"
+  },
+  "checks": [
+    {
+      "id": "harness-unit-tests",
+      "status": "passed",
+      "detail": "31 tests passed: 20 CIGARBench/performance, 2 comparator-matrix, and 9 demo-harness tests"
+    },
+    {
+      "id": "seven-source-demos",
+      "status": "passed",
+      "detail": "7/7 fixture-bound public-surface demos qualified under darwin-loopback-only-v1 no-egress enforcement"
+    },
+    {
+      "id": "demo-repeatability",
+      "status": "passed",
+      "detail": "a second complete seven-demo run produced byte-identical records"
+    },
+    {
+      "id": "four-sdk-source-workflows",
+      "status": "passed",
+      "detail": "Rust, TypeScript, Python, and Go completed the same five-operation recorded workflow with one bundle identity"
+    },
+    {
+      "id": "release-shaped-paired-dry-run",
+      "status": "passed-ineligible",
+      "detail": "540 raw events formed 270 randomized pairs across all 9 strata; every stratum had 30 pairs, reports requested 10000 bootstrap repetitions, raw replay passed, and canary/profile guards passed"
+    },
+    {
+      "id": "confidence-and-per-stratum-output",
+      "status": "passed-ineligible",
+      "detail": "9/9 per-stratum distributions and Wilson harm intervals were emitted; task-cluster bootstrap intervals correctly remained null because each stratum has only one independent task"
+    },
+    {
+      "id": "twelve-comparator-protocol-dry-run",
+      "status": "passed-ineligible",
+      "detail": "all 7 baseline IDs and 5 ablation IDs produced paired raw events and byte-exact replayable reports; the recorded consumer does not implement the real comparator algorithms"
+    },
+    {
+      "id": "installed-artifact-mode",
+      "status": "not-executed",
+      "detail": "no dist tree, installed-artifact report, or complete offline dependency stores are present"
+    },
+    {
+      "id": "independent-outcome-evaluation",
+      "status": "not-executed",
+      "detail": "no adjudicated 30-task-per-stratum dataset or independently held evaluator attestation is present"
+    },
+    {
+      "id": "performance-qualification",
+      "status": "not-executed",
+      "detail": "no installed-daemon raw run, pinned-host calibration, independent performance attestation, or candidate report is present"
+    }
+  ],
+  "demo_evidence": {
+    "directory": "reports/demos",
+    "qualified_records": 7,
+    "no_egress_enforcement": "darwin-loopback-only-v1",
+    "byte_identical_repeat": true,
+    "record_sha256": {
+      "claude-code-experience.json": "ba22d508972fdce09ba0200f7f96fa9e0cfeb61d00cb81bd5914c3f0aa0927dc",
+      "cross-runtime-replay.json": "dd3a59874c6bd66b07f89076818058c099555186c8b5a5c586acaf0a30d11d2c",
+      "effect-crash-recovery.json": "ee5e33ad00cf572541a990373e41cd49b76aae3aaad6c46d10282a985ec01a57",
+      "multi-agent-handoff.json": "d0c8cd097a33f2ec2849ad4e9dbf9fb0b6307c95575782aa62a37b2d1e8b3146",
+      "multi-project-isolation.json": "92f0c3dd756cf8d93db6fb389dd027f8020b0227f63e009c872ea48f7808c8fc",
+      "offline-context-compiler.json": "aa746cc636253d76ba09a8d421f283291abaccc66a74fd5879d1dcb8d6e86a22",
+      "prompt-injection-defense.json": "cb7f7ced5f5cfcce933989c557310ec424a4c8d3fc2638e2a6fde057e4ae6d1e"
+    }
+  },
+  "sdk_evidence": {
+    "path": "reports/demos/sdk-quickstarts.json",
+    "sha256": "58b85183708cfe09be77f6ba5fa045c90ab3479f7a6c8f2dc1e3c32f9303f1e6",
+    "source_workflow_qualified": true,
+    "installed_artifact_qualified": false,
+    "release_qualified": false,
+    "runtime_count": 4
+  },
+  "benchmark_evidence": {
+    "release_shaped_dry_run": {
+      "receipt": "reports/cigarbench/local-dry-run/qualification.json",
+      "receipt_sha256": "9c15962fc98c19656a925dd2cfb3aaa21c83366c92f21b3e92f864e46c2af139",
+      "decision": "insufficient_evidence",
+      "eligible": false,
+      "ineligible_reasons": [
+        "fewer_than_30_independent_tasks_per_stratum",
+        "non_qualification_evidence"
+      ]
+    },
+    "comparator_matrix_dry_run": {
+      "receipt": "reports/cigarbench/local-matrix-dry-run-v1/matrix-receipt.json",
+      "receipt_sha256": "41e59b3409dc54388df32322f4a9a51ece396076c79754ae8f53c1db8a6df62a",
+      "decision": "passed-ineligible",
+      "eligible": false,
+      "ineligible_reasons": [
+        "fewer_than_10000_bootstrap_repetitions",
+        "fewer_than_30_independent_tasks_per_stratum",
+        "fewer_than_30_post_warm_pairs_per_stratum",
+        "non_qualification_evidence",
+        "recorded_consumer_does_not_implement_comparator_algorithms",
+        "no_independent_evaluator_attestation"
+      ]
+    }
+  },
+  "release_blocking_gaps": [
+    "committed-candidate-source-binding",
+    "installed-native-and-sdk-artifact-demo",
+    "thirty-independent-adjudicated-tasks-per-stratum",
+    "real-baseline-and-ablation-implementations-and-runs",
+    "independent-human-outcome-evaluator-attestation",
+    "pinned-host-installed-daemon-performance-evidence",
+    "performance-and-outcome-gates"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/opaque/provider-transcript.jsonl",
+  "cwd": "/workspace/cigar-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "Elicitation",
+  "mcp_server_name": "plugin:cigar:cigar",
+  "request_id": "elicitation-fixture-1",
+  "message": "Select a fixture value."
+}

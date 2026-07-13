@@ -1,0 +1,8 @@
+{
+  "schema_version": "cigar.invariant-traceability-result.v1",
+  "manifest_digest": "sha256:d717ad3153237f7ddc4951c6fd6c08f9e00e7d6ec3a264a7b403f62b15dddd55",
+  "requirement_registry_digest": "sha256:e79265e01533f58b03550055d0edee7cc576e7a91000aaf2c31e3e12c62c3357",
+  "requirement_count": 35,
+  "test_count": 17,
+  "valid": true
+}
