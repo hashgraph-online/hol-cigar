@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::{Read as _, Write as _};
 use std::path::{Component, Path, PathBuf};
+#[cfg(test)]
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -93,6 +95,37 @@ impl Drop for CancelBlockingOnDrop {
     fn drop(&mut self) {
         self.0.cancel();
     }
+}
+
+#[cfg(test)]
+struct PostCommitCancellationProbe {
+    reached: tokio::sync::oneshot::Sender<()>,
+    cancellation_observed: tokio::sync::oneshot::Sender<bool>,
+}
+
+#[cfg(test)]
+static POST_COMMIT_CANCELLATION_PROBE: Mutex<Option<PostCommitCancellationProbe>> =
+    Mutex::new(None);
+
+#[cfg(test)]
+fn pause_after_committed_operation_for_test(cancellation: &BlockingCancellation) {
+    let probe = POST_COMMIT_CANCELLATION_PROBE
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take());
+    let Some(probe) = probe else {
+        return;
+    };
+    let _ignored = probe.reached.send(());
+    let mut cancellation_observed = false;
+    for _attempt in 0..2_000 {
+        if cancellation.0.load(Ordering::Acquire) {
+            cancellation_observed = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let _ignored = probe.cancellation_observed.send(cancellation_observed);
 }
 
 struct StateDirectoryLock {
@@ -409,36 +442,40 @@ fn execute_blocking(
 ) -> Result<OperationResponse, CliError> {
     cancellation.checkpoint()?;
     let path = invocation.command.path();
-    if path == "init" {
-        let result = initialize(invocation, configuration, cancellation)?;
-        cancellation.checkpoint()?;
-        return Ok(OperationResponse {
-            operation_id: "cigar.cli.beta-embedded.init.v1".to_owned(),
-            result,
-            semantic_etag: None,
-            next_page_cursor: None,
-        });
-    }
-    let state = StateDirectoryLock::acquire(
-        configuration.project_state_directory(),
-        invocation.command.mutates() && !invocation.options.dry_run,
-        cancellation,
-    )?;
-    let result = match path {
-        "source.add" => source_add(invocation, &state, cancellation)?,
-        "source.list" => source_list(invocation, &state)?,
-        "source.remove" => source_remove(invocation, &state, cancellation)?,
-        "project.list" => project_list(invocation, &state)?,
-        "project.attach" => project_attach(invocation, &state, cancellation)?,
-        "project.detach" => project_detach(invocation, &state, cancellation)?,
-        "project.switch" => project_switch(invocation, &state, cancellation)?,
-        "project.link" => project_link(invocation, &state, cancellation)?,
-        "project.unlink" => project_unlink(invocation, &state, cancellation)?,
-        "focus.switch" => focus_switch(invocation, &state, cancellation)?,
-        "focus.close" => focus_close(invocation, &state, cancellation)?,
-        _ => return Err(CliError::invalid_command()),
+    let result = if path == "init" {
+        initialize(invocation, configuration, cancellation)?
+    } else {
+        let state = StateDirectoryLock::acquire(
+            configuration.project_state_directory(),
+            invocation.command.mutates() && !invocation.options.dry_run,
+            cancellation,
+        )?;
+        match path {
+            "source.add" => source_add(invocation, &state, cancellation)?,
+            "source.list" => source_list(invocation, &state)?,
+            "source.remove" => source_remove(invocation, &state, cancellation)?,
+            "project.list" => project_list(invocation, &state)?,
+            "project.attach" => project_attach(invocation, &state, cancellation)?,
+            "project.detach" => project_detach(invocation, &state, cancellation)?,
+            "project.switch" => project_switch(invocation, &state, cancellation)?,
+            "project.link" => project_link(invocation, &state, cancellation)?,
+            "project.unlink" => project_unlink(invocation, &state, cancellation)?,
+            "focus.switch" => focus_switch(invocation, &state, cancellation)?,
+            "focus.close" => focus_close(invocation, &state, cancellation)?,
+            _ => return Err(CliError::invalid_command()),
+        }
     };
-    cancellation.checkpoint()?;
+    let committed_operation = invocation.command.mutates() && !invocation.options.dry_run;
+    #[cfg(test)]
+    if committed_operation {
+        pause_after_committed_operation_for_test(cancellation);
+    }
+    // A successful committing operation has crossed its durable state boundary. Cancellation
+    // remains authoritative before that boundary, while changing the result afterwards would
+    // report a committed mutation as failed and make a retry ambiguous.
+    if !committed_operation {
+        cancellation.checkpoint()?;
+    }
     Ok(OperationResponse {
         operation_id: format!("cigar.cli.beta-embedded.{}.v1", path.replace('.', "-")),
         result,
@@ -991,9 +1028,88 @@ fn random_suffix() -> Result<String, CliError> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::{
-        BlockingCancellation, LocalState, StateDirectoryLock, create_private_directory, read_state,
-        write_state,
+        BlockingCancellation, LocalState, POST_COMMIT_CANCELLATION_PROBE,
+        PostCommitCancellationProbe, StateDirectoryLock, create_private_directory, execute,
+        read_state, write_state,
     };
+    use crate::TerminalContext;
+    use crate::arguments::parse;
+    use crate::configuration::EffectiveConfiguration;
+    use std::ffi::OsString;
+
+    #[tokio::test]
+    async fn cancellation_after_durable_commit_reports_the_committed_result()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        let state_directory = root.path().join("state");
+        let source_directory = root.path().join("source");
+        let config_path = root.path().join("beta.toml");
+        create_private_directory(&state_directory).map_err(|error| error.to_string())?;
+        std::fs::create_dir(&source_directory)?;
+        let setup_cancellation = BlockingCancellation::new();
+        let setup_lock = StateDirectoryLock::acquire(&state_directory, true, &setup_cancellation)
+            .map_err(|error| error.to_string())?;
+        write_state(&setup_lock, &LocalState::default()).map_err(|error| error.to_string())?;
+        drop(setup_lock);
+        std::fs::write(
+            &config_path,
+            format!(
+                concat!(
+                    "schema_version = 1\n",
+                    "target = \"embedded\"\n",
+                    "project_state_directory = {}\n"
+                ),
+                serde_json::to_string(&state_directory.display().to_string())?
+            ),
+        )?;
+
+        let invocation = parse(
+            vec![
+                OsString::from("source"),
+                OsString::from("add"),
+                OsString::from("committed-source"),
+                source_directory.into_os_string(),
+                OsString::from("--config"),
+                config_path.into_os_string(),
+                OsString::from("--yes"),
+            ],
+            TerminalContext::default(),
+        )
+        .map_err(|error| error.to_string())?;
+        let configuration =
+            EffectiveConfiguration::load(&invocation).map_err(|error| error.to_string())?;
+        let (reached_sender, reached_receiver) = tokio::sync::oneshot::channel();
+        let (observed_sender, observed_receiver) = tokio::sync::oneshot::channel();
+        {
+            let mut probe = POST_COMMIT_CANCELLATION_PROBE
+                .lock()
+                .map_err(|_poisoned| "post-commit cancellation probe was poisoned")?;
+            if probe.is_some() {
+                return Err("post-commit cancellation probe was already installed".into());
+            }
+            *probe = Some(PostCommitCancellationProbe {
+                reached: reached_sender,
+                cancellation_observed: observed_sender,
+            });
+        }
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(25);
+        let execution =
+            tokio::spawn(async move { execute(&invocation, &configuration, deadline).await });
+        reached_receiver.await?;
+        assert!(observed_receiver.await?);
+        let response = execution.await?.map_err(|error| error.to_string())?;
+        assert_eq!(
+            response.operation_id,
+            "cigar.cli.beta-embedded.source-add.v1"
+        );
+
+        let observed = StateDirectoryLock::acquire(&state_directory, false, &setup_cancellation)
+            .map_err(|error| error.to_string())?;
+        let state = read_state(&observed).map_err(|error| error.to_string())?;
+        assert_eq!(state.generation, 2);
+        assert!(state.sources.contains_key("committed-source"));
+        Ok(())
+    }
 
     #[test]
     fn descriptor_relative_state_rejects_a_locked_directory_swap()

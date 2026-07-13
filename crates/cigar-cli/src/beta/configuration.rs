@@ -2,6 +2,7 @@
 
 use crate::arguments::{OutputFormat, ParsedInvocation, TargetKind};
 use crate::error::CliError;
+use crate::render::escaped_terminal_text;
 use serde::Deserialize;
 use serde_json::json;
 use std::fs::File;
@@ -47,8 +48,9 @@ impl EffectiveConfiguration {
             });
         }
         let current = std::env::current_dir().map_err(|_error| CliError::configuration_io())?;
+        let state = validate_state_directory(current.join(".cigar"))?;
         Ok(Self {
-            project_state_directory: current.join(".cigar"),
+            project_state_directory: state,
             state_directory_source: "compiled beta default",
         })
     }
@@ -74,15 +76,18 @@ impl EffectiveConfiguration {
             }))
             .map(|value| format!("{value}\n"))
             .map_err(|_error| CliError::invalid_configuration()),
-            OutputFormat::Text => Ok(format!(
-                concat!(
-                    "profile: cigar.beta.embedded-local.linux-x86_64.v1 (compiled beta profile)\n",
-                    "target: embedded (compiled beta profile)\n",
-                    "project_state_directory: {} ({})\n"
-                ),
-                self.project_state_directory.display(),
-                self.state_directory_source
-            )),
+            OutputFormat::Text => {
+                let state_directory =
+                    escaped_terminal_text(&self.project_state_directory.display().to_string());
+                Ok(format!(
+                    concat!(
+                        "profile: cigar.beta.embedded-local.linux-x86_64.v1 (compiled beta profile)\n",
+                        "target: embedded (compiled beta profile)\n",
+                        "project_state_directory: {} ({})\n"
+                    ),
+                    state_directory, self.state_directory_source
+                ))
+            }
         }
     }
 }

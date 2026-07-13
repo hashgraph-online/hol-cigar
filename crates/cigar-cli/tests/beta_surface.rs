@@ -4,6 +4,8 @@
 
 use cigar_cli::{TerminalContext, progress_start, run};
 use std::ffi::OsString;
+#[cfg(unix)]
+use std::process::Command;
 
 fn args(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
@@ -184,6 +186,58 @@ async fn beta_configuration_rejects_remote_and_unknown_fields()
         assert_eq!(outcome.status, 78);
         assert!(outcome.stdout.contains("CLI_INVALID_CONFIGURATION"));
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn beta_explain_config_escapes_human_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let state = directory.path().join("state-λ");
+    let config = directory.path().join("beta.toml");
+    std::fs::write(
+        &config,
+        format!(
+            concat!(
+                "schema_version = 1\n",
+                "target = \"embedded\"\n",
+                "project_state_directory = {}\n"
+            ),
+            serde_json::to_string(&state.display().to_string())?
+        ),
+    )?;
+    let outcome = run(
+        vec![
+            OsString::from("source"),
+            OsString::from("list"),
+            OsString::from("--config"),
+            config.into_os_string(),
+            OsString::from("--explain-config"),
+        ],
+        TerminalContext::default(),
+    )
+    .await;
+    assert_eq!(outcome.status, 0, "{}", outcome.stderr);
+    assert!(!outcome.stdout.contains('λ'));
+    assert!(outcome.stdout.contains(r"\u{3bb}"));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn beta_default_configuration_rejects_a_control_character_cwd()
+-> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let unsafe_cwd = directory.path().join("workspace\nsegment");
+    std::fs::create_dir(&unsafe_cwd)?;
+    let output = Command::new(env!("CARGO_BIN_EXE_cigar"))
+        .current_dir(&unsafe_cwd)
+        .args(["source", "list", "--explain-config"])
+        .output()?;
+    assert_eq!(output.status.code(), Some(78));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("CLI_INVALID_CONFIGURATION"));
+    assert!(!stderr.contains(&unsafe_cwd.display().to_string()));
     Ok(())
 }
 

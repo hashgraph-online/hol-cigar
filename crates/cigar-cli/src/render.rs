@@ -180,7 +180,7 @@ fn render_plain_line(value: &str, output: &mut String, width: Option<usize>) {
     }
 }
 
-fn escaped_terminal_text(value: &str) -> String {
+pub(crate) fn escaped_terminal_text(value: &str) -> String {
     value
         .chars()
         .flat_map(|character| character.escape_default())
