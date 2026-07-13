@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -280,19 +281,27 @@ class FuzzEvidenceTests(unittest.TestCase):
     def test_external_seed_corpus_is_digest_bound_to_report(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             corpus_root, targets = self.build_external_stage(Path(raw).resolve())
-            path, descriptor = fuzz_and_mutation.seed_corpus_root(
-                argparse.Namespace(corpus_dir=str(corpus_root)), targets
-            )
-            self.assertEqual(path, corpus_root.resolve())
-            self.assertEqual(descriptor["kind"], "external-minimized-corpus")
-            policy = fuzz_and_mutation.load_corpus_policy(targets)
-            fixture_name = policy["targets"][targets[0]]["named_fixtures"][0]["name"]
-            substituted = corpus_root / targets[0] / fixture_name
-            substituted.write_bytes(b"substituted")
-            with self.assertRaises(fuzz_and_mutation.GateFailure):
-                fuzz_and_mutation.seed_corpus_root(
+            verification = {"targets": [{"target": target} for target in targets]}
+            with mock.patch.object(
+                fuzz_and_mutation,
+                "verify_minimized_output",
+                return_value=verification,
+            ):
+                path, descriptor = fuzz_and_mutation.seed_corpus_root(
                     argparse.Namespace(corpus_dir=str(corpus_root)), targets
                 )
+                self.assertEqual(path, corpus_root.resolve())
+                self.assertEqual(descriptor["kind"], "external-minimized-corpus")
+                policy = fuzz_and_mutation.load_corpus_policy(targets)
+                fixture_name = policy["targets"][targets[0]]["named_fixtures"][0][
+                    "name"
+                ]
+                substituted = corpus_root / targets[0] / fixture_name
+                substituted.write_bytes(b"substituted")
+                with self.assertRaises(fuzz_and_mutation.GateFailure):
+                    fuzz_and_mutation.seed_corpus_root(
+                        argparse.Namespace(corpus_dir=str(corpus_root)), targets
+                    )
 
 
 if __name__ == "__main__":

@@ -29,6 +29,16 @@ QUALITY_TOOL_DIR = Path(__file__).resolve().parent
 if str(QUALITY_TOOL_DIR) not in sys.path:
     sys.path.insert(0, str(QUALITY_TOOL_DIR))
 from bounded_process import BoundedProcessError, run_bounded  # noqa: E402
+from corpus_manager import (  # noqa: E402
+    CorpusFailure as CorpusManagerFailure,
+    candidate_checkout_state,
+    create_execution_source_mirror,
+    expected_execution_source_state,
+    execution_source_state,
+    remove_owned_scratch_tree,
+    tracked_index_entries,
+    verify_minimized_output,
+)
 from hermetic_execution import (  # noqa: E402
     DIRECT_CARGO_FUZZ_MODE,
     HermeticExecutionError,
@@ -819,118 +829,11 @@ def external_corpus_descriptor(
     if report_path.is_symlink() or not report_path.is_file():
         raise GateFailure("external corpus lacks its minimization report")
     try:
-        report = json.loads(report_path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise GateFailure(f"cannot read external corpus report: {error}") from error
-    if report.get("schema_version") != "cigar.fuzz-corpus-minimization.v1":
-        raise GateFailure("external corpus has an unexpected report schema")
-    current_source_binding = source_binding_identity()
-    if report.get("source_binding") != current_source_binding:
-        raise GateFailure(
-            "external corpus binds a different source, Git state, lockfile, or toolchain"
-        )
-    if report.get("source_revision") != current_source_binding["git_head"]:
-        raise GateFailure("external corpus source revision does not match current HEAD")
-    if (
-        report.get("source_working_corpus_unchanged") is not True
-        or report.get("all_fourteen_targets_snapshotted") is not True
-        or report.get("source_corpus_before") != report.get("source_corpus_after")
-        or not isinstance(report.get("source_corpus_before"), dict)
-        or set(report["source_corpus_before"]) != set(targets)
-    ):
-        raise GateFailure(
-            "external corpus report lacks an all-target source snapshot proof"
-        )
-    if report.get("dependency_mode") != "locked-offline-cargo-wrapper":
-        raise GateFailure("external corpus dependencies were not locked and offline")
-    expected_cargo_fuzz_execution = cargo_fuzz_execution_record(
-        path.parent / "cargo-wrapper" / "cargo", current_source_binding
-    )
-    if report.get("cargo_fuzz_execution") != expected_cargo_fuzz_execution:
-        raise GateFailure(
-            "external corpus does not bind direct cargo-fuzz and its inner Cargo wrapper"
-        )
-    try:
-        current_enforcement = execution_enforcement()
-    except HermeticExecutionError as error:
-        raise GateFailure(
-            f"external corpus no-network proof is unavailable: {error}"
-        ) from error
-    if report.get("execution_enforcement") != current_enforcement:
-        raise GateFailure("external corpus no-network enforcement binding is stale")
-    preflight = report.get("metadata_preflight")
-    preflight_log = path.parent / "preflight" / "cargo-metadata.log"
-    if (
-        not isinstance(preflight, dict)
-        or preflight.get("exit_code") != 0
-        or preflight.get("timed_out") is not False
-        or preflight.get("output_overflow") is not False
-        or preflight.get("descendant_cleanup_required") is not False
-        or preflight.get("execution_enforcement") != current_enforcement
-        or preflight_log.is_symlink()
-        or not preflight_log.is_file()
-        or preflight_log.stat().st_mode & 0o777 != 0o600
-        or preflight.get("private_log", {}).get("sha256") != sha256_file(preflight_log)
-    ):
-        raise GateFailure("external corpus metadata preflight proof is invalid")
-    if report.get("campaign", {}).get("sha256") != sha256_file(CAMPAIGN):
-        raise GateFailure("external corpus report binds a different campaign")
-    if report.get("policy", {}).get("sha256") != sha256_file(POLICY):
-        raise GateFailure("external corpus report binds a different corpus policy")
-    report_targets = report.get("targets")
-    if (
-        not isinstance(report_targets, list)
-        or [item.get("target") for item in report_targets if isinstance(item, dict)]
-        != targets
-    ):
-        raise GateFailure(
-            "external corpus report does not bind all campaign targets in order"
-        )
-    equivalence_root = path.parent / "equivalence"
-    equivalence_states = corpus_tree_states(equivalence_root, targets, policy)
-    artifact_root = path.parent / "artifacts"
-    if artifact_root.is_symlink() or not artifact_root.is_dir():
-        raise GateFailure("external corpus has no safe artifact proof directory")
-    artifact_targets = list(artifact_root.iterdir())
-    if {entry.name for entry in artifact_targets} != set(targets):
-        raise GateFailure("external artifact target set does not match the campaign")
-    for index, item in enumerate(report_targets):
-        target = item["target"]
-        expected_seed = policy["deterministic_minimization_seed_base"] + index
-        if (
-            states[target] != item.get("output")
-            or equivalence_states[target] != item.get("repeat_output")
-            or states[target] != equivalence_states[target]
-            or item.get("deterministic_equivalence_proved") is not True
-        ):
-            raise GateFailure(f"external corpus deterministic proof failed: {target}")
-        for label in ("engine", "repeat_engine"):
-            engine = item.get(label)
-            if (
-                not isinstance(engine, dict)
-                or engine.get("exit_code") != 0
-                or engine.get("artifact_count") != 0
-                or engine.get("deterministic_seed") != expected_seed
-                or engine.get("dependency_mode") != "locked-offline-cargo-wrapper"
-                or engine.get("cargo_fuzz_invocation") != DIRECT_CARGO_FUZZ_MODE
-                or engine.get("timed_out") is not False
-                or engine.get("output_overflow") is not False
-                or engine.get("descendant_cleanup_required") is not False
-                or engine.get("execution_enforcement") != current_enforcement
-            ):
-                raise GateFailure(f"external corpus has invalid {label}: {target}")
-        artifact_target = artifact_root / target
-        if artifact_target.is_symlink() or not artifact_target.is_dir():
-            raise GateFailure(f"external artifact directory is unsafe: {target}")
-        runs = list(artifact_target.iterdir())
-        if {run.name for run in runs} != {"primary", "repeat"}:
-            raise GateFailure(f"external artifact run proof is incomplete: {target}")
-        if any(
-            run.is_symlink() or not run.is_dir() or any(run.iterdir()) for run in runs
-        ):
-            raise GateFailure(
-                f"external corpus retained minimization artifacts: {target}"
-            )
+        verification = verify_minimized_output(path.parent, require_all_targets=True)
+    except CorpusManagerFailure as error:
+        raise GateFailure(f"external corpus verification failed: {error}") from error
+    if [item.get("target") for item in verification.get("targets", [])] != targets:
+        raise GateFailure("external corpus verification target set is incomplete")
     return path, {
         "kind": "external-minimized-corpus",
         "root_path_sha256": sha256_bytes(str(path).encode()),
@@ -1054,6 +957,24 @@ def smoke(args: argparse.Namespace) -> None:
     log_root = external_private_tempdir(output_directory, "wp19-smoke-logs-")
     cargo_environment = locked_cargo_environment(build_root)
     try:
+        index_entries = tracked_index_entries()
+        candidate_before = candidate_checkout_state(
+            index_entries, require_read_only=True
+        )
+        execution_root, execution_source_before, source_checkout = (
+            create_execution_source_mirror(
+                build_root,
+                index_entries,
+                cargo_environment,
+                checkout_log_path=log_root / "source-checkout.log",
+            )
+        )
+    except CorpusManagerFailure as error:
+        raise GateFailure(
+            f"cannot construct smoke execution source: {error}"
+        ) from error
+    execution_fuzz_root = execution_root / "fuzz"
+    try:
         cargo_fuzz_environment = direct_cargo_fuzz_environment(
             cargo_environment,
             cargo_wrapper=build_root / "cargo-wrapper" / "cargo",
@@ -1072,11 +993,12 @@ def smoke(args: argparse.Namespace) -> None:
             "check",
             "--locked",
             "--manifest-path",
-            "fuzz/Cargo.toml",
+            str(execution_fuzz_root / "Cargo.toml"),
             "--all-targets",
         ],
         log_path=log_root / "harness-check.log",
         timeout_seconds=900,
+        cwd=execution_root,
         env=cargo_environment,
     )
     require_clean(check, "fuzz harness check")
@@ -1087,11 +1009,12 @@ def smoke(args: argparse.Namespace) -> None:
             "test",
             "--locked",
             "--manifest-path",
-            "tests/properties/Cargo.toml",
+            str(execution_root / "tests" / "properties" / "Cargo.toml"),
             "--all-targets",
         ],
         log_path=log_root / "properties-and-loom.log",
         timeout_seconds=1800,
+        cwd=execution_root,
         env=cargo_environment,
     )
     require_clean(properties, "property and Loom suite")
@@ -1104,7 +1027,7 @@ def smoke(args: argparse.Namespace) -> None:
             "test",
             "--locked",
             "--manifest-path",
-            "tests/miri/Cargo.toml",
+            str(execution_root / "tests" / "miri" / "Cargo.toml"),
             "--target",
             "x86_64-unknown-linux-gnu",
             "--test",
@@ -1112,6 +1035,7 @@ def smoke(args: argparse.Namespace) -> None:
         ],
         log_path=log_root / "strict-miri.log",
         timeout_seconds=1800,
+        cwd=execution_root,
         env={
             **cargo_environment,
             "MIRIFLAGS": "-Zmiri-strict-provenance -Zmiri-symbolic-alignment-check",
@@ -1160,10 +1084,12 @@ def smoke(args: argparse.Namespace) -> None:
                 "address",
                 "--target-dir",
                 cargo_environment["CARGO_TARGET_DIR"],
+                "--fuzz-dir",
+                str(execution_fuzz_root),
                 target,
                 str(corpus),
                 "--",
-                f"-dict={ROOT / 'fuzz' / 'dictionaries' / 'cigar.dict'}",
+                f"-dict={execution_fuzz_root / 'dictionaries' / 'cigar.dict'}",
                 limiter,
                 f"-seed={seed}",
                 f"-timeout={campaign['timeout_seconds']}",
@@ -1176,7 +1102,7 @@ def smoke(args: argparse.Namespace) -> None:
                 command,
                 log_path=log_root / f"fuzz-{target}.log",
                 timeout_seconds=(requested_seconds + 180) if qualifying_smoke else 600,
-                cwd=ROOT / "fuzz",
+                cwd=execution_root,
                 env=cargo_fuzz_environment,
             )
             after_artifacts = artifact_state(artifact_directory)
@@ -1249,6 +1175,42 @@ def smoke(args: argparse.Namespace) -> None:
                 indexed_results[futures[future]] = future.result()
         fuzz_results = [indexed_results[index] for index in range(len(targets))]
 
+    try:
+        execution_source_after = execution_source_state(
+            execution_root,
+            index_entries,
+            expected_artifact_targets=set(targets),
+        )
+        candidate_after = candidate_checkout_state(
+            index_entries, require_read_only=True
+        )
+    except CorpusManagerFailure as error:
+        raise GateFailure(
+            f"smoke execution source verification failed: {error}"
+        ) from error
+    if (
+        execution_source_before["tracked_source"]
+        != execution_source_after["tracked_source"]
+        or candidate_before != candidate_after
+    ):
+        raise GateFailure("smoke execution source or read-only candidate changed")
+
+    scratch_bindings = [
+        {
+            "path_sha256": sha256_bytes(str(build_root).encode()),
+            "kind": "tool-owned-external-smoke-build-scratch",
+        },
+        {
+            "path_sha256": sha256_bytes(str(raw_root).encode()),
+            "kind": "tool-owned-external-smoke-artifact-scratch",
+        },
+    ]
+    try:
+        remove_owned_scratch_tree(build_root, label="smoke-build-root")
+        remove_owned_scratch_tree(raw_root, label="smoke-artifact-root")
+    except CorpusManagerFailure as error:
+        raise GateFailure(f"cannot remove successful smoke scratch: {error}") from error
+
     minimum_cpu_seconds = int(campaign["minimum_clean_cpu_seconds_per_target"])
     finished_source_binding = source_binding_identity()
     finished_source = finished_source_binding["qualification_source"]
@@ -1274,6 +1236,14 @@ def smoke(args: argparse.Namespace) -> None:
         "dependency_execution": {
             "mode": "locked-offline-cargo-wrapper",
             "cargo_fuzz_execution": cargo_fuzz_execution,
+            "source_checkout": source_checkout,
+            "execution_source_before": execution_source_before,
+            "execution_source_after": execution_source_after,
+            "read_only_candidate": candidate_after,
+            "success_scratch_cleanup": {
+                "bindings": scratch_bindings,
+                "removed": True,
+            },
             "build_outputs_external_to_repository": True,
             "private_directory_modes": True,
             "ambient_environment": "strict-reviewed-allowlist",
@@ -1606,9 +1576,30 @@ def verify_evidence(args: argparse.Namespace) -> None:
     )
     dependency_execution = smoke_document.get("dependency_execution", {})
     expect(
+        isinstance(dependency_execution, dict)
+        and set(dependency_execution)
+        == {
+            "mode",
+            "cargo_fuzz_execution",
+            "source_checkout",
+            "execution_source_before",
+            "execution_source_after",
+            "read_only_candidate",
+            "success_scratch_cleanup",
+            "build_outputs_external_to_repository",
+            "private_directory_modes",
+            "ambient_environment",
+            "credentials_proxies_cloud_ci_variables_inherited",
+            "network_enforcement",
+        },
+        "smoke dependency-execution field set is not exact",
+    )
+    expect(
         dependency_execution.get("ambient_environment") == "strict-reviewed-allowlist"
         and dependency_execution.get("credentials_proxies_cloud_ci_variables_inherited")
         is False
+        and dependency_execution.get("build_outputs_external_to_repository") is True
+        and dependency_execution.get("private_directory_modes") is True
         and dependency_execution.get("network_enforcement") == current_enforcement,
         "smoke hermetic/no-network execution proof is incomplete",
     )
@@ -1619,6 +1610,172 @@ def verify_evidence(args: argparse.Namespace) -> None:
         ),
         "smoke direct cargo-fuzz/inner Cargo execution binding is invalid",
     )
+    try:
+        current_index_entries = tracked_index_entries()
+        current_candidate = candidate_checkout_state(
+            current_index_entries, require_read_only=True
+        )
+    except CorpusManagerFailure as error:
+        raise GateFailure(
+            f"cannot verify smoke read-only candidate: {error}"
+        ) from error
+    expect(
+        dependency_execution.get("read_only_candidate") == current_candidate,
+        "smoke read-only candidate binding is stale",
+    )
+    expect(
+        dependency_execution.get("execution_source_before")
+        == expected_execution_source_state(current_candidate["tracked_source"], set()),
+        "smoke execution-source pre-run state is invalid",
+    )
+    expect(
+        dependency_execution.get("execution_source_after")
+        == expected_execution_source_state(
+            current_candidate["tracked_source"], set(targets)
+        ),
+        "smoke execution-source post-run state is invalid",
+    )
+    checkout = dependency_execution.get("source_checkout")
+    checkout_private_log = (
+        checkout.get("private_log") if isinstance(checkout, dict) else None
+    )
+    expect(
+        isinstance(checkout, dict)
+        and set(checkout)
+        == {
+            "command",
+            "exit_code",
+            "timed_out",
+            "output_overflow",
+            "descendant_cleanup_required",
+            "captured_output_bytes",
+            "maximum_output_bytes",
+            "execution_enforcement",
+            "private_log",
+        }
+        and checkout.get("command")
+        == "git checkout-index --all --prefix=<external-execution-source>"
+        and checkout.get("exit_code") == 0
+        and checkout.get("timed_out") is False
+        and checkout.get("output_overflow") is False
+        and checkout.get("descendant_cleanup_required") is False
+        and checkout.get("maximum_output_bytes") == 1024 * 1024
+        and checkout.get("execution_enforcement") == current_enforcement
+        and isinstance(checkout_private_log, dict)
+        and set(checkout_private_log) == {"name", "sha256", "size", "mode"}
+        and checkout_private_log.get("name") == "source-checkout.log"
+        and checkout_private_log.get("mode") == "0600"
+        and type(checkout.get("captured_output_bytes")) is int
+        and type(checkout_private_log.get("size")) is int
+        and 0 <= checkout_private_log["size"] <= 1024 * 1024
+        and checkout.get("captured_output_bytes") == checkout_private_log.get("size"),
+        "smoke execution-source checkout proof is invalid",
+    )
+    cleanup = dependency_execution.get("success_scratch_cleanup")
+    cleanup_bindings = cleanup.get("bindings") if isinstance(cleanup, dict) else None
+    expected_cleanup_kinds = {
+        "tool-owned-external-smoke-build-scratch",
+        "tool-owned-external-smoke-artifact-scratch",
+    }
+    expect(
+        isinstance(cleanup, dict)
+        and set(cleanup) == {"bindings", "removed"}
+        and cleanup.get("removed") is True
+        and isinstance(cleanup_bindings, list)
+        and {item.get("kind") for item in cleanup_bindings if isinstance(item, dict)}
+        == expected_cleanup_kinds
+        and len(cleanup_bindings) == 2
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"path_sha256", "kind"}
+            and re.fullmatch(r"[0-9a-f]{64}", str(item.get("path_sha256", "")))
+            is not None
+            for item in cleanup_bindings
+        ),
+        "smoke scratch cleanup proof is invalid",
+    )
+    retained_smoke_scratch = [
+        path.name
+        for path in output_directory.iterdir()
+        if path.name.startswith("wp19-smoke-build-")
+        or path.name.startswith("wp19-smoke-artifacts-")
+    ]
+    expect(
+        not retained_smoke_scratch, "successful smoke retained build/artifact scratch"
+    )
+
+    smoke_log_roots = [
+        path
+        for path in output_directory.iterdir()
+        if path.name.startswith("wp19-smoke-logs-")
+    ]
+    expect(len(smoke_log_roots) == 1, "smoke private-log root set is not exact")
+    if len(smoke_log_roots) == 1:
+        smoke_log_root = smoke_log_roots[0]
+        expected_log_records = [
+            checkout,
+            smoke_document.get("gates", {}).get("harness_check"),
+            smoke_document.get("gates", {}).get("properties_and_loom"),
+            smoke_document.get("gates", {}).get("strict_miri"),
+            *fuzz_results,
+        ]
+        log_records = [
+            item.get("private_log") if isinstance(item, dict) else None
+            for item in expected_log_records
+        ]
+        expected_log_names_ordered = [
+            "source-checkout.log",
+            "harness-check.log",
+            "properties-and-loom.log",
+            "strict-miri.log",
+            *(f"fuzz-{target}.log" for target in targets),
+        ]
+        expected_log_maxima = [
+            1024 * 1024,
+            *(
+                MAXIMUM_SUBPROCESS_OUTPUT_BYTES
+                for _ in range(len(expected_log_names_ordered) - 1)
+            ),
+        ]
+        expected_log_names = set(expected_log_names_ordered)
+        expect(
+            len(log_records) == len(expected_log_records)
+            and len(expected_log_names) == len(expected_log_records)
+            and not smoke_log_root.is_symlink()
+            and smoke_log_root.is_dir()
+            and smoke_log_root.stat().st_mode & 0o777 == 0o700
+            and {path.name for path in smoke_log_root.iterdir()} == expected_log_names,
+            "smoke private-log attachment set is invalid",
+        )
+        for expected_name, expected_maximum, process_record, record in zip(
+            expected_log_names_ordered,
+            expected_log_maxima,
+            expected_log_records,
+            log_records,
+        ):
+            if (
+                not isinstance(process_record, dict)
+                or not isinstance(record, dict)
+                or set(record) != {"name", "sha256", "size", "mode"}
+                or record.get("name") != expected_name
+                or process_record.get("maximum_output_bytes") != expected_maximum
+                or type(process_record.get("captured_output_bytes")) is not int
+                or type(record.get("size")) is not int
+                or not 0 <= record["size"] <= expected_maximum
+                or process_record.get("captured_output_bytes") != record.get("size")
+            ):
+                expect(False, "smoke private-log record is malformed")
+                continue
+            log_path = smoke_log_root / record["name"]
+            expect(
+                not log_path.is_symlink()
+                and log_path.is_file()
+                and log_path.stat().st_mode & 0o777 == 0o600
+                and record.get("mode") == "0600"
+                and record.get("size") == log_path.stat().st_size
+                and record.get("sha256") == sha256_file(log_path),
+                f"smoke private log is stale or unsafe: {record['name']}",
+            )
 
     gates = smoke_document.get("gates", {})
     properties = gates.get("properties_and_loom", {})

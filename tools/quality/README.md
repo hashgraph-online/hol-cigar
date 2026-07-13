@@ -43,3 +43,9 @@ slices with external evidence and private mutable worker corpora.
 `corpus_manager.py` inventories, externally minimizes, and safely reconciles
 libFuzzer corpus growth. See `fuzz/README.md` and `fuzz/corpus-policy.v1.json`;
 neither tool is allowed to silently mutate or discard the checked-in corpus.
+Qualification minimization and smoke execution compile only from a closed
+Git-index external source mirror bound to a Git-clean read-only candidate.
+Direct cargo-fuzz runs use a wrapper-first `PATH`, explicit `CARGO`, nightly
+selection, locked/offline inner Cargo, and a Darwin no-network sandbox. Failed
+scratch is preserved; successful tool-owned build/mirror/artifact scratch is
+verified and removed before the content-free receipt is written.

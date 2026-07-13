@@ -23,9 +23,11 @@ python3 tools/quality/fuzz_and_mutation.py smoke --evidence-dir "$EVIDENCE_DIR"
 The default runs every target for the campaign's full 60-second smoke threshold with four bounded
 workers. `--runs N` is available for local harness viability checks, but evidence from run-count
 mode is explicitly non-qualifying. Every fuzzer gets a private temporary copy of its seed corpus,
-and crash artifacts are retained under the external evidence directory. Successful qualification
-therefore cannot add to or rewrite `fuzz/corpus`. Run the deterministic canonical trust-boundary
-mutation slice and then verify both artifacts against the current source tree:
+and all compilation runs from a Git-index-derived external source mirror. Fault/build scratch is
+preserved on failure and deleted only after a clean run proves the mirror and read-only candidate
+unchanged; private bounded logs remain attached to the receipt. Successful qualification therefore
+cannot add to or rewrite `fuzz/corpus`. Run the deterministic canonical trust-boundary mutation
+slice and then verify both artifacts against the current source tree:
 
 ```sh
 python3 tools/quality/fuzz_and_mutation.py mutation --evidence-dir "$EVIDENCE_DIR"
@@ -59,11 +61,23 @@ python3 tools/quality/corpus_manager.py minimize \
   --output-dir "$AUDIT_DIR/mcp-minimized"
 ```
 
-The command copies all current and index-recovered inputs, runs libFuzzer merge minimization only
-on that external copy, adds every pinned named fixture back, canonicalizes anonymous names to the
-SHA-1 of their bytes, enforces the policy ceilings, and writes `minimization-report.json` with a
-content-free old-to-new digest map. The output path must be fresh. Review and test this staged
-corpus before intentionally applying it; the manager never deletes or overwrites source corpus.
+Run qualification minimization from a Git-clean detached candidate whose root/tracked directories
+are mode 0555 and whose tracked files are mode 0444/0555. The manager rejects symlink, submodule,
+special, dirty, or writable candidate inputs. It checks out the closed regular-file index set into
+an owner-private external execution mirror, preserves the Git executable bit while hardening
+tracked mirror content read-only, and leaves writable only the mirror fuzz root and cargo-fuzz's
+empty artifact scratch. Cargo configuration, manifests, path dependencies, dictionaries, and
+working directory all point at that mirror.
+
+The command copies all current and index-recovered corpus inputs, runs direct `cargo-fuzz` merge
+minimization only on external copies, forces cargo-fuzz's inner Cargo through a content-bound
+`--locked --offline` wrapper under the nightly toolchain, adds every pinned named fixture back,
+canonicalizes anonymous names to the SHA-1 of their bytes, and enforces the policy ceilings. It
+checks the candidate and mirror after every primary/repeat pass. On complete success it deletes
+only fresh tool-owned build, mirror, wrapper, and work scratch, then emits an exact-top-level
+`minimization-report.json` and content-free old-to-new digest map. On any failure it preserves the
+whole nonqualifying stage. Every retry requires a never-used output path. The manager never deletes
+or overwrites source corpus.
 
 After reviewing an external inventory, reconcile interrupted smoke-run churn with an explicit,
 fail-closed operation:

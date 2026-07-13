@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -88,7 +91,18 @@ class CorpusManagerTests(unittest.TestCase):
                 "sha256": fixture["sha256"],
                 "size": len(fixture_body),
                 "_body": fixture_body,
-            }
+            },
+            {
+                "path": "fuzz/corpus/example/other",
+                "name": "other",
+                "present": True,
+                "tracked": True,
+                "classification": "reusable-corpus",
+                "sha1": corpus_manager.digest(other_body, "sha1"),
+                "sha256": corpus_manager.digest(other_body, "sha256"),
+                "size": len(other_body),
+                "_body": other_body,
+            },
         ]
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw).resolve()
@@ -105,6 +119,13 @@ class CorpusManagerTests(unittest.TestCase):
             )
             self.assertEqual(state["file_count"], 2)
             self.assertEqual(mapping[0]["new_names"], ["named-regression"])
+            foreign = base / "foreign"
+            foreign.mkdir()
+            (foreign / "engine-name").write_bytes(b"not a source input")
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.emit_deterministic_corpus(
+                    "example", foreign, base / "foreign-output", entries, policy
+                )
 
     def test_reconcile_copies_verifies_then_restores_and_unlinks(self) -> None:
         transient_body = b"new fuzzer growth"
@@ -280,6 +301,220 @@ class CorpusManagerTests(unittest.TestCase):
                 "named-fixture-deletion-recovered-from-index",
             )
 
+    def test_execution_source_state_rejects_mutation_and_extra_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            mirror = Path(raw).resolve() / "execution-source"
+            (mirror / "fuzz").mkdir(parents=True, mode=0o700)
+            (mirror / "crates" / "example").mkdir(parents=True, mode=0o700)
+            files = {
+                "fuzz/Cargo.toml": (b"[workspace]\n", "100644"),
+                "crates/example/build.rs": (b"fn main() {}\n", "100755"),
+            }
+            entries = []
+            for relative, (body, git_mode) in files.items():
+                path = mirror / relative
+                path.write_bytes(body)
+                entries.append(
+                    {
+                        "path": relative,
+                        "git_mode": git_mode,
+                        "git_oid": corpus_manager.digest(body, "sha1"),
+                        "size": len(body),
+                        "sha256": corpus_manager.digest(body, "sha256"),
+                    }
+                )
+            corpus_manager.harden_execution_source(mirror, entries)
+            expected = corpus_manager.expected_execution_source_state(
+                corpus_manager.tracked_source_digest(entries), set()
+            )
+            self.assertEqual(
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets=set()
+                ),
+                expected,
+            )
+            cargo_toml = mirror / "fuzz" / "Cargo.toml"
+            cargo_toml.chmod(0o600)
+            cargo_toml.write_bytes(b"substituted\n")
+            cargo_toml.chmod(0o400)
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets=set()
+                )
+            cargo_toml.chmod(0o600)
+            cargo_toml.write_bytes(files["fuzz/Cargo.toml"][0])
+            cargo_toml.chmod(0o400)
+            extra = mirror / "fuzz" / "unexpected.tmp"
+            extra.write_bytes(b"unexpected")
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets=set()
+                )
+            extra.unlink()
+            unexpected_directory = mirror / "fuzz" / "unexpected-directory"
+            unexpected_directory.mkdir(mode=0o700)
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets=set()
+                )
+            unexpected_directory.rmdir()
+            symlink = mirror / "fuzz" / "unexpected-symlink"
+            symlink.symlink_to(cargo_toml)
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets=set()
+                )
+            symlink.unlink()
+            artifact_target = mirror / "fuzz" / "artifacts" / "example"
+            artifact_target.mkdir(mode=0o700)
+            (artifact_target / "crash-deadbeef").write_bytes(b"crash")
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.execution_source_state(
+                    mirror, entries, expected_artifact_targets={"example"}
+                )
+
+    def test_execution_source_checkout_uses_only_index_and_hardens_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw).resolve()
+            source_root = base / "candidate"
+            source_root.mkdir()
+            subprocess.run(["git", "init", "--quiet"], cwd=source_root, check=True)
+            tracked = source_root / "fuzz" / "Cargo.toml"
+            executable = source_root / "scripts" / "check"
+            tracked.parent.mkdir()
+            executable.parent.mkdir()
+            tracked.write_text("[workspace]\n", encoding="utf-8")
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            subprocess.run(
+                ["git", "add", "fuzz/Cargo.toml", "scripts/check"],
+                cwd=source_root,
+                check=True,
+            )
+            (source_root / "untracked-secret").write_text(
+                "must not be mirrored", encoding="utf-8"
+            )
+            output_root = base / "output"
+            output_root.mkdir(mode=0o700)
+            preflight = output_root / "preflight"
+            preflight.mkdir(mode=0o700)
+            home = base / "home"
+            temporary = base / "tmp"
+            home.mkdir(mode=0o700)
+            temporary.mkdir(mode=0o700)
+            environment = corpus_manager.sanitized_environment(
+                private_home=home,
+                private_tmp=temporary,
+                ambient={"PATH": os.environ.get("PATH", "")},
+            )
+            with mock.patch.object(corpus_manager, "ROOT", source_root):
+                entries = corpus_manager.tracked_index_entries()
+                mirror, state, checkout = corpus_manager.create_execution_source_mirror(
+                    output_root, entries, environment
+                )
+            self.assertFalse((mirror / "untracked-secret").exists())
+            self.assertEqual(
+                (mirror / "fuzz" / "Cargo.toml").stat().st_mode & 0o777, 0o400
+            )
+            self.assertEqual(
+                (mirror / "scripts" / "check").stat().st_mode & 0o777, 0o500
+            )
+            self.assertEqual(
+                state["tracked_source"], corpus_manager.tracked_source_digest(entries)
+            )
+            self.assertEqual(checkout["exit_code"], 0)
+            corpus_manager.remove_owned_scratch_tree(mirror, label="test-mirror")
+
+    def test_read_only_candidate_and_index_mode_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve() / "candidate"
+            source = root / "src" / "lib.rs"
+            source.parent.mkdir(parents=True)
+            body = b"pub fn value() -> u8 { 1 }\n"
+            source.write_bytes(body)
+            source.chmod(0o444)
+            source.parent.chmod(0o555)
+            root.chmod(0o555)
+            entry = {
+                "path": "src/lib.rs",
+                "git_mode": "100644",
+                "git_oid": corpus_manager.digest(body, "sha1"),
+                "size": len(body),
+                "sha256": corpus_manager.digest(body, "sha256"),
+            }
+
+            def fake_git(*arguments: str) -> bytes:
+                if arguments[0] == "status":
+                    return b""
+                if arguments[-1] == "HEAD":
+                    return b"a" * 40 + b"\n"
+                if arguments[-1] == "HEAD^{tree}":
+                    return b"b" * 40 + b"\n"
+                raise AssertionError(arguments)
+
+            with (
+                mock.patch.object(corpus_manager, "ROOT", root),
+                mock.patch.object(corpus_manager, "git_bytes", side_effect=fake_git),
+            ):
+                state = corpus_manager.candidate_checkout_state(
+                    [entry], require_read_only=True
+                )
+                self.assertEqual(state["tracked_source"]["file_count"], 1)
+                source.chmod(0o644)
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.candidate_checkout_state(
+                        [entry], require_read_only=True
+                    )
+                source.chmod(0o444)
+                source.parent.chmod(0o755)
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.candidate_checkout_state(
+                        [entry], require_read_only=True
+                    )
+                source.parent.chmod(0o555)
+                mismatched = dict(entry, sha256="0" * 64)
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.candidate_checkout_state(
+                        [mismatched], require_read_only=True
+                    )
+            source.parent.chmod(0o755)
+            root.chmod(0o755)
+
+        unsafe_index = b"120000 " + b"c" * 40 + b" 0\tlink\0"
+        with mock.patch.object(corpus_manager, "git_bytes", return_value=unsafe_index):
+            with self.assertRaises(corpus_manager.CorpusFailure):
+                corpus_manager.tracked_index_entries()
+
+    def test_success_scratch_cleanup_removes_only_owned_exact_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            output_root = Path(raw).resolve() / "stage"
+            output_root.mkdir(mode=0o700)
+            for name in (
+                "build-target",
+                "cargo-wrapper",
+                "execution-source",
+                "work",
+            ):
+                directory = output_root / name
+                directory.mkdir(mode=0o700)
+                child = directory / "nested"
+                child.mkdir(mode=0o700)
+                file = child / "file"
+                file.write_bytes(b"scratch")
+                file.chmod(0o400)
+                child.chmod(0o500)
+                directory.chmod(0o500)
+            retained = output_root / "preflight"
+            retained.mkdir(mode=0o700)
+            removed = corpus_manager.remove_success_scratch(output_root)
+            self.assertEqual(
+                removed,
+                ["build-target", "cargo-wrapper", "execution-source", "work"],
+            )
+            self.assertTrue(retained.is_dir())
+            for name in removed:
+                self.assertFalse((output_root / name).exists())
+
     def test_staged_verifier_detects_substitution(self) -> None:
         policy, _ = corpus_manager.load_policy()
         entries = corpus_manager.collect_entries("mcp_messages", policy)
@@ -311,7 +546,8 @@ class CorpusManagerTests(unittest.TestCase):
                     output_root / "artifacts" / "mcp_messages" / run,
                     exist_ok=False,
                 )
-            corpus_manager.private_mkdir(output_root / "build-target", exist_ok=False)
+            build_target = output_root / "build-target"
+            corpus_manager.private_mkdir(build_target, exist_ok=False)
             wrapper_directory = output_root / "cargo-wrapper"
             corpus_manager.private_mkdir(wrapper_directory, exist_ok=False)
             real_cargo = corpus_manager.shutil.which("cargo")
@@ -324,14 +560,36 @@ class CorpusManagerTests(unittest.TestCase):
                 ),
                 mode=0o700,
             )
+            source_binding = corpus_manager.source_binding_document()
+            cargo_fuzz_execution = corpus_manager.cargo_fuzz_execution_record(
+                wrapper, source_binding
+            )
+            tracked_source = {
+                "algorithm": "sha256-path-git-mode-oid-content-size-v1",
+                "digest": "1" * 64,
+                "file_count": 1,
+                "total_bytes": 1,
+            }
+            candidate_state = {
+                "schema_version": "cigar.read-only-candidate.v1",
+                "git_head": source_binding["git_head"],
+                "git_tree": "2" * 40,
+                "git_status": {
+                    "algorithm": "sha256-git-porcelain-v1-z",
+                    "digest": corpus_manager.digest(b"", "sha256"),
+                    "entry_count": 0,
+                    "dirty": False,
+                },
+                "tracked_source": tracked_source,
+                "root_mode": "0555",
+                "tracked_files_read_only": True,
+                "tracked_directories_read_only": True,
+            }
             _, campaign_targets = corpus_manager.load_policy()
             source_snapshots = {
-                target: {
-                    "algorithm": "sha256-path-and-content-v1",
-                    "digest": "0" * 64,
-                    "file_count": 1,
-                    "total_bytes": 1,
-                }
+                target: corpus_manager.corpus_state(
+                    corpus_manager.collect_entries(target, policy), present_only=True
+                )
                 for target in campaign_targets
             }
             seed_value = policy[
@@ -340,12 +598,42 @@ class CorpusManagerTests(unittest.TestCase):
             enforcement = corpus_manager.execution_enforcement()
             log_directory = output_root / "logs" / "mcp_messages"
             corpus_manager.private_mkdir(log_directory, exist_ok=False)
+            campaign_document = json.loads(
+                corpus_manager.CAMPAIGN_PATH.read_text(encoding="utf-8")
+            )
 
             def engine_for(label: str) -> dict[str, object]:
                 log_path = log_directory / f"{label}.log"
                 corpus_manager.write_new_bytes(log_path, b"")
                 return {
                     "target": "mcp_messages",
+                    "command": corpus_manager.redacted_command(
+                        [
+                            str(corpus_manager.direct_cargo_fuzz_binary()),
+                            "cmin",
+                            "--sanitizer",
+                            "address",
+                            "--target-dir",
+                            str(output_root / "build-target"),
+                            "--fuzz-dir",
+                            str(output_root / "execution-source" / "fuzz"),
+                            "mcp_messages",
+                            str(output_root / "work" / "mcp_messages" / label),
+                            "--",
+                            (
+                                "-dict="
+                                f"{output_root / 'execution-source' / 'fuzz' / 'dictionaries' / 'cigar.dict'}"
+                            ),
+                            f"-timeout={campaign_document['timeout_seconds']}",
+                            f"-rss_limit_mb={campaign_document['rss_limit_mib']}",
+                            f"-max_len={campaign_document['maximum_input_bytes']}",
+                            (
+                                "-artifact_prefix="
+                                f"{output_root / 'artifacts' / 'mcp_messages' / label}{os.sep}"
+                            ),
+                            f"-seed={seed_value}",
+                        ]
+                    ),
                     "exit_code": 0,
                     "artifact_count": 0,
                     "deterministic_seed": seed_value,
@@ -360,6 +648,12 @@ class CorpusManagerTests(unittest.TestCase):
                     "captured_output_bytes": 0,
                     "maximum_output_bytes": policy["maximum_subprocess_output_bytes"],
                     "execution_enforcement": enforcement,
+                    "execution_source_after": (
+                        corpus_manager.expected_execution_source_state(
+                            tracked_source, {"mcp_messages"}
+                        )
+                    ),
+                    "read_only_candidate_unchanged": True,
                     "private_log": {
                         "name": log_path.name,
                         "sha256": corpus_manager.digest_file(log_path),
@@ -372,19 +666,62 @@ class CorpusManagerTests(unittest.TestCase):
             corpus_manager.private_mkdir(preflight_directory, exist_ok=False)
             preflight_log = preflight_directory / "cargo-metadata.log"
             corpus_manager.write_new_bytes(preflight_log, b"")
+            checkout_log = preflight_directory / "source-checkout.log"
+            corpus_manager.write_new_bytes(checkout_log, b"")
             engine = engine_for("primary")
             repeat_engine = engine_for("repeat")
-            source_binding = corpus_manager.source_binding_document()
+            checkout_preflight = {
+                "command": "git checkout-index --all --prefix=<external-execution-source>",
+                "exit_code": 0,
+                "timed_out": False,
+                "output_overflow": False,
+                "descendant_cleanup_required": False,
+                "captured_output_bytes": 0,
+                "maximum_output_bytes": 1024 * 1024,
+                "execution_enforcement": enforcement,
+                "private_log": {
+                    "name": checkout_log.name,
+                    "sha256": corpus_manager.digest_file(checkout_log),
+                    "size": 0,
+                    "mode": "0600",
+                },
+            }
             report = {
                 "schema_version": "cigar.fuzz-corpus-minimization.v1",
+                "created_at": corpus_manager.utc_now(),
                 "source_working_corpus_unchanged": True,
                 "all_fourteen_targets_snapshotted": True,
                 "source_corpus_before": source_snapshots,
                 "source_corpus_after": source_snapshots,
                 "dependency_mode": "locked-offline-cargo-wrapper",
-                "cargo_fuzz_execution": corpus_manager.cargo_fuzz_execution_record(
-                    wrapper, source_binding
-                ),
+                "cargo_fuzz_execution": cargo_fuzz_execution,
+                "read_only_candidate": {
+                    "before": candidate_state,
+                    "after": candidate_state,
+                    "unchanged": True,
+                },
+                "execution_source": {
+                    "construction": "git-checkout-index-closed-regular-file-set",
+                    "checkout_preflight": checkout_preflight,
+                    "before": corpus_manager.expected_execution_source_state(
+                        tracked_source, set()
+                    ),
+                    "after": corpus_manager.expected_execution_source_state(
+                        tracked_source, {"mcp_messages"}
+                    ),
+                    "tracked_source_unchanged": True,
+                    "candidate_tracked_source_equal": True,
+                    "compiled_only_from_execution_source": True,
+                },
+                "success_scratch_cleanup": {
+                    "removed": [
+                        "build-target",
+                        "cargo-wrapper",
+                        "execution-source",
+                        "work",
+                    ],
+                    "completed": True,
+                },
                 "execution_enforcement": enforcement,
                 "environment_policy": {
                     "ambient_environment": "strict-reviewed-allowlist",
@@ -392,10 +729,25 @@ class CorpusManagerTests(unittest.TestCase):
                     "private_home_and_tmp": True,
                 },
                 "metadata_preflight": {
+                    "command": corpus_manager.redacted_command(
+                        [
+                            "cargo",
+                            "metadata",
+                            "--manifest-path",
+                            str(
+                                output_root / "execution-source" / "fuzz" / "Cargo.toml"
+                            ),
+                            "--no-deps",
+                            "--format-version",
+                            "1",
+                        ]
+                    ),
                     "exit_code": 0,
                     "timed_out": False,
                     "output_overflow": False,
                     "descendant_cleanup_required": False,
+                    "captured_output_bytes": 0,
+                    "maximum_output_bytes": 1024 * 1024,
                     "execution_enforcement": enforcement,
                     "private_log": {
                         "name": preflight_log.name,
@@ -423,6 +775,9 @@ class CorpusManagerTests(unittest.TestCase):
                 "targets": [
                     {
                         "target": "mcp_messages",
+                        "input": corpus_manager.corpus_state(
+                            entries, present_only=False
+                        ),
                         "output": state,
                         "repeat_output": repeat_state,
                         "engine": engine,
@@ -432,21 +787,76 @@ class CorpusManagerTests(unittest.TestCase):
                     }
                 ],
             }
+            corpus_manager.shutil.rmtree(output_root / "work")
+            corpus_manager.shutil.rmtree(build_target)
+            corpus_manager.shutil.rmtree(wrapper_directory)
             corpus_manager.write_new_json(
                 output_root / "minimization-report.json", report
             )
-            verified = corpus_manager.verify_minimized_output(
-                output_root, require_all_targets=False
-            )
-            self.assertEqual(verified["status"], "passed")
-            regression = (
-                output_root / "corpus" / "mcp_messages" / "out-of-range-numeric-id"
-            )
-            regression.write_bytes(b"substituted")
-            with self.assertRaises(corpus_manager.CorpusFailure):
-                corpus_manager.verify_minimized_output(
+            with (
+                mock.patch.object(
+                    corpus_manager, "tracked_index_entries", return_value=[{}]
+                ),
+                mock.patch.object(
+                    corpus_manager,
+                    "candidate_checkout_state",
+                    return_value=candidate_state,
+                ),
+            ):
+                verified = corpus_manager.verify_minimized_output(
                     output_root, require_all_targets=False
                 )
+                self.assertEqual(verified["status"], "passed")
+                unexpected = output_root / "unexpected-scratch"
+                unexpected.mkdir(mode=0o700)
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.verify_minimized_output(
+                        output_root, require_all_targets=False
+                    )
+                unexpected.rmdir()
+                report_path = output_root / "minimization-report.json"
+                report["unexpected_field"] = True
+                report_path.write_text(
+                    json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.verify_minimized_output(
+                        output_root, require_all_targets=False
+                    )
+                report.pop("unexpected_field")
+                report["targets"][0]["old_to_new"][0]["retained"] = not report[
+                    "targets"
+                ][0]["old_to_new"][0]["retained"]
+                report_path.write_text(
+                    json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.verify_minimized_output(
+                        output_root, require_all_targets=False
+                    )
+                report["targets"][0]["old_to_new"][0]["retained"] = not report[
+                    "targets"
+                ][0]["old_to_new"][0]["retained"]
+                report_path.write_text(
+                    json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                regression = (
+                    output_root / "corpus" / "mcp_messages" / "out-of-range-numeric-id"
+                )
+                regression.chmod(0o644)
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.verify_minimized_output(
+                        output_root, require_all_targets=False
+                    )
+                regression.chmod(0o600)
+                regression.write_bytes(b"substituted")
+                with self.assertRaises(corpus_manager.CorpusFailure):
+                    corpus_manager.verify_minimized_output(
+                        output_root, require_all_targets=False
+                    )
 
 
 if __name__ == "__main__":
