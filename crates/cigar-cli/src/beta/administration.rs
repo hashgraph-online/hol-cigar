@@ -161,7 +161,14 @@ impl StateDirectoryLock {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt as _;
-            if expected.dev() != observed.dev() || expected.ino() != observed.ino() {
+            let owner = rustix::process::geteuid().as_raw();
+            if expected.dev() != observed.dev()
+                || expected.ino() != observed.ino()
+                || expected.uid() != owner
+                || observed.uid() != owner
+                || expected.mode() & 0o077 != 0
+                || observed.mode() & 0o077 != 0
+            {
                 return Err(CliError::state_unavailable());
             }
         }
@@ -225,7 +232,13 @@ impl StateDirectoryLock {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt as _;
-            if before.dev() != after.dev() || before.ino() != after.ino() {
+            if before.dev() != after.dev()
+                || before.ino() != after.ino()
+                || before.mtime() != after.mtime()
+                || before.mtime_nsec() != after.mtime_nsec()
+                || before.ctime() != after.ctime()
+                || before.ctime_nsec() != after.ctime_nsec()
+            {
                 return Err(CliError::state_corrupt());
             }
         }
@@ -1021,6 +1034,27 @@ mod tests {
                 .generation,
             7
         );
+        Ok(())
+    }
+
+    #[test]
+    fn locked_state_rejects_permissions_widened_after_acquisition()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = tempfile::tempdir()?;
+        let configured = root.path().join("configured");
+        create_private_directory(&configured).map_err(|error| error.to_string())?;
+        let cancellation = BlockingCancellation::new();
+        let lock = StateDirectoryLock::acquire(&configured, true, &cancellation)
+            .map_err(|error| error.to_string())?;
+        write_state(&lock, &LocalState::default()).map_err(|error| error.to_string())?;
+
+        std::fs::set_permissions(&configured, std::fs::Permissions::from_mode(0o750))?;
+        assert!(read_state(&lock).is_err());
+        assert!(write_state(&lock, &LocalState::default()).is_err());
+
+        std::fs::set_permissions(&configured, std::fs::Permissions::from_mode(0o700))?;
         Ok(())
     }
 }

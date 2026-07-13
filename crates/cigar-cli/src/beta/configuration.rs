@@ -160,6 +160,10 @@ fn read_bounded_regular(path: &Path) -> Result<Vec<u8>, CliError> {
         use std::os::unix::fs::MetadataExt as _;
         if after.dev() != metadata.dev()
             || after.ino() != metadata.ino()
+            || after.mtime() != metadata.mtime()
+            || after.mtime_nsec() != metadata.mtime_nsec()
+            || after.ctime() != metadata.ctime()
+            || after.ctime_nsec() != metadata.ctime_nsec()
             || after.uid() != rustix::process::geteuid().as_raw()
             || after.mode() & 0o022 != 0
             || after.nlink() != 1
