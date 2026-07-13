@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-capability-policy.v1.schema.json",
+  "title": "CIGAR beta capability policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "included", "excluded", "fail_closed"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.capability-policy.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "included": {
+      "const": [{
+        "id": "local-workspace-metadata-administration",
+        "description": "Local init plus source, project, and focus metadata administration against private workspace state.",
+        "command_paths": ["init", "source.add", "source.list", "source.remove", "project.list", "project.attach", "project.detach", "project.switch", "project.link", "project.unlink", "focus.switch", "focus.close", "help", "version"]
+      }]
+    },
+    "excluded": {
+      "type": "array",
+      "minItems": 29,
+      "maxItems": 29,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": {
+          "id": {"enum": ["catalog-discovery", "catalog-ingest", "catalog-query", "context", "retrieval", "handoff", "space", "replay", "policy", "daemon", "effects", "extensions", "installers", "macos", "mcp", "oci", "otlp", "plugin", "remote", "sdk", "shared", "vector", "windows", "arm", "backup", "garbage-collection", "diagnostics", "serving", "completion-man"]},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "fail_closed": {"const": true}
+  }
+}

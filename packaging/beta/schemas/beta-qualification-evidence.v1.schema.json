@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-qualification-evidence.v1.schema.json",
+  "title": "CIGAR beta qualification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product_version", "evidence_purpose", "id", "category", "source", "status", "artifact_bindings", "producer", "checks", "metrics", "attachments"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.qualification-evidence.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "evidence_purpose": {"const": "cigar-beta-qualification-evidence-v1"},
+    "id": {"$ref": "#/$defs/identifier"},
+    "category": {"enum": ["archive-contract", "conformance", "docs", "installed-artifact", "license", "offline", "provenance", "reproducibility", "sbom", "security", "signature"]},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "tree", "archive"],
+      "properties": {
+        "revision": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "archive": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "sha256", "bytes"],
+          "properties": {
+            "id": {"const": "source"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "bytes": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "status": {"const": "passed"},
+    "artifact_bindings": {
+      "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "sha256", "bytes"],
+        "properties": {
+          "id": {"enum": ["source", "docs", "schemas", "conformance", "licenses", "cigar-linux-x86_64-gnu"]},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "bytes": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "invocation_id"],
+      "properties": {
+        "name": {"$ref": "#/$defs/identity"},
+        "version": {"$ref": "#/$defs/identity"},
+        "invocation_id": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "checks": {
+      "type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {"id": {"$ref": "#/$defs/identifier"}, "status": {"const": "passed"}}
+      }
+    },
+    "metrics": {
+      "type": "object", "maxProperties": 4096,
+      "propertyNames": {"$ref": "#/$defs/identifier"},
+      "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807}
+    },
+    "attachments": {
+      "type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/fileReference"}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "identity": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+    "gitObject": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^attachments/(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

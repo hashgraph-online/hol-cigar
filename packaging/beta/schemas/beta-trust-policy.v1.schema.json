@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-trust-policy.v1.schema.json",
+  "title": "CIGAR external initial-beta trust policy",
+  "$comment": "The verifier additionally requires valid_from <= approved_at <= verification_time < valid_until and an active key window containing verification_time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "release_profile", "product_version", "approved_at", "valid_from", "valid_until", "signature_verifier", "keys"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.trust-policy.v1"},
+    "policy_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "approved_at": {"$ref": "#/$defs/timestamp"},
+    "valid_from": {"$ref": "#/$defs/timestamp"},
+    "valid_until": {"$ref": "#/$defs/timestamp"},
+    "signature_verifier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["implementation", "sha256"],
+      "properties": {
+        "implementation": {"const": "openssl"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "keys": {
+      "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["key_id", "public_key", "public_key_sha256", "signer_principal", "purposes", "status", "active_from", "active_until", "status_changed_at"],
+        "properties": {
+          "key_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "public_key": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+          "public_key_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "signer_principal": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+          "purposes": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": {"enum": ["cigar-beta-qualification-evidence-v1", "cigar-beta-release-artifact-v1", "cigar-beta-release-checksums-v1", "cigar-beta-release-evidence-v1", "cigar-beta-release-provenance-v1", "cigar-beta-release-sbom-v1", "cigar-beta-release-spdx-v1"]}
+          },
+          "status": {"enum": ["active", "retired", "revoked"]},
+          "active_from": {"$ref": "#/$defs/timestamp"},
+          "active_until": {"$ref": "#/$defs/timestamp"},
+          "status_changed_at": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]}
+        }
+      }
+    }
+  },
+  "$defs": {"timestamp": {"type": "integer", "minimum": 0, "maximum": 253402300799}}
+}

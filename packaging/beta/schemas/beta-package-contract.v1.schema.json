@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-package-contract.v1.schema.json",
+  "title": "CIGAR beta package contracts",
+  "oneOf": [
+    {"$ref": "#/$defs/sourceProjection"},
+    {"$ref": "#/$defs/sourceDerived"},
+    {"$ref": "#/$defs/binary"}
+  ],
+  "$defs": {
+    "sourceProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "id", "release_profile", "format", "allow", "required", "deny", "symlinks", "line_endings", "modes", "max_entries", "max_member_bytes", "max_total_bytes", "content_scan", "content_scan_exemptions"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.source-package-contract.v1"},
+        "id": {"const": "cigar-beta-source-archive-v1"},
+        "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+        "format": {"const": "tar.gz"},
+        "allow": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "required": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "deny": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "symlinks": {"const": "forbid"},
+        "line_endings": {"const": "lf"},
+        "modes": {"const": ["0644", "0755"]},
+        "max_entries": {"const": 4096},
+        "max_member_bytes": {"const": 16777216},
+        "max_total_bytes": {"const": 134217728},
+        "content_scan": {"const": true},
+        "content_scan_exemptions": {"const": []}
+      }
+    },
+    "sourceDerived": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"id": {"const": "cigar-beta-conformance-archive-v1"}}, "required": ["id"]},
+          "then": {"properties": {"modes": {"const": ["0644", "0755"]}}},
+          "else": {"properties": {"modes": {"const": ["0644"]}}}
+        }
+      ],
+      "required": ["schema_version", "id", "release_profile", "format", "allow", "required", "deny", "symlinks", "line_endings", "modes", "max_entries", "max_member_bytes", "max_total_bytes", "content_scan", "content_scan_exemptions"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.source-package-contract.v1"},
+        "id": {"enum": ["cigar-beta-docs-archive-v1", "cigar-beta-schemas-archive-v1", "cigar-beta-conformance-archive-v1", "cigar-beta-license-archive-v1"]},
+        "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+        "format": {"const": "tar.gz"},
+        "allow": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "required": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "deny": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "symlinks": {"const": "forbid"},
+        "line_endings": {"const": "lf"},
+        "modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["0644", "0755"]}},
+        "max_entries": {"type": "integer", "minimum": 1, "maximum": 256},
+        "max_member_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "max_total_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "content_scan": {"const": true},
+        "content_scan_exemptions": {"const": []}
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "id", "release_profile", "format", "allow", "required", "executables", "deny", "symlinks", "line_endings", "modes", "max_entries", "max_member_bytes", "max_total_bytes", "content_scan", "content_scan_exemptions", "checksum_manifest"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.package-contract.v1"},
+        "id": {"const": "cigar-beta-binary-archive-v1"},
+        "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+        "format": {"const": "tar.gz"},
+        "allow": {"const": ["RELEASE-METADATA.json", "bin/cigar", "LICENSE", "NOTICE", "SHA256SUMS"]},
+        "required": {"const": ["RELEASE-METADATA.json", "bin/cigar", "LICENSE", "NOTICE", "SHA256SUMS"]},
+        "executables": {"const": ["bin/cigar"]},
+        "deny": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "symlinks": {"const": "forbid"},
+        "line_endings": {"const": "lf"},
+        "modes": {"const": ["0644", "0755"]},
+        "max_entries": {"type": "integer", "minimum": 1, "maximum": 64},
+        "max_member_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "max_total_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+        "content_scan": {"const": true},
+        "content_scan_exemptions": {"const": []},
+        "checksum_manifest": {
+          "type": "object", "additionalProperties": false, "required": ["path", "scope"],
+          "properties": {"path": {"const": "SHA256SUMS"}, "scope": {"const": "all-payload-files"}}
+        }
+      }
+    }
+  }
+}

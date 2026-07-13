@@ -55,6 +55,19 @@ fn public_parser_reaches_every_beta_command_and_no_excluded_command() {
 async fn beta_help_does_not_advertise_excluded_capabilities_or_flags() {
     let outcome = run(args(&["help"]), TerminalContext::default()).await;
     assert_eq!(outcome.status, 0);
+    assert_eq!(
+        outcome.stdout,
+        include_str!("../assets/cigar-help-beta.txt"),
+        "help output must remain the reviewed text asset"
+    );
+    assert!(outcome.stdout.contains("Cancel before state publication"));
+    assert!(!outcome.stdout.contains("Bound the complete command"));
+    assert!(outcome.stdout.contains(
+        "Qualification requires Ubuntu 24.04 x86-64 with glibc 2.39 and external signed release evidence;"
+    ));
+    assert!(outcome.stdout.contains(
+        "this executable does not self-attest qualification and production_ready is false."
+    ));
     for excluded in [
         "cigar status",
         "cigar context",
@@ -75,6 +88,35 @@ async fn beta_help_does_not_advertise_excluded_capabilities_or_flags() {
             "beta help leaked excluded surface: {excluded}"
         );
     }
+}
+
+#[tokio::test]
+async fn help_is_always_text_and_version_is_always_json_regardless_of_output_mode()
+-> Result<(), Box<dyn std::error::Error>> {
+    let canonical_help = include_str!("../assets/cigar-help-beta.txt");
+    let canonical_version = run(args(&["version"]), TerminalContext::default()).await;
+    assert_eq!(canonical_version.status, 0);
+    let _: serde_json::Value = serde_json::from_str(&canonical_version.stdout)?;
+
+    for mode in ["text", "json"] {
+        let help = run(
+            args(&["--output", mode, "help"]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(help.status, 0);
+        assert_eq!(help.stdout, canonical_help);
+
+        let version = run(
+            args(&["--output", mode, "version"]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(version.status, 0);
+        assert_eq!(version.stdout, canonical_version.stdout);
+        let _: serde_json::Value = serde_json::from_str(&version.stdout)?;
+    }
+    Ok(())
 }
 
 #[tokio::test]
@@ -129,9 +171,45 @@ async fn beta_version_reports_the_prerelease_identity() -> Result<(), Box<dyn st
     );
     assert_eq!(
         metadata
-            .get("qualified_target_triple")
+            .get("qualification_status")
+            .and_then(serde_json::Value::as_str),
+        Some("requires-external-release-evidence")
+    );
+    assert_eq!(
+        metadata
+            .get("required_target_triple")
             .and_then(serde_json::Value::as_str),
         Some("x86_64-unknown-linux-gnu")
+    );
+    assert_eq!(
+        metadata
+            .get("required_host_profile")
+            .and_then(serde_json::Value::as_str),
+        Some("ubuntu-24.04-x86_64-glibc-2.39")
+    );
+    assert_eq!(
+        metadata
+            .get("required_distribution")
+            .and_then(serde_json::Value::as_str),
+        Some("ubuntu")
+    );
+    assert_eq!(
+        metadata
+            .get("required_distribution_version")
+            .and_then(serde_json::Value::as_str),
+        Some("24.04")
+    );
+    assert_eq!(
+        metadata
+            .get("required_libc")
+            .and_then(serde_json::Value::as_str),
+        Some("glibc")
+    );
+    assert_eq!(
+        metadata
+            .get("required_libc_version")
+            .and_then(serde_json::Value::as_str),
+        Some("2.39")
     );
     assert_eq!(
         metadata
@@ -145,7 +223,20 @@ async fn beta_version_reports_the_prerelease_identity() -> Result<(), Box<dyn st
             .and_then(serde_json::Value::as_str),
         Some(std::env::consts::ARCH)
     );
-    assert_eq!(metadata.as_object().map(serde_json::Map::len), Some(13));
+    for obsolete in [
+        "qualified_target_triple",
+        "qualified_host_profile",
+        "qualified_distribution",
+        "qualified_distribution_version",
+        "qualified_libc",
+        "qualified_libc_version",
+    ] {
+        assert!(
+            metadata.get(obsolete).is_none(),
+            "obsolete claim present: {obsolete}"
+        );
+    }
+    assert_eq!(metadata.as_object().map(serde_json::Map::len), Some(19));
     Ok(())
 }
 
@@ -247,9 +338,11 @@ async fn beta_embedded_state_workflow_is_private_and_durable()
     let directory = tempfile::tempdir()?;
     let state = directory.path().join("state");
     let source = directory.path().join("source");
-    let project = directory.path().join("project");
+    let primary_project = directory.path().join("primary-project");
+    let secondary_project = directory.path().join("secondary-project");
     std::fs::create_dir(&source)?;
-    std::fs::create_dir(&project)?;
+    std::fs::create_dir(&primary_project)?;
+    std::fs::create_dir(&secondary_project)?;
     let config = directory.path().join("beta.toml");
     std::fs::write(
         &config,
@@ -281,7 +374,52 @@ async fn beta_embedded_state_workflow_is_private_and_durable()
             OsString::from("project"),
             OsString::from("attach"),
             OsString::from("primary"),
-            project.into_os_string(),
+            primary_project.into_os_string(),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("attach"),
+            OsString::from("secondary"),
+            secondary_project.into_os_string(),
+        ],
+        vec![OsString::from("source"), OsString::from("list")],
+        vec![OsString::from("project"), OsString::from("list")],
+        vec![
+            OsString::from("project"),
+            OsString::from("switch"),
+            OsString::from("secondary"),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("link"),
+            OsString::from("primary"),
+            OsString::from("secondary"),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("unlink"),
+            OsString::from("primary"),
+            OsString::from("secondary"),
+        ],
+        vec![
+            OsString::from("focus"),
+            OsString::from("switch"),
+            OsString::from("review"),
+        ],
+        vec![
+            OsString::from("focus"),
+            OsString::from("close"),
+            OsString::from("review"),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("detach"),
+            OsString::from("secondary"),
+        ],
+        vec![
+            OsString::from("source"),
+            OsString::from("remove"),
+            OsString::from("docs"),
         ],
     ] {
         invocation.extend(shared.iter().cloned());
@@ -294,7 +432,27 @@ async fn beta_embedded_state_workflow_is_private_and_durable()
         document
             .get("generation")
             .and_then(serde_json::Value::as_u64),
-        Some(3)
+        Some(11)
+    );
+    assert_eq!(document.get("active_project"), None);
+    assert_eq!(document.get("active_focus"), None);
+    assert_eq!(
+        document
+            .get("sources")
+            .and_then(serde_json::Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_eq!(
+        document
+            .get("links")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        document.pointer("/projects/secondary/attached"),
+        Some(&serde_json::json!(false))
     );
     #[cfg(unix)]
     {
@@ -385,7 +543,7 @@ async fn concurrent_beta_mutations_are_serialized_without_lost_updates()
 }
 
 #[tokio::test]
-async fn contended_beta_state_lock_honors_the_complete_command_deadline()
+async fn contended_beta_state_lock_honors_the_prepublication_deadline()
 -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
     let state = directory.path().join("state");

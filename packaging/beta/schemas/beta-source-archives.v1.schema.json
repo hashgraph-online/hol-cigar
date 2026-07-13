@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-source-archives.v1.schema.json",
+  "title": "CIGAR beta source-derived archive selection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product_version", "archives", "always_exclude"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.source-archives.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "archives": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "prefixItems": [
+        {"$ref": "#/$defs/source"}, {"$ref": "#/$defs/docs"},
+        {"$ref": "#/$defs/schemas"}, {"$ref": "#/$defs/conformance"},
+        {"$ref": "#/$defs/licenses"}
+      ],
+      "items": false
+    },
+    "always_exclude": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "archive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "filename", "contract", "include"],
+      "properties": {
+        "id": {"type": "string"},
+        "filename": {"type": "string", "pattern": "^cigar-0\\.1\\.0-beta\\.1-.+\\.tar\\.gz$"},
+        "contract": {"type": "string", "pattern": "^packaging/(?:beta/)?contracts/[a-z0-9-]+\\.v1\\.json$"},
+        "include": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "source": {"allOf": [{"$ref": "#/$defs/archive"}, {"properties": {"id": {"const": "source"}}}]},
+    "docs": {"allOf": [{"$ref": "#/$defs/archive"}, {"properties": {"id": {"const": "docs"}}}]},
+    "schemas": {"allOf": [{"$ref": "#/$defs/archive"}, {"properties": {"id": {"const": "schemas"}}}]},
+    "conformance": {"allOf": [{"$ref": "#/$defs/archive"}, {"properties": {"id": {"const": "conformance"}}}]},
+    "licenses": {"allOf": [{"$ref": "#/$defs/archive"}, {"properties": {"id": {"const": "licenses"}}}]}
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-release-verification.v1.schema.json",
+  "title": "CIGAR unsigned nonqualifying beta candidate verification",
+  "description": "Structural and integrity verification of an unsigned candidate. This receipt is not release qualification or publication evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "release_profile", "product_version", "tag", "target", "source_revision", "manifest", "artifacts", "checks"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.release-verification.v1"},
+    "status": {"const": "passed"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "target": {"const": "x86_64-unknown-linux-gnu"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "manifest": {"type": "object"},
+    "artifacts": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "object"}},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_count", "signed", "published", "production_ready", "binary_executed"],
+      "properties": {
+        "artifact_count": {"const": 6},
+        "signed": {"const": false},
+        "published": {"const": false},
+        "production_ready": {"const": false},
+        "binary_executed": {"type": "boolean"}
+      }
+    }
+  }
+}

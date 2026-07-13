@@ -19,8 +19,8 @@ Commands:
   cigar version
 
 Global options:
-  --output <text|json>          Select human or versioned machine output
-  --deadline <Nms|Ns|Nm>       Bound the complete command (maximum 5m)
+  --output <text|json>          Select operation/config output (help text; version JSON)
+  --deadline <Nms|Ns|Nm>       Cancel before state publication (maximum 5m)
   --config <path>              Read an explicit embedded-beta configuration
   --target embedded            Assert the only compiled execution target
   --embedded                   Assert the only compiled execution target
@@ -35,3 +35,5 @@ Global options:
 
 Only the commands and options listed above are compiled into this prerelease. Source entries are
 local metadata references; this build does not discover, ingest, index, retrieve, or compile context.
+Qualification requires Ubuntu 24.04 x86-64 with glibc 2.39 and external signed release evidence;
+this executable does not self-attest qualification and production_ready is false.

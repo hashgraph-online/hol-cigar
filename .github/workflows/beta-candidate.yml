@@ -1,0 +1,275 @@
+name: beta-unsigned-diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: beta-unsigned-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unsigned-diagnostic:
+    name: unsigned diagnostic only (non-qualifying)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: x64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Initialize an isolated Cargo cache
+        run: |
+          cargo_home="${RUNNER_TEMP}/cigar-beta-cargo-home"
+          install -d -m 0700 "${cargo_home}"
+          printf 'CARGO_HOME=%s\n' "${cargo_home}" >> "${GITHUB_ENV}"
+
+      - name: Inspect the pinned diagnostic host and toolchain
+        run: |
+          timeout --kill-after=30s 2m rustup show
+          timeout --kill-after=30s 2m cargo --version --verbose
+          timeout --kill-after=30s 2m rustc --version --verbose
+          source /etc/os-release
+          test "${ID}" = "ubuntu"
+          test "${VERSION_ID}" = "24.04"
+          test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.39"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "x86_64-unknown-linux-gnu"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(uname -m)" = "x86_64"
+          test "$(command -v git)" = "/usr/bin/git"
+          test "$(command -v cc)" = "/usr/bin/cc"
+          test "$(cc -dumpmachine)" = "x86_64-linux-gnu"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Install the pinned Python formatter and linter
+        run: |
+          timeout --kill-after=30s 5m \
+            python3 -m pip install \
+              --disable-pip-version-check \
+              --no-input \
+              ruff==0.14.10
+          test "$(python3 -m ruff --version)" = "ruff 0.14.10"
+
+      - name: Hydrate the locked dependency cache
+        run: |
+          timeout --kill-after=30s 10m \
+            cargo fetch --locked --target x86_64-unknown-linux-gnu
+          cargo_home="${CARGO_HOME:-${HOME}/.cargo}"
+          crate_cache="$(cd "${cargo_home}/registry/cache" && pwd -P)"
+          test -d "${crate_cache}"
+
+      - name: Check Python lint and formatting
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          timeout --kill-after=30s 5m \
+            python3 -m ruff check \
+              scripts/release \
+              tools/quality/tests/test_beta_profile.py
+          timeout --kill-after=30s 5m \
+            python3 -m ruff format --check \
+              scripts/release \
+              tools/quality/tests/test_beta_profile.py
+
+      - name: Check Rust formatting
+        run: timeout --kill-after=30s 5m cargo fmt --all -- --check
+
+      - name: Validate the closed beta profile
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          timeout --kill-after=30s 5m \
+            python3 scripts/release/beta_profile.py check --root .
+          timeout --kill-after=30s 10m \
+            python3 -B -m unittest tools.quality.tests.test_beta_profile -v
+          timeout --kill-after=30s 15m \
+            python3 -B -m unittest discover \
+              -s scripts/release/tests \
+              -p 'test_*.py' \
+              -v
+
+      - name: Test and lint the full and beta compositions offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cigar-beta-tests
+        run: |
+          timeout --kill-after=30s 15m \
+            cargo test --locked -p cigar-cli \
+              --no-default-features \
+              --features full \
+              --all-targets
+          timeout --kill-after=30s 15m \
+            cargo clippy --locked -p cigar-cli \
+              --no-default-features \
+              --features full \
+              --all-targets \
+              -- \
+              -D warnings
+          timeout --kill-after=30s 15m \
+            cargo test --locked -p cigar-cli \
+              --no-default-features \
+              --features beta-embedded \
+              --lib \
+              --test beta_surface
+          timeout --kill-after=30s 15m \
+            cargo clippy --locked -p cigar-cli \
+              --no-default-features \
+              --features beta-embedded \
+              --all-targets \
+              -- \
+              -D warnings
+
+      - name: Reject missing and conflicting CLI feature compositions
+        env:
+          CARGO_NET_OFFLINE: "true"
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cigar-feature-isolation
+        run: |
+          neither_log="${RUNNER_TEMP}/cigar-cli-neither-feature.log"
+          both_log="${RUNNER_TEMP}/cigar-cli-both-features.log"
+          if timeout --kill-after=30s 10m \
+            cargo check --locked -p cigar-cli \
+              --no-default-features \
+              >"${neither_log}" 2>&1; then
+            echo "cigar-cli unexpectedly compiled without an explicit composition" >&2
+            exit 1
+          fi
+          grep -F \
+            'exactly one of features `full` or `beta-embedded` must be enabled' \
+            "${neither_log}"
+          if timeout --kill-after=30s 10m \
+            cargo check --locked -p cigar-cli \
+              --no-default-features \
+              --features full,beta-embedded \
+              >"${both_log}" 2>&1; then
+            echo "cigar-cli unexpectedly compiled with conflicting compositions" >&2
+            exit 1
+          fi
+          grep -F \
+            'features `full` and `beta-embedded` are mutually exclusive' \
+            "${both_log}"
+
+      - name: Build and verify an unsigned diagnostic candidate
+        env:
+          CARGO_NET_OFFLINE: "true"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          candidate="${RUNNER_TEMP}/cigar-beta-unsigned-${GITHUB_SHA}"
+          source_freeze="${RUNNER_TEMP}/cigar-beta-source-${GITHUB_SHA}"
+          python_path="$(command -v python3)"
+          cargo_path="$(rustup which cargo)"
+          rustc_path="$(rustup which rustc)"
+          linker_path="$(command -v cc)"
+          git_path="$(command -v git)"
+          cargo_home="${CARGO_HOME:-${HOME}/.cargo}"
+          crate_cache="$(cd "${cargo_home}/registry/cache" && pwd -P)"
+          test "${linker_path}" = /usr/bin/cc
+          test "${git_path}" = /usr/bin/git
+          timeout --kill-after=30s 10m \
+            python3 scripts/release/beta_artifacts.py freeze-source \
+              --root "${GITHUB_WORKSPACE}" \
+              --out "${source_freeze}" \
+              --git "${git_path}"
+          timeout --kill-after=30s 10m \
+            python3 scripts/release/beta_artifacts.py verify-source \
+              --root "${GITHUB_WORKSPACE}" \
+              --source-freeze "${source_freeze}" \
+              --git "${git_path}"
+          timeout --kill-after=30s 40m \
+            python3 scripts/release/beta_artifacts.py build \
+            --root "${GITHUB_WORKSPACE}" \
+            --out "${candidate}" \
+            --source-freeze "${source_freeze}" \
+            --builder-id "github-actions://${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}" \
+            --python "${python_path}" \
+            --cargo "${cargo_path}" \
+            --rustc "${rustc_path}" \
+            --linker "${linker_path}" \
+            --git "${git_path}" \
+            --crate-cache "${crate_cache}"
+          timeout --kill-after=30s 15m \
+            python3 scripts/release/beta_artifacts.py verify \
+              --root "${GITHUB_WORKSPACE}" \
+              --candidate "${candidate}" \
+              --recompute-cargo \
+              --crate-cache "${crate_cache}"
+
+      - name: Create and verify the mode-preserving transport
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          candidate="${RUNNER_TEMP}/cigar-beta-unsigned-${GITHUB_SHA}"
+          transport="${RUNNER_TEMP}/cigar-beta-unsigned-${GITHUB_SHA}.transport.tar"
+          imported="${RUNNER_TEMP}/cigar-beta-transport-roundtrip-${GITHUB_SHA}"
+          epoch="$(git show -s --format=%ct HEAD)"
+          tar \
+            --create \
+            --format=posix \
+            --sort=name \
+            --mtime="@${epoch}" \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            --file="${transport}" \
+            --directory="${candidate}" \
+            .
+          (
+            cd "${RUNNER_TEMP}"
+            sha256sum "$(basename "${transport}")" > "$(basename "${transport}").sha256"
+            sha256sum --check "$(basename "${transport}").sha256"
+          )
+          install -d -m 0700 "${imported}"
+          tar \
+            --extract \
+            --file="${transport}" \
+            --directory="${imported}" \
+            --no-same-owner \
+            --same-permissions
+          chmod 0700 "${imported}"
+          timeout --kill-after=30s 15m \
+            python3 scripts/release/beta_artifacts.py verify \
+              --root "${GITHUB_WORKSPACE}" \
+              --candidate "${imported}"
+
+      - name: Upload the unsigned diagnostic transport (non-qualifying)
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unsigned-beta-diagnostic-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/cigar-beta-unsigned-${{ github.sha }}.transport.tar
+            ${{ runner.temp }}/cigar-beta-unsigned-${{ github.sha }}.transport.tar.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record the unsigned transport digest
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          printf '%s\n' \
+            'This artifact is an unsigned, non-qualifying diagnostic output. It is not a release-readiness attestation.' \
+            >> "${GITHUB_STEP_SUMMARY}"
+          printf 'Unsigned diagnostic transport digest: `%s`\n' \
+            "${ARTIFACT_DIGEST}" \
+            >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Assert the diagnostic left the checkout clean
+        if: ${{ always() }}
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

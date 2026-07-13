@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-cargo-resolution.v1.schema.json",
+  "title": "CIGAR beta Cargo resolution pin",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "target", "workspace_packages", "component_count", "dependency_edge_count", "sbom_resolution_sha256", "metadata_resolution_sha256", "external_packages", "vendor_packages", "dependencies", "resolution"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.cargo-resolution.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "target": {"const": "x86_64-unknown-linux-gnu"},
+    "workspace_packages": {"const": ["cigar-canon", "cigar-cli"]},
+    "component_count": {"const": 45},
+    "dependency_edge_count": {"const": 66},
+    "sbom_resolution_sha256": {"const": "45d5434dfa44efb692e49d04debcc9e109e5f3bfb8e09b5e894970553d7abdf8"},
+    "metadata_resolution_sha256": {"const": "d872be685bfe1cbbe1130ee286f44a959f02edd01b140ec33372a45995b9b288"},
+    "external_packages": {"type": "array", "minItems": 43, "maxItems": 43, "items": {"$ref": "#/$defs/package"}},
+    "vendor_packages": {"type": "array", "minItems": 47, "maxItems": 47, "items": {"$ref": "#/$defs/package"}},
+    "dependencies": {"type": "array", "minItems": 45, "maxItems": 45, "items": {"$ref": "#/$defs/dependency"}},
+    "resolution": {"type": "array", "minItems": 45, "maxItems": 45, "items": {"$ref": "#/$defs/resolution"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "source", "checksum"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9_+-]+$"},
+        "version": {"type": "string", "pattern": "^[A-Za-z0-9.+_-]+$"},
+        "source": {"const": "registry+https://github.com/rust-lang/crates.io-index"},
+        "checksum": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "dependsOn"],
+      "properties": {
+        "ref": {"type": "string", "pattern": "^pkg:cargo/"},
+        "dependsOn": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^pkg:cargo/"}}
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "source", "checksum", "features", "workspace_manifest"],
+      "properties": {
+        "ref": {"type": "string", "pattern": "^pkg:cargo/"},
+        "source": {"type": "string", "minLength": 1},
+        "checksum": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "features": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "workspace_manifest": {"oneOf": [{"type": "string", "pattern": "^crates/(cigar-canon|cigar-cli)/Cargo\\.toml$"}, {"type": "null"}]}
+      }
+    }
+  }
+}

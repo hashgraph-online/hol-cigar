@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-release-metadata.v1.schema.json",
+  "title": "CIGAR beta archive metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product_version", "tag", "prerelease", "production_ready", "artifact_id", "source_date_epoch", "source", "contract", "payload", "build"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.release-metadata.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "prerelease": {"const": true},
+    "production_ready": {"const": false},
+    "artifact_id": {"enum": ["source", "docs", "schemas", "conformance", "licenses", "cigar-linux-x86_64-gnu"]},
+    "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "source": {"$ref": "#/$defs/source"},
+    "contract": {"$ref": "#/$defs/reference"},
+    "payload": {
+      "type": "object", "additionalProperties": false, "required": ["tree_sha256", "file_count"],
+      "properties": {"tree_sha256": {"$ref": "#/$defs/sha256"}, "file_count": {"type": "integer", "minimum": 1, "maximum": 100000}}
+    },
+    "build": {"type": "object", "minProperties": 3}
+  },
+  "$defs": {
+    "gitObject": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["revision", "tree", "committed", "clean"],
+      "properties": {"revision": {"$ref": "#/$defs/gitObject"}, "tree": {"$ref": "#/$defs/gitObject"}, "committed": {"const": true}, "clean": {"const": true}}
+    },
+    "reference": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}
+    }
+  }
+}

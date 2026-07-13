@@ -232,6 +232,22 @@ impl CliError {
         )
     }
 
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    pub(crate) const fn state_commit_uncertain() -> Self {
+        Self::new(
+            "CLI_STATE_COMMIT_UNCERTAIN",
+            "the embedded state publish completed but its durable settlement is uncertain",
+            "inspect the current state generation before deciding whether to retry",
+            75,
+        )
+    }
+
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    #[cfg(test)]
+    pub(crate) fn is_state_commit_uncertain(self) -> bool {
+        self.code == "CLI_STATE_COMMIT_UNCERTAIN"
+    }
+
     #[cfg(feature = "full")]
     pub(crate) const fn state_corrupt() -> Self {
         Self::new(

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-final-release-verification.v1.schema.json",
+  "title": "CIGAR offline signed-beta release verification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "release_profile", "product_version", "source_revision", "artifact_count", "qualification_count", "signature_count", "trust_policy_sha256", "qualification_policy_sha256", "verification_time", "binary_executed", "published", "production_ready"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.final-release-verification.v1"},
+    "status": {"const": "passed"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "artifact_count": {"const": 6},
+    "qualification_count": {"const": 11},
+    "signature_count": {"type": "integer", "minimum": 33, "maximum": 45078},
+    "trust_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "qualification_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "verification_time": {"type": "integer", "minimum": 0, "maximum": 253402300799},
+    "binary_executed": {"const": false},
+    "published": {"const": false},
+    "production_ready": {"const": false}
+  }
+}

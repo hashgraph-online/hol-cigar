@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-product-version.v1.schema.json",
+  "title": "CIGAR beta product version",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "product", "version", "tag", "channel", "release_profile", "prerelease", "production_ready", "target_triple"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.product-version.v1"},
+    "product": {"const": "cigar"},
+    "version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "channel": {"const": "beta"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "prerelease": {"const": true},
+    "production_ready": {"const": false},
+    "target_triple": {"const": "x86_64-unknown-linux-gnu"}
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-artifact-matrix.v1.schema.json",
+  "title": "CIGAR beta artifact matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product", "product_version", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.artifact-matrix.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product": {"const": "cigar"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {"$ref": "#/$defs/source"},
+        {"$ref": "#/$defs/docs"},
+        {"$ref": "#/$defs/schemas"},
+        {"$ref": "#/$defs/conformance"},
+        {"$ref": "#/$defs/licenses"},
+        {"$ref": "#/$defs/binary"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "filename", "contract", "required_for_beta", "qualification"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "kind": {"type": "string", "minLength": 1},
+        "filename": {"type": "string", "pattern": "^(?!/)(?!.*\\.\\.).+\\.tar\\.gz$"},
+        "contract": {"type": "string", "pattern": "^packaging/(?:beta/)?contracts/[a-z0-9-]+\\.v1\\.json$"},
+        "required_for_beta": {"const": true},
+        "qualification": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["archive-contract", "conformance", "docs", "installed-artifact", "license", "offline", "provenance", "reproducibility", "sbom", "security", "signature"]}},
+        "target": {"const": "x86_64-unknown-linux-gnu"},
+        "executables": {"const": ["bin/cigar"]}
+      }
+    },
+    "source": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "source"}, "kind": {"const": "source-archive"}, "contract": {"const": "packaging/beta/contracts/source-archive.v1.json"}}, "required": ["id", "kind", "contract"]}]},
+    "docs": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "docs"}, "kind": {"const": "documentation-archive"}, "contract": {"const": "packaging/beta/contracts/docs-archive.v1.json"}}, "required": ["id", "kind", "contract"]}]},
+    "schemas": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "schemas"}, "kind": {"const": "schema-archive"}, "contract": {"const": "packaging/beta/contracts/schemas-archive.v1.json"}}, "required": ["id", "kind", "contract"]}]},
+    "conformance": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "conformance"}, "kind": {"const": "conformance-archive"}, "contract": {"const": "packaging/beta/contracts/conformance-archive.v1.json"}}, "required": ["id", "kind", "contract"]}]},
+    "licenses": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "licenses"}, "kind": {"const": "license-archive"}, "contract": {"const": "packaging/beta/contracts/license-archive.v1.json"}}, "required": ["id", "kind", "contract"]}]},
+    "binary": {"allOf": [{"$ref": "#/$defs/base"}, {"properties": {"id": {"const": "cigar-linux-x86_64-gnu"}, "kind": {"const": "binary-archive"}, "contract": {"const": "packaging/beta/contracts/cigar-binary-archive.v1.json"}, "target": {"const": "x86_64-unknown-linux-gnu"}, "executables": {"const": ["bin/cigar"]}}, "required": ["id", "kind", "contract", "target", "executables"]}]}
+  }
+}

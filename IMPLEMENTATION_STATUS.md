@@ -1,8 +1,8 @@
 # CIGAR v1 Implementation Status
 
 Source specification: CIGAR v1 Production Implementation Execution Spec  
-Repository baseline for this status update: `main` at `0d8a8115b4fa1bedec534eeca497a157836ed6da` (tree `0e23e2ea2759045a5f5b201df193ad0eca105bee`); the next clean candidate is not frozen and release evidence is not candidate-bound
-Updated: 2026-07-13T18:09:54Z
+Repository baseline for this status update: active development workspace; the immutable beta candidate commit/tree must be recorded externally by the source descriptor after freeze
+Updated: 2026-07-13T20:07:08Z
 Executor: Codex `/root`
 
 ## Environment
@@ -45,18 +45,30 @@ Executor: Codex `/root`
 | WP21 | in_progress | WP20 | Codex /root + SDK/release agents | `${CIGAR_EVIDENCE_DIR}/wp21-local-readiness.json`, `${CIGAR_EVIDENCE_DIR}/rust-publication-chain-local.json` | machine-recorded external, candidate-binding, installed-artifact, and live-operation gaps |
 | WP22 | not_started | WP21 | unassigned | pending | WP19-WP21 exits, exact committed candidate, installed bytes, duration and external release gates |
 
+WP19-WP22 remain unchanged by the initial beta lane. Beta completion cannot be used as their evidence or exit.
+
+## Initial beta lane
+
+| Release | Status | Exact scope | Workspace proof | Release blockers |
+|---|---|---|---|---|
+| `0.1.0-beta.1` | in_progress / STOP-SHIP | Workspace-state administration through `cigar`; target `x86_64-unknown-linux-gnu`; required qualification runtime Ubuntu 24.04 x86_64/glibc 2.39; six archives; no installer | Profile/schema checker and 8 tests; compile-time feature isolation; beta CLI suite with 22 tests | clean candidate, required builder and independent reproducibility, installed/offline/security qualification, legal approval, production beta signatures/trust roots, verified private reporting channel, offline verification, publisher approval/readback |
+
+The beta profile is `cigar.beta.embedded-local.linux-x86_64.v1`, but the implemented CLI behavior is narrower than “embedded-local execution”: it only administers local workspace state. It does not ingest, index, retrieve, compile context, run services, execute effects, or expose daemon/API/MCP/SDK/plugin/shared/remote/vector/OTLP surfaces. The exact contract and open checklist are in `docs/release/INITIAL_BETA.md` and the separate BETA tasks in `todo-launch.md`.
+
+The three listed proof groups passed in the development workspace only. They are not tied to a clean immutable candidate or built artifact and must be rerun after freeze. No beta candidate, archive, deterministic rebuild, installed-byte smoke, final-byte security scan, SBOM/provenance, production signature, offline verification, or publication task is complete.
+
 ## Current packet
 
 - Objective: finish WP19 quality hardening and integrated matrices, then carry the exact stabilized source through the locally testable WP20/WP21 gates without misrepresenting external evidence.
 - Completed transition: WP17 and WP18 are complete. All eight conformance profiles pass 24/24 cases; traceability is valid; 47 sealed security findings are reconciled; the 19-package Rust publication chain passes an offline local registry; seven demos, four SDK workflows, and the local CIGARBench protocol harness pass their honest local scopes.
-- Active hardening: the historical WP19 smoke campaign passed all 14 ASan/libFuzzer targets for at least 60 seconds each with no crash or sanitizer failure, plus the property/Loom and strict Miri gates. Its representative mutation slice reported 10/10 viable mutants caught. Exact copies of those development receipts are preserved outside the repository, but they intentionally do not satisfy the seven-day-per-target fuzz or four-hour full release-candidate mutation gates and are not bound to a clean candidate. The mutation receipt is diagnostic only: it does not retain the bounded raw outcomes needed to recompute every claimed metric, so the combined verifier fails closed and only the exact `verify-smoke` route can currently qualify WP19 smoke evidence.
-- Active release blockers: `HEAD` exists, but the worktree is dirty. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence; they must be regenerated into `${CIGAR_EVIDENCE_DIR}` against the next exact clean candidate rather than edited by hand. A closed mutation-evidence format and verifier are still required before any representative mutation result can qualify. The full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
-- Exact next action: reconcile and minimize intentional fuzz corpora, commit the resulting source/policy/status baseline, prove the candidate remains clean before and after smoke testing, then regenerate every invalidated matrix and WP19-WP21 receipt against that exact revision before beginning duration or external gates.
+- Active hardening: receipts preserved under the external `launch-000-*-4081a835` directories describe source `4081a8355b8e6bd5959dcc44c48b63b9d8dc55ca` (tree `844643f2d0daf36b4813c66fd62c3c65a2fdc952`). They record useful smoke observations, but their qualification/combined verification is failed or incomplete, they are not candidate-bound, and they do not satisfy the seven-day-per-target fuzz or four-hour release-candidate mutation gates. They are historical diagnostics only and cannot be copied, edited, or rebound as evidence for a later candidate or the beta.
+- Active release blockers: the latest observed committed development baseline exists, but the worktree is dirty. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence; they must be regenerated into `${CIGAR_EVIDENCE_DIR}` against the next exact clean candidate rather than edited by hand. A closed mutation-evidence format and verifier are still required before any representative mutation result can qualify. The full security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no qualified final `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
+- Exact next action: the beta artifact/evidence assembly path is implemented and its development-workspace tests pass; commit one exact beta candidate, rerun the source gates while proving it stays clean, then build and qualify the six-artifact beta set on native Ubuntu 24.04 x86_64/glibc 2.39 with Rust 1.92.0 and Python 3.14.6. In parallel, continue the independent WP19-WP21 GA work without treating beta evidence as GA evidence.
 
 ## Workspace state
 
 - Existing unrelated changes preserved: `prd.md` remains intact except evidence-backed completion marks requested by the user.
-- Commit state: the initial commit is `0d8a8115b4fa1bedec534eeca497a157836ed6da`; it is a historical baseline, not a qualified release candidate.
-- Uncommitted changes: WP00-WP18 remain complete; WP19-WP21 contain active source and evidence-workspace migration work. Historical WP19-WP21 qualification receipts were preserved byte-for-byte outside the repository before their tracked copies were removed.
+- Commit state: development history is not qualification evidence. The candidate commit/tree will be authoritative only when a clean detached source descriptor records it and every dependent gate is rerun.
+- Uncommitted changes: WP00-WP18 remain complete; WP19-WP21 and the separate beta lane contain active work. Historical WP19-WP21 receipts were preserved outside the repository before their tracked copies were removed; the `4081a835` receipt set is explicitly nonqualifying.
 - Generated and package artifacts require a final drift check after corpus reconciliation. No workspace result may be represented as release-candidate evidence while the worktree is dirty or while its source descriptor differs from the exact candidate commit/tree.
 - Migration/schema owner: Codex `/root`; SQLite and PostgreSQL histories remain append-only and checksum-verified.

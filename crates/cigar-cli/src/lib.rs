@@ -175,7 +175,10 @@ async fn execute(
         return Ok((command::man_page().to_owned(), String::new()));
     }
 
+    #[cfg(feature = "full")]
     let configuration = EffectiveConfiguration::load(&invocation)?;
+    #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
+    let configuration = EffectiveConfiguration::load_until(&invocation, deadline_at).await?;
     if tokio::time::Instant::now() >= deadline_at {
         return Err(CliError::deadline_exceeded());
     }
@@ -284,7 +287,13 @@ fn beta_build_metadata() -> Result<String, CliError> {
         release_profile: &'static str,
         channel: &'static str,
         production_ready: bool,
-        qualified_target_triple: &'static str,
+        qualification_status: &'static str,
+        required_target_triple: &'static str,
+        required_host_profile: &'static str,
+        required_distribution: &'static str,
+        required_distribution_version: &'static str,
+        required_libc: &'static str,
+        required_libc_version: &'static str,
         target_os: &'static str,
         target_arch: &'static str,
         target_env: &'static str,
@@ -307,7 +316,13 @@ fn beta_build_metadata() -> Result<String, CliError> {
         release_profile: "cigar.beta.embedded-local.linux-x86_64.v1",
         channel: "beta",
         production_ready: false,
-        qualified_target_triple: "x86_64-unknown-linux-gnu",
+        qualification_status: "requires-external-release-evidence",
+        required_target_triple: "x86_64-unknown-linux-gnu",
+        required_host_profile: "ubuntu-24.04-x86_64-glibc-2.39",
+        required_distribution: "ubuntu",
+        required_distribution_version: "24.04",
+        required_libc: "glibc",
+        required_libc_version: "2.39",
         target_os: std::env::consts::OS,
         target_arch: std::env::consts::ARCH,
         target_env: if cfg!(target_env = "gnu") {

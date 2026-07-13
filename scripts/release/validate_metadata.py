@@ -10,6 +10,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from beta_profile import validate as validate_beta_profile
 from release_lib import (
     ReleaseError,
     load_json,
@@ -387,6 +388,7 @@ def main() -> int:
         "reproducibility-report.v1.schema.json",
         "sbom-artifacts.v1.schema.json",
         "signature-envelope.v1.schema.json",
+        "source-descriptor.v1.schema.json",
         "wp20-local-readiness.v1.schema.json",
         "wp21-local-qualification.v1.schema.json",
     }
@@ -405,6 +407,7 @@ def main() -> int:
             "$schema"
         ) != "https://json-schema.org/draft/2020-12/schema" or not schema.get("$id"):
             raise ReleaseError(f"release schema is missing draft/id metadata: {path}")
+    validate_beta_profile(root)
     wp20_schema = load_json(
         root / "packaging/schemas/wp20-local-readiness.v1.schema.json"
     )

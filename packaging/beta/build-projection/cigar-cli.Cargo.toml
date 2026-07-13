@@ -1,0 +1,31 @@
+[package]
+name = "cigar-cli"
+description = "CIGAR embedded-local initial-beta command-line interface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = []
+full = []
+beta-embedded = []
+
+[dependencies]
+cigar-canon.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt", "signal", "sync", "time"] }
+toml.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "cigar"
+path = "src/main.rs"

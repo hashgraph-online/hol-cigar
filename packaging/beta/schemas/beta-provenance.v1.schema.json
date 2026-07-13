@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-provenance.v1.schema.json",
+  "title": "CIGAR unsigned beta SLSA provenance statement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "properties": {
+    "_type": {"const": "https://in-toto.io/Statement/v1"},
+    "subject": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/subject"}
+    },
+    "predicateType": {"const": "https://slsa.dev/provenance/v1"},
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildDefinition", "runDetails"],
+      "properties": {
+        "buildDefinition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["buildType", "externalParameters", "internalParameters", "resolvedDependencies"],
+          "properties": {
+            "buildType": {"const": "urn:cigar:build-type:beta-artifacts:v1"},
+            "externalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["releaseProfile", "productVersion", "tag", "target", "command", "defaultFeatures", "enabledFeatures", "sourceRevisionEnvironment"],
+              "properties": {
+                "releaseProfile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+                "productVersion": {"const": "0.1.0-beta.1"},
+                "tag": {"const": "v0.1.0-beta.1"},
+                "target": {"const": "x86_64-unknown-linux-gnu"},
+                "command": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+                "defaultFeatures": {"const": false},
+                "enabledFeatures": {"const": ["beta-embedded"]},
+                "sourceRevisionEnvironment": {"const": "CIGAR_SOURCE_REVISION"}
+              }
+            },
+            "internalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sourceDateEpoch", "source", "sourceDescriptor", "networkMode", "dependencySource", "toolchainSource", "locale", "timezone", "host", "tools", "binaryRepeatability"],
+              "properties": {
+                "sourceDateEpoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+                "source": {"type": "object"},
+                "sourceDescriptor": {"$ref": "#/$defs/fileReference"},
+                "networkMode": {"const": "cargo-offline-requested"},
+                "dependencySource": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["mode", "packageCount", "snapshotSha256"],
+                  "properties": {
+                    "mode": {"const": "verified-read-only-directory-source"},
+                    "packageCount": {"const": 47},
+                    "snapshotSha256": {"$ref": "#/$defs/sha256"}
+                  }
+                },
+                "toolchainSource": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["targetLibdirSha256", "fileCount", "bytes", "noticeBytes", "noticeSha256", "rustcCommit", "target", "toolchainVersion"],
+                  "properties": {
+                    "targetLibdirSha256": {"$ref": "#/$defs/sha256"},
+                    "fileCount": {"type": "integer", "minimum": 1},
+                    "bytes": {"type": "integer", "minimum": 1},
+                    "noticeBytes": {"type": "integer", "minimum": 1},
+                    "noticeSha256": {"$ref": "#/$defs/sha256"},
+                    "rustcCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                    "target": {"const": "x86_64-unknown-linux-gnu"},
+                    "toolchainVersion": {"const": "1.92.0"}
+                  }
+                },
+                "locale": {"const": "C"},
+                "timezone": {"const": "UTC"},
+                "host": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["system", "machine", "distribution", "distributionVersion", "libc", "libcVersion", "glibcIdentity", "runtimeBaseline", "target"],
+                  "properties": {
+                    "system": {"const": "linux"},
+                    "machine": {"const": "x86_64"},
+                    "distribution": {"const": "ubuntu"},
+                    "distributionVersion": {"const": "24.04"},
+                    "libc": {"const": "glibc"},
+                    "libcVersion": {"const": "2.39"},
+                    "glibcIdentity": {"const": "glibc 2.39"},
+                    "runtimeBaseline": {"const": "ubuntu-24.04-x86_64-glibc-2.39"},
+                    "target": {"const": "x86_64-unknown-linux-gnu"}
+                  }
+                },
+                "tools": {
+                  "type": "array",
+                  "minItems": 8,
+                  "maxItems": 9,
+                  "items": {"$ref": "#/$defs/tool"}
+                },
+                "binaryRepeatability": {
+                  "const": {"scope": "bin/cigar-payload", "sameBuilder": true, "cleanTargetDirectoryCount": 2, "buildCount": 2, "byteIdentical": true}
+                }
+              }
+            },
+            "resolvedDependencies": {
+              "type": "array",
+              "minItems": 50,
+              "items": {"$ref": "#/$defs/material"}
+            }
+          }
+        },
+        "runDetails": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["builder", "metadata", "byproducts"],
+          "properties": {
+            "builder": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {"id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:"}}
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["invocationId", "startedOn", "finishedOn"],
+              "properties": {
+                "invocationId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "startedOn": {"$ref": "#/$defs/timestamp"},
+                "finishedOn": {"$ref": "#/$defs/timestamp"}
+              }
+            },
+            "byproducts": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/subject"}}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "digest": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 128}
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "digest": {"$ref": "#/$defs/digest"}}
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest", "annotations"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "annotations": {"type": "object"}
+      }
+    },
+    "fileReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "bytes", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "version": {"type": "string", "minLength": 1, "maxLength": 16384}
+      }
+    }
+  }
+}

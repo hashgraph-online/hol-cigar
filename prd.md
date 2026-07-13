@@ -83,6 +83,8 @@ Production-ready means all of the following are true:
 
 [1.4 Fixed v1 scope](#bookmark=id.85nnzwq556tv)
 
+[1.4A Initial beta release lane](#initial-beta-release-lane)
+
 [1.5 Non-goals for implementation](#bookmark=id.1nkg0nnqeohn)
 
 [**2\. Fixed architecture and technical decisions**](#bookmark=id.f70c8l2od45a)
@@ -603,6 +605,56 @@ The v1 release includes:
 * Claude Code plugin with MCP, hooks, skills, diagnostics, and provider-present context accounting.  
 * Production diagnostics, metrics, tracing, backup, restore, migrations, health checks, and resource controls.  
 * Deterministic demos, conformance kit, performance harness, documentation, installers, packages, images, SBOMs, signatures, and release provenance.
+
+<a id="initial-beta-release-lane"></a>
+
+## **1.4A Initial beta release lane**
+
+The initial prerelease is a separate, narrower release lane. It does not amend, satisfy, waive, or mark complete any v1.0.0 requirement, WP19-WP22 exit, production-readiness claim, or final stop-ship checkbox in this specification.
+
+The pinned beta identity is:
+
+* Version `0.1.0-beta.1`; tag `v0.1.0-beta.1`.
+* Release profile `cigar.beta.embedded-local.linux-x86_64.v1`.
+* Single target `x86_64-unknown-linux-gnu`; required qualification runtime Ubuntu 24.04 x86_64 with glibc 2.39 only.
+* Prerelease channel `beta`; `production_ready` is false.
+* Archives only. There is no installer, daemon, service, image, SDK, plugin, or platform claim outside that target.
+
+The beta executable is limited to local workspace-state administration through these exact documented commands:
+
+* `cigar init [project-root]`
+* `cigar source add <source-id> <directory>`, `cigar source list`, and `cigar source remove <source-id>`
+* `cigar project list`, `attach`, `detach`, `switch`, `link`, and `unlink` with the arguments fixed by `crates/cigar-cli/assets/cigar-help-beta.txt`
+* `cigar focus switch <focus-id>` and `cigar focus close [focus-id]`
+* `cigar help` and `cigar version`
+
+The beta does not discover, ingest, atomize, query, index, retrieve, plan, compile context, run a daemon, expose an API or MCP server, dispatch effects, load extensions, export OTLP, use vector backends, support remote/shared operation, or distribute SDK/plugin/OCI/installer artifacts. The closed excluded capability identifiers are `catalog-discovery`, `catalog-ingest`, `catalog-query`, `context`, `retrieval`, `handoff`, `space`, `replay`, `policy`, `daemon`, `effects`, `extensions`, `installers`, `macos`, `mcp`, `oci`, `otlp`, `plugin`, `remote`, `sdk`, `shared`, `vector`, `windows`, `arm`, `backup`, `garbage-collection`, `diagnostics`, `serving`, and `completion-man`, as pinned by `packaging/beta/capability-policy.v1.json`. Unknown or excluded commands, options, and feature selections MUST fail closed.
+
+Exactly six artifacts are required:
+
+1. `cigar-0.1.0-beta.1-source.tar.gz`
+2. `cigar-0.1.0-beta.1-docs.tar.gz`
+3. `cigar-0.1.0-beta.1-schemas.tar.gz`
+4. `cigar-0.1.0-beta.1-conformance.tar.gz`
+5. `cigar-0.1.0-beta.1-licenses.tar.gz`
+6. `cigar-0.1.0-beta.1-x86_64-unknown-linux-gnu.tar.gz`, containing only `bin/cigar` as an executable payload
+
+Beta evidence MUST use `cigar.beta.qualification-evidence.v1` and `cigar.beta.release-evidence.v1`, with purpose `cigar-beta-qualification-evidence-v1`. Beta signatures MUST use the qualification-evidence purpose or the reserved `cigar-beta-release-*` purposes pinned in `packaging/beta/release-profile.v1.json`, according to the signed payload type. GA evidence schemas and GA signature purposes are forbidden in this lane; beta receipts cannot be relabeled or counted as GA evidence.
+
+Workspace implementation checks recorded at the time this amendment was written:
+
+* [x] The pinned beta profile/schema generator and fail-closed checker execute successfully, including their eight-test unit suite.
+* [x] Compile-time feature-isolation tests pass: full and beta selections are mutually exclusive, neither/both selections fail closed, and the beta dependency graph excludes the out-of-scope service/effect/plugin families asserted by the tests.
+* [x] The beta CLI test suite executes successfully in the development workspace (22 tests: 10 unit and 12 integration).
+* [x] The capability description matches the administration-only surface; undocumented metadata/confirmation aliases are rejected; descriptor-relative state locking and restrictive state/configuration checks regress directory replacement, link, permission, concurrency, cancellation, and deadline behavior.
+* [ ] Freeze a clean committed beta candidate and bind its full commit, tree, deterministic source archive, source-archive digest, and `SOURCE_DATE_EPOCH` to every receipt.
+* [ ] Produce all six allowlisted artifacts on a qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder with Rust 1.92.0 and Python 3.14.6; prove archive contracts, deterministic rebuilds, exact file modes, no extra files, and path/symlink safety.
+* [ ] Install the exact binary archive as an unprivileged user in a clean no-compiler environment; enforce no-egress offline operation and pass positive and excluded-surface smoke tests.
+* [ ] Pass final-byte vulnerability, malware-indicator, secret, endpoint, developer-path, license, SBOM, and provenance gates with the required artifact bindings.
+* [ ] Sign every qualification receipt and attachment plus artifacts, checksums, SBOM, provenance, and beta release evidence through the approved isolated signer; verify the complete set offline against independent trusted roots.
+* [ ] Obtain publisher approval, publish the already-qualified exact bytes under the prerelease tag without rebuilding, and read every public byte back by digest. The beta MUST NOT update a stable or `latest` channel.
+
+The unchecked gates require external qualified Ubuntu 24.04 x86_64/glibc 2.39 builder capacity, production beta signing identity and trust roots, final scanner data/approval, legal approval, a publisher-verified private security-reporting channel, and release-host publisher authority where applicable. The complete operator contract is `docs/release/INITIAL_BETA.md`. Until every beta gate passes against one immutable candidate, the beta verdict is **STOP-SHIP**.
 
 ## **1.5 Non-goals for implementation**
 

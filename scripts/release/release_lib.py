@@ -23,6 +23,14 @@ class ReleaseError(RuntimeError):
 
 
 _MAX_JSON_BYTES = 64 * 1024 * 1024
+_MAX_JSON_DEPTH = 64
+_MAX_JSON_NODES = 250_000
+_MAX_JSON_CONTAINER_ITEMS = 100_000
+_MAX_JSON_STRING_BYTES = 1024 * 1024
+_MAX_JSON_KEY_BYTES = 1024
+_MAX_JSON_AGGREGATE_STRING_BYTES = 32 * 1024 * 1024
+_MIN_JSON_INTEGER = -(1 << 63)
+_MAX_JSON_INTEGER = (1 << 63) - 1
 
 
 def repo_root() -> Path:
@@ -42,16 +50,103 @@ def _reject_json_constant(value: str) -> Any:
     raise ReleaseError(f"non-finite JSON number is forbidden: {value}")
 
 
-def _reject_nonfinite_numbers(value: Any) -> Any:
-    if isinstance(value, float) and not math.isfinite(value):
+def _parse_json_integer(value: str) -> int:
+    if len(value) > 20:
+        raise ReleaseError("JSON integer exceeds signed 64-bit range")
+    parsed = int(value, 10)
+    if not _MIN_JSON_INTEGER <= parsed <= _MAX_JSON_INTEGER:
+        raise ReleaseError("JSON integer exceeds signed 64-bit range")
+    return parsed
+
+
+def _parse_json_float(value: str) -> float:
+    if len(value) > 128:
+        raise ReleaseError("JSON floating-point literal is unbounded")
+    parsed = float(value)
+    if not math.isfinite(parsed):
         raise ReleaseError("non-finite JSON number is forbidden")
-    if isinstance(value, list):
-        for item in value:
-            _reject_nonfinite_numbers(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            _reject_nonfinite_numbers(item)
+    return parsed
+
+
+def _validate_json_tree(value: Any) -> Any:
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    nodes = 0
+    string_bytes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > _MAX_JSON_NODES:
+            raise ReleaseError(f"JSON exceeds {_MAX_JSON_NODES} aggregate nodes")
+        if depth > _MAX_JSON_DEPTH:
+            raise ReleaseError(f"JSON exceeds {_MAX_JSON_DEPTH} levels")
+        if current is None or isinstance(current, bool):
+            continue
+        if isinstance(current, int):
+            if not _MIN_JSON_INTEGER <= current <= _MAX_JSON_INTEGER:
+                raise ReleaseError("JSON integer exceeds signed 64-bit range")
+            continue
+        if isinstance(current, float):
+            if not math.isfinite(current):
+                raise ReleaseError("non-finite JSON number is forbidden")
+            continue
+        if isinstance(current, str):
+            encoded = len(current.encode("utf-8"))
+            if encoded > _MAX_JSON_STRING_BYTES:
+                raise ReleaseError("JSON string exceeds the per-string byte limit")
+            string_bytes += encoded
+            if string_bytes > _MAX_JSON_AGGREGATE_STRING_BYTES:
+                raise ReleaseError("JSON strings exceed the aggregate byte limit")
+            continue
+        if isinstance(current, list):
+            if len(current) > _MAX_JSON_CONTAINER_ITEMS:
+                raise ReleaseError("JSON array exceeds the item limit")
+            stack.extend((item, depth + 1) for item in reversed(current))
+            continue
+        if isinstance(current, dict):
+            if len(current) > _MAX_JSON_CONTAINER_ITEMS:
+                raise ReleaseError("JSON object exceeds the property limit")
+            for key, item in reversed(tuple(current.items())):
+                if not isinstance(key, str):
+                    raise ReleaseError("JSON object key is not a string")
+                encoded = len(key.encode("utf-8"))
+                if encoded > _MAX_JSON_KEY_BYTES:
+                    raise ReleaseError("JSON object key exceeds the byte limit")
+                string_bytes += encoded
+                if string_bytes > _MAX_JSON_AGGREGATE_STRING_BYTES:
+                    raise ReleaseError("JSON strings exceed the aggregate byte limit")
+                nodes += 1
+                if nodes > _MAX_JSON_NODES:
+                    raise ReleaseError(
+                        f"JSON exceeds {_MAX_JSON_NODES} aggregate nodes"
+                    )
+                stack.append((item, depth + 1))
+            continue
+        raise ReleaseError(f"unsupported JSON value type: {type(current).__name__}")
     return value
+
+
+def _loads_strict(payload: str, label: str) -> Any:
+    try:
+        value = json.loads(
+            payload,
+            object_pairs_hook=_object_without_duplicates,
+            parse_constant=_reject_json_constant,
+            parse_int=_parse_json_integer,
+            parse_float=_parse_json_float,
+        )
+        return _validate_json_tree(value)
+    except ReleaseError:
+        raise
+    except (
+        json.JSONDecodeError,
+        RecursionError,
+        MemoryError,
+        OverflowError,
+        ValueError,
+    ) as error:
+        raise ReleaseError(
+            f"cannot parse bounded strict JSON {label}: {error}"
+        ) from error
 
 
 def load_json(path: Path) -> Any:
@@ -59,13 +154,8 @@ def load_json(path: Path) -> Any:
         size = path.stat().st_size
         if size < 0 or size > _MAX_JSON_BYTES:
             raise ReleaseError(f"strict JSON exceeds {_MAX_JSON_BYTES} bytes: {path}")
-        value = json.loads(
-            path.read_text(encoding="utf-8"),
-            object_pairs_hook=_object_without_duplicates,
-            parse_constant=_reject_json_constant,
-        )
-        return _reject_nonfinite_numbers(value)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        return _loads_strict(path.read_text(encoding="utf-8"), str(path))
+    except (OSError, UnicodeError, RecursionError, MemoryError) as error:
         raise ReleaseError(f"cannot read strict JSON {path}: {error}") from error
 
 
@@ -73,17 +163,13 @@ def load_json_bytes(payload: bytes, label: str) -> Any:
     try:
         if len(payload) > _MAX_JSON_BYTES:
             raise ReleaseError(f"strict JSON exceeds {_MAX_JSON_BYTES} bytes: {label}")
-        value = json.loads(
-            payload.decode("utf-8"),
-            object_pairs_hook=_object_without_duplicates,
-            parse_constant=_reject_json_constant,
-        )
-        return _reject_nonfinite_numbers(value)
-    except (UnicodeError, json.JSONDecodeError) as error:
+        return _loads_strict(payload.decode("utf-8"), label)
+    except (UnicodeError, RecursionError, MemoryError) as error:
         raise ReleaseError(f"cannot read strict JSON {label}: {error}") from error
 
 
 def canonical_json_bytes(value: Any) -> bytes:
+    _validate_json_tree(value)
     try:
         serialized = json.dumps(
             value,
@@ -153,15 +239,30 @@ def run_bounded(
     timeout: float = 300,
     max_stdout: int = 4 * 1024 * 1024,
     max_stderr: int = 4 * 1024 * 1024,
+    input_payload: bytes | None = None,
+    max_stdin: int = 16 * 1024 * 1024,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run without a shell while draining both streams and killing on a byte-limit violation."""
     if not arguments or not all(
         isinstance(value, str) and value for value in arguments
     ):
         raise ReleaseError("bounded process arguments are invalid")
-    if timeout <= 0 or max_stdout < 0 or max_stderr < 0:
+    if (
+        timeout <= 0
+        or max_stdout < 0
+        or max_stderr < 0
+        or max_stdin < 0
+        or (input_payload is not None and not isinstance(input_payload, bytes))
+        or (input_payload is not None and len(input_payload) > max_stdin)
+    ):
         raise ReleaseError("bounded process limits are invalid")
+    input_file: Any | None = None
     try:
+        if input_payload is not None:
+            input_file = tempfile.TemporaryFile(mode="w+b")
+            input_file.write(input_payload)
+            input_file.flush()
+            input_file.seek(0)
         creation_flags = (
             int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
             if os.name == "nt"
@@ -171,7 +272,7 @@ def run_bounded(
             arguments,
             cwd=cwd,
             env=env,
-            stdin=subprocess.DEVNULL,
+            stdin=input_file if input_file is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
@@ -180,6 +281,9 @@ def run_bounded(
         )
     except OSError as error:
         raise ReleaseError(f"cannot execute {arguments[0]}: {error}") from error
+    finally:
+        if input_file is not None:
+            input_file.close()
     if process.stdout is None or process.stderr is None:
         process.kill()
         raise ReleaseError("bounded process did not expose output streams")

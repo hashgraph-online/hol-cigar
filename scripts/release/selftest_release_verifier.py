@@ -112,7 +112,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(
         prefix="cigar-release-verifier-selftest-"
     ) as directory:
-        root = Path(directory)
+        root = Path(directory).resolve(strict=True)
         packaging = root / "packaging"
         contracts = packaging / "contracts"
         contracts.mkdir(parents=True)

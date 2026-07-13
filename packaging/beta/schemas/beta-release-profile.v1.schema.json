@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-release-profile.v1.schema.json",
+  "title": "CIGAR initial beta release profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "product", "version", "tag", "channel", "prerelease", "production_ready", "support", "manifests", "build", "evidence_domain", "signature_domain"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.release-profile.v1"},
+    "profile_id": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product": {"const": "cigar"},
+    "version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "channel": {"const": "beta"},
+    "prerelease": {"const": true},
+    "production_ready": {"const": false},
+    "support": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_boundary", "deployment_mode", "host_arch", "host_os", "libc", "minimum_glibc_version", "network_scope", "qualified_distribution", "qualified_distribution_version", "runtime_baseline", "target_triple"],
+      "properties": {
+        "capability_boundary": {"const": "workspace-metadata-only"},
+        "deployment_mode": {"const": "embedded-local"},
+        "host_arch": {"const": "x86_64"},
+        "host_os": {"const": "linux"},
+        "libc": {"const": "gnu"},
+        "minimum_glibc_version": {"const": "2.39"},
+        "network_scope": {"const": "no-network-service-surface"},
+        "qualified_distribution": {"const": "ubuntu"},
+        "qualified_distribution_version": {"const": "24.04"},
+        "runtime_baseline": {"const": "ubuntu-24.04-x86_64-glibc-2.39"},
+        "target_triple": {"const": "x86_64-unknown-linux-gnu"}
+      }
+    },
+    "manifests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_matrix", "capability_policy", "cargo_resolution", "build_projection", "product_version", "qualification_policy", "source_archives"],
+      "properties": {
+        "artifact_matrix": {"const": "packaging/beta/artifact-matrix.v1.json"},
+        "capability_policy": {"const": "packaging/beta/capability-policy.v1.json"},
+        "cargo_resolution": {"const": "packaging/beta/cargo-resolution.v1.json"},
+        "build_projection": {"const": "packaging/beta/build-projection/projection.v1.json"},
+        "product_version": {"const": "packaging/beta/product-version.v1.json"},
+        "qualification_policy": {"const": "packaging/beta/qualification-policy.v1.json"},
+        "source_archives": {"const": "packaging/beta/source-archives.v1.json"}
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "package", "binary", "capability_profile", "default_features", "enabled_features", "source_revision_environment", "target", "rust_toolchain", "python_toolchain"],
+      "properties": {
+        "command": {"const": ["cargo", "build", "--locked", "--release", "-p", "cigar-cli", "--no-default-features", "--features", "beta-embedded", "--target", "x86_64-unknown-linux-gnu"]},
+        "package": {"const": "cigar-cli"},
+        "binary": {"const": "cigar"},
+        "capability_profile": {"const": "workspace-metadata-only"},
+        "default_features": {"const": false},
+        "enabled_features": {"const": ["beta-embedded"]},
+        "source_revision_environment": {"const": "CIGAR_SOURCE_REVISION"},
+        "target": {"const": "x86_64-unknown-linux-gnu"},
+        "rust_toolchain": {"const": "1.92.0"},
+        "python_toolchain": {"const": "3.14.6"}
+      }
+    },
+    "evidence_domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "release_schema_version", "purpose", "forbidden_ga_schema_versions"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.qualification-evidence.v1"},
+        "release_schema_version": {"const": "cigar.beta.release-evidence.v1"},
+        "purpose": {"const": "cigar-beta-qualification-evidence-v1"},
+        "forbidden_ga_schema_versions": {
+          "const": ["cigar.qualification-evidence.v1", "cigar.release-evidence.v1"]
+        }
+      }
+    },
+    "signature_domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope_schema_version", "allowed_purposes", "forbidden_ga_purposes"],
+      "properties": {
+        "envelope_schema_version": {"const": "cigar.signature-envelope.v1"},
+        "allowed_purposes": {
+          "const": ["cigar-beta-qualification-evidence-v1", "cigar-beta-release-artifact-v1", "cigar-beta-release-checksums-v1", "cigar-beta-release-evidence-v1", "cigar-beta-release-provenance-v1", "cigar-beta-release-sbom-v1", "cigar-beta-release-spdx-v1"]
+        },
+        "forbidden_ga_purposes": {
+          "const": ["release-artifact", "release-benchmark", "release-checksums", "release-conformance", "release-evidence", "release-provenance", "release-sbom"]
+        }
+      }
+    }
+  }
+}

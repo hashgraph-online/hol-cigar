@@ -1,12 +1,12 @@
 {
   "schema_version": "cigar.qualification-gaps.v1",
-  "generated_for": "development-candidate-pre-freeze",
+  "generated_for": "development-and-initial-beta-pre-freeze",
   "gaps": [
     {
       "id": "dirty-unbound-source-revision",
       "release_blocking": true,
       "owner": "release",
-      "condition": "An initial commit exists at 0d8a8115b4fa1bedec534eeca497a157836ed6da (tree 0e23e2ea2759045a5f5b201df193ad0eca105bee), but launch-preparation changes have not yet been frozen as the next clean candidate and existing local qualification receipts either predate the commit or bind only a workspace source digest.",
+      "condition": "The latest observed committed development baseline is b26e32439bcf5bf42f0d47d993b935cb3eb5f182 (tree 4db649dc926e1550637c6817a4b20e4fd4ca5a2c), but the worktree contains active implementation changes and has not been frozen as either a GA or beta candidate. Receipts for source 4081a8355b8e6bd5959dcc44c48b63b9d8dc55ca are failed or incomplete historical diagnostics, are not candidate-bound, and are nonqualifying.",
       "closure": "Reconcile the intentional source, corpus, policy, and status changes; commit the exact candidate; prove the worktree remains clean before and after smoke qualification; rebuild from its source archive; and regenerate every report with matching commit, tree, source-archive, policy, toolchain, and artifact digests."
     },
     {
@@ -85,6 +85,48 @@
       "owner": "release-security",
       "condition": "The deterministic local SBOM covers locked language components and binds supplied artifact bytes, but final native libraries, extension modules, installer contents, plugin executables, and OCI image layers are not all available for reconciliation.",
       "closure": "Inventory the unpacked final artifact set and OCI layers on release builders, merge native and packaged components into SPDX and CycloneDX, require reviewed licenses, and prove the SBOM artifact binding matches every distributed byte."
+    },
+    {
+      "id": "initial-beta-contract-and-state-safety",
+      "release_blocking": true,
+      "owner": "beta-runtime",
+      "condition": "The administration-only capability surface, exact command aliases, and descriptor-relative state locking were reconciled and regression-tested in committed development source. The remaining release blocker is a proven production path that assembles and independently verifies complete candidate, source-archive, artifact, version, profile, purpose, trust-policy, receipt-status, and complete-set bindings.",
+      "closure": "Complete the signed beta release-evidence assembly and independent offline verifier; cover missing, duplicate, stale, wrong-purpose, wrong-trust, and source/artifact substitution cases; then rerun the runtime and evidence suites against the exact frozen candidate."
+    },
+    {
+      "id": "initial-beta-clean-candidate-and-linux-builder",
+      "release_blocking": true,
+      "owner": "beta-release-ci",
+      "condition": "No clean committed 0.1.0-beta.1 candidate, deterministic source archive, canonical source descriptor, or qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder receipt exists. Development-workspace profile, feature-isolation, and CLI test passes are not candidate-bound release evidence.",
+      "closure": "Commit the exact beta source and prove a clean read-only checkout before and after gates; bind commit, tree, SOURCE_DATE_EPOCH, source-archive digest, policies, contracts, tools, builder, and network mode; then rerun all beta checks and build through a qualified isolated native Ubuntu 24.04 x86_64/glibc 2.39 builder with Rust 1.92.0 and Python 3.14.6, preferably with a second independent builder for reproducibility."
+    },
+    {
+      "id": "initial-beta-six-artifact-qualification",
+      "release_blocking": true,
+      "owner": "beta-distribution",
+      "condition": "The closed beta set of source, docs, schemas, conformance, licenses, and cigar-linux-x86_64-gnu archives has not been assembled from one candidate, contract-verified, or independently rebuilt; no complete beta archive assembler or independent offline verifier has qualified the set.",
+      "closure": "Produce exactly the six filenames pinned in packaging/beta/artifact-matrix.v1.json; require the binary archive to contain only bin/cigar; reject every missing/extra/unsafe member and metadata violation; generate canonical checksums; prove deterministic independent rebuilds; and verify the complete set offline against pinned contracts."
+    },
+    {
+      "id": "initial-beta-installed-offline-and-security",
+      "release_blocking": true,
+      "owner": "beta-security",
+      "condition": "No exact beta binary archive has passed unprivileged clean-host installation, OS-enforced no-egress execution, full included-command and excluded-surface smoke, state concurrency/durability tests, or approved packed-and-unpacked final-byte vulnerability, malware-indicator, secret, endpoint, and developer-path scans.",
+      "closure": "Install the exact archive on clean Ubuntu 24.04 x86_64/glibc 2.39 without source, compiler, privilege, or undeclared runtime packages; enforce network denial; pass all positive, restart, persistence, permission, concurrency, cancellation, malformed-state, and negative excluded-command cases; then bind zero-critical/high and no-unknown/skipped final-byte scan receipts to the source and artifact digests."
+    },
+    {
+      "id": "initial-beta-sbom-provenance-and-signing",
+      "release_blocking": true,
+      "owner": "beta-release-security",
+      "condition": "The beta has no approved final-content license reconciliation, artifact-bound SPDX and CycloneDX SBOMs, provenance for all six artifacts, isolated production beta signing identity, or independent trusted beta root bundle. Development identities and GA signature purposes do not qualify.",
+      "closure": "Reconcile exact source and binary contents with approved notices; generate complete artifact-bound SPDX/CycloneDX and provenance binding source, materials, builders, tools, parameters, network mode, and reproducibility; sign every qualification receipt and attachment using cigar-beta-qualification-evidence-v1 and sign artifacts, checksums, SBOMs, provenance, and release evidence using only their reserved cigar-beta-release-* purposes through the isolated signer; then verify every envelope offline against independent approved roots."
+    },
+    {
+      "id": "initial-beta-publication-and-readback",
+      "release_blocking": true,
+      "owner": "beta-release",
+      "condition": "No complete signed cigar.beta.release-evidence.v1 set, independent offline-verifier pass, release-owner approval, protected prerelease publisher authority, exact-byte publication, or public digest readback exists for v0.1.0-beta.1.",
+      "closure": "Assemble the closed beta evidence set with no failed, skipped, waived, unknown, stale, dirty, or unbound result; pass independent offline verification; obtain publisher approval; publish the already-qualified exact bytes without rebuilding; read every public object back by digest; and prove the prerelease did not update latest, stable, or GA channels."
     }
   ]
 }

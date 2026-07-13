@@ -12,13 +12,18 @@ use std::io::{Read as _, Write as _};
 use std::path::{Component, Path, PathBuf};
 #[cfg(test)]
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
 const MAX_BLOCKING_ADMINISTRATION_TASKS: usize = 4;
 const STATE_SCHEMA: &str = "cigar.cli-administration.v1";
 const STATE_FILE: &str = "state.json";
 const MAX_STATE_BYTES: u64 = 8 * 1024 * 1024;
+const PHASE_PREPARING: u8 = 0;
+const PHASE_CANCELLED: u8 = 1;
+const PHASE_COMMITTING: u8 = 2;
+const PHASE_COMMITTED: u8 = 3;
+const PHASE_UNCERTAIN: u8 = 4;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -69,23 +74,77 @@ struct ProjectLink {
 }
 
 #[derive(Clone, Debug)]
-struct BlockingCancellation(Arc<AtomicBool>);
+struct BlockingCancellation(Arc<AtomicU8>);
 
 impl BlockingCancellation {
     fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
+        Self(Arc::new(AtomicU8::new(PHASE_PREPARING)))
     }
 
-    fn cancel(&self) {
-        self.0.store(true, Ordering::Release);
+    fn cancel_before_commit(&self) -> bool {
+        match self.0.compare_exchange(
+            PHASE_PREPARING,
+            PHASE_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) | Err(PHASE_CANCELLED) => true,
+            Err(_) => false,
+        }
     }
 
     fn checkpoint(&self) -> Result<(), CliError> {
-        if self.0.load(Ordering::Acquire) {
+        if self.0.load(Ordering::Acquire) == PHASE_CANCELLED {
             Err(CliError::interrupted())
         } else {
             Ok(())
         }
+    }
+
+    fn begin_commit(&self) -> Result<(), CliError> {
+        match self.0.compare_exchange(
+            PHASE_PREPARING,
+            PHASE_COMMITTING,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) | Err(PHASE_COMMITTING) => Ok(()),
+            Err(PHASE_CANCELLED) => Err(CliError::interrupted()),
+            Err(_) => Err(CliError::state_unavailable()),
+        }
+    }
+
+    fn mark_committed(&self) -> Result<(), CliError> {
+        self.0
+            .compare_exchange(
+                PHASE_COMMITTING,
+                PHASE_COMMITTED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .map(|_| ())
+            .map_err(|_phase| CliError::state_commit_uncertain())
+    }
+
+    fn mark_uncertain(&self) {
+        let _ignored = self.0.compare_exchange(
+            PHASE_COMMITTING,
+            PHASE_UNCERTAIN,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
+
+    #[cfg(test)]
+    fn committed(&self) -> bool {
+        self.0.load(Ordering::Acquire) == PHASE_COMMITTED
+    }
+
+    fn crossed_commit_boundary(&self) -> bool {
+        matches!(
+            self.0.load(Ordering::Acquire),
+            PHASE_COMMITTING | PHASE_COMMITTED | PHASE_UNCERTAIN
+        )
     }
 }
 
@@ -93,14 +152,14 @@ struct CancelBlockingOnDrop(BlockingCancellation);
 
 impl Drop for CancelBlockingOnDrop {
     fn drop(&mut self) {
-        self.0.cancel();
+        let _cancelled = self.0.cancel_before_commit();
     }
 }
 
 #[cfg(test)]
 struct PostCommitCancellationProbe {
     reached: tokio::sync::oneshot::Sender<()>,
-    cancellation_observed: tokio::sync::oneshot::Sender<bool>,
+    release: std::sync::mpsc::Receiver<()>,
 }
 
 #[cfg(test)]
@@ -108,7 +167,7 @@ static POST_COMMIT_CANCELLATION_PROBE: Mutex<Option<PostCommitCancellationProbe>
     Mutex::new(None);
 
 #[cfg(test)]
-fn pause_after_committed_operation_for_test(cancellation: &BlockingCancellation) {
+fn pause_after_committed_operation_for_test() {
     let probe = POST_COMMIT_CANCELLATION_PROBE
         .lock()
         .ok()
@@ -117,15 +176,57 @@ fn pause_after_committed_operation_for_test(cancellation: &BlockingCancellation)
         return;
     };
     let _ignored = probe.reached.send(());
-    let mut cancellation_observed = false;
-    for _attempt in 0..2_000 {
-        if cancellation.0.load(Ordering::Acquire) {
-            cancellation_observed = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    let _ignored = probe.cancellation_observed.send(cancellation_observed);
+    let _ignored = probe
+        .release
+        .recv_timeout(std::time::Duration::from_secs(2));
+}
+
+#[cfg(test)]
+static POST_RENAME_FAILURE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[cfg(test)]
+fn fail_after_rename_for_test(path: &Path) -> bool {
+    POST_RENAME_FAILURE_PATH
+        .lock()
+        .ok()
+        .and_then(|mut configured| {
+            if configured.as_deref() == Some(path) {
+                configured.take()
+            } else {
+                None
+            }
+        })
+        .is_some()
+}
+
+#[cfg(test)]
+struct ParentSwapProbe {
+    parent: PathBuf,
+    displaced: PathBuf,
+    replacement: PathBuf,
+}
+
+#[cfg(test)]
+static PARENT_SWAP_PROBE: Mutex<Option<ParentSwapProbe>> = Mutex::new(None);
+
+#[cfg(test)]
+fn swap_parent_after_open_for_test(parent: &Path) -> Result<(), CliError> {
+    let mut slot = PARENT_SWAP_PROBE
+        .lock()
+        .map_err(|_poisoned| CliError::state_unavailable())?;
+    let probe = if slot.as_ref().is_some_and(|probe| probe.parent == parent) {
+        slot.take()
+    } else {
+        None
+    };
+    drop(slot);
+    let Some(probe) = probe else {
+        return Ok(());
+    };
+    std::fs::rename(&probe.parent, &probe.displaced)
+        .map_err(|_error| CliError::state_unavailable())?;
+    std::fs::rename(&probe.replacement, &probe.parent)
+        .map_err(|_error| CliError::state_unavailable())
 }
 
 struct StateDirectoryLock {
@@ -279,18 +380,27 @@ impl StateDirectoryLock {
         Ok(bytes)
     }
 
-    fn write_bytes(&self, bytes: &[u8]) -> Result<(), CliError> {
+    fn write_bytes(
+        &self,
+        bytes: &[u8],
+        cancellation: &BlockingCancellation,
+    ) -> Result<(), CliError> {
         self.ensure_path_binding()?;
         let temporary = format!(
             ".cigar-beta-tmp-{}-{}",
             std::process::id(),
             random_suffix()?
         );
-        self.write_bytes_to_temporary(&temporary, bytes)
+        self.write_bytes_to_temporary(&temporary, bytes, cancellation)
     }
 
     #[cfg(unix)]
-    fn write_bytes_to_temporary(&self, temporary: &str, bytes: &[u8]) -> Result<(), CliError> {
+    fn write_bytes_to_temporary(
+        &self,
+        temporary: &str,
+        bytes: &[u8],
+        cancellation: &BlockingCancellation,
+    ) -> Result<(), CliError> {
         use rustix::fs::{AtFlags, Mode, OFlags, openat, renameat, unlinkat};
 
         let owned = openat(
@@ -321,12 +431,19 @@ impl StateDirectoryLock {
             file.sync_all()
                 .map_err(|_error| CliError::state_unavailable())?;
             self.ensure_path_binding()?;
+            cancellation.begin_commit()?;
             renameat(&self.directory, temporary, &self.directory, STATE_FILE)
                 .map_err(|_error| CliError::state_unavailable())?;
-            self.directory
-                .sync_all()
-                .map_err(|_error| CliError::state_unavailable())?;
-            self.ensure_path_binding()
+            #[cfg(test)]
+            if fail_after_rename_for_test(&self.path) {
+                cancellation.mark_uncertain();
+                return Err(CliError::state_commit_uncertain());
+            }
+            if self.directory.sync_all().is_err() || self.ensure_path_binding().is_err() {
+                cancellation.mark_uncertain();
+                return Err(CliError::state_commit_uncertain());
+            }
+            cancellation.mark_committed()
         })();
         if result.is_err() {
             let _ignored = unlinkat(&self.directory, temporary, AtFlags::empty());
@@ -335,7 +452,12 @@ impl StateDirectoryLock {
     }
 
     #[cfg(not(unix))]
-    fn write_bytes_to_temporary(&self, temporary: &str, bytes: &[u8]) -> Result<(), CliError> {
+    fn write_bytes_to_temporary(
+        &self,
+        temporary: &str,
+        bytes: &[u8],
+        cancellation: &BlockingCancellation,
+    ) -> Result<(), CliError> {
         let path = self.path.join(temporary);
         let mut options = std::fs::OpenOptions::new();
         let result = (|| {
@@ -349,12 +471,19 @@ impl StateDirectoryLock {
             file.sync_all()
                 .map_err(|_error| CliError::state_unavailable())?;
             self.ensure_path_binding()?;
+            cancellation.begin_commit()?;
             std::fs::rename(&path, self.path.join(STATE_FILE))
                 .map_err(|_error| CliError::state_unavailable())?;
-            self.directory
-                .sync_all()
-                .map_err(|_error| CliError::state_unavailable())?;
-            self.ensure_path_binding()
+            #[cfg(test)]
+            if fail_after_rename_for_test(&self.path) {
+                cancellation.mark_uncertain();
+                return Err(CliError::state_commit_uncertain());
+            }
+            if self.directory.sync_all().is_err() || self.ensure_path_binding().is_err() {
+                cancellation.mark_uncertain();
+                return Err(CliError::state_commit_uncertain());
+            }
+            cancellation.mark_committed()
         })();
         if result.is_err() {
             let _ignored = std::fs::remove_file(path);
@@ -420,18 +549,21 @@ pub(crate) async fn execute(
         }
     };
 
-    cancellation.cancel();
+    if cancellation.cancel_before_commit() {
+        drop(cancel_on_drop);
+        return match stop_reason {
+            Some(StopReason::Interrupted) => Err(CliError::interrupted()),
+            Some(StopReason::Deadline) => Err(CliError::deadline_exceeded()),
+            None => Err(CliError::state_unavailable()),
+        };
+    }
+    // Publication already won the atomic boundary. Settle it so a visible mutation can never be
+    // reported as an ordinary cancellation or timeout.
     let settled = receiver.await;
     drop(cancel_on_drop);
-    if let Ok(Ok(response)) = settled {
-        // The update crossed its commit boundary before cancellation. Report the committed
-        // result instead of returning an ambiguous timeout while work continues in the background.
-        return Ok(response);
-    }
-    match stop_reason {
-        Some(StopReason::Interrupted) => Err(CliError::interrupted()),
-        Some(StopReason::Deadline) => Err(CliError::deadline_exceeded()),
-        None => Err(CliError::state_unavailable()),
+    match settled {
+        Ok(result) => result,
+        Err(_closed) => Err(CliError::state_unavailable()),
     }
 }
 
@@ -465,15 +597,14 @@ fn execute_blocking(
             _ => return Err(CliError::invalid_command()),
         }
     };
-    let committed_operation = invocation.command.mutates() && !invocation.options.dry_run;
     #[cfg(test)]
-    if committed_operation {
-        pause_after_committed_operation_for_test(cancellation);
+    if cancellation.committed() {
+        pause_after_committed_operation_for_test();
     }
     // A successful committing operation has crossed its durable state boundary. Cancellation
     // remains authoritative before that boundary, while changing the result afterwards would
     // report a committed mutation as failed and make a retry ambiguous.
-    if !committed_operation {
+    if !cancellation.crossed_commit_boundary() {
         cancellation.checkpoint()?;
     }
     Ok(OperationResponse {
@@ -514,6 +645,7 @@ fn initialize(
     }
     if !exists {
         cancellation.checkpoint()?;
+        cancellation.begin_commit()?;
         create_private_directory(&state_directory)?;
     }
     let state =
@@ -528,7 +660,7 @@ fn initialize(
         }));
     }
     if !invocation.options.dry_run {
-        write_state(&state, &LocalState::default())?;
+        write_state(&state, &LocalState::default(), cancellation)?;
     }
     Ok(json!({
         "initialized": !invocation.options.dry_run,
@@ -791,7 +923,7 @@ fn persist_mutation(
     validate_state(state)?;
     cancellation.checkpoint()?;
     if !invocation.options.dry_run {
-        write_state(store, state)?;
+        write_state(store, state, cancellation)?;
     }
     Ok(())
 }
@@ -843,13 +975,17 @@ fn validate_state(state: &LocalState) -> Result<(), CliError> {
     Ok(())
 }
 
-fn write_state(store: &StateDirectoryLock, state: &LocalState) -> Result<(), CliError> {
+fn write_state(
+    store: &StateDirectoryLock,
+    state: &LocalState,
+    cancellation: &BlockingCancellation,
+) -> Result<(), CliError> {
     validate_state(state)?;
     let bytes = serde_json::to_vec(state).map_err(|_error| CliError::state_corrupt())?;
     if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_STATE_BYTES) {
         return Err(CliError::state_corrupt());
     }
-    store.write_bytes(&bytes)
+    store.write_bytes(&bytes, cancellation)
 }
 
 fn validate_name(value: &str) -> Result<(), CliError> {
@@ -925,9 +1061,13 @@ fn require_no_positionals(invocation: &ParsedInvocation) -> Result<(), CliError>
 }
 
 fn create_private_directory(path: &Path) -> Result<(), CliError> {
-    if path.exists() {
-        validate_private_directory(path)?;
-        return Ok(());
+    match std::fs::symlink_metadata(path) {
+        Ok(_metadata) => {
+            validate_private_directory(path)?;
+            return Ok(());
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_error) => return Err(CliError::state_unavailable()),
     }
     let parent = path.parent().ok_or_else(CliError::state_unavailable)?;
     let parent_metadata =
@@ -942,22 +1082,75 @@ fn create_private_directory(path: &Path) -> Result<(), CliError> {
             return Err(CliError::state_unavailable());
         }
     }
-    let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
-        use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
-        builder.mode(0o700);
-        builder
-            .create(path)
+        use rustix::fs::{Mode, OFlags, mkdirat, openat};
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+        let name = path.file_name().ok_or_else(CliError::state_unavailable)?;
+        let parent_directory = open_directory_nofollow(parent)?;
+        let opened_parent = parent_directory
+            .metadata()
             .map_err(|_error| CliError::state_unavailable())?;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+        let owner = rustix::process::geteuid().as_raw();
+        if parent_metadata.dev() != opened_parent.dev()
+            || parent_metadata.ino() != opened_parent.ino()
+            || parent_metadata.uid() != owner
+            || opened_parent.uid() != owner
+            || opened_parent.mode() & 0o022 != 0
+        {
+            return Err(CliError::state_unavailable());
+        }
+        #[cfg(test)]
+        swap_parent_after_open_for_test(parent)?;
+        mkdirat(
+            &parent_directory,
+            name,
+            Mode::RUSR | Mode::WUSR | Mode::XUSR,
+        )
+        .map_err(|_error| CliError::state_unavailable())?;
+        let created = openat(
+            &parent_directory,
+            name,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(|_error| CliError::state_unavailable())?;
+        created
+            .set_permissions(std::fs::Permissions::from_mode(0o700))
             .map_err(|_error| CliError::state_unavailable())?;
+        let created_metadata = created
+            .metadata()
+            .map_err(|_error| CliError::state_unavailable())?;
+        let bound = open_directory_nofollow(path)?;
+        let bound_metadata = bound
+            .metadata()
+            .map_err(|_error| CliError::state_unavailable())?;
+        let rebound_parent = open_directory_nofollow(parent)?;
+        let rebound_parent_metadata = rebound_parent
+            .metadata()
+            .map_err(|_error| CliError::state_unavailable())?;
+        if created_metadata.dev() != bound_metadata.dev()
+            || created_metadata.ino() != bound_metadata.ino()
+            || created_metadata.uid() != owner
+            || bound_metadata.uid() != owner
+            || created_metadata.mode() & 0o077 != 0
+            || bound_metadata.mode() & 0o077 != 0
+            || opened_parent.dev() != rebound_parent_metadata.dev()
+            || opened_parent.ino() != rebound_parent_metadata.ino()
+        {
+            return Err(CliError::state_unavailable());
+        }
+        Ok(())
     }
     #[cfg(not(unix))]
-    builder
-        .create(path)
-        .map_err(|_error| CliError::state_unavailable())?;
-    validate_private_directory(path)
+    {
+        std::fs::DirBuilder::new()
+            .create(path)
+            .map_err(|_error| CliError::state_unavailable())?;
+        validate_private_directory(path)
+    }
 }
 
 fn validate_private_directory(path: &Path) -> Result<(), CliError> {
@@ -1028,19 +1221,59 @@ fn random_suffix() -> Result<String, CliError> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::{
-        BlockingCancellation, LocalState, POST_COMMIT_CANCELLATION_PROBE,
-        PostCommitCancellationProbe, StateDirectoryLock, create_private_directory, execute,
-        read_state, write_state,
+        BlockingCancellation, LocalState, PARENT_SWAP_PROBE, POST_COMMIT_CANCELLATION_PROBE,
+        POST_RENAME_FAILURE_PATH, ParentSwapProbe, PostCommitCancellationProbe, StateDirectoryLock,
+        create_private_directory, execute, read_state, write_state,
     };
     use crate::TerminalContext;
     use crate::arguments::parse;
     use crate::configuration::EffectiveConfiguration;
     use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMPORARY_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> std::io::Result<Self> {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let base = std::env::temp_dir();
+            for _attempt in 0..128 {
+                let sequence = TEMPORARY_COUNTER.fetch_add(1, Ordering::Relaxed);
+                let path = base.join(format!("cigar-beta-test-{}-{sequence}", std::process::id()));
+                match std::fs::create_dir(&path) {
+                    Ok(()) => {
+                        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
+                        return Ok(Self(path));
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "could not create a unique beta test directory",
+            ))
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ignored = std::fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[tokio::test]
     async fn cancellation_after_durable_commit_reports_the_committed_result()
     -> Result<(), Box<dyn std::error::Error>> {
-        let root = tempfile::tempdir()?;
+        let root = TestDirectory::new()?;
         let state_directory = root.path().join("state");
         let source_directory = root.path().join("source");
         let config_path = root.path().join("beta.toml");
@@ -1049,7 +1282,8 @@ mod tests {
         let setup_cancellation = BlockingCancellation::new();
         let setup_lock = StateDirectoryLock::acquire(&state_directory, true, &setup_cancellation)
             .map_err(|error| error.to_string())?;
-        write_state(&setup_lock, &LocalState::default()).map_err(|error| error.to_string())?;
+        write_state(&setup_lock, &LocalState::default(), &setup_cancellation)
+            .map_err(|error| error.to_string())?;
         drop(setup_lock);
         std::fs::write(
             &config_path,
@@ -1079,7 +1313,7 @@ mod tests {
         let configuration =
             EffectiveConfiguration::load(&invocation).map_err(|error| error.to_string())?;
         let (reached_sender, reached_receiver) = tokio::sync::oneshot::channel();
-        let (observed_sender, observed_receiver) = tokio::sync::oneshot::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
         {
             let mut probe = POST_COMMIT_CANCELLATION_PROBE
                 .lock()
@@ -1089,21 +1323,24 @@ mod tests {
             }
             *probe = Some(PostCommitCancellationProbe {
                 reached: reached_sender,
-                cancellation_observed: observed_sender,
+                release: release_receiver,
             });
         }
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(25);
         let execution =
             tokio::spawn(async move { execute(&invocation, &configuration, deadline).await });
         reached_receiver.await?;
-        assert!(observed_receiver.await?);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(!execution.is_finished());
+        release_sender.send(())?;
         let response = execution.await?.map_err(|error| error.to_string())?;
         assert_eq!(
             response.operation_id,
             "cigar.cli.beta-embedded.source-add.v1"
         );
 
-        let observed = StateDirectoryLock::acquire(&state_directory, false, &setup_cancellation)
+        let observed_cancellation = BlockingCancellation::new();
+        let observed = StateDirectoryLock::acquire(&state_directory, false, &observed_cancellation)
             .map_err(|error| error.to_string())?;
         let state = read_state(&observed).map_err(|error| error.to_string())?;
         assert_eq!(state.generation, 2);
@@ -1114,23 +1351,33 @@ mod tests {
     #[test]
     fn descriptor_relative_state_rejects_a_locked_directory_swap()
     -> Result<(), Box<dyn std::error::Error>> {
-        let root = tempfile::tempdir()?;
+        let root = TestDirectory::new()?;
         let configured = root.path().join("configured");
         let replacement = root.path().join("replacement");
         let displaced = root.path().join("displaced");
         create_private_directory(&configured).map_err(|error| error.to_string())?;
         create_private_directory(&replacement).map_err(|error| error.to_string())?;
-        let cancellation = BlockingCancellation::new();
-        let configured_lock = StateDirectoryLock::acquire(&configured, true, &cancellation)
+        let lock_cancellation = BlockingCancellation::new();
+        let configured_lock = StateDirectoryLock::acquire(&configured, true, &lock_cancellation)
             .map_err(|error| error.to_string())?;
-        let replacement_lock = StateDirectoryLock::acquire(&replacement, true, &cancellation)
+        let replacement_lock = StateDirectoryLock::acquire(&replacement, true, &lock_cancellation)
             .map_err(|error| error.to_string())?;
-        write_state(&configured_lock, &LocalState::default()).map_err(|error| error.to_string())?;
+        write_state(
+            &configured_lock,
+            &LocalState::default(),
+            &BlockingCancellation::new(),
+        )
+        .map_err(|error| error.to_string())?;
         let replacement_state = LocalState {
             generation: 7,
             ..LocalState::default()
         };
-        write_state(&replacement_lock, &replacement_state).map_err(|error| error.to_string())?;
+        write_state(
+            &replacement_lock,
+            &replacement_state,
+            &BlockingCancellation::new(),
+        )
+        .map_err(|error| error.to_string())?;
 
         std::fs::rename(&configured, &displaced)?;
         std::fs::rename(&replacement, &configured)?;
@@ -1138,12 +1385,20 @@ mod tests {
             generation: 2,
             ..LocalState::default()
         };
-        assert!(write_state(&configured_lock, &redirected_mutation).is_err());
+        assert!(
+            write_state(
+                &configured_lock,
+                &redirected_mutation,
+                &BlockingCancellation::new()
+            )
+            .is_err()
+        );
 
         drop(replacement_lock);
         drop(configured_lock);
-        let observed = StateDirectoryLock::acquire(&configured, false, &cancellation)
-            .map_err(|error| error.to_string())?;
+        let observed =
+            StateDirectoryLock::acquire(&configured, false, &BlockingCancellation::new())
+                .map_err(|error| error.to_string())?;
         assert_eq!(
             read_state(&observed)
                 .map_err(|error| error.to_string())?
@@ -1158,19 +1413,79 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         use std::os::unix::fs::PermissionsExt as _;
 
-        let root = tempfile::tempdir()?;
+        let root = TestDirectory::new()?;
         let configured = root.path().join("configured");
         create_private_directory(&configured).map_err(|error| error.to_string())?;
         let cancellation = BlockingCancellation::new();
         let lock = StateDirectoryLock::acquire(&configured, true, &cancellation)
             .map_err(|error| error.to_string())?;
-        write_state(&lock, &LocalState::default()).map_err(|error| error.to_string())?;
+        write_state(&lock, &LocalState::default(), &BlockingCancellation::new())
+            .map_err(|error| error.to_string())?;
 
         std::fs::set_permissions(&configured, std::fs::Permissions::from_mode(0o750))?;
         assert!(read_state(&lock).is_err());
-        assert!(write_state(&lock, &LocalState::default()).is_err());
+        assert!(write_state(&lock, &LocalState::default(), &BlockingCancellation::new()).is_err());
 
         std::fs::set_permissions(&configured, std::fs::Permissions::from_mode(0o700))?;
+        Ok(())
+    }
+
+    #[test]
+    fn post_rename_failure_is_reported_as_commit_uncertain()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = TestDirectory::new()?;
+        let configured = root.path().join("configured");
+        create_private_directory(&configured).map_err(|error| error.to_string())?;
+        let lock = StateDirectoryLock::acquire(&configured, true, &BlockingCancellation::new())
+            .map_err(|error| error.to_string())?;
+        write_state(&lock, &LocalState::default(), &BlockingCancellation::new())
+            .map_err(|error| error.to_string())?;
+        {
+            let mut failure_path = POST_RENAME_FAILURE_PATH
+                .lock()
+                .map_err(|_poisoned| "post-rename failure probe was poisoned")?;
+            if failure_path.is_some() {
+                return Err("post-rename failure probe was already installed".into());
+            }
+            *failure_path = Some(configured.clone());
+        }
+        let updated = LocalState {
+            generation: 2,
+            ..LocalState::default()
+        };
+        let result = write_state(&lock, &updated, &BlockingCancellation::new());
+        assert!(result.is_err_and(|error| error.is_state_commit_uncertain()));
+        let observed = read_state(&lock).map_err(|error| error.to_string())?;
+        assert_eq!(observed.generation, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn descriptor_relative_creation_rejects_a_parent_swap() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = TestDirectory::new()?;
+        let parent = root.path().join("parent");
+        let displaced = root.path().join("displaced");
+        let replacement = root.path().join("replacement");
+        create_private_directory(&parent).map_err(|error| error.to_string())?;
+        create_private_directory(&replacement).map_err(|error| error.to_string())?;
+        {
+            let mut probe = PARENT_SWAP_PROBE
+                .lock()
+                .map_err(|_poisoned| "parent-swap probe was poisoned")?;
+            if probe.is_some() {
+                return Err("parent-swap probe was already installed".into());
+            }
+            *probe = Some(ParentSwapProbe {
+                parent: parent.clone(),
+                displaced: displaced.clone(),
+                replacement: replacement.clone(),
+            });
+        }
+
+        assert!(create_private_directory(&parent.join("state")).is_err());
+        assert!(!parent.join("state").exists());
+        assert!(displaced.join("state").is_dir());
         Ok(())
     }
 }

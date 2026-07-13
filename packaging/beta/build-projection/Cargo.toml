@@ -1,0 +1,39 @@
+[workspace]
+resolver = "3"
+members = ["crates/cigar-canon", "crates/cigar-cli"]
+default-members = ["crates/cigar-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+cigar-canon = { version = "=0.1.0", path = "crates/cigar-canon" }
+getrandom = { version = "=0.4.3" }
+rustix = { version = "=1.1.4", features = ["process"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150" }
+sha2 = { version = "=0.11.0" }
+toml = { version = "=1.1.2" }
+unicode-normalization = { version = "=0.1.25" }
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+warnings = "deny"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

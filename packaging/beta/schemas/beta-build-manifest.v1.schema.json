@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-build-manifest.v1.schema.json",
+  "title": "CIGAR unsigned beta build manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product_version", "tag", "prerelease", "production_ready", "target", "source_date_epoch", "source", "source_descriptor", "artifacts", "checksums", "sbom", "spdx", "provenance", "binary_build", "claims"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.build-manifest.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "prerelease": {"const": true},
+    "production_ready": {"const": false},
+    "target": {"const": "x86_64-unknown-linux-gnu"},
+    "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "tree", "committed", "clean"],
+      "properties": {
+        "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+        "tree": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+        "committed": {"const": true},
+        "clean": {"const": true}
+      }
+    },
+    "source_descriptor": {"$ref": "#/$defs/fileReference"},
+    "artifacts": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "object"}},
+    "checksums": {"$ref": "#/$defs/fileReference"},
+    "sbom": {"$ref": "#/$defs/fileReference"},
+    "spdx": {"$ref": "#/$defs/fileReference"},
+    "provenance": {"$ref": "#/$defs/fileReference"},
+    "binary_build": {"type": "object"},
+    "claims": {"const": {"signed": false, "published": false, "production_ready": false}}
+  },
+  "$defs": {
+    "fileReference": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256", "bytes"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "bytes": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

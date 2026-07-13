@@ -2,7 +2,7 @@
 
 Audience: Codex GPT-5.6 SOL and release operators
 Generated from repository state: 2026-07-13
-Observed commit: `0d8a8115b4fa1bedec534eeca497a157836ed6da` (`Initial Commit`)
+Candidate identity: derive the full commit/tree from the immutable source descriptor after freeze; a hash embedded in this mutable backlog is never release identity
 Target: a clean, immutable CIGAR v1.0.0 candidate and exact-byte production release
 
 ## Launch verdict
@@ -13,7 +13,7 @@ Do not tag, publish, notarize, sign, or describe this revision as production-rea
 
 | Area | Observed state | Required state |
 |---|---|---|
-| Source | `HEAD` exists, but two WP19 receipts are modified, 25 tracked fuzz corpus entries are deleted, and 6,189 corpus entries are untracked | One later clean candidate commit; qualification writes outside the checkout |
+| Source | Development history and historical receipts are not release identity; current workspace changes remain unqualified until frozen and rerun | One clean candidate commit/tree in the external source descriptor; qualification writes outside the checkout; no receipt rebinding |
 | Command plane | `cargo xtask test all`, named suites, `bench`, `package`, and `release-verify` deliberately fail; some accepted flags are ignored | Every PRD section 28.1 command dispatches to a distinct real, fail-closed gate |
 | Security | `reports/security-matrix.local.json` is stale and failed 8/10; Semgrep has five reviewed but blocking results | All release cases and pinned scans pass on applicable native platforms |
 | Security review | Previous scan read 73/380 source-like files fully and retains 12 deferred proof gaps | Fresh deep scan of exact candidate, 100% claimed-surface disposition, zero critical/high |
@@ -24,9 +24,80 @@ Do not tag, publish, notarize, sign, or describe this revision as production-rea
 | WP20 | Seven demos, four recorded SDK workflows, and 540-event dry run pass local scope only | Installed-byte runs, real comparators, >= 270 independent adjudicated tasks, independent evaluator |
 | Packaging | Six source-derived archives have producers; 12/18 matrix entries do not; no `dist/` exists | Every claimed artifact has a deterministic producer, contract, installed test, and final-byte evidence |
 | Licensing | 568 components inventoried; 20 are `review-required` | Zero unreviewed distributed components |
-| Metadata | Matrix is `0.1.0`/`development` while WP22 requires v1.0.0; 11 gaps remain | One version/ABI and every gap closed by exact evidence |
+| Metadata | The GA matrix remains development while WP22 requires v1.0.0. A separate `0.1.0-beta.1` profile exists but is not candidate- or artifact-qualified; all GA and beta qualification gaps remain open | One GA version/ABI and every GA gap closed independently; one exact beta identity and every beta gap closed before prerelease publication |
 | Operations | Eight runbooks pass static validation only | Eight live exercises against exact installed bytes |
-| CI/repository | Only fast and security workflows exist; no Git remote is configured in the observed checkout | Authoritative protected remote plus merge, nightly, weekly, RC, build, qualification, signing, and promotion workflows |
+| CI/repository | Fast and security workflows plus an unsigned, non-qualifying beta diagnostic workflow exist; no Git remote is configured in the observed checkout | Authoritative protected remote plus merge, nightly, weekly, RC, build, qualification, signing, and promotion workflows |
+
+## Initial beta lane — `0.1.0-beta.1`
+
+**STOP-SHIP. This is a prerelease workspace-administration lane, not a v1.0.0 shortcut and not a production-ready build.**
+
+Beta completion does not mark any GA task, WP19, WP20, WP21, WP22, or final PRD checklist item complete. The exact contract is in `docs/release/INITIAL_BETA.md`.
+
+Pinned identity: profile `cigar.beta.embedded-local.linux-x86_64.v1`, tag `v0.1.0-beta.1`, target `x86_64-unknown-linux-gnu`, required qualification runtime Ubuntu 24.04 x86_64 with glibc 2.39, Rust 1.92.0, Python 3.14.6, prerelease `true`, production-ready `false`. The included executable surface is limited to local workspace-state administration: `init`; source add/list/remove; project list/attach/detach/switch/link/unlink; focus switch/close; help; and version. It does not ingest, index, retrieve, compile context, serve a daemon/API/MCP endpoint, execute effects, load extensions/plugins, export OTLP, provide SDKs, use vector/remote/shared modes, or claim macOS, Windows, ARM, OCI, or installers.
+
+### BETA-000 — Close and verify the beta contract
+
+Dependencies: none
+Executor: Codex
+Beta release blocking: yes
+
+- [x] Execute the pinned profile/schema checker and its fail-closed eight-test suite in the development workspace.
+- [x] Execute compile-time feature-isolation checks: full and beta modes remain separate, neither/both fail closed, and asserted excluded dependency families are absent from the beta graph.
+- [x] Execute the beta CLI suite in the development workspace; 22 tests (10 unit and 12 integration) passed at the recorded proof point.
+- [x] Narrow the capability manifest's broad “embedded-local execution” description to the actual workspace-administration-only behavior and make profile, compiled help, implementation, tests, and public documentation identical.
+- [x] Remove or explicitly contract-test accepted aliases/options outside the advertised surface, including `--confirm`, `--help`/`-h`, and `--version`/`-V`.
+- [x] Fix and regress the state-directory replacement/lock-bypass race; prove exclusive mutation, symlink/path-race resistance, restrictive modes, atomic durability, recovery, deadlines, and deterministic concurrency failure.
+- [x] Require evidence/signature helpers and their production call path to validate complete candidate, source-archive, artifact, version, profile, purpose, and complete-set bindings; add missing/duplicate/substitution negative tests.
+
+### BETA-001 — Freeze one immutable beta candidate
+
+Dependencies: BETA-000
+Executor: Codex
+Beta release blocking: yes
+
+- [ ] Commit all intended beta source, contracts, tests, generated files, documentation, lockfiles, and release tooling; record the full candidate SHA and tree and prove the worktree clean before and after every gate.
+- [ ] Produce a deterministic source archive and canonical source descriptor binding commit, tree, source-archive name/SHA-256/size, commit-derived `SOURCE_DATE_EPOCH`/generation time, and exact profile/policy/contract/tool-input digests. Builder, toolchain, and network observations belong to the later candidate provenance and qualification receipts.
+- [ ] Run from a detached read-only checkout or verified source archive, with all evidence and build outputs external to candidate source. Prove source bytes and Git status remain unchanged.
+- [ ] Rerun the three recorded workspace checks and every BETA-000 regression against the exact candidate; workspace receipts do not qualify by reuse.
+
+### BETA-002 — Build the exact six-artifact set
+
+Dependencies: BETA-001; qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder
+Executor: Codex plus release builder operator
+Beta release blocking: yes
+
+- [ ] On an isolated native Ubuntu 24.04 x86_64/glibc 2.39 builder with Rust 1.92.0 and Python 3.14.6, produce exactly `cigar-0.1.0-beta.1-source.tar.gz`, `-docs.tar.gz`, `-schemas.tar.gz`, `-conformance.tar.gz`, `-licenses.tar.gz`, and `-x86_64-unknown-linux-gnu.tar.gz` from the same source descriptor.
+- [ ] Require the binary archive to contain only the allowlisted `bin/cigar` executable payload; reject missing/extra files, unsafe types/paths/links, wrong modes/owners/timestamps, collisions, bombs, and trailing data in every archive.
+- [ ] Independently rebuild from the same source archive and prove deterministic byte identity or the approved closed normalization comparison. Bind both builders, toolchains, materials, and results.
+- [ ] Generate one canonical checksums document; reject an unlisted seventh artifact or a missing required artifact.
+
+### BETA-003 — Qualify installed bytes and supply chain
+
+Dependencies: BETA-002
+Executor: Codex plus security, legal, and signing operators
+Beta release blocking: yes
+
+- [ ] Install the exact binary archive as an unprivileged user in a clean Ubuntu 24.04 x86_64/glibc 2.39 environment without source, compiler, writable dependency cache, privilege, or undeclared runtime dependency.
+- [ ] Enforce OS-level no-egress and run positive smoke for every included command/output mode plus restart, persistence, permission, concurrency, cancellation/deadline, malformed-state, and excluded-command negative cases.
+- [ ] Scan packed and unpacked final bytes for vulnerabilities, malware indicators, secrets, unexpected endpoints, developer paths, and undeclared native/runtime dependencies; permit no critical/high or unknown/skipped result.
+- [ ] Reconcile licenses/notices and produce artifact-bound SPDX and CycloneDX SBOMs plus provenance covering source, all six artifacts, materials, toolchains, builders, parameters, network mode, and reproducibility.
+- [ ] Sign every qualification receipt and attachment with `cigar-beta-qualification-evidence-v1`, then sign artifacts, checksums, SBOMs, provenance, and release evidence with their reserved `cigar-beta-release-*` purposes through the approved isolated signer and independently distributed beta trust roots.
+
+### BETA-004 — Verify and publish exact prerelease bytes
+
+Dependencies: BETA-003; signer and publisher authority
+Executor: independent verifier plus release publisher
+Beta release blocking: yes
+
+- [ ] Assemble a complete canonical `cigar.beta.release-evidence.v1` set with no failed, skipped, waived, unknown, stale, dirty, or unbound result. GA evidence schemas and signature purposes are forbidden.
+- [ ] Run the independent verifier offline from a clean environment using only the candidate artifacts, signed evidence, pinned contracts/policy, and approved public trust roots.
+- [ ] Obtain release-owner approval and publish the already-qualified bytes under `v0.1.0-beta.1` without rebuild or metadata mutation. Do not update `latest`, stable, or GA channels.
+- [ ] Read back every public artifact, checksum, signature, SBOM, provenance, and evidence object and require exact digest agreement.
+
+External prerequisites remain open until supplied by their owners: qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder capacity (preferably two independent builders), production beta signer/trust roots, approved final scanner data and security disposition, legal approval, a verified private security-reporting channel, and protected release-host publisher authority.
+
+The external directories named `launch-000-quality-cache-4081a835`, `launch-000-smoke-4081a835`, and `launch-000-wp20-local-4081a835` are tied to source `4081a8355b8e6bd5959dcc44c48b63b9d8dc55ca` (tree `844643f2d0daf36b4813c66fd62c3c65a2fdc952`). They remain historical diagnostics only and cannot qualify or be rebound to the beta candidate.
 
 ### Dependency-safe execution order
 
@@ -101,7 +172,7 @@ Release blocking: yes
 - [x] Commit only reviewed seeds/regressions/minimized corpus. Narrowly ignore transient output; never ignore crashes awaiting triage.
 - [x] Move generated qualification receipts out of tracked source paths. Label any tracked sample receipt as non-qualification.
 - [x] Keep current WP19 smoke/mutation receipts as historical smoke evidence only.
-- [ ] Regenerate stale “unborn repository” content in `IMPLEMENTATION_STATUS.md`, `docs/execution/work-packets.yaml`, `packaging/qualification-gaps.v1.json`, and WP20/WP21 receipts without claiming completion.
+- [ ] Regenerate stale source-baseline content in status/gap documents and WP20/WP21 receipts against the eventual exact candidate without claiming packet or release completion.
 - [ ] Commit the policy/corpus/status changes and record the later SHA. Prove a smoke gate leaves `git status --porcelain=v1` empty.
 
 Done when the source/fixtures are intentional, no regression is lost, and the checkout is clean before and after testing.

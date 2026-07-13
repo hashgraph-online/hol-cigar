@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/beta-release-evidence.v1.schema.json",
+  "title": "CIGAR initial-beta release-evidence signature payload",
+  "description": "Canonical release evidence whose supporting payloads are signed and which requires its own detached release-evidence signature.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_profile", "product_version", "tag", "target", "prerelease", "production_ready", "source", "trust_policy", "qualification_policy", "candidate_files", "artifacts", "qualification", "signatures", "claims"],
+  "properties": {
+    "schema_version": {"const": "cigar.beta.release-evidence.v1"},
+    "release_profile": {"const": "cigar.beta.embedded-local.linux-x86_64.v1"},
+    "product_version": {"const": "0.1.0-beta.1"},
+    "tag": {"const": "v0.1.0-beta.1"},
+    "target": {"const": "x86_64-unknown-linux-gnu"},
+    "prerelease": {"const": true},
+    "production_ready": {"const": false},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "tree", "source_date_epoch", "archive"],
+      "properties": {
+        "revision": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "source_date_epoch": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "archive": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "path", "sha256", "bytes"],
+          "properties": {
+            "id": {"const": "source"},
+            "path": {"const": "artifacts/cigar-0.1.0-beta.1-source.tar.gz"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "bytes": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "trust_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "policy_id", "sha256"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.trust-policy.v1"},
+        "policy_id": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "qualification_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "path", "sha256"],
+      "properties": {
+        "schema_version": {"const": "cigar.beta.qualification-policy.v1"},
+        "path": {"const": "packaging/beta/qualification-policy.v1.json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate_files": {
+      "type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/fileReference"}
+    },
+    "artifacts": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "prefixItems": [
+        {"$ref": "#/$defs/sourceArtifact"}, {"$ref": "#/$defs/docsArtifact"},
+        {"$ref": "#/$defs/schemasArtifact"}, {"$ref": "#/$defs/conformanceArtifact"},
+        {"$ref": "#/$defs/licensesArtifact"}, {"$ref": "#/$defs/binaryArtifact"}
+      ],
+      "items": false
+    },
+    "qualification": {
+      "type": "array", "minItems": 11, "maxItems": 11, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "category", "artifact_ids", "receipt"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "category": {"enum": ["archive-contract", "conformance", "docs", "installed-artifact", "license", "offline", "provenance", "reproducibility", "sbom", "security", "signature"]},
+          "artifact_ids": {
+            "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true,
+            "items": {"$ref": "#/$defs/artifactId"}
+          },
+          "receipt": {"$ref": "#/$defs/fileReference"}
+        }
+      }
+    },
+    "signatures": {
+      "type": "array", "minItems": 32, "maxItems": 45077, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/fileReference"}
+    },
+    "claims": {"const": {"supporting_payloads_signed": true, "release_evidence_signature_required": true, "published": false, "production_ready": false}}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "gitObject": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "safePath": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+    "fileReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifactId": {"enum": ["source", "docs", "schemas", "conformance", "licenses", "cigar-linux-x86_64-gnu"]},
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "path", "sha256", "bytes", "contract", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/artifactId"},
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "contract": {"$ref": "#/$defs/safePath"},
+        "status": {"const": "passed"}
+      }
+    },
+    "sourceArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "source"}}}]},
+    "docsArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "docs"}}}]},
+    "schemasArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "schemas"}}}]},
+    "conformanceArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "conformance"}}}]},
+    "licensesArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "licenses"}}}]},
+    "binaryArtifact": {"allOf": [{"$ref": "#/$defs/artifact"}, {"properties": {"id": {"const": "cigar-linux-x86_64-gnu"}}}]}
+  }
+}

@@ -1,12 +1,66 @@
 schema_version: 1
-updated: 2026-07-13T18:09:54Z
+updated: 2026-07-13T20:07:08Z
 current_packet: WP19
 repository:
   branch: main
-  baseline_head: 0d8a8115b4fa1bedec534eeca497a157836ed6da
-  baseline_tree: 0e23e2ea2759045a5f5b201df193ad0eca105bee
+  baseline_head: b26e32439bcf5bf42f0d47d993b935cb3eb5f182
+  baseline_tree: 4db649dc926e1550637c6817a4b20e4fd4ca5a2c
+  baseline_kind: committed-development-baseline
   next_candidate: pending
   candidate_bound_evidence: false
+initial_beta:
+  id: BETA-0.1.0-beta.1
+  status: in_progress
+  verdict: stop-ship
+  relationship_to_ga: independent-prerelease-lane-does-not-complete-WP19-WP22
+  version: 0.1.0-beta.1
+  tag: v0.1.0-beta.1
+  release_profile: cigar.beta.embedded-local.linux-x86_64.v1
+  scope: workspace-state-administration-only
+  target: x86_64-unknown-linux-gnu
+  qualified_host_profile: ubuntu-24.04-x86_64-glibc-2.39
+  qualified_distribution: ubuntu-24.04
+  qualified_libc: glibc-2.39
+  rust: 1.92.0
+  python: 3.14.6
+  prerelease: true
+  production_ready: false
+  candidate: pending
+  candidate_bound_evidence: false
+  workspace_machine_proven:
+    - profile-and-schema-checker-seven-test-suite
+    - compile-time-feature-isolation-and-excluded-dependency-tests
+    - beta-cli-eighteen-test-suite
+  required_artifacts:
+    - { id: source, filename: cigar-0.1.0-beta.1-source.tar.gz }
+    - { id: docs, filename: cigar-0.1.0-beta.1-docs.tar.gz }
+    - { id: schemas, filename: cigar-0.1.0-beta.1-schemas.tar.gz }
+    - { id: conformance, filename: cigar-0.1.0-beta.1-conformance.tar.gz }
+    - { id: licenses, filename: cigar-0.1.0-beta.1-licenses.tar.gz }
+    - { id: cigar-linux-x86_64-gnu, filename: cigar-0.1.0-beta.1-x86_64-unknown-linux-gnu.tar.gz }
+  blockers:
+    - incomplete-candidate-source-artifact-and-signature-bindings
+    - exact-clean-committed-candidate
+    - six-artifact-builder-and-independent-offline-verifier
+    - deterministic-native-ubuntu-24.04-x86_64-glibc-2.39-build-and-rebuild
+    - installed-no-egress-security-license-sbom-and-provenance-gates
+    - production-beta-signatures-and-trust-roots
+    - exact-byte-publication-and-readback
+  external_prerequisites:
+    - qualified-native-ubuntu-24.04-x86_64-glibc-2.39-builder-capacity
+    - approved-final-byte-scanners-and-security-disposition
+    - legal-license-and-notice-approval
+    - isolated-production-beta-signer-and-independent-trust-roots
+    - verified-private-security-reporting-channel
+    - protected-release-host-publisher-authority
+  historical_nonqualifying:
+    source_revision: 4081a8355b8e6bd5959dcc44c48b63b9d8dc55ca
+    source_tree: 844643f2d0daf36b4813c66fd62c3c65a2fdc952
+    evidence_directories:
+      - launch-000-quality-cache-4081a835
+      - launch-000-smoke-4081a835
+      - launch-000-wp20-local-4081a835
+    reason: failed-or-incomplete-historical-development-receipts-not-candidate-bound-and-never-rebindable
 packets:
   - { id: WP00, status: complete, prerequisites: [], evidence: artifacts/work-packets/WP00.json }
   - { id: WP01, status: complete, prerequisites: [WP00], evidence: artifacts/work-packets/WP01.json }
