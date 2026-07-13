@@ -124,17 +124,18 @@ Only these beta signature purposes are permitted:
 
 The GA purposes listed as forbidden in `packaging/beta/release-profile.v1.json` must be rejected. Verification must use a separately approved trust-root bundle and reject unknown purpose, wrong artifact, wrong source, wrong profile/version, duplicate envelope, expired/revoked identity, unsupported algorithm, malformed canonical bytes, or partial signature sets.
 
-## Current workspace proof
+## Current candidate-source proof
 
-The following checks have passed in the development workspace. They prove that the corresponding implementation tests execute; they are not candidate-bound release evidence and must be rerun after the source is frozen.
+The following checks passed from a clean detached committed candidate with build outputs and raw logs outside the checkout. Two independently created local source freezes were byte-identical and independently verified against the same Git object tree. These local results are candidate-source proof, not native artifact qualification or signed release evidence.
 
 - [x] `python3 scripts/release/beta_profile.py check --root .` validated profile `cigar.beta.embedded-local.linux-x86_64.v1` and version `0.1.0-beta.1`; `python3 -B -m unittest tools.quality.tests.test_beta_profile -v` passed 8 tests. The related Ruff lint and format checks passed at the recorded proof point.
 - [x] Compile-time feature-isolation checks passed: the full and `beta-embedded` modes build separately, neither/both selections fail closed, and the asserted daemon/API/crypto/effects/policy/store/network/OTLP/Wasmtime dependency families are absent from the beta dependency graph.
-- [x] `cargo test -p cigar-cli --locked --no-default-features --features beta-embedded --lib --test beta_surface` passed 22 tests (10 unit and 12 integration) at the recorded proof point; projected-source check and strict beta/full Clippy checks also passed in the available toolchain.
+- [x] `cargo test -p cigar-cli --locked --no-default-features --features beta-embedded --lib --test beta_surface` passed 22 tests (10 unit and 12 integration); the full CLI composition passed 37 tests, the release-tool suite passed 58 tests, and projected-source plus strict beta/full Clippy checks passed in the available toolchain.
 
-These checks do not prove a clean candidate, required Ubuntu builder identity, deterministic final
-artifacts, the safety of installed final bytes, OS-enforced no-egress, final-byte security, SBOM and
-provenance approval, production signatures, or publication.
+These checks prove the clean committed source and deterministic source-freeze gates only. They do
+not prove the required Ubuntu builder identity, deterministic final artifacts, the safety of
+installed final bytes, OS-enforced no-egress, final-byte security, SBOM and provenance approval,
+production signatures, or publication.
 
 ## Release-tool sequence
 
@@ -152,7 +153,7 @@ The manual GitHub workflow uploads an explicitly unsigned transport wrapper, not
 
 ## Known release blockers
 
-1. No frozen candidate has a complete six-artifact build and independent reproducibility result from the required Ubuntu 24.04 x86-64/glibc 2.39 runtime.
+1. The frozen candidate has no complete six-artifact build or independent reproducibility result from the required Ubuntu 24.04 x86-64/glibc 2.39 runtime.
 2. No installed-byte/no-egress qualification, approved final scan and legal disposition, production beta signature set, verified private reporting channel, or publisher authorization has been supplied.
 3. No final offline complete-set verification or public readback receipt exists. Local tool implementation and tests cannot substitute for those external results.
 
@@ -162,16 +163,16 @@ Every item below is required and remains unchecked until machine evidence for on
 
 ### Source freeze and binding
 
-- [ ] Commit all intended beta source, tests, contracts, generated outputs, lockfiles, and documentation; require a clean worktree before and after every source gate.
-- [ ] Record full commit SHA, tree SHA, commit timestamp/`SOURCE_DATE_EPOCH`, deterministic source-archive name/SHA-256/size, and exact profile/policy/contract/tool-input digests in one canonical source descriptor. Record builder, toolchain, and network observations later in candidate provenance and qualification receipts.
-- [ ] Build from the verified source archive in a detached/read-only source tree. Write all outputs and evidence outside it; prove source bytes and Git status are unchanged afterward.
-- [ ] Rerun the three workspace checks above against that exact source and bind their raw results to its source descriptor.
+- [x] Commit all intended beta source, tests, contracts, generated outputs, lockfiles, and documentation; require a clean worktree before and after every source gate.
+- [x] Record full commit SHA, tree SHA, commit timestamp/`SOURCE_DATE_EPOCH`, deterministic source-archive name/SHA-256/size, and exact profile/policy/contract/tool-input digests in one canonical source descriptor. Record builder, toolchain, and network observations later in candidate provenance and qualification receipts.
+- [x] Build from the verified source archive in a detached/read-only source tree. Write all outputs and evidence outside it; prove source bytes and Git status are unchanged afterward.
+- [x] Rerun the three workspace checks above against that exact source and bind their raw results to its source descriptor.
 
 ### Surface and state safety
 
-- [ ] Reconcile “embedded-local” language to workspace-metadata-administration-only behavior and contract-test the closed compiled command/option surface against the immutable candidate.
-- [ ] Reject the full-product/excluded commands, undocumented metadata/confirmation aliases, unknown options, incompatible targets, invalid identifiers, malformed state/configuration, and unsafe link/permission cases covered by the 22-test beta suite without mutation against the immutable candidate.
-- [ ] Fix the state-directory replacement/lock bypass with descriptor-relative state access and regress exclusive mutation, atomic replacement, restrictive file/directory modes, unsafe links, bounded deadlines, cancellation settlement, and concurrent updates against the immutable candidate.
+- [x] Reconcile “embedded-local” language to workspace-metadata-administration-only behavior and contract-test the closed compiled command/option surface against the immutable candidate.
+- [x] Reject the full-product/excluded commands, undocumented metadata/confirmation aliases, unknown options, incompatible targets, invalid identifiers, malformed state/configuration, and unsafe link/permission cases covered by the 22-test beta suite without mutation against the immutable candidate.
+- [x] Fix the state-directory replacement/lock bypass with descriptor-relative state access and regress exclusive mutation, atomic replacement, restrictive file/directory modes, unsafe links, bounded deadlines, cancellation settlement, and concurrent updates against the immutable candidate.
 
 ### Native build and deterministic artifacts
 

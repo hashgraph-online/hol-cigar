@@ -647,7 +647,7 @@ Workspace implementation checks recorded at the time this amendment was written:
 * [x] Compile-time feature-isolation tests pass: full and beta selections are mutually exclusive, neither/both selections fail closed, and the beta dependency graph excludes the out-of-scope service/effect/plugin families asserted by the tests.
 * [x] The beta CLI test suite executes successfully in the development workspace (22 tests: 10 unit and 12 integration).
 * [x] The capability description matches the administration-only surface; undocumented metadata/confirmation aliases are rejected; descriptor-relative state locking and restrictive state/configuration checks regress directory replacement, link, permission, concurrency, cancellation, and deadline behavior.
-* [ ] Freeze a clean committed beta candidate and bind its full commit, tree, deterministic source archive, source-archive digest, and `SOURCE_DATE_EPOCH` to every receipt.
+* [x] Freeze a clean committed beta candidate and bind its full commit, tree, deterministic source archive, source-archive digest, and `SOURCE_DATE_EPOCH` to every receipt.
 * [ ] Produce all six allowlisted artifacts on a qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder with Rust 1.92.0 and Python 3.14.6; prove archive contracts, deterministic rebuilds, exact file modes, no extra files, and path/symlink safety.
 * [ ] Install the exact binary archive as an unprivileged user in a clean no-compiler environment; enforce no-egress offline operation and pass positive and excluded-surface smoke tests.
 * [ ] Pass final-byte vulnerability, malware-indicator, secret, endpoint, developer-path, license, SBOM, and provenance gates with the required artifact bindings.

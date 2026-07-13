@@ -56,10 +56,10 @@ Dependencies: BETA-000
 Executor: Codex
 Beta release blocking: yes
 
-- [ ] Commit all intended beta source, contracts, tests, generated files, documentation, lockfiles, and release tooling; record the full candidate SHA and tree and prove the worktree clean before and after every gate.
-- [ ] Produce a deterministic source archive and canonical source descriptor binding commit, tree, source-archive name/SHA-256/size, commit-derived `SOURCE_DATE_EPOCH`/generation time, and exact profile/policy/contract/tool-input digests. Builder, toolchain, and network observations belong to the later candidate provenance and qualification receipts.
-- [ ] Run from a detached read-only checkout or verified source archive, with all evidence and build outputs external to candidate source. Prove source bytes and Git status remain unchanged.
-- [ ] Rerun the three recorded workspace checks and every BETA-000 regression against the exact candidate; workspace receipts do not qualify by reuse.
+- [x] Commit all intended beta source, contracts, tests, generated files, documentation, lockfiles, and release tooling; record the full candidate SHA and tree and prove the worktree clean before and after every gate.
+- [x] Produce a deterministic source archive and canonical source descriptor binding commit, tree, source-archive name/SHA-256/size, commit-derived `SOURCE_DATE_EPOCH`/generation time, and exact profile/policy/contract/tool-input digests. Builder, toolchain, and network observations belong to the later candidate provenance and qualification receipts.
+- [x] Run from a detached read-only checkout or verified source archive, with all evidence and build outputs external to candidate source. Prove source bytes and Git status remain unchanged.
+- [x] Rerun the three recorded workspace checks and every BETA-000 regression against the exact candidate; workspace receipts do not qualify by reuse.
 
 ### BETA-002 — Build the exact six-artifact set
 
