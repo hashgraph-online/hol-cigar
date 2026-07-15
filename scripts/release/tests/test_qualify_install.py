@@ -69,7 +69,7 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
             qualification_tool_build_receipt=(
                 tool_build_receipt or self.tool_build_receipt
             ),
-            expected_artifact_id="cli-daemon-macos-aarch64",
+            expected_artifact_id=qualify_install.RUNTIME_ARTIFACT_ID,
             expected_target="aarch64-apple-darwin",
             expected_version=qualify_install.DEFAULT_PRODUCT_VERSION,
             expected_abi="cigar.context.v1",
@@ -203,7 +203,8 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
                 "expanded_bytes": 1024,
             },
             "claims": {
-                "development_build": True,
+                "development_build": False,
+                "developer_preview_build": True,
                 "distribution_signed": False,
                 "notarized": False,
                 "qualified": False,
@@ -287,7 +288,8 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
                 "expanded_bytes": 2048,
             },
             "claims": {
-                "development_build": True,
+                "development_build": False,
+                "developer_preview_build": True,
                 "candidate": False,
                 "distribution_signed": False,
                 "notarized": False,
@@ -582,6 +584,21 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
             ("cigar", "cigard", "cigar-mcp", "cigar-claude-hook"),
         )
 
+    def test_honey_documented_qualifier_command_uses_runtime_profile_id(self) -> None:
+        root = qualify_install.REPOSITORY_ROOT
+        commands = json.loads((root / "docs/commands.v1.json").read_bytes())
+        command = next(
+            row for row in commands["commands"] if row.get("id") == "install-archive"
+        )
+        index = command["argv"].index("--expected-artifact-id")
+        self.assertEqual(
+            command["argv"][index + 1], qualify_install.RUNTIME_ARTIFACT_ID
+        )
+        guide = (root / "docs/guides/install.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"--expected-artifact-id {qualify_install.RUNTIME_ARTIFACT_ID}", guide
+        )
+
     def test_official_build_receipts_require_exact_source_archive_and_contract_bindings(
         self,
     ) -> None:
@@ -616,7 +633,7 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
             qualify_install._validate_same_source_identity(
                 self.source_identity(), self.source_identity()
             ),
-            self.source_identity(),
+            (self.source_identity(), self.source_identity()),
         )
         qualify_install._validate_shared_build_authority(runtime, tool)
 
@@ -624,9 +641,19 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
             **self.source_identity(),
             "tree_sha256": "9" * 64,
         }
-        with self.assertRaisesRegex(ReleaseError, "source identity is not exact"):
+        self.assertEqual(
             qualify_install._validate_same_source_identity(
                 self.source_identity(), same_revision_different_tree
+            ),
+            (self.source_identity(), same_revision_different_tree),
+        )
+        different_revision = {
+            **same_revision_different_tree,
+            "revision": "8" * 40,
+        }
+        with self.assertRaisesRegex(ReleaseError, "one clean committed revision"):
+            qualify_install._validate_same_source_identity(
+                self.source_identity(), different_revision
             )
 
         for path in qualify_install.SHARED_BUILD_AUTHORITY_PATHS:
@@ -826,7 +853,7 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
     def test_driver_receipt_requires_exact_artifact_bound_workflow_inventory(
         self,
     ) -> None:
-        artifact_id = "cli-daemon-macos-aarch64"
+        artifact_id = qualify_install.RUNTIME_ARTIFACT_ID
         artifact_sha256 = "a" * 64
         version = qualify_install.DEFAULT_PRODUCT_VERSION
         abi = "cigar.context.v1"
@@ -920,26 +947,26 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
         }
         self.assertEqual(
             qualify_install._installed_workflow_binding(
-                artifact_id="cli-daemon-macos-aarch64",
+                artifact_id=qualify_install.RUNTIME_ARTIFACT_ID,
                 artifact_sha256="a" * 64,
                 source_revision="b" * 40,
                 workflow=workflow,
             ),
-            "84956be5a2614f8af42760e747b02e29c711183e872516f4f5bb91a2d24c5eee",
+            "212cf7301b171d084f40fa0873126a53924e91747e4e4d11eef2ac567b2f6b01",
         )
 
     def test_driver_receipt_rejects_stale_duplicate_and_nonpassing_claims(self) -> None:
         base = {
             "schema_version": "cigar.installed-driver.v1",
             "status": "passed",
-            "artifact_id": "cli-daemon-macos-aarch64",
+            "artifact_id": qualify_install.RUNTIME_ARTIFACT_ID,
             "artifact_sha256": "b" * 64,
             "product_version": qualify_install.DEFAULT_PRODUCT_VERSION,
             "context_abi": "cigar.context.v1",
             "source_revision": "d" * 40,
             "runtime_profile": qualify_install.RUNTIME_PROFILE,
             "installed_workflow": self.installed_workflow(
-                "cli-daemon-macos-aarch64", "b" * 64, "d" * 40
+                qualify_install.RUNTIME_ARTIFACT_ID, "b" * 64, "d" * 40
             ),
             "process_enforcement": qualify_install.MACOS_PROCESS_ENFORCEMENT,
             "checks": [

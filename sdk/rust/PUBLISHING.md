@@ -15,24 +15,24 @@ Publish one crate at a time and wait until crates.io resolves the exact version 
 
 1. `cigar-aws-creds = 0.39.1-cigar.1`
 2. `cigar-rust-s3 = 0.37.2-cigar.1`
-3. `cigar-canon = 1.0.0-dev.1`
-4. `cigar-protocol = 1.0.0-dev.1`
-5. `cigar-testkit = 1.0.0-dev.1`
-6. `cigar-windows-ipc = 1.0.0-dev.1`
-7. `cigar-crypto = 1.0.0-dev.1`
-8. `cigar-replay = 1.0.0-dev.1`
-9. `cigar-policy = 1.0.0-dev.1`
-10. `cigar-store = 1.0.0-dev.1`
-11. `cigar-effects = 1.0.0-dev.1`
-12. `cigar-retrieval = 1.0.0-dev.1`
-13. `cigar-space = 1.0.0-dev.1`
-14. `cigar-catalog = 1.0.0-dev.1`
-15. `cigar-code-intel = 1.0.0-dev.1`
-16. `cigar-compiler = 1.0.0-dev.1`
-17. `cigar-api = 1.0.0-dev.1`
-18. `cigar-observe = 1.0.0-dev.1`
-19. `cigar-daemon = 1.0.0-dev.1`
-20. `cigar-sdk = 1.0.0-dev.1`
+3. `cigar-canon = 0.9.0-honey.1`
+4. `cigar-protocol = 0.9.0-honey.1`
+5. `cigar-testkit = 0.9.0-honey.1`
+6. `cigar-windows-ipc = 0.9.0-honey.1`
+7. `cigar-crypto = 0.9.0-honey.1`
+8. `cigar-replay = 0.9.0-honey.1`
+9. `cigar-policy = 0.9.0-honey.1`
+10. `cigar-store = 0.9.0-honey.1`
+11. `cigar-effects = 0.9.0-honey.1`
+12. `cigar-retrieval = 0.9.0-honey.1`
+13. `cigar-space = 0.9.0-honey.1`
+14. `cigar-catalog = 0.9.0-honey.1`
+15. `cigar-code-intel = 0.9.0-honey.1`
+16. `cigar-compiler = 0.9.0-honey.1`
+17. `cigar-api = 0.9.0-honey.1`
+18. `cigar-observe = 0.9.0-honey.1`
+19. `cigar-daemon = 0.9.0-honey.1`
+20. `cigar-sdk = 0.9.0-honey.1`
 
 `cigar-testkit` is a versioned development dependency used during package verification.
 `cigar-windows-ipc` is a normal Windows-only daemon dependency, so a macOS-only check is not a
@@ -94,7 +94,7 @@ The qualifier runs `cargo package --locked --allow-dirty --offline` for every cr
 above. For every archive, it rejects unsafe paths and links, missing release assets, path
 dependencies in the normalized manifest, unexpected tests, a changed security-fork identity, a
 lost Ring selection, restored Surf/async-std exposure, or missing proto/migrations. It then compiles
-a clean project depending only on `cigar-sdk = 1.0.0-dev.1` from the local registry.
+a clean project depending only on `cigar-sdk = 0.9.0-honey.1` from the local registry.
 
 The evidence document uses the closed schema
 `cigar.rust-publication-chain-qualification.v1`. Its writer validates that it contains only package
@@ -120,7 +120,7 @@ Before calling this chain release-ready:
    receipt for each crate, compare it with the approved package, and stop immediately on any
    identity, version, checksum, feature, or ownership mismatch.
 4. From a clean environment with no workspace patch or local registry replacement, compile and
-   test `cigar-sdk = 1.0.0-dev.1` from crates.io on the supported platform matrix.
+   test `cigar-sdk = 0.9.0-honey.1` from crates.io on the supported platform matrix.
 5. Reconcile the published archives with release signing, SBOM, license, provenance, artifact
    inventory, and final release-policy evidence.
 

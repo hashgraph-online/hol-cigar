@@ -38,3 +38,21 @@ that explicit transport becomes the caller's channel-identity and redirect-polic
 
 Run `pnpm qualify:bundle` to verify the packaged cross-SDK fixture and print its semantic
 bundle ID.
+
+## Honey two-agent observer
+
+The packaged `dist/examples/two-agent-observer.js` example uses a distinct observer credential and
+only the disclosure-safe `previewHandoff` and `getSpaceLog` reads. It reports counts and authority
+attenuation without printing task text, source material, result claims, credentials, or event
+payload digests:
+
+```text
+CIGAR_URL=http://127.0.0.1:8080 \
+CIGAR_OBSERVER_TOKEN=... \
+CIGAR_HANDOFF_ID=... \
+CIGAR_SPACE_ID=... \
+node dist/examples/two-agent-observer.js
+```
+
+The observer principal must be provisioned independently. This example never accepts, records,
+merges, or revokes a handoff and therefore does not receive Agent A or Agent B mutation authority.

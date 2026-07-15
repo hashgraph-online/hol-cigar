@@ -50,7 +50,7 @@ from signatures import sign, verify as verify_signature
 from verify_package import verify as verify_package
 
 
-PRODUCT_VERSION = "1.0.0-dev.1"
+PRODUCT_VERSION = "0.9.0-honey.1"
 PYTHON_DISTRIBUTION_VERSION = python_distribution_version(PRODUCT_VERSION)
 
 

@@ -1263,6 +1263,14 @@ def assert_release_contracts() -> None:
     if not isinstance(version, str):
         raise AssertionError("workspace package version is invalid")
 
+    python_version = version
+    prerelease = re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(?:dev|honey)\.([1-9][0-9]*)",
+        version,
+    )
+    if prerelease is not None:
+        major, minor, patch, sequence = prerelease.groups()
+        python_version = f"{major}.{minor}.{patch}.dev{sequence}"
     manifests = {
         "rust": tomllib.loads((SDK / "rust/Cargo.toml").read_text(encoding="utf-8"))[
             "package"
@@ -1272,7 +1280,12 @@ def assert_release_contracts() -> None:
             (SDK / "python/pyproject.toml").read_text(encoding="utf-8")
         )["project"]["version"],
     }
-    if any(value != version for value in manifests.values()):
+    expected_manifests = {
+        "rust": version,
+        "typescript": version,
+        "python": python_version,
+    }
+    if manifests != expected_manifests:
         raise AssertionError(f"SDK package version drift: {manifests}")
 
     releases = {

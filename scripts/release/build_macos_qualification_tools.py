@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build deterministic, unsigned macOS development qualification-tool packages."""
+"""Build deterministic, unsigned macOS qualification-tool packages."""
 
 from __future__ import annotations
 
@@ -49,11 +49,19 @@ FIXED_CIGARBENCH_PYTHON = "/opt/homebrew/bin/python3"
 MACOS_SANDBOX_EXEC = Path("/usr/bin/sandbox-exec")
 MACOS_NO_EGRESS_POLICY = "(version 1)(allow default)(deny network*)"
 MACOS_NO_EGRESS_ENFORCEMENT = "darwin-sandbox-exec-deny-network-v1"
-COMMON_AUTHORITY_PATHS = (
+DEVELOPMENT_COMMON_AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
     "packaging/artifact-matrix.v1.json",
     "packaging/development/local-macos-aarch64.v1.json",
 )
+HONEY_COMMON_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
+)
+HONEY_PROFILE_ID = "cigar.honey.local-developer-preview.macos-arm64.v1"
+HONEY_INTERNAL_INPUT_ID = "qualification-tools"
 SOURCE_EXCLUDES = (
     "**/.DS_Store",
     "**/__pycache__/**",
@@ -96,6 +104,7 @@ class BuildConfiguration:
     contract_path: Path
     authority: dict[str, dict[str, object]]
     assets: dict[str, bytes]
+    honey: bool
 
 
 @dataclass(frozen=True)
@@ -515,11 +524,16 @@ def _read_stable_file(path: Path, maximum: int, label: str) -> bytes:
             os.close(descriptor)
 
 
-def _authority_paths(spec: ToolSpec) -> tuple[str, ...]:
-    return (*COMMON_AUTHORITY_PATHS, spec.contract_relative)
+def _authority_paths(spec: ToolSpec, *, honey: bool = True) -> tuple[str, ...]:
+    common = (
+        HONEY_COMMON_AUTHORITY_PATHS if honey else DEVELOPMENT_COMMON_AUTHORITY_PATHS
+    )
+    return (*common, spec.contract_relative)
 
 
-def _authority_digests(root: Path, spec: ToolSpec) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, spec: ToolSpec, *, honey: bool = True
+) -> dict[str, dict[str, object]]:
     return {
         relative: {
             "sha256": sha256_bytes(
@@ -529,7 +543,7 @@ def _authority_digests(root: Path, spec: ToolSpec) -> dict[str, dict[str, object
             ),
             "bytes": len(payload),
         }
-        for relative in _authority_paths(spec)
+        for relative in _authority_paths(spec, honey=honey)
     }
 
 
@@ -549,6 +563,55 @@ def _matrix_row(spec: ToolSpec, version: str) -> dict[str, Any]:
     }
 
 
+def _honey_internal_input(spec: ToolSpec, version: str) -> dict[str, Any]:
+    if spec.selector != "conformance":
+        raise ReleaseError(
+            "Honey selects only the bounded conformance qualification tool"
+        )
+    return {
+        "id": HONEY_INTERNAL_INPUT_ID,
+        "evidence_class": "package",
+        "required": True,
+        "public_attachment": False,
+        "artifact_id": spec.artifact_id,
+        "kind": spec.kind,
+        "filename": spec.filename_template.format(version=version),
+        "contract": spec.contract_relative,
+        "producer": [
+            "python3",
+            "scripts/release/build_macos_qualification_tools.py",
+            spec.selector,
+        ],
+        "target": TARGET_TRIPLE,
+        "workspace": "qualification-tools",
+        "receipt": {
+            "required": True,
+            "schema_version": "cigar.development-qualification-tool-build.v1",
+            "filename": spec.receipt_name,
+        },
+    }
+
+
+def _source_includes(spec: ToolSpec, *, honey: bool) -> tuple[str, ...]:
+    if not honey:
+        return spec.source_includes
+    replaced = tuple(
+        relative
+        for relative in spec.source_includes
+        if relative
+        not in {
+            "packaging/artifact-matrix.v1.json",
+            "packaging/development/local-macos-aarch64.v1.json",
+        }
+    )
+    return (
+        *replaced,
+        "packaging/honey/capability-profile.v1.json",
+        "packaging/honey/artifact-matrix.v1.json",
+        "packaging/honey/release-requirements.v1.json",
+    )
+
+
 def _expected_archive_paths(spec: ToolSpec) -> set[str]:
     common = {"RELEASE-METADATA.json", "README.md", "LICENSE", "NOTICE", "SHA256SUMS"}
     if spec.selector == "conformance":
@@ -564,79 +627,188 @@ def _expected_archive_paths(spec: ToolSpec) -> set[str]:
 
 def _load_configuration(root: Path, spec: ToolSpec) -> BuildConfiguration:
     root = root.resolve(strict=True)
-    authority = _authority_digests(root, spec)
     product = load_json(root / "packaging/product-version.v1.json")
-    matrix = load_json(root / "packaging/artifact-matrix.v1.json")
-    profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
-    contract_path = root.joinpath(*spec.contract_relative.split("/"))
-    contract = load_json(contract_path)
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
+    honey_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or honey_identity)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or product.get("context_abi") != "cigar.context.v1"
     ):
         raise ReleaseError(
-            "product authority is not an unpublished development identity"
+            "product authority is not an unpublished development or Honey identity"
         )
     version = product["version"]
     context_abi = product["context_abi"]
-    if (
-        not isinstance(matrix, dict)
-        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("release_state") != "development"
-        or matrix.get("product_version") != version
-        or matrix.get("context_abi") != context_abi
-        or not isinstance(matrix.get("artifacts"), list)
-    ):
-        raise ReleaseError("artifact matrix is stale relative to product authority")
-    rows = [
-        row
-        for row in matrix["artifacts"]
-        if isinstance(row, dict) and row.get("id") == spec.artifact_id
-    ]
-    expected_row = _matrix_row(spec, version)
-    if rows != [expected_row]:
+    honey = bool(honey_identity)
+    if honey and spec.selector != "conformance":
         raise ReleaseError(
-            f"artifact matrix row is incomplete or stale: {spec.artifact_id}"
+            "Honey selects only the bounded conformance qualification tool"
         )
-    selected = profile.get("selected_artifacts") if isinstance(profile, dict) else None
-    selected_by_id = (
-        {row.get("id"): row for row in selected if isinstance(row, dict)}
-        if isinstance(selected, list)
-        else {}
+    authority = _authority_digests(root, spec, honey=honey)
+    matrix_path = (
+        "packaging/honey/artifact-matrix.v1.json"
+        if honey
+        else "packaging/artifact-matrix.v1.json"
     )
-    if (
-        not isinstance(profile, dict)
-        or profile.get("schema_version") != "cigar.development-artifact-profile.v1"
-        or profile.get("release_state") != "development"
-        or profile.get("published") is not False
-        or profile.get("supported") is not False
-        or profile.get("target")
-        != {
-            "host_arch": "arm64",
-            "host_os": "macos",
-            "target_triple": TARGET_TRIPLE,
-        }
-        or selected_by_id.get(spec.artifact_id)
-        != {
-            "id": spec.artifact_id,
-            "selection_group": spec.selection_group,
-            "status": "planned",
-            "built": False,
-            "qualified": False,
-        }
-        or profile.get("missing_artifacts") != []
-    ):
-        raise ReleaseError(
-            "development macOS profile does not keep the tool planned and unclaimed"
+    profile_path = (
+        "packaging/honey/capability-profile.v1.json"
+        if honey
+        else "packaging/development/local-macos-aarch64.v1.json"
+    )
+    matrix = load_json(root / matrix_path)
+    profile = load_json(root / profile_path)
+    contract_path = root.joinpath(*spec.contract_relative.split("/"))
+    contract = load_json(contract_path)
+
+    if honey:
+        requirements = load_json(root / "packaging/honey/release-requirements.v1.json")
+        internal = matrix.get("internal_inputs") if isinstance(matrix, dict) else None
+        internal_rows = [
+            row
+            for row in internal or []
+            if isinstance(row, dict) and row.get("id") == HONEY_INTERNAL_INPUT_ID
+        ]
+        identity = profile.get("identity") if isinstance(profile, dict) else None
+        platform_profile = (
+            profile.get("platform") if isinstance(profile, dict) else None
         )
+        product_binding = (
+            profile.get("product_version_binding")
+            if isinstance(profile, dict)
+            else None
+        )
+        mandatory_gates = (
+            requirements.get("mandatory_gates")
+            if isinstance(requirements, dict)
+            else None
+        )
+        mandatory_gate_ids = (
+            [row.get("id") for row in mandatory_gates if isinstance(row, dict)]
+            if isinstance(mandatory_gates, list)
+            else []
+        )
+        if (
+            not isinstance(matrix, dict)
+            or matrix.get("schema_version") != "cigar.honey.artifact-matrix.v1"
+            or matrix.get("profile_id") != HONEY_PROFILE_ID
+            or matrix.get("release_state") != "developer-preview"
+            or matrix.get("product_version") != version
+            or matrix.get("context_abi") != context_abi
+            or matrix.get("fail_closed") is not True
+            or internal_rows != [_honey_internal_input(spec, version)]
+            or not isinstance(profile, dict)
+            or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+            or profile.get("profile_id") != HONEY_PROFILE_ID
+            or profile.get("fail_closed") is not True
+            or not isinstance(identity, dict)
+            or identity.get("product_version") != version
+            or identity.get("context_abi") != context_abi
+            or identity.get("release_state") != "developer-preview"
+            or identity.get("channel") != "honey"
+            or identity.get("published") is not False
+            or identity.get("supported") is not False
+            or identity.get("production_qualified") is not False
+            or platform_profile
+            != {
+                "deployment_modes": ["embedded", "local-sidecar"],
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "network_required": False,
+                "target_triple": TARGET_TRIPLE,
+                "trust_model": "single-local-os-user-with-explicit-agent-principals",
+            }
+            or product_binding
+            != {
+                "path": "packaging/product-version.v1.json",
+                "sha256": authority["packaging/product-version.v1.json"]["sha256"],
+            }
+            or not isinstance(requirements, dict)
+            or requirements.get("schema_version")
+            != "cigar.honey.release-requirements.v1"
+            or requirements.get("profile_id") != HONEY_PROFILE_ID
+            or requirements.get("evidence_class") != "developer-preview"
+            or requirements.get("fail_closed") is not True
+            or requirements.get("required_source_state")
+            != {"committed": True, "clean": True, "tagged_before_build": False}
+            or not {
+                "clean-committed-source",
+                "conformance",
+                "installed-runtime",
+            }.issubset(mandatory_gate_ids)
+        ):
+            raise ReleaseError(
+                "Honey qualification-tool internal input authority is incomplete or stale"
+            )
+    else:
+        if (
+            not isinstance(matrix, dict)
+            or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
+            or matrix.get("release_state") != "development"
+            or matrix.get("product_version") != version
+            or matrix.get("context_abi") != context_abi
+            or not isinstance(matrix.get("artifacts"), list)
+        ):
+            raise ReleaseError("artifact matrix is stale relative to product authority")
+        rows = [
+            row
+            for row in matrix["artifacts"]
+            if isinstance(row, dict) and row.get("id") == spec.artifact_id
+        ]
+        expected_row = _matrix_row(spec, version)
+        if rows != [expected_row]:
+            raise ReleaseError(
+                f"artifact matrix row is incomplete or stale: {spec.artifact_id}"
+            )
+        selected = (
+            profile.get("selected_artifacts") if isinstance(profile, dict) else None
+        )
+        selected_by_id = (
+            {row.get("id"): row for row in selected if isinstance(row, dict)}
+            if isinstance(selected, list)
+            else {}
+        )
+        if (
+            not isinstance(profile, dict)
+            or profile.get("schema_version") != "cigar.development-artifact-profile.v1"
+            or profile.get("release_state") != "development"
+            or profile.get("published") is not False
+            or profile.get("supported") is not False
+            or profile.get("target")
+            != {
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "target_triple": TARGET_TRIPLE,
+            }
+            or selected_by_id.get(spec.artifact_id)
+            != {
+                "id": spec.artifact_id,
+                "selection_group": spec.selection_group,
+                "status": "planned",
+                "built": False,
+                "qualified": False,
+            }
+            or profile.get("missing_artifacts") != []
+        ):
+            raise ReleaseError(
+                "development macOS profile does not keep the tool planned and unclaimed"
+            )
     expected_paths = _expected_archive_paths(spec)
     if (
         not isinstance(contract, dict)
@@ -693,11 +865,14 @@ def _load_configuration(root: Path, spec: ToolSpec) -> BuildConfiguration:
         contract_path=contract_path,
         authority=authority,
         assets=assets,
+        honey=honey,
     )
 
 
-def _source_identity(root: Path, spec: ToolSpec) -> dict[str, Any]:
-    files = expand_files(root, spec.source_includes, SOURCE_EXCLUDES)
+def _source_identity(
+    root: Path, spec: ToolSpec, *, honey: bool = True
+) -> dict[str, Any]:
+    files = expand_files(root, _source_includes(spec, honey=honey), SOURCE_EXCLUDES)
     if not files:
         raise ReleaseError(f"{spec.selector} source inventory is empty")
     identity = git_state(root, tree_digest(files))
@@ -706,10 +881,14 @@ def _source_identity(root: Path, spec: ToolSpec) -> dict[str, Any]:
         or not isinstance(identity.get("revision"), str)
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", identity["revision"]) is None
         or not isinstance(identity.get("clean"), bool)
+        or (honey and identity.get("clean") is not True)
         or not isinstance(identity.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", identity["tree_sha256"]) is None
     ):
-        raise ReleaseError("qualification-tool build requires a committed Git identity")
+        raise ReleaseError(
+            "qualification-tool build requires a committed Git identity"
+            + (" and Honey requires a clean tree" if honey else "")
+        )
     return identity
 
 
@@ -1442,7 +1621,11 @@ def produce(
     evidence_root = _selected_evidence_directory(arguments)
     epoch = require_source_date_epoch(arguments.source_date_epoch)
     configuration = _load_configuration(root, spec)
-    source_before = _source_identity(root, spec)
+    source_before = _source_identity(root, spec, honey=configuration.honey)
+    if configuration.honey and source_before.get("clean") is not True:
+        raise ReleaseError(
+            "qualification-tool build requires a committed Git identity and Honey requires a clean tree"
+        )
     workspace = EvidenceWorkspace.create(evidence_root, repository_root=root)
     try:
         workspace.read_files(set())
@@ -1473,11 +1656,14 @@ def produce(
                         binaries[relative].payload,
                         relative.removeprefix("bin/"),
                     )
-            if _source_identity(root, spec) != source_before:
+            if _source_identity(root, spec, honey=configuration.honey) != source_before:
                 raise ReleaseError(
                     "qualification-tool source changed during construction"
                 )
-            if _authority_digests(root, spec) != configuration.authority:
+            if (
+                _authority_digests(root, spec, honey=configuration.honey)
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "qualification-tool authority changed during construction"
                 )
@@ -1510,11 +1696,14 @@ def produce(
                 configuration.context_abi,
                 epoch,
             )
-            if _source_identity(root, spec) != source_before:
+            if _source_identity(root, spec, honey=configuration.honey) != source_before:
                 raise ReleaseError(
                     "qualification-tool source changed during verification"
                 )
-            if _authority_digests(root, spec) != configuration.authority:
+            if (
+                _authority_digests(root, spec, honey=configuration.honey)
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "qualification-tool authority changed during verification"
                 )
@@ -1573,7 +1762,8 @@ def produce(
                 "expanded_bytes": verification["expanded_bytes"],
             },
             "claims": {
-                "development_build": True,
+                "development_build": not configuration.honey,
+                **({"developer_preview_build": True} if configuration.honey else {}),
                 "candidate": False,
                 "distribution_signed": False,
                 "notarized": False,

@@ -74,3 +74,20 @@ cargo run -p cigar-sdk --example quickstart
 
 It verifies the packaged copy of `sdk/fixtures/semantic-bundle-v1.json` and prints the shared
 semantic bundle ID. Qualification tests require the packaged and shared fixture bytes to match.
+
+## Honey Agent A coordinator
+
+The packaged `agent_a_coordinator` example creates one recipient-bound handoff from a reviewed,
+bounded JSON `CreateHandoffRequest`. It reads authorization only through
+`CIGAR_AUTHORIZATION_FILE`, requires a caller-provided idempotency key, and prints only
+disclosure-safe identifiers and attenuation counts:
+
+```text
+CIGAR_ENDPOINT=http://127.0.0.1:8080 \
+CIGAR_AUTHORIZATION_FILE=/private/path/agent-a.authorization \
+cargo run --example agent_a_coordinator -- handoff-request.json agent-a-handoff-001
+```
+
+Agent B acceptance and result recording use a distinct principal. The coordinator example does
+not acquire Agent B credentials, bypass recipient reauthorization, or print the task and typed
+references from the request.

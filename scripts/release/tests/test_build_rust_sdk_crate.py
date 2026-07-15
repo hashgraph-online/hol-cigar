@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -48,6 +49,45 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
             cargo_local_registry=None,
             protoc=None,
             cargo_cache=None,
+            honey_local_registry_kit=True,
+        )
+
+    def honey_configuration(self) -> builder.BuildConfiguration:
+        return builder._load_configuration(self.root, honey_local_registry_kit=True)
+
+    def write_honey_fixture_kit(
+        self,
+        destination: Path,
+        configuration: builder.BuildConfiguration | None = None,
+    ) -> dict[str, object]:
+        configuration = configuration or self.honey_configuration()
+        registry = destination.parent / f"{destination.stem}-registry"
+        index = registry / "index/ci/ga"
+        index.mkdir(parents=True, mode=0o700)
+        crate_payload = b"fixture Cargo package\n"
+        (registry / f"cigar-sdk-{configuration.version}.crate").write_bytes(
+            crate_payload
+        )
+        (index / "cigar-sdk").write_bytes(b'{"fixture":true}\n')
+        consumer = destination.parent / f"{destination.stem}-consumer"
+        consumer.mkdir(mode=0o700)
+        (consumer / "Cargo.lock").write_bytes(b"version = 4\n")
+        return builder._write_honey_kit(
+            destination,
+            configuration=configuration,
+            source=self.source,
+            epoch=1700000000,
+            registry=registry,
+            consumer=consumer,
+            package_chain=(
+                {
+                    "name": "cigar-sdk",
+                    "version": configuration.version,
+                    "sha256": "a" * 64,
+                    "bytes": len(crate_payload),
+                },
+            ),
+            registry_identity=builder._registry_identity(registry),
         )
 
     def normalized_manifest(self, configuration: builder.BuildConfiguration) -> bytes:
@@ -196,7 +236,28 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         _arguments: argparse.Namespace,
     ) -> builder.BuiltCrate:
         self.assertEqual(stat.S_IMODE(scratch.stat().st_mode), 0o700)
-        return self.fake_built(configuration, source=source)
+        built = self.fake_built(configuration, source=source)
+        kit_path = scratch / configuration.filename
+        construction = self.write_honey_fixture_kit(kit_path, configuration)
+        qualification = {
+            "schema_version": "cigar.honey-rust-sdk-kit-validation.v1",
+            "status": "passed",
+            "offline": True,
+            "network_proxy": "deny-loopback",
+            "cargo_check": "passed",
+            "cargo_test": "passed",
+            "semantic_workflow": "passed",
+            "semantic_bundle_identity": builder.EXPECTED_QUICKSTART_IDENTITY,
+            "archive_file_count": construction["file_count"],
+        }
+        return replace(
+            built,
+            kit_path=kit_path,
+            kit_validation={
+                "construction": construction,
+                "qualification": qualification,
+            },
+        )
 
     def produce(
         self,
@@ -234,11 +295,22 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
             )
 
     def test_configuration_binds_authorities_and_packaged_quickstart(self) -> None:
-        configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "1.0.0-dev.1")
+        configuration = builder._load_configuration(
+            self.root, honey_local_registry_kit=True
+        )
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
-        self.assertEqual(configuration.filename, "cigar-sdk-1.0.0-dev.1.crate")
-        self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
+        self.assertEqual(
+            configuration.filename,
+            "cigar-rust-sdk-0.9.0-honey.1-local-registry.tar.gz",
+        )
+        self.assertEqual(
+            set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
+        )
+        self.assertEqual(
+            configuration.receipt_filename,
+            "rust-sdk-local-registry-build-receipt.json",
+        )
         self.assertIn("examples/quickstart.rs", configuration.sdk_sources)
         self.assertIn("fixtures/semantic-bundle-v1.json", configuration.sdk_sources)
 
@@ -247,8 +319,9 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         second = self.base / "second"
         first_receipt = self.produce(first)
         second_receipt = self.produce(second)
-        first_archive = first / "cigar-sdk-1.0.0-dev.1.crate"
-        second_archive = second / "cigar-sdk-1.0.0-dev.1.crate"
+        filename = "cigar-rust-sdk-0.9.0-honey.1-local-registry.tar.gz"
+        first_archive = first / filename
+        second_archive = second / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
         self.assertEqual(
             first_receipt["archive"]["sha256"], second_receipt["archive"]["sha256"]
@@ -257,7 +330,7 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
     def test_receipt_keeps_unpublished_chain_and_release_claims_false(self) -> None:
         evidence = self.base / "evidence"
         receipt = self.produce(evidence)
-        self.assertEqual(receipt["status"], "built-unqualified")
+        self.assertEqual(receipt["status"], "honey-built-unqualified")
         self.assertEqual(
             receipt["unpublished_dependency_chain"]["package_count"],
             len(builder.PACKAGE_SPECS) - 1,
@@ -275,19 +348,26 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
             "registry_signature",
             "distribution_signed",
             "signed",
-            "installable",
-            "installed_compatibility",
-            "clean_install_from_crates_io",
-            "crates_io_dependency_resolution",
-            "crates_io_published",
+            "notarized",
             "published",
-            "qualified",
             "supported",
+            "production_qualified",
             "release",
         ):
             self.assertFalse(claims[name], name)
+        for name in (
+            "developer_preview",
+            "cargo_package_generated",
+            "package_contract_verified",
+            "self_contained_local_registry",
+            "offline_consumer_check",
+            "offline_consumer_test",
+            "semantic_workflow_verified",
+        ):
+            self.assertTrue(claims[name], name)
         self.assertEqual(
-            stat.S_IMODE((evidence / builder.BUILD_RECEIPT).stat().st_mode), 0o400
+            stat.S_IMODE((evidence / builder.HONEY_BUILD_RECEIPT).stat().st_mode),
+            0o400,
         )
         self.assertEqual(
             stat.S_IMODE((evidence / receipt["archive"]["path"]).stat().st_mode),
@@ -403,29 +483,101 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
     def test_canonical_writer_refuses_existing_target(self) -> None:
         destination = self.base / "existing.crate"
         destination.write_bytes(b"occupied")
-        configuration = builder._load_configuration(self.root)
+        configuration = builder._load_configuration(
+            self.root, honey_local_registry_kit=True
+        )
         entries = self.entries(configuration)
         with self.assertRaisesRegex(ReleaseError, "refusing to overwrite"):
             builder._write_canonical_crate(destination, entries, 1700000000)
 
     def test_normalized_manifest_with_path_dependency_is_rejected(self) -> None:
         normalized = (
-            '[package]\nname = "cigar-sdk"\nversion = "1.0.0-dev.1"\n'
+            '[package]\nname = "cigar-sdk"\nversion = "0.9.0-honey.1"\n'
             'publish = ["crates-io"]\n\n[dependencies.cigar-api]\n'
-            'version = "=1.0.0-dev.1"\npath = "../../crates/cigar-api"\n'
+            'version = "=0.9.0-honey.1"\npath = "../../crates/cigar-api"\n'
         ).encode("utf-8")
         archive = self.base / "bad.crate"
         with tarfile.open(archive, mode="w:gz") as package:
-            member = tarfile.TarInfo("cigar-sdk-1.0.0-dev.1/Cargo.toml")
+            member = tarfile.TarInfo("cigar-sdk-0.9.0-honey.1/Cargo.toml")
             member.size = len(normalized)
             package.addfile(member, io.BytesIO(normalized))
         with self.assertRaisesRegex(ReleaseError, "normalized dependency"):
-            builder._normalized_manifest(archive, "cigar-sdk", "1.0.0-dev.1")
+            builder._normalized_manifest(archive, "cigar-sdk", "0.9.0-honey.1")
+
+    def test_honey_local_registry_kit_is_deterministic_and_checksum_bound(self) -> None:
+        first = self.base / "first-kit.tar.gz"
+        second = self.base / "second-kit.tar.gz"
+        first_construction = self.write_honey_fixture_kit(first)
+        second_construction = self.write_honey_fixture_kit(second)
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        self.assertEqual(first_construction, second_construction)
+
+        payloads = builder._extract_honey_kit(
+            first, self.base / "kit-extracted", 1700000000
+        )
+        expected_support = {
+            ".cargo/config.toml",
+            "README.md",
+            "LICENSE",
+            "NOTICE",
+            "RELEASE-METADATA.json",
+            "SHA256SUMS",
+            "examples/agent_a_coordinator.rs",
+            "examples/consumer/Cargo.toml",
+            "examples/consumer/Cargo.lock",
+            "examples/consumer/src/main.rs",
+            "examples/consumer/fixtures/semantic-bundle-v1.json",
+        }
+        self.assertTrue(expected_support.issubset(payloads))
+        self.assertTrue(
+            any(
+                name.startswith("registry/") and name.endswith(".crate")
+                for name in payloads
+            )
+        )
+        metadata = json.loads(payloads["RELEASE-METADATA.json"])
+        configuration = self.honey_configuration()
+        self.assertEqual(metadata["schema_version"], "cigar.release-metadata.v1")
+        self.assertEqual(metadata["artifact_id"], builder.HONEY_ARTIFACT_ID)
+        self.assertEqual(metadata["product_version"], configuration.version)
+        self.assertEqual(metadata["context_abi"], configuration.context_abi)
+        self.assertEqual(metadata["source"], self.source)
+        self.assertEqual(metadata["source_date_epoch"], 1700000000)
+        self.assertEqual(metadata["input_file_count"], len(payloads) - 1)
+        self.assertEqual(metadata["contract"], configuration.contract_relative)
+        self.assertEqual(
+            metadata["contract_sha256"],
+            configuration.authority[configuration.contract_relative]["sha256"],
+        )
+        self.assertNotIn("offline", metadata)
+        self.assertNotIn("production_qualified", metadata)
+
+    def test_honey_local_registry_kit_rejects_checksum_tampering(self) -> None:
+        original = self.base / "original-kit.tar.gz"
+        self.write_honey_fixture_kit(original)
+        entries: list[builder.CrateEntry] = []
+        with tarfile.open(original, mode="r:gz") as archive:
+            for member in archive:
+                handle = archive.extractfile(member)
+                self.assertIsNotNone(handle)
+                payload = handle.read() if handle is not None else b""
+                if member.name == "SHA256SUMS":
+                    lines = payload.splitlines()
+                    prefix = b"0" if lines[0][:1] != b"0" else b"1"
+                    lines[0] = prefix + lines[0][1:]
+                    payload = b"\n".join(lines) + b"\n"
+                entries.append(builder.CrateEntry(member.name, payload))
+        tampered = self.base / "tampered-kit.tar.gz"
+        builder._write_canonical_crate(tampered, tuple(entries), 1700000000)
+        with self.assertRaisesRegex(ReleaseError, "checksum"):
+            builder._extract_honey_kit(
+                tampered, self.base / "tampered-extracted", 1700000000
+            )
 
     def test_receipt_is_canonical_json(self) -> None:
         evidence = self.base / "evidence"
         receipt = self.produce(evidence)
-        payload = (evidence / builder.BUILD_RECEIPT).read_bytes()
+        payload = (evidence / builder.HONEY_BUILD_RECEIPT).read_bytes()
         self.assertEqual(payload, canonical_json_bytes(receipt))
         self.assertEqual(json.loads(payload), receipt)
 

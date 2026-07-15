@@ -148,17 +148,32 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
                 source_validator=self.fake_validator,
             )
 
-    def test_configuration_binds_exact_development_authorities_and_source_package(
+    def test_configuration_binds_exact_honey_authorities_and_source_package(
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "1.0.0-dev.1")
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.filename,
-            "cigar-claude-code-1.0.0-dev.1.tar.gz",
+            "cigar-claude-code-0.9.0-honey.1.tar.gz",
         )
-        self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
+        self.assertEqual(
+            set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
+        )
+        self.assertEqual(
+            configuration.receipt_filename,
+            "claude-code-plugin-build-receipt.json",
+        )
+        self.assertTrue(configuration.honey)
+        self.assertEqual(
+            builder._runtime_artifact_id(configuration),
+            builder.HONEY_RUNTIME_ARTIFACT_ID,
+        )
+        self.assertEqual(
+            builder._runtime_artifact_id(mock.Mock(honey=False)),
+            builder.DEVELOPMENT_RUNTIME_ARTIFACT_ID,
+        )
         self.assertEqual(
             set(configuration.assets),
             set(builder.SOURCE_RELEASE_PATHS) | {"LICENSE", "NOTICE"},
@@ -172,7 +187,7 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-claude-code-1.0.0-dev.1.tar.gz"
+        filename = "cigar-claude-code-0.9.0-honey.1.tar.gz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
@@ -192,7 +207,7 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
         )
         self.assertEqual(stat.S_IMODE(first_root.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE(first_archive.stat().st_mode), 0o400)
-        receipt_path = first_root / builder.BUILD_RECEIPT
+        receipt_path = first_root / "claude-code-plugin-build-receipt.json"
         self.assertEqual(stat.S_IMODE(receipt_path.stat().st_mode), 0o400)
         self.assertEqual(json.loads(receipt_path.read_bytes()), first)
 
@@ -519,7 +534,7 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
             "file_count": 2,
             "expanded_bytes": len(hook) + len(mcp),
             "metadata": {
-                "artifact_id": "cli-daemon-macos-aarch64",
+                "artifact_id": builder.HONEY_RUNTIME_ARTIFACT_ID,
                 "product_version": configuration.version,
                 "context_abi": configuration.context_abi,
                 "source_date_epoch": 1_700_000_000,
@@ -539,6 +554,10 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
         self.assertEqual(
             built.runtime_binding["hook"],
             {"sha256": hashlib.sha256(hook).hexdigest(), "bytes": len(hook)},
+        )
+        self.assertEqual(
+            built.runtime_binding["artifact_id"],
+            builder.HONEY_RUNTIME_ARTIFACT_ID,
         )
         self.assertFalse(built.runtime_binding["distribution_signature_qualified"])
 

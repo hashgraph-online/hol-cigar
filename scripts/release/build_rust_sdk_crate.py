@@ -42,9 +42,19 @@ from verify_package import verify as verify_package
 
 
 ARTIFACT_ID = "rust-sdk-crate"
+HONEY_ARTIFACT_ID = "rust-sdk-local-registry"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 PRODUCER = "python3 scripts/release/build_rust_sdk_crate.py"
+HONEY_PRODUCER = (
+    "python3 scripts/release/build_rust_sdk_crate.py --honey-local-registry-kit"
+)
+HONEY_PRODUCER_ARGV = [
+    "python3",
+    "scripts/release/build_rust_sdk_crate.py",
+    "--honey-local-registry-kit",
+]
 BUILD_RECEIPT = "rust-sdk-crate-development-build.json"
+HONEY_BUILD_RECEIPT = "rust-sdk-local-registry-build-receipt.json"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SDK_RELATIVE = "sdk/rust"
 EXPECTED_QUICKSTART_IDENTITY = (
@@ -58,6 +68,10 @@ MAX_COMMAND_OUTPUT = 16 * 1024 * 1024
 MAX_TOOL_BYTES = 64 * 1024 * 1024
 MAX_REGISTRY_FILES = 10_000
 MAX_REGISTRY_BYTES = 2 * 1024 * 1024 * 1024
+MAX_KIT_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_KIT_MEMBER_BYTES = MAX_ARCHIVE_BYTES
+MAX_KIT_EXPANDED_BYTES = 512 * 1024 * 1024
+HONEY_CONTRACT_RELATIVE = "packaging/honey/contracts/rust-sdk-local-registry.v1.json"
 
 AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
@@ -71,6 +85,18 @@ AUTHORITY_PATHS = (
     f"{SDK_RELATIVE}/PUBLISHING.md",
     f"{SDK_RELATIVE}/release.json",
 )
+HONEY_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
+    HONEY_CONTRACT_RELATIVE,
+    "Cargo.toml",
+    "Cargo.lock",
+    f"{SDK_RELATIVE}/Cargo.toml",
+    f"{SDK_RELATIVE}/README.md",
+    f"{SDK_RELATIVE}/release.json",
+)
 
 SDK_SOURCE_PATHS = frozenset(
     {
@@ -79,6 +105,7 @@ SDK_SOURCE_PATHS = frozenset(
         "LICENSE",
         "NOTICE",
         "release.json",
+        "examples/agent_a_coordinator.rs",
         "examples/quickstart.rs",
         "fixtures/semantic-bundle-v1.json",
         "src/client.rs",
@@ -164,13 +191,18 @@ class BuildConfiguration:
     sdk_root: Path
     version: str
     context_abi: str
+    artifact_id: str
+    artifact_kind: str
     filename: str
+    sdk_crate_filename: str
+    receipt_filename: str
     crate_root: str
     contract_path: Path
     contract_relative: str
     authority: dict[str, dict[str, object]]
     sdk_sources: dict[str, bytes]
     producer_declared: bool
+    honey_local_registry_kit: bool
 
 
 @dataclass(frozen=True)
@@ -182,6 +214,8 @@ class BuiltCrate:
     dependency_registry: dict[str, object]
     tools: tuple[dict[str, object], ...]
     validation: dict[str, object]
+    kit_path: Path | None = None
+    kit_validation: dict[str, object] | None = None
 
 
 CrateBuilder = Callable[
@@ -198,6 +232,11 @@ def parse_arguments() -> argparse.Namespace:
         help="absolute external empty output workspace (or set CIGAR_EVIDENCE_DIR)",
     )
     parser.add_argument("--source-date-epoch")
+    parser.add_argument(
+        "--honey-local-registry-kit",
+        action="store_true",
+        help="build the self-contained Honey offline local-registry kit",
+    )
     parser.add_argument("--cargo", type=Path)
     parser.add_argument("--rustc", type=Path)
     parser.add_argument("--cargo-local-registry", type=Path)
@@ -286,9 +325,11 @@ def _read_stable_file(
             os.close(descriptor)
 
 
-def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, paths: tuple[str, ...] = AUTHORITY_PATHS
+) -> dict[str, dict[str, object]]:
     records: dict[str, dict[str, object]] = {}
-    for relative in AUTHORITY_PATHS:
+    for relative in paths:
         payload = _read_stable_file(
             root.joinpath(*relative.split("/")), MAX_SOURCE_BYTES, relative
         )
@@ -369,6 +410,7 @@ def _validate_contract(contract: Any, crate_root: str) -> None:
             f"{crate_root}/LICENSE",
             f"{crate_root}/NOTICE",
             f"{crate_root}/release.json",
+            f"{crate_root}/examples/agent_a_coordinator.rs",
             f"{crate_root}/examples/quickstart.rs",
             f"{crate_root}/fixtures/semantic-bundle-v1.json",
             f"{crate_root}/src/**",
@@ -383,6 +425,7 @@ def _validate_contract(contract: Any, crate_root: str) -> None:
             f"{crate_root}/LICENSE",
             f"{crate_root}/NOTICE",
             f"{crate_root}/release.json",
+            f"{crate_root}/examples/agent_a_coordinator.rs",
             f"{crate_root}/examples/quickstart.rs",
             f"{crate_root}/fixtures/semantic-bundle-v1.json",
             f"{crate_root}/src/lib.rs",
@@ -423,7 +466,7 @@ def _validate_contract(contract: Any, crate_root: str) -> None:
         raise ReleaseError("Rust SDK crate package contract is incomplete or stale")
 
 
-def _load_configuration(root: Path) -> BuildConfiguration:
+def _load_development_configuration(root: Path) -> BuildConfiguration:
     root = root.resolve(strict=True)
     sdk_root = root / SDK_RELATIVE
     authority = _authority_digests(root)
@@ -435,21 +478,34 @@ def _load_configuration(root: Path) -> BuildConfiguration:
     contract = load_json(contract_path)
     sdk_sources = _read_sdk_sources(sdk_root)
 
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
+    honey_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or honey_identity)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+", product["version"])
         is None
         or product.get("context_abi") != "cigar.context.v1"
     ):
-        raise ReleaseError("product version authority is not a development identity")
+        raise ReleaseError(
+            "product version authority is not a development or Honey identity"
+        )
     version = product["version"]
     context_abi = product["context_abi"]
     filename = f"cigar-sdk-{version}.crate"
@@ -552,6 +608,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
     package = sdk_manifest.get("package")
     expected_include = [
         "src/**",
+        "examples/agent_a_coordinator.rs",
         "examples/quickstart.rs",
         "fixtures/semantic-bundle-v1.json",
         "Cargo.toml",
@@ -637,18 +694,385 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         sdk_root=sdk_root,
         version=version,
         context_abi=context_abi,
+        artifact_id=ARTIFACT_ID,
+        artifact_kind="cargo-crate",
         filename=filename,
+        sdk_crate_filename=filename,
+        receipt_filename=BUILD_RECEIPT,
         crate_root=crate_root,
         contract_path=contract_path,
         contract_relative=contract_relative,
         authority=authority,
         sdk_sources=sdk_sources,
         producer_declared=row.get("producer") == PRODUCER,
+        honey_local_registry_kit=False,
     )
 
 
-def _source_identity(root: Path) -> dict[str, Any]:
-    files = expand_files(root, list(SOURCE_INCLUDES), list(SOURCE_EXCLUDES))
+def _is_honey_product(product: Any) -> bool:
+    return (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
+
+
+def _validate_honey_authority(
+    product: dict[str, Any],
+    matrix: Any,
+    profile: Any,
+    requirements: Any,
+    authority: dict[str, dict[str, object]],
+) -> None:
+    version = product["version"]
+    python_match = re.fullmatch(
+        r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
+    )
+    if python_match is None:
+        raise ReleaseError("Honey version cannot be mapped to the capability profile")
+    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    identity = {
+        "channel": "honey",
+        "context_abi": product["context_abi"],
+        "ecosystem_versions": {
+            "archive": version,
+            "plugin": version,
+            "python": python_version,
+            "rust": version,
+            "typescript": version,
+        },
+        "marketing_name": "CIGAR Honey v0.9",
+        "prerelease": True,
+        "product_version": version,
+        "production_qualified": False,
+        "published": False,
+        "python_distribution_version": python_version,
+        "release_state": "developer-preview",
+        "supported": False,
+        "tag": f"v{version}",
+    }
+    if (
+        not isinstance(matrix, dict)
+        or matrix.get("schema_version") != "cigar.honey.artifact-matrix.v1"
+        or matrix.get("release_state") != "developer-preview"
+        or matrix.get("product_version") != version
+        or matrix.get("context_abi") != product["context_abi"]
+        or matrix.get("profile_id")
+        != "cigar.honey.local-developer-preview.macos-arm64.v1"
+        or matrix.get("fail_closed") is not True
+        or not isinstance(matrix.get("artifacts"), list)
+        or not isinstance(profile, dict)
+        or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+        or profile.get("profile_id") != matrix.get("profile_id")
+        or profile.get("fail_closed") is not True
+        or profile.get("identity") != identity
+        or profile.get("platform")
+        != {
+            "deployment_modes": ["embedded", "local-sidecar"],
+            "host_arch": "arm64",
+            "host_os": "macos",
+            "network_required": False,
+            "target_triple": TARGET_TRIPLE,
+            "trust_model": "single-local-os-user-with-explicit-agent-principals",
+        }
+        or profile.get("product_version_binding")
+        != {
+            "path": "packaging/product-version.v1.json",
+            "sha256": authority["packaging/product-version.v1.json"]["sha256"],
+        }
+        or profile.get("artifact_ids") != [row.get("id") for row in matrix["artifacts"]]
+        or "rust-local-registry-kit" not in profile.get("integrations", [])
+        or not any(
+            isinstance(capability, dict)
+            and capability.get("id") == "rust-sdk"
+            and capability.get("status") == "required"
+            and capability.get("support_level") == "developer-preview"
+            for capability in profile.get("capabilities", [])
+        )
+    ):
+        raise ReleaseError("Honey Rust capability authority is incomplete or stale")
+    expected_bindings = {
+        "artifact_matrix": {
+            "path": "packaging/honey/artifact-matrix.v1.json",
+            "sha256": authority["packaging/honey/artifact-matrix.v1.json"]["sha256"],
+        },
+        "capability_profile": {
+            "path": "packaging/honey/capability-profile.v1.json",
+            "sha256": authority["packaging/honey/capability-profile.v1.json"]["sha256"],
+        },
+    }
+    mandatory_gates = profile.get("mandatory_gate_ids")
+    if (
+        not isinstance(requirements, dict)
+        or requirements.get("schema_version") != "cigar.honey.release-requirements.v1"
+        or requirements.get("profile_id") != matrix.get("profile_id")
+        or requirements.get("fail_closed") is not True
+        or requirements.get("machine_claims")
+        != {
+            "prerelease": True,
+            "production_qualified": False,
+            "supported": False,
+        }
+        or requirements.get("required_source_state")
+        != {"clean": True, "committed": True, "tagged_before_build": False}
+        or requirements.get("authority_bindings") != expected_bindings
+        or not isinstance(mandatory_gates, list)
+        or requirements.get("mandatory_gates")
+        != [
+            {
+                "evidence_status": "required-not-implied",
+                "id": gate,
+                "required": True,
+            }
+            for gate in mandatory_gates
+        ]
+    ):
+        raise ReleaseError("Honey release requirements are incomplete or stale")
+
+
+def _validate_honey_contract(contract: Any) -> None:
+    expected = {
+        "schema_version": "cigar.package-contract.v1",
+        "id": "honey-rust-sdk-local-registry-v1",
+        "formats": ["tar.gz"],
+        "allow": [
+            "RELEASE-METADATA.json",
+            ".cargo/config.toml",
+            "registry/**",
+            "examples/agent_a_coordinator.rs",
+            "examples/consumer/**",
+            "README.md",
+            "LICENSE",
+            "NOTICE",
+            "SHA256SUMS",
+        ],
+        "deny": [
+            "**/.git/**",
+            "**/.env*",
+            "**/*.key",
+            "**/*.pem",
+            "**/target/**",
+        ],
+        "required": [
+            "RELEASE-METADATA.json",
+            ".cargo/config.toml",
+            "examples/agent_a_coordinator.rs",
+            "examples/consumer/Cargo.toml",
+            "examples/consumer/Cargo.lock",
+            "examples/consumer/src/main.rs",
+            "examples/consumer/fixtures/semantic-bundle-v1.json",
+            "README.md",
+            "LICENSE",
+            "NOTICE",
+            "SHA256SUMS",
+        ],
+        "required_patterns": ["registry/*.crate", "registry/index/**"],
+        "symlinks": "forbid",
+        "line_endings": "lf",
+        "modes": ["0644", "0755"],
+        "max_entries": 30_000,
+        "max_member_bytes": MAX_KIT_MEMBER_BYTES,
+        "max_total_bytes": MAX_KIT_EXPANDED_BYTES,
+        "content_scan": True,
+        "content_scan_exemptions": [],
+        "checksum_manifest": {
+            "path": "SHA256SUMS",
+            "scope": "all-payload-files",
+        },
+        "version_binding": {
+            "path_pattern": "RELEASE-METADATA.json",
+            "format": "json",
+            "json_pointer": "/product_version",
+        },
+        "abi_binding": {
+            "path_pattern": "RELEASE-METADATA.json",
+            "format": "json",
+            "json_pointer": "/context_abi",
+        },
+    }
+    if contract != expected:
+        raise ReleaseError("Honey Rust local-registry package contract is stale")
+
+
+def _load_honey_configuration(root: Path) -> BuildConfiguration:
+    root = root.resolve(strict=True)
+    sdk_root = root / SDK_RELATIVE
+    authority = _authority_digests(root, HONEY_AUTHORITY_PATHS)
+    product = load_json(root / "packaging/product-version.v1.json")
+    matrix = load_json(root / "packaging/honey/artifact-matrix.v1.json")
+    profile = load_json(root / "packaging/honey/capability-profile.v1.json")
+    requirements = load_json(root / "packaging/honey/release-requirements.v1.json")
+    contract_path = root / HONEY_CONTRACT_RELATIVE
+    contract = load_json(contract_path)
+    sdk_sources = _read_sdk_sources(sdk_root)
+    if (
+        not isinstance(product, dict)
+        or product.get("schema_version") != "cigar.product-version.v1"
+        or not _is_honey_product(product)
+        or product.get("product") != "cigar"
+        or product.get("prerelease") is not True
+        or product.get("published") is not False
+        or product.get("supported") is not False
+        or product.get("context_abi") != "cigar.context.v1"
+    ):
+        raise ReleaseError("product version authority is not the Honey identity")
+    version = product["version"]
+    context_abi = product["context_abi"]
+    _validate_honey_authority(product, matrix, profile, requirements, authority)
+    filename = f"cigar-rust-sdk-{version}-local-registry.tar.gz"
+    sdk_crate_filename = f"cigar-sdk-{version}.crate"
+    crate_root = f"cigar-sdk-{version}"
+    rows = [
+        row
+        for row in matrix["artifacts"]
+        if isinstance(row, dict) and row.get("id") == HONEY_ARTIFACT_ID
+    ]
+    expected_row = {
+        "contract": HONEY_CONTRACT_RELATIVE,
+        "filename": filename,
+        "generated_by_assembler": False,
+        "id": HONEY_ARTIFACT_ID,
+        "kind": "cargo-local-registry-kit",
+        "order": 8,
+        "producer": HONEY_PRODUCER_ARGV,
+        "public_attachment": True,
+        "qualification_gate_ids": ["sdk-clean-installs", "archive-contracts"],
+        "receipt": {
+            "filename": HONEY_BUILD_RECEIPT,
+            "required": True,
+            "schema_version": "cigar.honey-rust-sdk-local-registry-build.v1",
+        },
+        "required": True,
+        "sha256_required": True,
+        "workspace": "rust",
+    }
+    if len(rows) != 1 or rows[0] != expected_row:
+        raise ReleaseError("Honey Rust artifact matrix row is incomplete or stale")
+    _validate_honey_contract(contract)
+
+    sdk_manifest = tomllib.loads(sdk_sources["Cargo.toml"].decode("utf-8"))
+    package = sdk_manifest.get("package")
+    expected_include = [
+        "src/**",
+        "examples/agent_a_coordinator.rs",
+        "examples/quickstart.rs",
+        "fixtures/semantic-bundle-v1.json",
+        "Cargo.toml",
+        "README.md",
+        "LICENSE",
+        "NOTICE",
+        "release.json",
+    ]
+    if (
+        not isinstance(package, dict)
+        or package.get("name") != "cigar-sdk"
+        or package.get("version") != version
+        or package.get("edition") != "2024"
+        or package.get("rust-version") != "1.92"
+        or package.get("license") != "Apache-2.0"
+        or package.get("publish") != ["crates-io"]
+        or package.get("include") != expected_include
+    ):
+        raise ReleaseError("Honey Rust SDK Cargo package identity is incomplete")
+    dependencies = sdk_manifest.get("dependencies")
+    expected_internal = {"cigar-api", "cigar-canon", "cigar-daemon", "cigar-protocol"}
+    if not isinstance(dependencies, dict) or not expected_internal.issubset(
+        dependencies
+    ):
+        raise ReleaseError("Honey Rust SDK internal dependencies are incomplete")
+    for name in expected_internal:
+        specification = dependencies[name]
+        if (
+            not isinstance(specification, dict)
+            or specification.get("version") != f"={version}"
+            or not isinstance(specification.get("path"), str)
+        ):
+            raise ReleaseError(f"Honey Rust SDK dependency {name} is not pinned")
+    release = load_json_bytes(sdk_sources["release.json"], "sdk/rust/release.json")
+    if release != {
+        "schema_version": "cigar.sdk-release.v1",
+        "name": "cigar-sdk",
+        "version": version,
+        "context_abi": context_abi,
+    }:
+        raise ReleaseError("Honey Rust SDK release metadata is stale")
+    workspace_manifest = tomllib.loads(
+        _read_stable_file(root / "Cargo.toml", MAX_SOURCE_BYTES, "Cargo.toml").decode(
+            "utf-8"
+        )
+    )
+    if (
+        workspace_manifest.get("workspace", {}).get("package", {}).get("version")
+        != version
+    ):
+        raise ReleaseError("workspace Cargo version differs from Honey authority")
+    workspace_lock = tomllib.loads(
+        _read_stable_file(root / "Cargo.lock", MAX_SOURCE_BYTES, "Cargo.lock").decode(
+            "utf-8"
+        )
+    )
+    lock_packages = workspace_lock.get("package")
+    if (
+        workspace_lock.get("version") != 4
+        or not isinstance(lock_packages, list)
+        or len(
+            [
+                item
+                for item in lock_packages
+                if isinstance(item, dict)
+                and item.get("name") == "cigar-sdk"
+                and item.get("version") == version
+            ]
+        )
+        != 1
+    ):
+        raise ReleaseError("workspace Cargo.lock does not bind the Honey Rust SDK")
+    return BuildConfiguration(
+        root=root,
+        sdk_root=sdk_root,
+        version=version,
+        context_abi=context_abi,
+        artifact_id=HONEY_ARTIFACT_ID,
+        artifact_kind="cargo-local-registry-kit",
+        filename=filename,
+        sdk_crate_filename=sdk_crate_filename,
+        receipt_filename=HONEY_BUILD_RECEIPT,
+        crate_root=crate_root,
+        contract_path=contract_path,
+        contract_relative=HONEY_CONTRACT_RELATIVE,
+        authority=authority,
+        sdk_sources=sdk_sources,
+        producer_declared=True,
+        honey_local_registry_kit=True,
+    )
+
+
+def _load_configuration(
+    root: Path, *, honey_local_registry_kit: bool = False
+) -> BuildConfiguration:
+    if honey_local_registry_kit:
+        return _load_honey_configuration(root)
+    if _is_honey_product(load_json(root / "packaging/product-version.v1.json")):
+        raise ReleaseError("Honey Rust SDK builds require --honey-local-registry-kit")
+    return _load_development_configuration(root)
+
+
+def _source_identity(
+    root: Path, *, honey_local_registry_kit: bool = False
+) -> dict[str, Any]:
+    includes = list(SOURCE_INCLUDES)
+    if honey_local_registry_kit:
+        includes.extend(
+            [
+                "packaging/honey/capability-profile.v1.json",
+                "packaging/honey/artifact-matrix.v1.json",
+                "packaging/honey/release-requirements.v1.json",
+                HONEY_CONTRACT_RELATIVE,
+            ]
+        )
+    files = expand_files(root, includes, list(SOURCE_EXCLUDES))
     if not files:
         raise ReleaseError("Rust SDK crate build source inventory is empty")
     identity = git_state(root, tree_digest(files))
@@ -657,6 +1081,7 @@ def _source_identity(root: Path) -> dict[str, Any]:
         or not isinstance(identity.get("revision"), str)
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", identity["revision"]) is None
         or not isinstance(identity.get("clean"), bool)
+        or (honey_local_registry_kit and identity.get("clean") is not True)
         or not isinstance(identity.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", identity["tree_sha256"]) is None
     ):
@@ -1226,6 +1651,411 @@ def _base_environment(
     }
 
 
+def _honey_cargo_config() -> bytes:
+    return (
+        '[source.crates-io]\nreplace-with = "cigar-local"\n\n'
+        '[source.cigar-local]\nlocal-registry = "registry"\n\n'
+        "[net]\noffline = true\n"
+    ).encode("utf-8")
+
+
+def _honey_consumer_manifest(version: str) -> bytes:
+    return (
+        '[package]\nname = "cigar-honey-rust-sdk-consumer"\nversion = "0.0.0"\n'
+        'edition = "2024"\nrust-version = "1.92"\npublish = false\n\n'
+        f'[dependencies]\ncigar-sdk = {{ version = "={version}", default-features = false }}\n'
+    ).encode("utf-8")
+
+
+def _honey_consumer_main() -> bytes:
+    return (
+        b'const FIXTURE: &[u8] = include_bytes!("../fixtures/semantic-bundle-v1.json");\n\n'
+        b"fn identity() -> Result<String, Box<dyn std::error::Error>> {\n"
+        b"    Ok(cigar_sdk::verify_semantic_bundle_fixture_json(FIXTURE)?.as_str().to_owned())\n"
+        b"}\n\n"
+        b"fn main() -> Result<(), Box<dyn std::error::Error>> {\n"
+        b'    println!("{}", identity()?);\n'
+        b"    Ok(())\n"
+        b"}\n\n"
+        b"#[cfg(test)]\nmod tests {\n"
+        b"    #[test]\n    fn shared_semantic_fixture_is_stable() -> Result<(), Box<dyn std::error::Error>> {\n"
+        b'        assert_eq!(super::identity()?, "'
+        + EXPECTED_QUICKSTART_IDENTITY.encode("ascii")
+        + b'");\n        Ok(())\n    }\n}\n'
+    )
+
+
+def _honey_readme(version: str) -> bytes:
+    return (
+        f"# CIGAR Honey Rust SDK local-registry kit {version}\n\n"
+        "This developer-preview archive is self-contained for the packaged Apple-silicon "
+        "Rust toolchain cohort. It does not contact crates.io. Extract the archive, enter "
+        "`examples/consumer`, and run `cargo check --locked --offline`, "
+        "`cargo test --locked --offline`, then `cargo run --locked --offline`.\n\n"
+        "The parent `.cargo/config.toml` replaces crates.io with the relative `registry` "
+        "directory. Do not move the consumer out of the extracted tree unless you also "
+        "supply an equivalent owner-controlled Cargo configuration. The coordinator source "
+        "in `examples/agent_a_coordinator.rs` is also packaged by the `cigar-sdk` crate.\n\n"
+        "Honey is unsigned, unnotarized, unsupported, and not production-qualified.\n"
+    ).encode("utf-8")
+
+
+def _registry_files(registry: Path) -> tuple[tuple[str, Path, str, int], ...]:
+    records: list[tuple[str, Path, str, int]] = []
+    aliases: set[str] = set()
+    total = 0
+    for current, directories, files in os.walk(
+        registry, topdown=True, followlinks=False
+    ):
+        current_path = Path(current)
+        directories[:] = sorted(directories)
+        for directory in directories:
+            if (current_path / directory).is_symlink():
+                raise ReleaseError("Honey local registry contains a directory symlink")
+        for name in sorted(files):
+            path = current_path / name
+            if path.is_symlink() or not path.is_file():
+                raise ReleaseError("Honey local registry contains a non-regular file")
+            relative = safe_relative_path(path.relative_to(registry).as_posix())
+            alias = unicodedata.normalize("NFC", relative).casefold()
+            if alias in aliases:
+                raise ReleaseError("Honey local registry paths collide portably")
+            aliases.add(alias)
+            payload = _read_stable_file(
+                path,
+                MAX_ARCHIVE_BYTES,
+                f"Honey local registry {relative}",
+                allow_empty=True,
+            )
+            total += len(payload)
+            if len(records) >= MAX_REGISTRY_FILES or total > MAX_KIT_EXPANDED_BYTES:
+                raise ReleaseError("Honey local registry exceeds its archive bounds")
+            records.append((relative, path, sha256_bytes(payload), len(payload)))
+    if not records or not any(relative.endswith(".crate") for relative, *_ in records):
+        raise ReleaseError("Honey local registry contains no Cargo packages")
+    return tuple(records)
+
+
+def _kit_tree_identity(records: dict[str, tuple[str, int]]) -> str:
+    digest = hashlib.sha256()
+    for path, (checksum, size) in sorted(
+        records.items(), key=lambda item: item[0].encode("utf-8")
+    ):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(size).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(checksum))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _release_input_tree_identity(records: dict[str, tuple[str, int]]) -> str:
+    """Match verify_package's canonical RELEASE-METADATA input-tree digest."""
+
+    digest = hashlib.sha256()
+    for path in sorted(records):
+        checksum, size = records[path]
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(size).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(b"0644")
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(checksum))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _write_honey_kit(
+    path: Path,
+    *,
+    configuration: BuildConfiguration,
+    source: dict[str, Any],
+    epoch: int,
+    registry: Path,
+    consumer: Path,
+    package_chain: tuple[dict[str, object], ...],
+    registry_identity: dict[str, object],
+) -> dict[str, object]:
+    if path.exists() or path.is_symlink():
+        raise ReleaseError(f"refusing to overwrite staged Honey Rust kit: {path}")
+    registry_files = _registry_files(registry)
+    consumer_lock = _read_stable_file(
+        consumer / "Cargo.lock", MAX_SOURCE_BYTES, "Honey consumer Cargo.lock"
+    )
+    support: dict[str, bytes] = {
+        ".cargo/config.toml": _honey_cargo_config(),
+        "README.md": _honey_readme(configuration.version),
+        "LICENSE": configuration.sdk_sources["LICENSE"],
+        "NOTICE": configuration.sdk_sources["NOTICE"],
+        "examples/agent_a_coordinator.rs": configuration.sdk_sources[
+            "examples/agent_a_coordinator.rs"
+        ],
+        "examples/consumer/Cargo.toml": _honey_consumer_manifest(configuration.version),
+        "examples/consumer/Cargo.lock": consumer_lock,
+        "examples/consumer/src/main.rs": _honey_consumer_main(),
+        "examples/consumer/fixtures/semantic-bundle-v1.json": configuration.sdk_sources[
+            "fixtures/semantic-bundle-v1.json"
+        ],
+    }
+    file_identities = {
+        name: (sha256_bytes(payload), len(payload)) for name, payload in support.items()
+    }
+    for relative, _source_path, checksum, size in registry_files:
+        file_identities[f"registry/{relative}"] = (checksum, size)
+    checksums = "".join(
+        f"{checksum}  {name}\n"
+        for name, (checksum, _size) in sorted(
+            file_identities.items(), key=lambda item: item[0].encode("utf-8")
+        )
+    ).encode("ascii")
+    support["SHA256SUMS"] = checksums
+    file_identities["SHA256SUMS"] = (sha256_bytes(checksums), len(checksums))
+    metadata = canonical_json_bytes(
+        {
+            "schema_version": "cigar.release-metadata.v1",
+            "artifact_id": HONEY_ARTIFACT_ID,
+            "product_version": configuration.version,
+            "context_abi": configuration.context_abi,
+            "source_date_epoch": epoch,
+            "source": source,
+            "input_tree_sha256": _release_input_tree_identity(file_identities),
+            "input_file_count": len(file_identities),
+            "contract": configuration.contract_relative,
+            "contract_sha256": configuration.authority[configuration.contract_relative][
+                "sha256"
+            ],
+        }
+    )
+    support["RELEASE-METADATA.json"] = metadata
+    file_identities["RELEASE-METADATA.json"] = (sha256_bytes(metadata), len(metadata))
+
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as raw:
+            temporary = Path(raw.name)
+            with gzip.GzipFile(
+                filename="", mode="wb", compresslevel=9, fileobj=raw, mtime=epoch
+            ) as compressed:
+                with tarfile.open(
+                    fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT
+                ) as archive:
+                    all_paths = set(support) | {
+                        f"registry/{relative}" for relative, *_ in registry_files
+                    }
+                    registry_by_path = {
+                        f"registry/{relative}": (source_path, checksum, size)
+                        for relative, source_path, checksum, size in registry_files
+                    }
+                    for name in sorted(
+                        all_paths, key=lambda value: value.encode("utf-8")
+                    ):
+                        if name in support:
+                            payload = support[name]
+                        else:
+                            source_path, checksum, size = registry_by_path[name]
+                            payload = _read_stable_file(
+                                source_path,
+                                MAX_ARCHIVE_BYTES,
+                                f"Honey kit member {name}",
+                                allow_empty=True,
+                            )
+                            if (
+                                len(payload) != size
+                                or sha256_bytes(payload) != checksum
+                            ):
+                                raise ReleaseError(
+                                    "Honey local registry changed during archive construction"
+                                )
+                        information = tarfile.TarInfo(name)
+                        information.size = len(payload)
+                        information.mode = 0o644
+                        information.mtime = epoch
+                        information.uid = 0
+                        information.gid = 0
+                        information.uname = ""
+                        information.gname = ""
+                        archive.addfile(information, io.BytesIO(payload))
+            raw.flush()
+            os.fsync(raw.fileno())
+        os.chmod(temporary, 0o600)
+        if (
+            temporary.stat().st_size <= 0
+            or temporary.stat().st_size > MAX_KIT_ARCHIVE_BYTES
+        ):
+            raise ReleaseError("Honey Rust kit archive exceeds its compressed bound")
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return {
+        "schema_version": "cigar.honey-rust-sdk-kit-construction.v1",
+        "status": "built",
+        "file_count": len(support) + len(registry_files),
+        "registry_file_count": len(registry_files),
+        "package_count": len(package_chain),
+        "registry": registry_identity,
+        "payload_tree_sha256": _kit_tree_identity(file_identities),
+        "semantic_bundle_identity": EXPECTED_QUICKSTART_IDENTITY,
+    }
+
+
+def _extract_honey_kit(
+    archive_path: Path, destination: Path, epoch: int
+) -> dict[str, bytes]:
+    if destination.exists() or destination.is_symlink():
+        raise ReleaseError("Honey kit extraction destination already exists")
+    destination.mkdir(mode=0o700)
+    payloads: dict[str, bytes] = {}
+    aliases: set[str] = set()
+    total = 0
+    try:
+        with tarfile.open(archive_path, mode="r:gz") as archive:
+            for member in archive:
+                name = safe_relative_path(member.name)
+                alias = unicodedata.normalize("NFC", name).casefold()
+                if name in payloads or alias in aliases:
+                    raise ReleaseError(f"Honey kit member collides: {name}")
+                aliases.add(alias)
+                if (
+                    not member.isfile()
+                    or member.mode != 0o644
+                    or member.uid != 0
+                    or member.gid != 0
+                    or member.mtime != epoch
+                    or member.size < 0
+                    or member.size > MAX_KIT_MEMBER_BYTES
+                ):
+                    raise ReleaseError(f"Honey kit member metadata is invalid: {name}")
+                total += member.size
+                if (
+                    len(payloads) >= MAX_REGISTRY_FILES + 64
+                    or total > MAX_KIT_EXPANDED_BYTES
+                ):
+                    raise ReleaseError("Honey kit expanded payload exceeds its bounds")
+                handle = archive.extractfile(member)
+                if handle is None:
+                    raise ReleaseError(f"Honey kit member is unreadable: {name}")
+                payload = handle.read(member.size + 1)
+                if len(payload) != member.size:
+                    raise ReleaseError(f"Honey kit member length differs: {name}")
+                target = destination.joinpath(*PurePosixPath(name).parts)
+                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                if target.exists() or target.is_symlink():
+                    raise ReleaseError(f"Honey kit extraction target collides: {name}")
+                target.write_bytes(payload)
+                target.chmod(0o600)
+                payloads[name] = payload
+    except (gzip.BadGzipFile, OSError, tarfile.TarError) as error:
+        raise ReleaseError(f"cannot extract Honey Rust kit: {error}") from error
+    checksum_payload = payloads.get("SHA256SUMS")
+    if checksum_payload is None:
+        raise ReleaseError("Honey Rust kit lacks SHA256SUMS")
+    expected: dict[str, str] = {}
+    try:
+        lines = checksum_payload.decode("ascii").splitlines()
+    except UnicodeError as error:
+        raise ReleaseError("Honey Rust kit checksum manifest is not ASCII") from error
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([!-~]+)", line)
+        if match is None or match.group(2) in expected:
+            raise ReleaseError("Honey Rust kit checksum manifest is malformed")
+        expected[match.group(2)] = match.group(1)
+    if set(expected) != set(payloads) - {
+        "SHA256SUMS",
+        "RELEASE-METADATA.json",
+    }:
+        raise ReleaseError("Honey Rust kit checksum inventory differs")
+    for name, checksum in expected.items():
+        if sha256_bytes(payloads[name]) != checksum:
+            raise ReleaseError(f"Honey Rust kit checksum differs: {name}")
+    return payloads
+
+
+def _qualify_honey_kit(
+    archive_path: Path,
+    *,
+    configuration: BuildConfiguration,
+    scratch: Path,
+    environment: dict[str, str],
+    cargo: Path,
+    epoch: int,
+    source: dict[str, Any],
+) -> dict[str, object]:
+    extracted = scratch / "honey-kit-extracted"
+    payloads = _extract_honey_kit(archive_path, extracted, epoch)
+    expected_config = _honey_cargo_config()
+    if payloads.get(".cargo/config.toml") != expected_config:
+        raise ReleaseError("Honey Rust kit Cargo configuration differs")
+    metadata = load_json_bytes(
+        payloads["RELEASE-METADATA.json"], "Honey Rust kit release metadata"
+    )
+    input_identities = {
+        name: (sha256_bytes(payload), len(payload))
+        for name, payload in payloads.items()
+        if name != "RELEASE-METADATA.json"
+    }
+    expected_metadata = {
+        "schema_version": "cigar.release-metadata.v1",
+        "artifact_id": HONEY_ARTIFACT_ID,
+        "product_version": configuration.version,
+        "context_abi": configuration.context_abi,
+        "source_date_epoch": epoch,
+        "source": source,
+        "input_tree_sha256": _release_input_tree_identity(input_identities),
+        "input_file_count": len(input_identities),
+        "contract": configuration.contract_relative,
+        "contract_sha256": configuration.authority[configuration.contract_relative][
+            "sha256"
+        ],
+    }
+    if metadata != expected_metadata:
+        raise ReleaseError("Honey Rust kit release metadata differs")
+    consumer = extracted / "examples/consumer"
+    kit_environment = dict(environment)
+    kit_environment["CARGO_HOME"] = str(extracted / ".cargo")
+    kit_environment["CARGO_TARGET_DIR"] = str(scratch / "honey-kit-target")
+    for command, label in (
+        (["check", "--locked", "--offline"], "check"),
+        (["test", "--locked", "--offline"], "test"),
+    ):
+        _run_checked(
+            [str(cargo), *command],
+            cwd=consumer,
+            environment=kit_environment,
+            timeout=1800,
+            label=f"extracted Honey Rust kit cargo {label}",
+        )
+    output = (
+        _run_checked(
+            [str(cargo), "run", "--locked", "--offline", "--quiet"],
+            cwd=consumer,
+            environment=kit_environment,
+            timeout=1800,
+            label="extracted Honey Rust kit semantic workflow",
+        )
+        .decode("utf-8", errors="strict")
+        .strip()
+    )
+    if output != EXPECTED_QUICKSTART_IDENTITY:
+        raise ReleaseError("Honey Rust kit semantic workflow identity differs")
+    return {
+        "schema_version": "cigar.honey-rust-sdk-kit-validation.v1",
+        "status": "passed",
+        "offline": True,
+        "network_proxy": "deny-loopback",
+        "cargo_check": "passed",
+        "cargo_test": "passed",
+        "semantic_workflow": "passed",
+        "semantic_bundle_identity": output,
+        "archive_file_count": len(payloads),
+    }
+
+
 def _default_crate_builder(
     configuration: BuildConfiguration,
     source: dict[str, Any],
@@ -1286,7 +2116,7 @@ def _default_crate_builder(
         timeout=300,
         label="offline locked Cargo dependency registry sync",
     )
-    dependency_registry = _registry_identity(registry)
+    _registry_identity(registry)
 
     cargo_home = scratch / "cargo-home"
     _cargo_config(cargo_home, registry)
@@ -1389,7 +2219,7 @@ def _default_crate_builder(
     entries = _read_sdk_crate(raw_sdk, configuration, source)
     canonical_root = scratch / "canonical-package"
     canonical_root.mkdir(mode=0o700)
-    canonical = canonical_root / configuration.filename
+    canonical = canonical_root / configuration.sdk_crate_filename
     _write_canonical_crate(canonical, entries, epoch)
     canonical_manifest = tomllib.loads(
         next(
@@ -1486,6 +2316,64 @@ def _default_crate_builder(
     ] != expected_identities:
         raise ReleaseError("Rust SDK local publication chain order differs")
 
+    dependency_registry = _registry_identity(registry)
+    kit_path: Path | None = None
+    kit_validation: dict[str, object] | None = None
+    if configuration.honey_local_registry_kit:
+        kit_consumer = scratch / "honey-kit-consumer-source"
+        (kit_consumer / "src").mkdir(parents=True, mode=0o700)
+        (kit_consumer / "fixtures").mkdir(mode=0o700)
+        kit_inputs = {
+            kit_consumer / "Cargo.toml": _honey_consumer_manifest(
+                configuration.version
+            ),
+            kit_consumer / "src/main.rs": _honey_consumer_main(),
+            kit_consumer
+            / "fixtures/semantic-bundle-v1.json": configuration.sdk_sources[
+                "fixtures/semantic-bundle-v1.json"
+            ],
+        }
+        for path, payload in kit_inputs.items():
+            path.write_bytes(payload)
+            path.chmod(0o600)
+        _run_checked(
+            [
+                str(cargo),
+                "generate-lockfile",
+                "--offline",
+                "--manifest-path",
+                str(kit_consumer / "Cargo.toml"),
+            ],
+            cwd=kit_consumer,
+            environment=validation_environment,
+            timeout=600,
+            label="Honey Rust kit consumer lock generation",
+        )
+        kit_path = scratch / configuration.filename
+        construction = _write_honey_kit(
+            kit_path,
+            configuration=configuration,
+            source=source,
+            epoch=epoch,
+            registry=registry,
+            consumer=kit_consumer,
+            package_chain=tuple(records),
+            registry_identity=dependency_registry,
+        )
+        qualification = _qualify_honey_kit(
+            kit_path,
+            configuration=configuration,
+            scratch=scratch,
+            environment=validation_environment,
+            cargo=cargo,
+            epoch=epoch,
+            source=source,
+        )
+        kit_validation = {
+            "construction": construction,
+            "qualification": qualification,
+        }
+
     return BuiltCrate(
         entries=entries,
         raw_cargo_package_sha256=sha256_bytes(raw_payload),
@@ -1518,6 +2406,8 @@ def _default_crate_builder(
                 "reason": "not packaged; repository integration tests depend on external shared schemas and fixtures",
             },
         },
+        kit_path=kit_path,
+        kit_validation=kit_validation,
     )
 
 
@@ -1689,6 +2579,31 @@ def _validate_built_crate(
     )
     if vcs != _expected_vcs_document(source):
         raise ReleaseError("built Rust SDK VCS metadata is not source-bound")
+    if configuration.honey_local_registry_kit:
+        kit = built.kit_validation
+        construction = kit.get("construction") if isinstance(kit, dict) else None
+        qualification = kit.get("qualification") if isinstance(kit, dict) else None
+        if (
+            built.kit_path is None
+            or not built.kit_path.is_file()
+            or not isinstance(kit, dict)
+            or set(kit) != {"construction", "qualification"}
+            or not isinstance(construction, dict)
+            or not isinstance(qualification, dict)
+            or construction.get("status") != "built"
+            or construction.get("semantic_bundle_identity")
+            != EXPECTED_QUICKSTART_IDENTITY
+            or qualification.get("status") != "passed"
+            or qualification.get("offline") is not True
+            or qualification.get("cargo_check") != "passed"
+            or qualification.get("cargo_test") != "passed"
+            or qualification.get("semantic_workflow") != "passed"
+            or qualification.get("semantic_bundle_identity")
+            != EXPECTED_QUICKSTART_IDENTITY
+        ):
+            raise ReleaseError("Honey Rust SDK kit validation evidence is incomplete")
+    elif built.kit_path is not None or built.kit_validation is not None:
+        raise ReleaseError("development Rust crate unexpectedly returned a Honey kit")
 
 
 def _entry_tree(entries: tuple[CrateEntry, ...]) -> str:
@@ -1711,11 +2626,18 @@ def produce(
     crate_builder: CrateBuilder = _default_crate_builder,
 ) -> dict[str, Any]:
     root = arguments.root.resolve(strict=True)
+    honey_local_registry_kit = bool(
+        getattr(arguments, "honey_local_registry_kit", False)
+    )
     host = _require_host()
     evidence_root = _selected_evidence_directory(arguments)
     epoch = require_source_date_epoch(arguments.source_date_epoch)
-    configuration = _load_configuration(root)
-    source_before = _source_identity(root)
+    configuration = _load_configuration(
+        root, honey_local_registry_kit=honey_local_registry_kit
+    )
+    source_before = _source_identity(
+        root, honey_local_registry_kit=honey_local_registry_kit
+    )
 
     workspace = EvidenceWorkspace.create(evidence_root, repository_root=root)
     try:
@@ -1730,19 +2652,34 @@ def produce(
                 configuration, source_before, epoch, scratch, arguments
             )
             _validate_built_crate(built, configuration, source_before)
-            if _source_identity(root) != source_before:
+            if (
+                _source_identity(
+                    root, honey_local_registry_kit=honey_local_registry_kit
+                )
+                != source_before
+            ):
                 raise ReleaseError(
                     "Rust SDK crate build source changed during construction"
                 )
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "Rust SDK crate build authority changed during construction"
                 )
 
-            staged_archive = scratch / configuration.filename
-            _write_canonical_crate(staged_archive, built.entries, epoch)
+            if honey_local_registry_kit:
+                if built.kit_path is None:
+                    raise ReleaseError("Honey Rust SDK builder returned no kit archive")
+                staged_archive = built.kit_path
+                maximum_archive_bytes = MAX_KIT_ARCHIVE_BYTES
+            else:
+                staged_archive = scratch / configuration.filename
+                _write_canonical_crate(staged_archive, built.entries, epoch)
+                maximum_archive_bytes = MAX_ARCHIVE_BYTES
             validated = _read_stable_file(
-                staged_archive, MAX_ARCHIVE_BYTES, "staged Rust SDK crate"
+                staged_archive, maximum_archive_bytes, "staged Rust SDK artifact"
             )
             validated_bytes = len(validated)
             validated_sha256 = sha256_bytes(validated)
@@ -1757,16 +2694,24 @@ def produce(
                 raise ReleaseError(
                     "Rust SDK crate package-contract verification failed"
                 )
-            if _source_identity(root) != source_before:
+            if (
+                _source_identity(
+                    root, honey_local_registry_kit=honey_local_registry_kit
+                )
+                != source_before
+            ):
                 raise ReleaseError(
                     "Rust SDK crate build source changed during verification"
                 )
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "Rust SDK crate build authority changed during verification"
                 )
             verified = _read_stable_file(
-                staged_archive, MAX_ARCHIVE_BYTES, "verified Rust SDK crate"
+                staged_archive, maximum_archive_bytes, "verified Rust SDK artifact"
             )
             if (
                 len(verified) != validated_bytes
@@ -1846,9 +2791,42 @@ def produce(
                 "release": False,
             },
         }
-        workspace.write_json(BUILD_RECEIPT, receipt)
+        if honey_local_registry_kit:
+            construction = (built.kit_validation or {}).get("construction", {})
+            qualification = (built.kit_validation or {}).get("qualification", {})
+            receipt = {
+                **receipt,
+                "schema_version": "cigar.honey-rust-sdk-local-registry-build.v1",
+                "status": "honey-built-unqualified",
+                "artifact_id": HONEY_ARTIFACT_ID,
+                "payload_file_count": construction.get("file_count"),
+                "payload_tree_sha256": construction.get("payload_tree_sha256"),
+                "kit_validation": built.kit_validation,
+                "claims": {
+                    "developer_preview": True,
+                    "cargo_package_generated": True,
+                    "package_contract_verified": True,
+                    "self_contained_local_registry": True,
+                    "offline_consumer_check": qualification.get("cargo_check")
+                    == "passed",
+                    "offline_consumer_test": qualification.get("cargo_test")
+                    == "passed",
+                    "semantic_workflow_verified": qualification.get("semantic_workflow")
+                    == "passed",
+                    "registry_signature": False,
+                    "distribution_signed": False,
+                    "signed": False,
+                    "notarized": False,
+                    "published": False,
+                    "supported": False,
+                    "production_qualified": False,
+                    "release": False,
+                },
+            }
+        workspace.write_json(configuration.receipt_filename, receipt)
         workspace.read_files(
-            {configuration.filename, BUILD_RECEIPT}, strict_read_only=True
+            {configuration.filename, configuration.receipt_filename},
+            strict_read_only=True,
         )
         return receipt
     finally:

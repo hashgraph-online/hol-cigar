@@ -84,6 +84,21 @@ class BuildArchivesEvidenceTests(unittest.TestCase):
         (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return root
 
+    def minimal_honey_source(self, name: str) -> Path:
+        root = self.minimal_source(name)
+        manifest = json.loads((root / "manifest.json").read_bytes())
+        manifest["product_version"] = "0.9.0-honey.1"
+        honey_manifest = root / build_archives.HONEY_MANIFEST_PATH
+        honey_manifest.parent.mkdir(parents=True, exist_ok=True)
+        honey_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+        for relative in build_archives.HONEY_AUTHORITY_PATHS:
+            path = root / relative
+            if path == honey_manifest:
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        return root
+
     def run_build_main(
         self,
         arguments: argparse.Namespace,
@@ -188,6 +203,53 @@ class BuildArchivesEvidenceTests(unittest.TestCase):
         self.assertTrue((destination / "SHA256SUMS").is_file())
         manifest = json.loads((destination / "build-manifest.json").read_bytes())
         self.assertEqual(manifest["artifacts"][0]["path"], "source.tar.gz")
+        self.assertNotIn("authority", manifest)
+
+    def test_honey_portable_build_requires_clean_flag_and_binds_authority(self) -> None:
+        root = self.minimal_honey_source("honey-source")
+        missing_flag = self.build_arguments(
+            root=root,
+            output=self.base / "honey-missing-flag",
+            evidence=None,
+        )
+        missing_flag.manifest = build_archives.HONEY_MANIFEST_PATH
+        with self.assertRaisesRegex(ReleaseError, "require-committed-clean"):
+            self.run_build_main(missing_flag)
+
+        destination = self.base / "honey-build"
+        arguments = self.build_arguments(
+            root=root,
+            output=destination,
+            evidence=None,
+        )
+        arguments.manifest = build_archives.HONEY_MANIFEST_PATH
+        arguments.require_committed_clean = True
+        result, _ = self.run_build_main(arguments)
+        self.assertEqual(result, 0)
+        receipt = json.loads((destination / "build-manifest.json").read_bytes())
+        expected_paths = {
+            *build_archives.HONEY_AUTHORITY_PATHS,
+            "contract.json",
+        }
+        self.assertEqual(set(receipt["authority"]), expected_paths)
+        for relative, binding in receipt["authority"].items():
+            payload = (root / relative).read_bytes()
+            self.assertEqual(binding["bytes"], len(payload))
+            self.assertEqual(
+                binding["sha256"], __import__("hashlib").sha256(payload).hexdigest()
+            )
+
+    def test_checked_in_honey_authority_inventory_is_exact(self) -> None:
+        manifest = build_archives.load_json(
+            self.root / build_archives.HONEY_MANIFEST_PATH
+        )
+        authority = build_archives._honey_authority(self.root, manifest)
+        expected_paths = {
+            *build_archives.HONEY_AUTHORITY_PATHS,
+            *(entry["contract"] for entry in manifest["archives"]),
+        }
+
+        self.assertEqual(set(authority), expected_paths)
 
     def test_main_builds_protected_archive_set_and_removes_staging(self) -> None:
         root = self.minimal_source("protected-source")

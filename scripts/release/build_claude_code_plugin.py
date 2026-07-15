@@ -41,8 +41,11 @@ from verify_package import verify as verify_package
 
 
 ARTIFACT_ID = "claude-code-plugin"
+DEVELOPMENT_RUNTIME_ARTIFACT_ID = "cli-daemon-macos-aarch64"
+HONEY_RUNTIME_ARTIFACT_ID = "macos-runtime-aarch64"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 PRODUCER = "python3 scripts/release/build_claude_code_plugin.py"
+PRODUCER_ARGV = ["python3", "scripts/release/build_claude_code_plugin.py"]
 BUILD_RECEIPT = "claude-code-plugin-development-build.json"
 MAX_BINARY_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
@@ -54,6 +57,15 @@ AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
     "packaging/artifact-matrix.v1.json",
     "packaging/development/local-macos-aarch64.v1.json",
+    "packaging/contracts/plugin-archive.v1.json",
+    "packaging/contracts/macos-runtime-archive.v1.json",
+    f"{ADAPTER_RELATIVE}/package-manifest.json",
+)
+HONEY_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
     "packaging/contracts/plugin-archive.v1.json",
     "packaging/contracts/macos-runtime-archive.v1.json",
     f"{ADAPTER_RELATIVE}/package-manifest.json",
@@ -114,10 +126,12 @@ class BuildConfiguration:
     version: str
     context_abi: str
     filename: str
+    receipt_filename: str
     contract_path: Path
     contract_relative: str
     authority: dict[str, dict[str, object]]
     assets: dict[str, bytes]
+    honey: bool
 
 
 @dataclass(frozen=True)
@@ -227,9 +241,11 @@ def _read_stable_file(path: Path, maximum: int, label: str) -> bytes:
             os.close(descriptor)
 
 
-def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, paths: tuple[str, ...] = AUTHORITY_PATHS
+) -> dict[str, dict[str, object]]:
     records: dict[str, dict[str, object]] = {}
-    for relative in AUTHORITY_PATHS:
+    for relative in paths:
         payload = _read_stable_file(
             root.joinpath(*relative.split("/")), 16 * 1024 * 1024, relative
         )
@@ -313,93 +329,275 @@ def _manifest_assets(adapter_root: Path) -> dict[str, bytes]:
     return assets
 
 
+def _is_honey_product(product: Any) -> bool:
+    return (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
+
+
+def _runtime_artifact_id(configuration: BuildConfiguration) -> str:
+    return (
+        HONEY_RUNTIME_ARTIFACT_ID
+        if configuration.honey
+        else DEVELOPMENT_RUNTIME_ARTIFACT_ID
+    )
+
+
+def _validate_honey_authority(
+    product: dict[str, Any],
+    matrix: Any,
+    profile: Any,
+    requirements: Any,
+    authority: dict[str, dict[str, object]],
+) -> None:
+    version = product["version"]
+    python_match = re.fullmatch(
+        r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
+    )
+    if python_match is None:
+        raise ReleaseError("Honey version cannot be mapped to the capability profile")
+    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    identity = {
+        "channel": "honey",
+        "context_abi": product["context_abi"],
+        "ecosystem_versions": {
+            "archive": version,
+            "plugin": version,
+            "python": python_version,
+            "rust": version,
+            "typescript": version,
+        },
+        "marketing_name": "CIGAR Honey v0.9",
+        "prerelease": True,
+        "product_version": version,
+        "production_qualified": False,
+        "published": False,
+        "python_distribution_version": python_version,
+        "release_state": "developer-preview",
+        "supported": False,
+        "tag": f"v{version}",
+    }
+    capabilities = profile.get("capabilities", []) if isinstance(profile, dict) else []
+    required_capabilities = {
+        capability.get("id")
+        for capability in capabilities
+        if isinstance(capability, dict)
+        and capability.get("status") == "required"
+        and capability.get("support_level") == "developer-preview"
+    }
+    if (
+        not isinstance(matrix, dict)
+        or matrix.get("schema_version") != "cigar.honey.artifact-matrix.v1"
+        or matrix.get("release_state") != "developer-preview"
+        or matrix.get("product_version") != version
+        or matrix.get("context_abi") != product["context_abi"]
+        or matrix.get("profile_id")
+        != "cigar.honey.local-developer-preview.macos-arm64.v1"
+        or matrix.get("fail_closed") is not True
+        or not isinstance(matrix.get("artifacts"), list)
+        or not isinstance(profile, dict)
+        or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+        or profile.get("profile_id") != matrix.get("profile_id")
+        or profile.get("fail_closed") is not True
+        or profile.get("identity") != identity
+        or profile.get("platform")
+        != {
+            "deployment_modes": ["embedded", "local-sidecar"],
+            "host_arch": "arm64",
+            "host_os": "macos",
+            "network_required": False,
+            "target_triple": TARGET_TRIPLE,
+            "trust_model": "single-local-os-user-with-explicit-agent-principals",
+        }
+        or profile.get("product_version_binding")
+        != {
+            "path": "packaging/product-version.v1.json",
+            "sha256": authority["packaging/product-version.v1.json"]["sha256"],
+        }
+        or profile.get("artifact_ids") != [row.get("id") for row in matrix["artifacts"]]
+        or not {"claude-code", "mcp-2025-06-18-stdio"}.issubset(
+            set(profile.get("integrations", []))
+        )
+        or not {"claude-code", "mcp"}.issubset(required_capabilities)
+    ):
+        raise ReleaseError(
+            "Honey Claude/MCP capability authority is incomplete or stale"
+        )
+    expected_bindings = {
+        "artifact_matrix": {
+            "path": "packaging/honey/artifact-matrix.v1.json",
+            "sha256": authority["packaging/honey/artifact-matrix.v1.json"]["sha256"],
+        },
+        "capability_profile": {
+            "path": "packaging/honey/capability-profile.v1.json",
+            "sha256": authority["packaging/honey/capability-profile.v1.json"]["sha256"],
+        },
+    }
+    mandatory_gates = profile.get("mandatory_gate_ids")
+    if (
+        not isinstance(requirements, dict)
+        or requirements.get("schema_version") != "cigar.honey.release-requirements.v1"
+        or requirements.get("profile_id") != matrix.get("profile_id")
+        or requirements.get("fail_closed") is not True
+        or requirements.get("machine_claims")
+        != {
+            "prerelease": True,
+            "production_qualified": False,
+            "supported": False,
+        }
+        or requirements.get("required_source_state")
+        != {"clean": True, "committed": True, "tagged_before_build": False}
+        or requirements.get("authority_bindings") != expected_bindings
+        or not isinstance(mandatory_gates, list)
+        or requirements.get("mandatory_gates")
+        != [
+            {
+                "evidence_status": "required-not-implied",
+                "id": gate,
+                "required": True,
+            }
+            for gate in mandatory_gates
+        ]
+    ):
+        raise ReleaseError("Honey release requirements are incomplete or stale")
+
+
 def _load_configuration(root: Path) -> BuildConfiguration:
     root = root.resolve(strict=True)
-    authority = _authority_digests(root)
+    initial_product = load_json(root / "packaging/product-version.v1.json")
+    honey = _is_honey_product(initial_product)
+    authority_paths = HONEY_AUTHORITY_PATHS if honey else AUTHORITY_PATHS
+    authority = _authority_digests(root, authority_paths)
     product = load_json(root / "packaging/product-version.v1.json")
-    matrix = load_json(root / "packaging/artifact-matrix.v1.json")
-    profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+    if honey:
+        matrix = load_json(root / "packaging/honey/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/honey/capability-profile.v1.json")
+        requirements = load_json(root / "packaging/honey/release-requirements.v1.json")
+    else:
+        matrix = load_json(root / "packaging/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+        requirements = None
     contract = load_json(root / "packaging/contracts/plugin-archive.v1.json")
     adapter_root = root / ADAPTER_RELATIVE
     assets = _manifest_assets(adapter_root)
 
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or _is_honey_product(product))
+        or honey != _is_honey_product(product)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or product.get("context_abi") != "cigar.context.v1"
     ):
         raise ReleaseError(
-            "product version authority is not an unpublished development identity"
+            "product version authority is not an unpublished development or Honey identity"
         )
     version = product["version"]
     context_abi = product["context_abi"]
-    if (
-        not isinstance(matrix, dict)
-        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("release_state") != "development"
-        or matrix.get("product_version") != version
-        or matrix.get("context_abi") != context_abi
-        or not isinstance(matrix.get("artifacts"), list)
-    ):
-        raise ReleaseError(
-            "artifact matrix is stale relative to product version authority"
-        )
-    matching = [
-        entry
-        for entry in matrix["artifacts"]
-        if isinstance(entry, dict) and entry.get("id") == ARTIFACT_ID
-    ]
-    if len(matching) != 1:
-        raise ReleaseError(
-            f"artifact matrix must contain exactly one {ARTIFACT_ID} row"
-        )
-    artifact = matching[0]
     expected_filename = f"cigar-claude-code-{version}.tar.gz"
-    if (
-        artifact.get("kind") != "plugin-archive"
-        or artifact.get("filename") != expected_filename
-        or artifact.get("contract") != "contracts/plugin-archive.v1.json"
-        or artifact.get("producer") != PRODUCER
-    ):
-        raise ReleaseError("Claude Code plugin artifact row is incomplete or stale")
-    if not isinstance(profile, dict):
-        raise ReleaseError("development macOS arm64 profile is malformed")
-    selected = profile.get("selected_artifacts")
-    selected_rows = (
-        [
-            row
-            for row in selected
-            if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
+    if honey:
+        _validate_honey_authority(product, matrix, profile, requirements, authority)
+        matching = [
+            entry
+            for entry in matrix["artifacts"]
+            if isinstance(entry, dict) and entry.get("id") == ARTIFACT_ID
         ]
-        if isinstance(selected, list)
-        else []
-    )
-    if (
-        profile.get("schema_version") != "cigar.development-artifact-profile.v1"
-        or profile.get("release_state") != "development"
-        or profile.get("published") is not False
-        or profile.get("supported") is not False
-        or profile.get("target")
-        != {
-            "host_arch": "arm64",
-            "host_os": "macos",
-            "target_triple": TARGET_TRIPLE,
+        expected_artifact = {
+            "contract": "packaging/contracts/plugin-archive.v1.json",
+            "filename": expected_filename,
+            "generated_by_assembler": False,
+            "id": ARTIFACT_ID,
+            "kind": "plugin-archive",
+            "order": 9,
+            "producer": PRODUCER_ARGV,
+            "public_attachment": True,
+            "qualification_gate_ids": ["claude-lifecycle", "archive-contracts"],
+            "receipt": {
+                "filename": "claude-code-plugin-build-receipt.json",
+                "required": True,
+                "schema_version": "cigar.development-claude-code-plugin-build.v1",
+            },
+            "required": True,
+            "sha256_required": True,
+            "workspace": "claude",
         }
-        or len(selected_rows) != 1
-        or selected_rows[0].get("status") != "planned"
-        or selected_rows[0].get("built") is not False
-        or selected_rows[0].get("qualified") is not False
-    ):
-        raise ReleaseError(
-            "development macOS arm64 profile does not keep the plugin unclaimed"
+        if len(matching) != 1 or matching[0] != expected_artifact:
+            raise ReleaseError("Claude Code Honey artifact row is incomplete or stale")
+        receipt_filename = expected_artifact["receipt"]["filename"]
+    else:
+        if (
+            not isinstance(matrix, dict)
+            or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
+            or matrix.get("release_state") != "development"
+            or matrix.get("product_version") != version
+            or matrix.get("context_abi") != context_abi
+            or not isinstance(matrix.get("artifacts"), list)
+        ):
+            raise ReleaseError(
+                "artifact matrix is stale relative to product version authority"
+            )
+        matching = [
+            entry
+            for entry in matrix["artifacts"]
+            if isinstance(entry, dict) and entry.get("id") == ARTIFACT_ID
+        ]
+        if len(matching) != 1:
+            raise ReleaseError(
+                f"artifact matrix must contain exactly one {ARTIFACT_ID} row"
+            )
+        artifact = matching[0]
+        if (
+            artifact.get("kind") != "plugin-archive"
+            or artifact.get("filename") != expected_filename
+            or artifact.get("contract") != "contracts/plugin-archive.v1.json"
+            or artifact.get("producer") != PRODUCER
+        ):
+            raise ReleaseError("Claude Code plugin artifact row is incomplete or stale")
+        if not isinstance(profile, dict):
+            raise ReleaseError("development macOS arm64 profile is malformed")
+        selected = profile.get("selected_artifacts")
+        selected_rows = (
+            [
+                row
+                for row in selected
+                if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
+            ]
+            if isinstance(selected, list)
+            else []
         )
+        if (
+            profile.get("schema_version") != "cigar.development-artifact-profile.v1"
+            or profile.get("release_state") != "development"
+            or profile.get("published") is not False
+            or profile.get("supported") is not False
+            or profile.get("target")
+            != {
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "target_triple": TARGET_TRIPLE,
+            }
+            or len(selected_rows) != 1
+            or selected_rows[0].get("status") != "planned"
+            or selected_rows[0].get("built") is not False
+            or selected_rows[0].get("qualified") is not False
+        ):
+            raise ReleaseError(
+                "development macOS arm64 profile does not keep the plugin unclaimed"
+            )
+        receipt_filename = BUILD_RECEIPT
 
     plugin = load_json_bytes(assets[".claude-plugin/plugin.json"], "plugin.json")
     compatibility = load_json_bytes(
@@ -490,15 +688,30 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         version=version,
         context_abi=context_abi,
         filename=expected_filename,
+        receipt_filename=receipt_filename,
         contract_path=root / "packaging/contracts/plugin-archive.v1.json",
         contract_relative="packaging/contracts/plugin-archive.v1.json",
         authority=authority,
         assets=assets,
+        honey=honey,
     )
 
 
 def _source_identity(root: Path) -> dict[str, Any]:
-    files = expand_files(root, SOURCE_INCLUDES, SOURCE_EXCLUDES)
+    honey = _is_honey_product(load_json(root / "packaging/product-version.v1.json"))
+    includes = list(SOURCE_INCLUDES)
+    if honey:
+        includes.extend(
+            [
+                "packaging/product-version.v1.json",
+                "packaging/honey/capability-profile.v1.json",
+                "packaging/honey/artifact-matrix.v1.json",
+                "packaging/honey/release-requirements.v1.json",
+                "packaging/contracts/plugin-archive.v1.json",
+                "packaging/contracts/macos-runtime-archive.v1.json",
+            ]
+        )
+    files = expand_files(root, includes, SOURCE_EXCLUDES)
     if not files:
         raise ReleaseError("Claude Code plugin build source inventory is empty")
     identity = git_state(root, tree_digest(files))
@@ -507,6 +720,7 @@ def _source_identity(root: Path) -> dict[str, Any]:
         or not isinstance(identity.get("revision"), str)
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", identity["revision"]) is None
         or not isinstance(identity.get("clean"), bool)
+        or (honey and identity.get("clean") is not True)
         or not isinstance(identity.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", identity["tree_sha256"]) is None
     ):
@@ -843,9 +1057,10 @@ def _default_hook_builder(
         raise ReleaseError("native runtime archive changed during verification")
     metadata = verification.get("metadata")
     runtime_source = metadata.get("source") if isinstance(metadata, dict) else None
+    runtime_artifact_id = _runtime_artifact_id(configuration)
     if (
         not isinstance(metadata, dict)
-        or metadata.get("artifact_id") != "cli-daemon-macos-aarch64"
+        or metadata.get("artifact_id") != runtime_artifact_id
         or metadata.get("product_version") != configuration.version
         or metadata.get("context_abi") != configuration.context_abi
         or metadata.get("source_date_epoch") != epoch
@@ -907,7 +1122,7 @@ def _default_hook_builder(
         schema_probe=probe,
         tools=(_tool_record(python, "python3", python_identity),),
         runtime_binding={
-            "artifact_id": "cli-daemon-macos-aarch64",
+            "artifact_id": runtime_artifact_id,
             "archive": {"sha256": archive_sha256, "bytes": archive_bytes},
             "source": runtime_source,
             "hook": {"sha256": sha256_bytes(hook), "bytes": len(hook)},
@@ -1101,7 +1316,10 @@ def produce(
             _validate_hook(hook)
             if _source_identity(root) != source_before:
                 raise ReleaseError("plugin build source changed during construction")
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError("plugin build authority changed during construction")
 
             entries = _package_entries(hook, configuration)
@@ -1138,7 +1356,10 @@ def produce(
             )
             if _source_identity(root) != source_before:
                 raise ReleaseError("plugin build source changed during verification")
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError("plugin build authority changed during verification")
             verified_archive = _read_stable_file(
                 staged_archive, MAX_ARCHIVE_BYTES, "verified Claude Code plugin archive"
@@ -1194,9 +1415,10 @@ def produce(
                 "release": False,
             },
         }
-        workspace.write_json(BUILD_RECEIPT, receipt)
+        workspace.write_json(configuration.receipt_filename, receipt)
         workspace.read_files(
-            {configuration.filename, BUILD_RECEIPT}, strict_read_only=True
+            {configuration.filename, configuration.receipt_filename},
+            strict_read_only=True,
         )
         return receipt
     finally:

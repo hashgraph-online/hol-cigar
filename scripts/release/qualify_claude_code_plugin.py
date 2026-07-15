@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify the development Claude Code plugin from exact installed macOS bytes."""
+"""Qualify a development or Honey Claude plugin from exact installed macOS bytes."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import sys
 import tarfile
 import tempfile
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,8 @@ from verify_package import verify as verify_package
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_ARTIFACT_ID = "cli-daemon-macos-aarch64"
+DEVELOPMENT_RUNTIME_ARTIFACT_ID = "cli-daemon-macos-aarch64"
+HONEY_RUNTIME_ARTIFACT_ID = "macos-runtime-aarch64"
 PLUGIN_ARTIFACT_ID = "claude-code-plugin"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 RECEIPT_NAME = "claude-code-plugin-installed-development-qualification.json"
@@ -86,6 +88,16 @@ MCP_RESOURCES = (
     ("cigar://effect", "Effects", "Governed effect state"),
     ("cigar://artifact", "Artifacts", "Bounded artifact and output pages"),
 )
+
+
+@dataclass(frozen=True)
+class QualificationProduct:
+    version: str
+    context_abi: str
+    runtime_artifact_id: str
+    release_state: str
+    channel: str
+    honey: bool
 
 
 # This helper is staged as three independent, link-count-one executables. Its basename selects a
@@ -482,6 +494,70 @@ def parse_arguments() -> argparse.Namespace:
         help="absolute external empty output workspace (or set CIGAR_EVIDENCE_DIR)",
     )
     return parser.parse_args()
+
+
+def _qualification_product(product: Any) -> QualificationProduct:
+    common = (
+        isinstance(product, dict)
+        and product.get("schema_version") == "cigar.product-version.v1"
+        and product.get("published") is False
+        and product.get("supported") is False
+        and isinstance(product.get("version"), str)
+        and product.get("context_abi") == "cigar.context.v1"
+    )
+    if not common:
+        raise ReleaseError(
+            "product version authority is not an unpublished development or Honey identity"
+        )
+    assert isinstance(product, dict)
+    version = product["version"]
+    context_abi = product["context_abi"]
+    if (
+        product.get("release_state") == "development"
+        and product.get("channel") == "development"
+    ):
+        return QualificationProduct(
+            version=version,
+            context_abi=context_abi,
+            runtime_artifact_id=DEVELOPMENT_RUNTIME_ARTIFACT_ID,
+            release_state="development",
+            channel="development",
+            honey=False,
+        )
+    honey_keys = {
+        "schema_version",
+        "product",
+        "version",
+        "target_release_version",
+        "context_abi",
+        "release_state",
+        "channel",
+        "prerelease",
+        "published",
+        "supported",
+        "tag",
+    }
+    if (
+        set(product) == honey_keys
+        and product.get("product") == "cigar"
+        and product.get("target_release_version") == "0.9.0"
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and product.get("prerelease") is True
+        and re.fullmatch(r"0\.9\.0-honey\.[1-9][0-9]*", version) is not None
+        and product.get("tag") == f"v{version}"
+    ):
+        return QualificationProduct(
+            version=version,
+            context_abi=context_abi,
+            runtime_artifact_id=HONEY_RUNTIME_ARTIFACT_ID,
+            release_state="developer-preview",
+            channel="honey",
+            honey=True,
+        )
+    raise ReleaseError(
+        "product version authority is not an unpublished development or Honey identity"
+    )
 
 
 def _expected_sha256(value: object, label: str) -> str:
@@ -1078,6 +1154,38 @@ def _metadata(
     ):
         raise ReleaseError(f"{artifact_id} metadata is not source-bound")
     return metadata
+
+
+def _archive_metadata_pair(
+    runtime_verification: dict[str, Any],
+    plugin_verification: dict[str, Any],
+    product: QualificationProduct,
+    epoch: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    runtime_metadata = _metadata(
+        runtime_verification,
+        product.runtime_artifact_id,
+        product.version,
+        product.context_abi,
+        epoch,
+    )
+    plugin_metadata = _metadata(
+        plugin_verification,
+        PLUGIN_ARTIFACT_ID,
+        product.version,
+        product.context_abi,
+        epoch,
+    )
+    runtime_source = runtime_metadata["source"]
+    plugin_source = plugin_metadata["source"]
+    if any(
+        runtime_source[field] != plugin_source[field]
+        for field in ("revision", "committed", "clean")
+    ):
+        raise ReleaseError(
+            "runtime and plugin archives have different revision/state identities"
+        )
+    return runtime_metadata, plugin_metadata
 
 
 def _private_directory(path: Path) -> Path:
@@ -2170,20 +2278,10 @@ def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
     _resolved, plugin_contract_payload = _secure_regular(
         plugin_contract_path, 16 * 1024 * 1024, "plugin archive contract"
     )
-    product = load_json_bytes(product_payload, "product version authority")
-    if (
-        not isinstance(product, dict)
-        or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
-        or product.get("published") is not False
-        or product.get("supported") is not False
-        or not isinstance(product.get("version"), str)
-        or product.get("context_abi") != "cigar.context.v1"
-    ):
-        raise ReleaseError("product version authority is not a development identity")
-    version = product["version"]
-    abi = product["context_abi"]
+    product_document = load_json_bytes(product_payload, "product version authority")
+    product = _qualification_product(product_document)
+    version = product.version
+    abi = product.context_abi
 
     runtime_input, runtime_payload = _secure_regular(
         arguments.runtime_archive, MAX_ARCHIVE_BYTES, "runtime archive"
@@ -2300,21 +2398,11 @@ def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
             abi,
             epoch,
         )
-        runtime_metadata = _metadata(
-            runtime_verification, RUNTIME_ARTIFACT_ID, version, abi, epoch
-        )
-        plugin_metadata = _metadata(
-            plugin_verification, PLUGIN_ARTIFACT_ID, version, abi, epoch
+        runtime_metadata, plugin_metadata = _archive_metadata_pair(
+            runtime_verification, plugin_verification, product, epoch
         )
         runtime_source = runtime_metadata["source"]
         plugin_source = plugin_metadata["source"]
-        if any(
-            runtime_source[field] != plugin_source[field]
-            for field in ("revision", "committed", "clean")
-        ):
-            raise ReleaseError(
-                "runtime and plugin archives have different revision/state identities"
-            )
         checks.extend(
             [
                 "frozen-runtime-contract-verification",
@@ -3031,6 +3119,7 @@ def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
         checks.append("all-consumed-byte-identities-stable")
 
         runtime_archive_record = {
+            "artifact_id": product.runtime_artifact_id,
             **_identity(runtime_payload),
             "verification_status": runtime_verification["status"],
         }
@@ -3073,6 +3162,8 @@ def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
         "target": TARGET_TRIPLE,
         "product_version": version,
         "context_abi": abi,
+        "release_state": product.release_state,
+        "channel": product.channel,
         "source_date_epoch": epoch,
         "source": source,
         "host": host,
