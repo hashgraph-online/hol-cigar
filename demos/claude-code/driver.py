@@ -32,7 +32,9 @@ from driver_support import (  # noqa: E402
 def executable(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8", newline="\n")
     # This generated demo helper must be owner-executable without becoming shared.
-    os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(
+        path, 0o700
+    )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
 
 
 def parse_object(payload: bytes, label: str) -> dict[str, Any]:
@@ -201,7 +203,18 @@ print(json.dumps({
         ),
     )
 
-    plugin_root = Path(__file__).resolve().parents[2] / "adapters" / "claude-code"
+    plugin_root_value = os.environ.get("CIGAR_DEMO_CLAUDE_PLUGIN_ROOT")
+    plugin_root = (
+        Path(plugin_root_value).resolve()
+        if plugin_root_value
+        else Path(__file__).resolve().parents[2] / "adapters" / "claude-code"
+    )
+    if (
+        not plugin_root.is_dir()
+        or not (plugin_root / ".claude-plugin" / "plugin.json").is_file()
+        or not (plugin_root / "hooks" / "hooks.json").is_file()
+    ):
+        fail("Claude plugin root is incomplete")
     environment = clean_environment(
         args.state,
         {

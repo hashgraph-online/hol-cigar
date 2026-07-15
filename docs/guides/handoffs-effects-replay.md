@@ -4,6 +4,11 @@ A handoff capsule binds its issuer, exact base, selected delta, provenance, expi
 capabilities. Preview before acceptance. Acceptance rechecks current policy; possession of a capsule
 never overrides a revocation or grants capabilities the issuer did not delegate.
 
+The installed-candidate documentation gate runs this block through the two-agent story from the
+digest-bound Honey demo archive. It uses the exact candidate runtime and Python wheel, requires two
+identical semantic runs under the no-egress boundary, and rejects missing recipient, attenuation,
+typed-result, or exact-base merge evidence.
+
 <!-- docs-check: command handoff-flow -->
 ```sh
 cigar --embedded handoff create --input handoff.json --yes
@@ -16,6 +21,10 @@ Effects use prepare, approve, dispatch, inspect, reconcile, and compensate. Dura
 authorization precede dispatch. A timeout after dispatch can become **unknown**; do not retry blindly.
 Inspect connector evidence and reconcile using an idempotency key or external receipt. Compensation
 is a new governed effect, not history deletion.
+
+For installed-candidate checking, the digest-bound packaged runner executes both the effect recovery
+and observational replay components twice from the exact runtime archive. A successful process exit
+without repeated semantic identities and enforced no-egress evidence fails qualification.
 
 <!-- docs-check: command effect-replay-flow -->
 ```sh

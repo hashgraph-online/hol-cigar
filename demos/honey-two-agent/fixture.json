@@ -1,0 +1,34 @@
+{
+  "schema_version": "cigar.demo-fixture.v1",
+  "demo_id": "honey-two-agent-handoff",
+  "fixed_seed": 49003,
+  "fixed_time": "2026-01-15T13:02:00Z",
+  "principals": {
+    "agent_a": "01890f47-8e7d-7b42-a1d2-000000041061",
+    "agent_b": "01890f47-8e7d-7b42-a1d2-000000041062"
+  },
+  "flow": [
+    "agent-a-creates-recipient-handoff",
+    "agent-b-accepts-recipient-context",
+    "agent-b-forbidden-project-denied",
+    "agent-b-write-amplification-denied",
+    "agent-b-records-typed-result",
+    "agent-a-merge-detects-conflict",
+    "agent-a-lists-content-free-conflict",
+    "agent-a-resolves-typed-conflict",
+    "final-evidence-root-correlates-workflow"
+  ],
+  "parent_transcript_tokens": 10000,
+  "children": [
+    {"role": "honey-worker-b", "capabilities": ["read_context"], "maximum_tokens": 1800}
+  ],
+  "adversarial_request": {"project": "forbidden-project", "capability": "write_overlay"},
+  "expected": {
+    "adversarial_request_denied": true,
+    "denial_discloses_source": false,
+    "grant_amplified": false,
+    "maximum_package_ratio": 0.2,
+    "result_fields": ["claims", "artifacts", "uncertainty", "verification"]
+  },
+  "secret_canary": "DEMO_CANARY_PARENT_TRANSCRIPT_35F29C"
+}

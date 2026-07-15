@@ -1,5 +1,40 @@
 # Deterministic demo execution harness
 
+## Honey installed-artifact projection
+
+Honey selects four user-facing stories from this broader development inventory: offline context
+with prompt-injection/secret-canary defense, Agent A/Agent B handoff, effect recovery plus
+observational replay, and Claude/MCP. The projection is declared in
+`demos/honey-manifest.v1.json` and run by `demos/run_honey.py`. It never builds from the checkout. It
+requires independently supplied SHA-256 values, extracts only bounded regular members, checks the
+runtime's exact member and internal-checksum inventory, and binds the Python wheel and Claude plugin
+for stories that use them.
+
+Every selected component runs twice from separate clean state under the macOS no-egress boundary.
+The report is qualified only when every public flow/assertion is observed and both executions return
+the same semantic identity. It binds product/ABI, clean source revision and tree, runtime and
+supporting artifact digests, suite/manifest/fixture/driver digests, fixed seeds, assertion evidence,
+and the no-egress mechanism.
+
+<!-- docs-check: illustrative -->
+```sh
+python3 demos/run_honey.py \
+  --runtime-archive dist/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
+  --runtime-sha256 "$RUNTIME_SHA256" \
+  --python-wheel dist/cigar_sdk-0.9.0.dev1-py3-none-any.whl \
+  --python-wheel-sha256 "$PYTHON_WHEEL_SHA256" \
+  --claude-plugin-archive dist/cigar-claude-code-0.9.0-honey.1.tar.gz \
+  --claude-plugin-sha256 "$CLAUDE_PLUGIN_SHA256" \
+  --output honey-installed-demos.json
+```
+
+Validate only the packaged scenario/manifests without claiming installed execution:
+
+<!-- docs-check: illustrative -->
+```sh
+python3 demos/run_honey.py --validate-only --output honey-demo-validation.json
+```
+
 Each of the seven directories contains a digest-bound manifest and fixture plus
 an explicit `driver.py`. The runner verifies the fixture, builds the public
 product executables offline, materializes the declared scenario in an isolated
@@ -127,15 +162,15 @@ installs each into a clean temporary root, and never falls back to source:
 ```sh
 python3 demos/installed_artifact_test.py \
   --cigar-binary dist/bin/cigar \
-  --expected-version 1.0.0-dev.1 \
-  --rust-archive dist/sdk/cigar-sdk-1.0.0-dev.1.crate \
+  --expected-version 0.9.0-honey.1 \
+  --rust-archive dist/sdk/cigar-sdk-0.9.0-honey.1.crate \
   --cargo-home dist/offline/cargo-home \
   --rustup-home dist/offline/rustup-home \
-  --typescript-tarball dist/sdk/cigar-sdk-1.0.0-dev.1.tgz \
+  --typescript-tarball dist/sdk/cigar-sdk-0.9.0-honey.1.tgz \
   --pnpm-store dist/offline/pnpm-store \
-  --python-wheel dist/sdk/cigar_sdk-1.0.0.dev1-py3-none-any.whl \
+  --python-wheel dist/sdk/cigar_sdk-0.9.0.dev1-py3-none-any.whl \
   --python-wheelhouse dist/sdk/wheelhouse \
-  --go-archive dist/sdk/cigar-go-sdk-1.0.0-dev.1.tar.gz \
+  --go-archive dist/sdk/cigar-go-sdk-0.9.0-honey.1.tar.gz \
   --go-mod-cache dist/offline/go-mod-cache \
   --output reports/demos/installed-artifacts.json
 ```

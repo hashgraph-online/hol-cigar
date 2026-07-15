@@ -8,6 +8,11 @@ A future release must pass package verification, approved Developer ID signing, 
 installed qualification before these commands become release installation instructions. The
 release-mode CLI embeds the manifest-bound adapter payload and never depends on the source checkout.
 
+The installed-candidate documentation gate verifies the exact Honey demo, runtime, and Claude plugin
+archives by independently supplied SHA-256, checks that the plugin carries the runtime's hook and MCP
+bytes, and executes the packaged Claude/MCP story twice under the no-egress boundary. It does not make
+a model call and does not treat an installer exit code alone as lifecycle evidence.
+
 <!-- docs-check: command claude-plugin-flow -->
 ```sh
 cigar plugin install claude-code --yes

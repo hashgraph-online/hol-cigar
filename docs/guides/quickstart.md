@@ -18,9 +18,12 @@ cd "CIGAR demo – café"
 cigar --embedded --yes init
 ```
 
-The installed-artifact qualification driver adds the current directory as a governed source,
-ingests it, compiles a bounded context bundle, explains every inclusion and omission, creates a
-handoff, and performs an observational replay.
+The installed-candidate documentation gate verifies the published Honey demo archive and runtime
+against independently supplied SHA-256 values, then runs the packaged offline-context story twice
+in fresh temporary projects under the macOS no-egress boundary. The story exercises the same public
+surface shown below: governed source registration, ingestion, bounded context compilation,
+explanation, and observational replay. A source-tree build or a zero-exit placeholder is not accepted
+as evidence for this block.
 
 <!-- docs-check: command quickstart-source-compile -->
 ```sh

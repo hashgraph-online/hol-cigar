@@ -1,0 +1,37 @@
+{
+  "schema_version": "cigar.honey-demo-suite.v1",
+  "product_version": "0.9.0-honey.1",
+  "context_abi": "cigar.context.v1",
+  "evidence_class": "cigar.honey-installed-demo.v1",
+  "runs_per_scenario": 2,
+  "network_required": false,
+  "credentials_required": false,
+  "scenarios": [
+    {
+      "id": "offline-context",
+      "title": "Offline deterministic context compiler",
+      "components": [
+        "demos/quickstart/demo.json",
+        "demos/prompt-injection-defense/demo.json"
+      ]
+    },
+    {
+      "id": "two-agent",
+      "title": "Agent A to Agent B scoped handoff",
+      "components": ["demos/honey-two-agent/honey-demo.json"]
+    },
+    {
+      "id": "effect-recovery-replay",
+      "title": "Effect UNKNOWN recovery and observational replay",
+      "components": [
+        "demos/effect-recovery/demo.json",
+        "demos/replay-comparison/demo.json"
+      ]
+    },
+    {
+      "id": "claude-mcp",
+      "title": "Claude Code and bounded MCP lifecycle",
+      "components": ["demos/claude-code/demo.json"]
+    }
+  ]
+}

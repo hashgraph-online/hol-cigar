@@ -12,7 +12,18 @@ and practice every [operator runbook](../operations/index.md). Interface details
 [public API reference](../reference/public-api.md), while artifact trust begins with
 [offline release verification](../release/verification.md).
 
-This site describes product version 1.0.0-dev.1 and Context ABI `cigar.context.v1`. The selector is
+## Honey developer preview
+
+Developers evaluating the local Apple-silicon Honey profile should begin with the
+[Honey installation guide](../guides/honey-install.md) and
+[offline context quickstart](../guides/honey-quickstart.md). The supported workflow continues through
+[two-agent coordination](../guides/honey-two-agent.md),
+[effects and replay](../guides/honey-effects-replay.md), and the
+[MCP/Claude integration](../guides/honey-mcp-claude.md). Review
+[Honey's security and qualification limitations](../guides/honey-security-limitations.md) before
+using it with private repositories or mediated effects.
+
+This site describes product version 0.9.0-honey.1 and Context ABI `cigar.context.v1`. The selector is
 development-only; `latest` remains absent until an approved version is published.
 
 <!-- docs-check: command docs-build-local -->

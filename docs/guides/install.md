@@ -53,7 +53,7 @@ python3 scripts/release/qualify_install.py ${BINARY_ARCHIVE} \
   --qualification-tool-archive ${CIGAR_QUALIFICATION_TOOL_ARCHIVE} \
   --qualification-tool-contract packaging/contracts/macos-conformance-runner.v1.json \
   --qualification-tool-build-receipt ${CIGAR_QUALIFICATION_TOOL_BUILD_RECEIPT} \
-  --expected-artifact-id cli-daemon-macos-aarch64 \
+  --expected-artifact-id macos-runtime-aarch64 \
   --expected-target aarch64-apple-darwin
 ```
 
@@ -63,14 +63,16 @@ upgrade or explicit data retention is intended. Never delete catalog, journal, o
 uninstall side effect.
 
 Pass the separately built macOS conformance-tool archive as
-`CIGAR_QUALIFICATION_TOOL_ARCHIVE`; the harness contract-verifies that archive, requires the exact
-same clean, committed source object (revision and tree digest) as the runtime candidate, and
+`CIGAR_QUALIFICATION_TOOL_ARCHIVE`; the harness contract-verifies that archive, requires both
+producer inputs to come from the same clean, committed Git revision while retaining each producer's
+distinct input-tree digest, and
 extracts its fixed
 `bin/cigar-install-qualifier` member. Callers cannot substitute a handwritten driver or synthetic
 receipt script. The runtime and tool build receipts are securely staged and validated for their
 exact schemas, target, version, Context ABI, source, archive digest and byte count, contract,
-build-tool identities, and payload identities. Their shared product-version, artifact-matrix, and
-local-macOS profile authority records must match byte-for-byte by digest and size. All four runtime
+build-tool identities, and payload identities. Their shared product-version, Honey artifact-matrix,
+Honey capability-profile, and Honey release-requirements authority records must match byte-for-byte
+by digest and size. All four runtime
 binaries plus the conformance runner and install driver must be thin arm64 Mach-O executables.
 The final report digest-binds both build receipts and both qualification executables. These receipt
 checks provide integrity and cross-binding only: they are explicitly not cryptographically
