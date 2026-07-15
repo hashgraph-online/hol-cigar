@@ -6,9 +6,10 @@ const MAX_IGNORE_PATTERN_BYTES: usize = 4_096;
 const MAX_IGNORE_NORMALIZED_BYTES: usize = 1_048_576;
 const MAX_IGNORE_MATCH_STEPS: u64 = 67_108_864;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct IgnorePatterns {
     patterns: Vec<Vec<u8>>,
+    source_bytes: usize,
 }
 
 impl IgnorePatterns {
@@ -21,14 +22,28 @@ impl IgnorePatterns {
         }
         let mut patterns = Vec::new();
         let mut normalized_bytes = 0_usize;
-        for line in bytes.split(|byte| *byte == b'\n') {
+        for raw_line in bytes.split(|byte| *byte == b'\n') {
             context.check()?;
-            let line = line.strip_suffix(b"\r").unwrap_or(line);
-            let line = trim_ascii(line);
-            if line.is_empty() || line.starts_with(b"#") || line.starts_with(b"!") {
+            let raw_line = raw_line.strip_suffix(b"\r").unwrap_or(raw_line);
+            let line = trim_ascii(raw_line);
+            if line.is_empty() {
+                continue;
+            }
+            if raw_line != line {
+                return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+            }
+            if line.starts_with(b"#") || line.starts_with(b"!") {
                 continue;
             }
             let line = line.strip_prefix(b"/").unwrap_or(line);
+            if line.is_empty()
+                || line.contains(&b'\\')
+                || line.contains(&b'?')
+                || line.contains(&b'[')
+                || line.contains(&b']')
+            {
+                return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+            }
             if line.len() > MAX_IGNORE_PATTERN_BYTES || patterns.len() == MAX_IGNORE_PATTERNS {
                 return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
             }
@@ -40,7 +55,18 @@ impl IgnorePatterns {
             }
             patterns.push(line.to_vec());
         }
-        Ok(Self { patterns })
+        Ok(Self {
+            patterns,
+            source_bytes: bytes.len(),
+        })
+    }
+
+    pub(crate) const fn source_bytes(&self) -> usize {
+        self.source_bytes
+    }
+
+    pub(crate) fn pattern_count(&self) -> usize {
+        self.patterns.len()
     }
 
     pub(crate) fn matches_filesystem(
@@ -51,7 +77,7 @@ impl IgnorePatterns {
     ) -> Result<bool, CatalogError> {
         for pattern in &self.patterns {
             work.charge(1, context)?;
-            if wildcard_match(pattern, path, work, context)? {
+            if positive_pattern_match(pattern, path, work, context)? {
                 return Ok(true);
             }
         }
@@ -64,24 +90,28 @@ impl IgnorePatterns {
         work: &mut IgnoreWorkBudget,
         context: &ConnectorContext,
     ) -> Result<bool, CatalogError> {
-        for pattern in &self.patterns {
-            let compared = path.len().min(pattern.len()).saturating_add(1);
-            work.charge(
-                u64::try_from(compared)
-                    .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?,
-                context,
-            )?;
-            let matches = if let Some(prefix) = pattern.strip_suffix(b"*") {
-                path.starts_with(prefix)
-            } else {
-                path_has_prefix(path, pattern)
-            };
-            if matches {
+        self.matches_filesystem(path, work, context)
+    }
+}
+
+fn positive_pattern_match(
+    pattern: &[u8],
+    path: &[u8],
+    work: &mut IgnoreWorkBudget,
+    context: &ConnectorContext,
+) -> Result<bool, CatalogError> {
+    if wildcard_match(pattern, path, work, context)? {
+        return Ok(true);
+    }
+    let basename_pattern = pattern.strip_suffix(b"/").unwrap_or(pattern);
+    if !basename_pattern.contains(&b'/') {
+        for component in path.split(|byte| *byte == b'/') {
+            if wildcard_match(basename_pattern, component, work, context)? {
                 return Ok(true);
             }
         }
-        Ok(false)
     }
+    Ok(false)
 }
 
 #[derive(Default)]
@@ -207,6 +237,7 @@ mod tests {
         let mut work = IgnoreWorkBudget::default();
         assert!(patterns.matches_filesystem(b"target/a.rs", &mut work, &context())?);
         assert!(patterns.matches_filesystem(b"private.pem", &mut work, &context())?);
+        assert!(patterns.matches_filesystem(b"nested/private.pem", &mut work, &context())?);
         assert!(!patterns.matches_filesystem(b"src/lib.rs", &mut work, &context())?);
 
         let mut exhausted = IgnoreWorkBudget {
@@ -218,5 +249,17 @@ mod tests {
             .ok_or("matching must reject the first work step over budget")?;
         assert_eq!(error.code(), CatalogErrorCode::LimitExceeded);
         Ok(())
+    }
+
+    #[test]
+    fn unsupported_git_syntax_fails_instead_of_silently_under_ignoring() {
+        for pattern in [b"file?.txt".as_slice(), b"[ab].txt", b"escaped\\ name"] {
+            assert_eq!(
+                IgnorePatterns::parse(pattern, &context())
+                    .err()
+                    .map(|error| error.code()),
+                Some(CatalogErrorCode::InvalidMetadata)
+            );
+        }
     }
 }

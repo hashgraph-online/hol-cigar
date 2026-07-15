@@ -136,8 +136,8 @@ def validate_matrix_reports(
     }
 
 
-def qualify(args: argparse.Namespace) -> int:
-    analyzer = load_analyzer()
+def qualify(args: argparse.Namespace, analyzer: ModuleType | None = None) -> int:
+    analyzer = analyzer or load_analyzer()
     manifest = analyzer.load_json(args.baselines)
     expected = comparator_inventory(manifest, analyzer)
     root = args.evidence_root.resolve()
@@ -178,6 +178,11 @@ def qualify(args: argparse.Namespace) -> int:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     result.add_argument("--evidence-root", type=Path, required=True)
     result.add_argument("--datasets", type=Path, required=True)
     result.add_argument("--baselines", type=Path, required=True)
@@ -190,8 +195,16 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    analyzer: ModuleType | None = None
+    evidence: Any | None = None
     try:
-        return qualify(parser().parse_args(argv))
+        arguments = parser().parse_args(argv)
+        analyzer = load_analyzer()
+        evidence = analyzer.EvidenceExecution.open(arguments)
+        status = qualify(arguments, analyzer)
+        if status == 0:
+            evidence.publish("matrix")
+        return status
     except MatrixError as error:
         print(f"cigarbench-matrix: {error}", file=sys.stderr)
         return 2
@@ -199,11 +212,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("cigarbench-matrix: local evidence operation failed", file=sys.stderr)
         return 2
     except Exception as error:
-        analyzer = sys.modules.get("cigarbench_matrix_analyzer")
-        if analyzer is not None and isinstance(error, analyzer.BenchError):
+        analyzer = analyzer or sys.modules.get("cigarbench_matrix_analyzer")
+        if analyzer is not None and isinstance(
+            error, (analyzer.BenchError, analyzer.EvidenceWorkspaceError)
+        ):
             print(f"cigarbench-matrix: {error}", file=sys.stderr)
             return 2
         raise
+    finally:
+        if evidence is not None:
+            evidence.close()
 
 
 if __name__ == "__main__":

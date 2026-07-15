@@ -11,9 +11,56 @@ leak-timeout = { period = "2s", result = "fail" }
 status-level = "fail"
 final-status-level = "slow"
 
+# Native macOS qualification is deliberately serial. Rust 1.92 on macOS creates
+# child-process pipes before applying CLOEXEC, so concurrent process launches can
+# transiently inherit an unrelated test's output handle and create a false leak
+# attribution. Serial launch keeps strict leak failure semantics without making
+# parallel developer feedback a release-quality signal.
+[profile.macos-qualification]
+inherits = "ci"
+test-threads = 1
+
 [test-groups.cigar-conformance-process]
+max-threads = 1
+
+[test-groups.cigar-resource-sensitive-acceptance]
 max-threads = 1
 
 [[profile.default.overrides]]
 filter = "package(cigar-conformance)"
 test-group = "cigar-conformance-process"
+
+# The release effect gate intentionally launches, checkpoints, kills, and verifies 24,000 fresh
+# child processes when CIGAR_EFFECT_RC_REPETITIONS=1000. Native Apple-silicon calibration is about
+# 11 minutes, so the global 120-second ceiling would make the documented RC command impossible.
+# Keep this one exact test bounded to two 15-minute periods; child output is discarded and the
+# fixture owns/removes its private temporary tree.
+[[profile.default.overrides]]
+filter = "package(=cigar-effects) & test(=efx_c01_through_c24_use_real_process_kill_and_fresh_recovery)"
+slow-timeout = { period = "15m", terminate-after = 2 }
+
+# The named group serializes these acceptance gates with each other, while the
+# full-pool reservation makes each gate globally exclusive with unrelated tests.
+[[profile.default.overrides]]
+filter = "package(=cigar-daemon) & test(=production_runtime::tests::real_daemon_handles_32_mixed_clients_with_exact_replay_and_no_quota_leak)"
+test-group = "cigar-resource-sensitive-acceptance"
+threads-required = "num-test-threads"
+
+[[profile.default.overrides]]
+filter = "package(=cigar-claude-hook) & test(=tests::warm_prompt_p95_and_p99_stay_within_acceptance_bounds)"
+test-group = "cigar-resource-sensitive-acceptance"
+threads-required = "num-test-threads"
+
+[[profile.ci.overrides]]
+filter = "package(=cigar-daemon) & test(=production_runtime::tests::real_daemon_handles_32_mixed_clients_with_exact_replay_and_no_quota_leak)"
+test-group = "cigar-resource-sensitive-acceptance"
+threads-required = "num-test-threads"
+
+[[profile.ci.overrides]]
+filter = "package(=cigar-claude-hook) & test(=tests::warm_prompt_p95_and_p99_stay_within_acceptance_bounds)"
+test-group = "cigar-resource-sensitive-acceptance"
+threads-required = "num-test-threads"
+
+[[profile.ci.overrides]]
+filter = "package(=cigar-effects) & test(=efx_c01_through_c24_use_real_process_kill_and_fresh_recovery)"
+slow-timeout = { period = "15m", terminate-after = 2 }

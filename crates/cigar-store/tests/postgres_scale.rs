@@ -26,6 +26,21 @@ const DATASET_ALGORITHM: &str = "cigar.wp18.atom-projection-scale.v1";
 
 static NEXT_DATABASE: AtomicU64 = AtomicU64::new(1);
 
+fn live_postgres_configuration(
+    database_url: String,
+) -> Result<PostgresConfiguration, Box<dyn Error>> {
+    let certificate_authority = fs::read(std::env::var("CIGAR_TEST_POSTGRES_CA_PATH")?)?;
+    if certificate_authority.is_empty() || certificate_authority.len() > 2 * 1024 * 1024 {
+        return Err("PostgreSQL qualification CA is empty or too large".into());
+    }
+    let server_name = std::env::var("CIGAR_TEST_POSTGRES_SERVER_NAME")?;
+    Ok(PostgresConfiguration::new_with_certificate_authority(
+        database_url,
+        server_name,
+        &certificate_authority,
+    )?)
+}
+
 struct TestDatabase {
     admin_url: String,
     database: String,
@@ -70,6 +85,8 @@ impl TestDatabase {
         let mut owner = postgres::Client::connect(&self.owner_url, NoTls)?;
         owner.batch_execute(&format!(
             "REVOKE CREATE ON SCHEMA public FROM {role};
+             REVOKE ALL ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC;
+             REVOKE ALL ON FUNCTION public.cigar_gc_lock_repository_revision() FROM PUBLIC;
              GRANT USAGE ON SCHEMA public TO {role};
              GRANT SELECT ON schema_migrations TO {role};
              GRANT SELECT, UPDATE ON cigar_repository_revision TO {role};
@@ -408,7 +425,7 @@ fn postgres_production_projection_physically_qualifies_ten_million_valid_atoms()
     let qualification_started = Instant::now();
 
     let database = TestDatabase::create(admin_url)?;
-    let mut owner_configuration = PostgresConfiguration::new(database.owner_url.clone())?;
+    let mut owner_configuration = live_postgres_configuration(database.owner_url.clone())?;
     owner_configuration.statement_timeout = Duration::from_secs(300);
     owner_configuration.idle_transaction_timeout = Duration::from_secs(300);
     let migration = PostgresStore::migrate(&owner_configuration)?;
@@ -417,7 +434,7 @@ fn postgres_production_projection_physically_qualifies_ten_million_valid_atoms()
     }
     database.grant_runtime()?;
 
-    let mut configuration = PostgresConfiguration::new(database.runtime_url.clone())?;
+    let mut configuration = live_postgres_configuration(database.runtime_url.clone())?;
     configuration.minimum_connections = 1;
     configuration.maximum_connections = 4;
     configuration.statement_timeout = Duration::from_secs(300);

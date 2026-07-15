@@ -6,11 +6,13 @@
 
 mod backend;
 mod json;
+#[path = "generated/operation_mappings.rs"]
+mod operation_mappings;
 mod server;
 
 pub use backend::{
     Backend, BackendError, BackendMetadata, BackendRequest, BackendRequestKind, BackendResponse,
-    CliBackend, HttpBackend,
+    CancellationToken, CliBackend, HttpBackend,
 };
 pub use server::{
     DEFAULT_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS, MAX_REQUEST_BYTES, MCP_PROTOCOL_VERSION,

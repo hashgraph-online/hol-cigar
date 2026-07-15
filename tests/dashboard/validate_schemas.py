@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import platform
+import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,6 +17,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_ROOT = ROOT / "schemas" / "dashboard"
 EXPECTED_DRAFT = "https://json-schema.org/draft/2020-12/schema"
+RECEIPT_NAME = "dashboard-schema-check.v1.json"
+SOURCE_REVISION = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
 
 class ValidationFailure(Exception):
@@ -113,11 +120,81 @@ def validate_references(documents: dict[Path, dict[str, Any]]) -> int:
     return references
 
 
+def schema_set_digest(documents: dict[Path, dict[str, Any]]) -> str:
+    """Bind the receipt to every validated schema path and exact byte sequence."""
+    digest = hashlib.sha256()
+    for path in sorted(documents):
+        relative = path.relative_to(ROOT).as_posix().encode("utf-8")
+        source = path.read_bytes()
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        digest.update(len(source).to_bytes(8, "big"))
+        digest.update(source)
+    return digest.hexdigest()
+
+
+def write_receipt_if_requested(
+    documents: dict[Path, dict[str, Any]], references: int
+) -> None:
+    """Write one create-new, content-safe receipt into a supervisor-owned root."""
+    configured = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if configured is None:
+        return
+    evidence_root = Path(configured)
+    if not evidence_root.is_absolute():
+        raise ValidationFailure("CIGAR_EVIDENCE_DIR must be absolute")
+    metadata = evidence_root.lstat()
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_ISLNK(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise ValidationFailure("evidence root must be an owner-only directory")
+    resolved_root = evidence_root.resolve(strict=True)
+    if resolved_root == ROOT or ROOT in resolved_root.parents:
+        raise ValidationFailure("evidence root must be outside the source checkout")
+    source_revision = os.environ.get("CIGAR_SOURCE_REVISION", "")
+    if not SOURCE_REVISION.fullmatch(source_revision):
+        raise ValidationFailure("CIGAR_SOURCE_REVISION is missing or malformed")
+    host_platform = "macos" if sys.platform == "darwin" else sys.platform
+    architecture = platform.machine().lower()
+    if architecture == "aarch64":
+        architecture = "arm64"
+    receipt = {
+        "host": {"architecture": architecture, "platform": host_platform},
+        "reference_count": references,
+        "schema_count": len(documents),
+        "schema_set_sha256": schema_set_digest(documents),
+        "schema_version": "cigar.dashboard-schema-check.v1",
+        "source_revision": source_revision,
+        "status": "passed",
+    }
+    encoded = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    destination = evidence_root / RECEIPT_NAME
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(destination, flags, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+    directory = os.open(evidence_root, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
 def main() -> int:
     """Run dashboard schema checks."""
     try:
         documents = load_documents()
         references = validate_references(documents)
+        write_receipt_if_requested(documents, references)
     except ValidationFailure as error:
         print(f"dashboard schema validation failed: {error}", file=sys.stderr)
         return 1

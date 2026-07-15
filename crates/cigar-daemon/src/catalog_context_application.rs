@@ -3,9 +3,14 @@
 //! This module is the authority boundary between caller-controlled API DTOs and the trusted
 //! catalog, retrieval, compiler, policy, clock, and repository inputs required by WP04-WP08.
 
+use crate::compiler_control_plane::{
+    CompilerControlPlaneError, CompilerGovernance, DurableCompilerControlPlane,
+    VerifiedTargetOverflow,
+};
 use crate::{
-    AuthorityClock, BlockingPool, BlockingPoolErrorCode, DomainIdentityResolver,
-    ProductionApplicationBuilder, ResolvedDomainIdentity,
+    AuthorityClock, BlockingPool, BlockingPoolErrorCode, CacheOutcome, CompilePhase,
+    DaemonTelemetry, DomainIdentityResolver, ParserStage, ProductionApplicationBuilder,
+    ResolvedDomainIdentity,
 };
 use cigar_api::{
     ApiError, AtomBatchResponse, AtomIdRequest, AtomLookupResult, BatchAtomsOperation,
@@ -26,15 +31,16 @@ use cigar_canon::parse_strict_json;
 use cigar_catalog::{
     Atomizer, CatalogAtomService, CatalogError, CatalogErrorCode, ConnectorContext,
     DiscoveryDisposition, DiscoveryPlan, DiscoveryPolicy, DiscoveryRequest, IngestionRequest,
-    IngestionService, SourceConnector, SourceHealthState,
+    IngestionService, SourceConnector, SourceHealthState, atomizer_registry_digest,
 };
 use cigar_compiler::{
-    BlockBodies, ByteTokenizer, CompilerCandidate, CompilerError, CompilerErrorCode,
-    CompilerProfile, DeterministicCompiler, ExactTokenizer, FrozenInputs, MaterializationError,
-    MaterializerProfile, RepresentationVariant, compiler_profile_digest, generate_delta,
+    BlockBodies, ByteTokenizer, CacheKey, CacheLayer, CompilerCandidate, CompilerError,
+    CompilerErrorCode, CompilerProfile, DeterministicCompiler, ExactTokenizer, FrozenInputs,
+    MaterializationError, MaterializerProfile, ReferenceTokenizer, ReferenceTokenizerProfile,
+    RepresentationVariant, apply_delta_verified, compiler_profile_digest, generate_delta,
     materialize,
 };
-use cigar_policy::PolicyOutcome;
+use cigar_policy::{PolicyOutcome, RetrievalAuthorization, RetrievalResourceAuthorizationRequest};
 use cigar_protocol::{
     AtomKind, AtomPayload, CandidateDisposition, Capability, Classification, ContentDigest,
     ContextAtomV1, ContextBundle, ContextContract, ContextPlan, DispositionReason, EdgeKind,
@@ -42,13 +48,13 @@ use cigar_protocol::{
     SelectionManifest, SourceUri, UtcTimestamp, Validate, VersionId,
 };
 use cigar_retrieval::{
-    AuthorizedPartition, CandidateFeatures, CandidateRef, QueryPlanner, RetrievalConsistency,
-    RetrievalContext, RetrievalError, RetrievalErrorCode, Retriever, StagedRetrieval,
-    StagedRetrievalResult,
+    AuthorizedPartition, CandidateFeatures, CandidateRef, QueryPlanner, QueryVectorProcessor,
+    RetrievalConsistency, RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalRequest,
+    RetrievalStage, Retriever, StagedRetrieval, StagedRetrievalResult,
 };
 use cigar_space::{RecipientBundleReceipt, ResultMergeKind};
 use cigar_store::{
-    AccessContext, AtomSelector, CancellationToken as StoreCancellationToken, IdempotencyIdentity,
+    AccessContext, CancellationToken as StoreCancellationToken, IdempotencyIdentity,
     ReadTransaction, Repository, ServiceBatch, ServiceError, ServiceErrorCode,
     ServiceExpectedVersion, ServiceIdempotency, ServiceRecord, ServiceRecordLocator,
     ServiceRecordSelection, ServiceRecordWrite, ServiceRepository, ServiceResponse,
@@ -68,6 +74,8 @@ const SOURCE_CONFIG_NAMESPACE: &str = "catalog.source-config.v1";
 const DISCOVERY_NAMESPACE: &str = "catalog.discovery-plan.v1";
 const CONTEXT_PLAN_NAMESPACE: &str = "context.compile-plan.v1";
 const CONTEXT_BUNDLE_INDEX_NAMESPACE: &str = "context.bundle-index.v1";
+const CATALOG_COMMITTED_TOPIC: &str = "catalog.committed";
+const CATALOG_TOMBSTONED_TOPIC: &str = "catalog.atom-tombstoned";
 const MAX_COMPILE_CANDIDATES: usize = 10_000;
 const MAX_DEPENDENCY_EDGES: usize = 1_000;
 const MAX_CAS_RETRIES: usize = 16;
@@ -99,7 +107,7 @@ impl fmt::Display for CatalogContextAuthorizationError {
 impl std::error::Error for CatalogContextAuthorizationError {}
 
 /// Server-derived authorization partition used by catalog retrieval and context compilation.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct CatalogContextAuthorization {
     /// Non-empty sorted project scope visible to the authenticated principal.
     pub project_ids: BTreeSet<RecordId>,
@@ -115,6 +123,25 @@ pub struct CatalogContextAuthorization {
     pub policy_digest: ContentDigest,
     /// Whether the current policy permits partitioned vector retrieval.
     pub vector_allowed: bool,
+    /// Opaque live policy proof required before any retrieval index can be touched.
+    pub retrieval_authorization: RetrievalAuthorization,
+}
+
+impl fmt::Debug for CatalogContextAuthorization {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CatalogContextAuthorization")
+            .field("project_count", &self.project_ids.len())
+            .field("purpose_bytes", &self.purpose.len())
+            .field("processor_bytes", &self.processor.len())
+            .field("maximum_classification", &self.maximum_classification)
+            .field(
+                "maximum_instruction_authority",
+                &self.maximum_instruction_authority,
+            )
+            .field("vector_allowed", &self.vector_allowed)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CatalogContextAuthorization {
@@ -158,59 +185,117 @@ pub trait CatalogContextAuthorizer: Send + Sync {
 
 /// Trusted registry for exact tokenizer implementations pinned by context contracts.
 pub trait ContextTokenizerRegistry: Send + Sync {
-    /// Resolves one exact tokenizer or returns `None` without falling back to an estimate.
+    /// Resolves one coherently bound target or returns `None` without falling back to an estimate.
     fn tokenizer(
         &self,
-        fingerprint: &ContentDigest,
+        target: &cigar_protocol::TargetProfile,
     ) -> Option<Arc<dyn ExactTokenizer + Send + Sync>>;
+}
+
+struct RegisteredTokenizer {
+    provider: String,
+    model_family: String,
+    tokenizer: Arc<dyn ExactTokenizer + Send + Sync>,
 }
 
 /// Thread-safe exact tokenizer registry for production composition and deterministic tests.
 #[derive(Default)]
 pub struct PinnedContextTokenizerRegistry {
-    tokenizers: RwLock<BTreeMap<ContentDigest, Arc<dyn ExactTokenizer + Send + Sync>>>,
+    tokenizers: RwLock<BTreeMap<ContentDigest, RegisteredTokenizer>>,
 }
 
 impl PinnedContextTokenizerRegistry {
-    /// Registers one exact tokenizer under its own immutable fingerprint.
-    pub fn register(
+    /// Creates the production registry containing every provider-neutral reference profile.
+    pub fn with_reference_profiles() -> Result<Self, CatalogContextAuthorizationError> {
+        let registry = Self::default();
+        registry.register_reference_profiles()?;
+        Ok(registry)
+    }
+
+    /// Registers every built-in provider-neutral reference profile exactly once.
+    pub fn register_reference_profiles(&self) -> Result<(), CatalogContextAuthorizationError> {
+        for profile in ReferenceTokenizerProfile::ALL {
+            let tokenizer = ReferenceTokenizer::new(profile)
+                .map_err(|_error| CatalogContextAuthorizationError::InvalidDecision)?;
+            self.register_for_target(
+                cigar_compiler::REFERENCE_TOKENIZER_PROVIDER,
+                profile.identifier(),
+                Arc::new(tokenizer),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Registers one exact tokenizer under an immutable provider/model/fingerprint tuple.
+    pub fn register_for_target(
         &self,
+        provider: &str,
+        model_family: &str,
         tokenizer: Arc<dyn ExactTokenizer + Send + Sync>,
     ) -> Result<(), CatalogContextAuthorizationError> {
+        if !valid_target_binding(provider) || !valid_target_binding(model_family) {
+            return Err(CatalogContextAuthorizationError::InvalidDecision);
+        }
         let fingerprint = tokenizer.fingerprint().clone();
         let mut tokenizers = self
             .tokenizers
             .write()
             .map_err(|_error| CatalogContextAuthorizationError::Unavailable)?;
-        if tokenizers
-            .get(&fingerprint)
-            .is_some_and(|existing| !Arc::ptr_eq(existing, &tokenizer))
-        {
+        if let Some(existing) = tokenizers.get(&fingerprint) {
+            if existing.provider == provider
+                && existing.model_family == model_family
+                && Arc::ptr_eq(&existing.tokenizer, &tokenizer)
+            {
+                return Ok(());
+            }
             return Err(CatalogContextAuthorizationError::InvalidDecision);
         }
-        tokenizers.insert(fingerprint, tokenizer);
+        tokenizers.insert(
+            fingerprint,
+            RegisteredTokenizer {
+                provider: provider.to_owned(),
+                model_family: model_family.to_owned(),
+                tokenizer,
+            },
+        );
         Ok(())
     }
 
     /// Registers the deterministic byte tokenizer for one pinned fingerprint.
     pub fn register_byte_tokenizer(
         &self,
+        provider: &str,
+        model_family: &str,
         fingerprint: ContentDigest,
     ) -> Result<(), CatalogContextAuthorizationError> {
-        self.register(Arc::new(ByteTokenizer::new(fingerprint)))
+        self.register_for_target(
+            provider,
+            model_family,
+            Arc::new(ByteTokenizer::new(fingerprint)),
+        )
     }
 }
 
 impl ContextTokenizerRegistry for PinnedContextTokenizerRegistry {
     fn tokenizer(
         &self,
-        fingerprint: &ContentDigest,
+        target: &cigar_protocol::TargetProfile,
     ) -> Option<Arc<dyn ExactTokenizer + Send + Sync>> {
         self.tokenizers
             .read()
             .ok()
-            .and_then(|tokenizers| tokenizers.get(fingerprint).cloned())
+            .and_then(|tokenizers| {
+                tokenizers.get(&target.tokenizer_fingerprint).map(|entry| {
+                    (entry.provider == target.provider && entry.model_family == target.model_family)
+                        .then(|| Arc::clone(&entry.tokenizer))
+                })
+            })
+            .flatten()
     }
+}
+
+fn valid_target_binding(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 256 && !value.bytes().any(|byte| byte.is_ascii_control())
 }
 
 /// Serializable trusted source discovery policy retained across daemon restarts.
@@ -264,6 +349,8 @@ pub struct SourceConfiguration {
     pub root: SourceUri,
     /// Stable configured connector implementation identity.
     pub connector_identity: String,
+    /// Digest of the exact ordered atomizer registry and each trusted configuration profile.
+    pub atomization_profile_digest: ContentDigest,
     /// Frozen discovery policy.
     pub discovery_policy: SourceDiscoveryPolicyConfiguration,
 }
@@ -299,16 +386,26 @@ impl ConfiguredSourceRuntime {
         atomizers: Vec<Arc<dyn Atomizer>>,
     ) -> Result<Self, CatalogError> {
         configuration.validate()?;
-        if atomizers.is_empty() {
+        let connector_descriptor = connector.descriptor();
+        if connector_descriptor.id != configuration.connector_identity
+            || connector_descriptor.root != configuration.root
+        {
             return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
         }
-        let mut identities = BTreeSet::new();
-        for atomizer in &atomizers {
-            let descriptor = atomizer.descriptor();
-            if descriptor.id.is_empty()
-                || descriptor.version.is_empty()
-                || !identities.insert((descriptor.id, descriptor.version))
-            {
+        let descriptors: Vec<_> = atomizers
+            .iter()
+            .map(|atomizer| atomizer.descriptor())
+            .collect();
+        if atomizer_registry_digest(&descriptors)? != configuration.atomization_profile_digest {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+        }
+        for media_type in &configuration.discovery_policy.allowed_media_types {
+            let maximum = descriptors
+                .iter()
+                .find(|descriptor| descriptor.media_types.contains(media_type))
+                .and_then(|descriptor| u64::try_from(descriptor.max_input_bytes).ok())
+                .ok_or_else(|| CatalogError::new(CatalogErrorCode::InvalidMetadata))?;
+            if configuration.discovery_policy.max_record_bytes > maximum {
                 return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
             }
         }
@@ -404,11 +501,14 @@ where
     identities: Arc<dyn DomainIdentityResolver>,
     authorizer: Arc<dyn CatalogContextAuthorizer>,
     retriever: Arc<dyn Retriever>,
+    query_vector_processor: Option<Arc<dyn QueryVectorProcessor>>,
     tokenizers: Arc<dyn ContextTokenizerRegistry>,
+    compiler_control_plane: Arc<DurableCompilerControlPlane>,
     blocking_pool: Arc<BlockingPool>,
     clock: Arc<dyn AuthorityClock>,
     errors: Arc<dyn FacadeErrorFactory>,
     sources: Arc<RwLock<SourceRuntimeRegistry>>,
+    telemetry: Option<Arc<DaemonTelemetry>>,
 }
 
 impl<R> Clone for CatalogContextApplication<R>
@@ -421,11 +521,14 @@ where
             identities: Arc::clone(&self.identities),
             authorizer: Arc::clone(&self.authorizer),
             retriever: Arc::clone(&self.retriever),
+            query_vector_processor: self.query_vector_processor.clone(),
             tokenizers: Arc::clone(&self.tokenizers),
+            compiler_control_plane: Arc::clone(&self.compiler_control_plane),
             blocking_pool: Arc::clone(&self.blocking_pool),
             clock: Arc::clone(&self.clock),
             errors: Arc::clone(&self.errors),
             sources: Arc::clone(&self.sources),
+            telemetry: self.telemetry.clone(),
         }
     }
 }
@@ -447,17 +550,35 @@ where
         clock: Arc<dyn AuthorityClock>,
         errors: Arc<dyn FacadeErrorFactory>,
     ) -> Self {
+        let compiler_repository: Arc<dyn ServiceRepository> = repository.clone();
         Self {
             repository,
             identities,
             authorizer,
             retriever,
+            query_vector_processor: None,
             tokenizers,
+            compiler_control_plane: Arc::new(DurableCompilerControlPlane::new(compiler_repository)),
             blocking_pool,
             clock,
             errors,
             sources: Arc::new(RwLock::new(BTreeMap::new())),
+            telemetry: None,
         }
+    }
+
+    /// Attaches the process telemetry authority used by the production composition.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
+    }
+
+    /// Installs the trusted query processor used only after live partition authorization.
+    #[must_use]
+    pub fn with_query_vector_processor(mut self, processor: Arc<dyn QueryVectorProcessor>) -> Self {
+        self.query_vector_processor = Some(processor);
+        self
     }
 
     /// Durably provisions or reattaches one tenant-scoped source runtime.
@@ -747,6 +868,14 @@ where
             .discover(&discovery, &connector_context)
             .map_err(map_catalog_error)?;
         validate_discovery_plan(&plan, &source.runtime.configuration.root)?;
+        if let Some(telemetry) = &self.telemetry {
+            let quarantines = plan
+                .entries
+                .iter()
+                .filter(|entry| entry.disposition == DiscoveryDisposition::Quarantine)
+                .count();
+            telemetry.record_quarantines(u64::try_from(quarantines).unwrap_or(u64::MAX));
+        }
         let health = source.runtime.connector.health();
         let retained = RetainedDiscoveryPlan {
             schema_version: "cigar.retained-discovery-plan.v1".to_owned(),
@@ -876,61 +1005,90 @@ where
                 .map_err(map_catalog_error)?,
             include_overrides: retained.include_paths.iter().cloned().collect(),
         };
-        let current_plan = source
-            .runtime
-            .connector
-            .discover(&discovery_request, &connector_context)
-            .map_err(map_catalog_error)?;
-        if current_plan.plan_digest != retained.plan_digest
-            || current_plan.included_count != retained.included_count
-            || current_plan.included_bytes != retained.included_bytes
-        {
-            return Err(cigar_protocol::ErrorCode::SnapshotIncomplete);
-        }
         let access = AccessContext::new(state.identity.tenant_id.clone(), authorization.purpose)
             .map_err(map_store_error)?;
-        let current_revision = self.current_revision(access.clone(), &state.store_cancellation)?;
-        if request.metadata.dry_run() {
-            let snapshot = source
-                .runtime
-                .connector
-                .snapshot(None, &connector_context)
-                .map_err(map_catalog_error)?;
-            if !snapshot.snapshot.complete {
-                return Err(cigar_protocol::ErrorCode::SnapshotIncomplete);
-            }
-            return Ok(IngestionReceiptResponse {
-                revision: current_revision.0.max(1),
-                snapshot_id: snapshot.snapshot.snapshot_id,
-                published_atoms: 0,
-                tombstoned_atoms: 0,
-                publication_digest: retained.plan_digest,
-            });
-        }
-        let key = parse_idempotency(request.metadata.idempotency_key())?;
+        let key = (!request.metadata.dry_run())
+            .then(|| parse_idempotency(request.metadata.idempotency_key()))
+            .transpose()?;
         let atomizers: Vec<&dyn Atomizer> =
             source.runtime.atomizers.iter().map(AsRef::as_ref).collect();
-        let receipt = IngestionService
-            .ingest_discovered(
+        for attempt in 0..MAX_CAS_RETRIES {
+            state.check()?;
+            let current_plan = source
+                .runtime
+                .connector
+                .discover(&discovery_request, &connector_context)
+                .map_err(map_catalog_error)?;
+            if current_plan.plan_digest != retained.plan_digest
+                || current_plan.included_count != retained.included_count
+                || current_plan.included_bytes != retained.included_bytes
+            {
+                return Err(cigar_protocol::ErrorCode::SnapshotIncomplete);
+            }
+            let current_revision =
+                self.current_revision(access.clone(), &state.store_cancellation)?;
+            let Some(key) = key.as_ref() else {
+                let snapshot = source
+                    .runtime
+                    .connector
+                    .snapshot(None, &connector_context)
+                    .map_err(map_catalog_error)?;
+                if !snapshot.snapshot.complete {
+                    return Err(cigar_protocol::ErrorCode::SnapshotIncomplete);
+                }
+                return Ok(IngestionReceiptResponse {
+                    revision: current_revision.0.max(1),
+                    snapshot_id: snapshot.snapshot.snapshot_id,
+                    published_atoms: 0,
+                    tombstoned_atoms: 0,
+                    publication_digest: retained.plan_digest,
+                });
+            };
+            match IngestionService.ingest_discovered(
                 self.repository.as_ref(),
                 IngestionRequest {
-                    access,
+                    access: access.clone(),
                     expected_revision: current_revision,
-                    idempotency_key: key,
+                    idempotency_key: key.clone(),
                 },
                 source.runtime.connector.as_ref(),
                 &atomizers,
                 &current_plan,
                 &connector_context,
-            )
-            .map_err(map_catalog_error)?;
-        Ok(IngestionReceiptResponse {
-            revision: receipt.revision.0,
-            snapshot_id: receipt.snapshot_id,
-            published_atoms: receipt.published_atoms,
-            tombstoned_atoms: receipt.tombstoned_atoms,
-            publication_digest: receipt.publication_digest,
-        })
+            ) {
+                Ok(receipt) => {
+                    if let Some(telemetry) = &self.telemetry {
+                        telemetry.record_ingestion(
+                            receipt.published_atoms,
+                            receipt.tombstoned_atoms,
+                            retained.included_bytes,
+                        );
+                    }
+                    return Ok(IngestionReceiptResponse {
+                        revision: receipt.revision.0,
+                        snapshot_id: receipt.snapshot_id,
+                        published_atoms: receipt.published_atoms,
+                        tombstoned_atoms: receipt.tombstoned_atoms,
+                        publication_digest: receipt.publication_digest,
+                    });
+                }
+                Err(error)
+                    if error.code() == CatalogErrorCode::SourceChanged
+                        && attempt + 1 < MAX_CAS_RETRIES =>
+                {
+                    continue;
+                }
+                Err(error) => {
+                    if error.code() == CatalogErrorCode::InvalidRecord
+                        && let Some(telemetry) = &self.telemetry
+                    {
+                        telemetry.record_parser_failure(ParserStage::Atomizer);
+                    }
+                    return Err(map_catalog_error(error));
+                }
+            }
+        }
+        Err(cigar_protocol::ErrorCode::RevisionConflict)
     }
 
     fn source_status(
@@ -970,15 +1128,18 @@ where
             authorization.purpose.clone(),
         )
         .map_err(map_store_error)?;
-        let revision = self.current_revision(access, &state.store_cancellation)?;
+        let revision = self.current_catalog_revision(access, &state.store_cancellation)?;
         let partition = authorized_partition(&state, &authorization)?;
         let plan = QueryPlanner::default()
-            .plan(
+            .plan_with_vector_processor(
                 &request.requirements,
                 &partition,
                 revision,
                 RetrievalConsistency::Strong,
-                authorization.vector_allowed,
+                authorization
+                    .vector_allowed
+                    .then_some(self.query_vector_processor.as_deref())
+                    .flatten(),
             )
             .map_err(map_retrieval_error)?;
         let result = StagedRetrieval
@@ -1025,22 +1186,12 @@ where
     ) -> Result<AtomBatchResponse, cigar_protocol::ErrorCode> {
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let authorization = self.catalog_authorization(&state)?;
-        let access = AccessContext::new(state.identity.tenant_id.clone(), authorization.purpose)
-            .map_err(map_store_error)?;
-        let batch = CatalogAtomService
-            .batch_atoms(
-                self.repository.as_ref(),
-                access,
-                SnapshotSelection::Latest,
-                &request.atom_ids,
-                state.store_cancellation.clone(),
-            )
-            .map_err(map_catalog_error)?;
+        let (_revision, mut authorized) =
+            self.authorized_atoms_by_id(&state, &authorization, &request.atom_ids)?;
         let results = request
             .atom_ids
             .into_iter()
-            .zip(batch.atoms)
-            .map(|(atom_id, atom)| match atom {
+            .map(|atom_id| match authorized.remove(&atom_id) {
                 Some(atom) => AtomLookupResult::Found {
                     atom: Box::new(atom),
                 },
@@ -1048,6 +1199,82 @@ where
             })
             .collect();
         Ok(AtomBatchResponse { results })
+    }
+
+    fn authorized_atoms_by_id(
+        &self,
+        request: &ApplicationRequest,
+        authorization: &CatalogContextAuthorization,
+        atom_ids: &[RecordId],
+    ) -> Result<(StoreRevision, BTreeMap<RecordId, ContextAtomV1>), cigar_protocol::ErrorCode> {
+        if atom_ids.is_empty() {
+            return Err(cigar_protocol::ErrorCode::InvalidArgument);
+        }
+        let partition = authorized_partition(request, authorization)?;
+        let access = AccessContext::new(
+            request.identity.tenant_id.clone(),
+            authorization.purpose.clone(),
+        )
+        .map_err(map_store_error)?;
+        let read = self
+            .repository
+            .begin_read(
+                access,
+                SnapshotSelection::Latest,
+                request.store_cancellation.clone(),
+            )
+            .map_err(map_store_error)?;
+        let revision = catalog_revision(&read)?;
+        let selector_ids: BTreeSet<_> = atom_ids.iter().cloned().collect();
+        if selector_ids.len() != atom_ids.len() {
+            return Err(cigar_protocol::ErrorCode::InvalidArgument);
+        }
+        let exact = RetrievalRequest {
+            stage: RetrievalStage::Exact,
+            partition: partition.clone(),
+            required_revision: revision,
+            consistency: RetrievalConsistency::Strong,
+            exact_versions: BTreeSet::new(),
+            atom_ids: selector_ids.clone(),
+            lineage_ids: BTreeSet::new(),
+            content_digests: BTreeSet::new(),
+            canonical_uris: BTreeSet::new(),
+            source_revisions: BTreeSet::new(),
+            paths: BTreeSet::new(),
+            terms: BTreeSet::new(),
+            approved_vector: None,
+            graph_roots: BTreeSet::new(),
+            graph_depth: 0,
+            limit: selector_ids.len(),
+            allow_fallback: false,
+        };
+        let batch = self
+            .retriever
+            .retrieve(
+                &exact,
+                &RetrievalContext {
+                    cancellation: request.store_cancellation.clone(),
+                    deadline: request.monotonic_deadline,
+                },
+            )
+            .map_err(map_retrieval_error)?;
+        let mut atoms = BTreeMap::new();
+        for candidate in batch.candidates {
+            request.check()?;
+            let atom = read
+                .get_atom(&candidate.version_id)
+                .map_err(map_store_error)?
+                .ok_or(cigar_protocol::ErrorCode::IntegrityFailure)?;
+            if !selector_ids.contains(&atom.atom_id) {
+                return Err(cigar_protocol::ErrorCode::IntegrityFailure);
+            }
+            require_atom_authorized(&partition, &atom, false)?;
+            if atoms.insert(atom.atom_id.clone(), atom).is_some() {
+                return Err(cigar_protocol::ErrorCode::IntegrityFailure);
+            }
+        }
+        partition.validate().map_err(map_retrieval_error)?;
+        Ok((revision, atoms))
     }
 
     fn tombstone_atom(
@@ -1059,20 +1286,19 @@ where
     ) -> Result<MutationReceipt, cigar_protocol::ErrorCode> {
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let authorization = self.catalog_authorization(&state)?;
+        let (authorized_revision, authorized) = self.authorized_atoms_by_id(
+            &state,
+            &authorization,
+            std::slice::from_ref(&request.payload.atom_id),
+        )?;
+        if !authorized.contains_key(&request.payload.atom_id) {
+            return Err(cigar_protocol::ErrorCode::InvalidArgument);
+        }
         let access = AccessContext::new(state.identity.tenant_id.clone(), authorization.purpose)
             .map_err(map_store_error)?;
         let expected = parse_revision(request.metadata.expected_revision())?;
         if request.metadata.dry_run() {
-            let batch = CatalogAtomService
-                .batch_atoms(
-                    self.repository.as_ref(),
-                    access,
-                    SnapshotSelection::Revision(expected),
-                    std::slice::from_ref(&request.payload.atom_id),
-                    state.store_cancellation.clone(),
-                )
-                .map_err(map_catalog_error)?;
-            if batch.atoms.first().and_then(Option::as_ref).is_none() {
+            if authorized_revision != expected {
                 return Err(cigar_protocol::ErrorCode::InvalidArgument);
             }
             return Ok(MutationReceipt {
@@ -1144,6 +1370,7 @@ where
         authorization: &CatalogContextAuthorization,
     ) -> Result<PreparedCompile, cigar_protocol::ErrorCode> {
         request.check()?;
+        let phase_started = Instant::now();
         let access = AccessContext::new(
             request.identity.tenant_id.clone(),
             authorization.purpose.clone(),
@@ -1157,7 +1384,7 @@ where
                 request.store_cancellation.clone(),
             )
             .map_err(map_store_error)?;
-        let revision = read.revision();
+        let revision = catalog_revision(&read)?;
         let partition = authorized_partition(request, authorization)?;
         let consistency = match contract.consistency {
             cigar_protocol::ConsistencyMode::Snapshot | cigar_protocol::ConsistencyMode::Strong => {
@@ -1169,13 +1396,18 @@ where
                 }
             }
         };
+        self.record_compile_phase(CompilePhase::Scope, phase_started.elapsed());
+        let phase_started = Instant::now();
         let retrieval_plan = QueryPlanner::default()
-            .plan(
+            .plan_with_vector_processor(
                 &contract.requirements,
                 &partition,
                 revision,
                 consistency,
-                authorization.vector_allowed,
+                authorization
+                    .vector_allowed
+                    .then_some(self.query_vector_processor.as_deref())
+                    .flatten(),
             )
             .map_err(map_retrieval_error)?;
         let retrieval = StagedRetrieval
@@ -1188,11 +1420,14 @@ where
                 },
             )
             .map_err(map_retrieval_error)?;
+        self.record_compile_phase(CompilePhase::Retrieve, phase_started.elapsed());
+        let phase_started = Instant::now();
         let tokenizer = self
             .tokenizers
-            .tokenizer(&contract.target.tokenizer_fingerprint)
+            .tokenizer(&contract.target)
             .ok_or(cigar_protocol::ErrorCode::DependencyUnavailable)?;
         let mut seeds = candidate_seeds(&retrieval);
+        let mut index_authorized_versions: BTreeSet<_> = seeds.keys().cloned().collect();
         let mut atoms = BTreeMap::new();
         let mut dependencies = BTreeMap::<VersionId, BTreeSet<VersionId>>::new();
         let mut pending: VecDeque<VersionId> = seeds.keys().cloned().collect();
@@ -1204,16 +1439,30 @@ where
             if atoms.len() >= MAX_COMPILE_CANDIDATES {
                 return Err(cigar_protocol::ErrorCode::LimitExceeded);
             }
+            if !index_authorized_versions.contains(&version_id) {
+                return Err(cigar_protocol::ErrorCode::PolicyDenied);
+            }
             let atom = read
                 .get_atom(&version_id)
                 .map_err(map_store_error)?
                 .ok_or(cigar_protocol::ErrorCode::IntegrityFailure)?;
+            require_atom_authorized(&partition, &atom, true)?;
             let edges = read
                 .edges_from(&version_id, Some(EdgeKind::DependsOn), MAX_DEPENDENCY_EDGES)
                 .map_err(map_store_error)?;
             let mut atom_dependencies = BTreeSet::new();
             for edge in edges {
                 if edge.lifecycle == Lifecycle::Active {
+                    if !index_authorized_versions.contains(&edge.to_version) {
+                        require_index_authorized_version(
+                            self.retriever.as_ref(),
+                            &partition,
+                            revision,
+                            &edge.to_version,
+                            request,
+                        )?;
+                        index_authorized_versions.insert(edge.to_version.clone());
+                    }
                     atom_dependencies.insert(edge.to_version.clone());
                     seeds.entry(edge.to_version.clone()).or_default();
                     pending.push_back(edge.to_version);
@@ -1222,19 +1471,26 @@ where
             dependencies.insert(version_id.clone(), atom_dependencies);
             atoms.insert(version_id, atom);
         }
-        let catalog_watermark = catalog_watermark(&read)?;
+        self.record_compile_phase(CompilePhase::Authorize, phase_started.elapsed());
+        let phase_started = Instant::now();
+        let catalog_watermark = authorized_catalog_watermark(&retrieval, &atoms, &dependencies)?;
         let retrieval_plan_digest = retained_retrieval_digest(&contract, &retrieval)?;
         let index_fingerprints = retained_index_fingerprints(&retrieval, &catalog_watermark)?;
         let profile = CompilerProfile::default();
         let profile_digest = compiler_profile_digest(&profile).map_err(map_compiler_error)?;
+        self.record_compile_phase(CompilePhase::Reconcile, phase_started.elapsed());
+        let phase_started = Instant::now();
         let mut candidates = Vec::with_capacity(atoms.len());
         let mut bodies_by_version = BTreeMap::new();
         for (version_id, atom) in &atoms {
             request.check()?;
+            require_atom_authorized(&partition, atom, true)?;
             let body = atom_body(&read, atom)?;
+            require_atom_authorized(&partition, atom, true)?;
             let token_count = tokenizer
                 .count_exact(&body)
                 .map_err(map_materialization_error)?;
+            require_atom_authorized(&partition, atom, true)?;
             if token_count == 0 {
                 return Err(cigar_protocol::ErrorCode::IntegrityFailure);
             }
@@ -1254,7 +1510,7 @@ where
                 })
                 .collect();
             let (policy_outcome, pre_exclusion_reason) =
-                atom_policy(atom, authorization, request.observed_at, &contract);
+                atom_compile_policy(atom, request.observed_at, &contract);
             let mut features = seed.candidate.as_ref().map_or_else(
                 || dependency_features(atom, token_count),
                 |candidate| candidate.features,
@@ -1282,6 +1538,7 @@ where
                 provenance_digest: digest_json(atom)?,
             });
         }
+        self.record_compile_phase(CompilePhase::Transform, phase_started.elapsed());
         let frozen = FrozenInputs {
             catalog_watermark: catalog_watermark.clone(),
             graph_revision: graph_digest(&dependencies)?,
@@ -1292,6 +1549,7 @@ where
             tokenizer_fingerprint: contract.target.tokenizer_fingerprint.clone(),
             materializer_fingerprint: contract.target.materializer_fingerprint.clone(),
         };
+        let phase_started = Instant::now();
         let output = DeterministicCompiler
             .compile(cigar_compiler::CompileRequest {
                 contract,
@@ -1300,6 +1558,44 @@ where
                 candidates,
             })
             .map_err(map_compiler_error)?;
+        self.record_compile_phase(CompilePhase::Pack, phase_started.elapsed());
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_compile_selection(
+                u64::try_from(output.plan.dispositions.len()).unwrap_or(u64::MAX),
+                u64::try_from(output.bundle.blocks.len()).unwrap_or(u64::MAX),
+            );
+            for lane in [
+                LaneKind::Rules,
+                LaneKind::Task,
+                LaneKind::Evidence,
+                LaneKind::History,
+                LaneKind::Tools,
+            ] {
+                let tokens = output
+                    .bundle
+                    .blocks
+                    .iter()
+                    .filter(|block| block.lane == lane)
+                    .fold(0_u64, |total, block| {
+                        total.saturating_add(u64::from(block.token_count))
+                    });
+                telemetry.record_lane_tokens(lane, tokens);
+            }
+            let conflicts = output
+                .plan
+                .dispositions
+                .iter()
+                .filter(|(_version, disposition)| {
+                    matches!(
+                        disposition,
+                        CandidateDisposition::Excluded {
+                            reason: DispositionReason::ConflictLost
+                        }
+                    )
+                })
+                .count();
+            telemetry.record_compile_conflicts(u64::try_from(conflicts).unwrap_or(u64::MAX));
+        }
         let selected_versions: BTreeSet<VersionId> = output
             .plan
             .dispositions
@@ -1351,6 +1647,12 @@ where
             }
             block_sources.insert(block.block_id.clone(), source);
         }
+        for version_id in &selected_versions {
+            let atom = atoms
+                .get(version_id)
+                .ok_or(cigar_protocol::ErrorCode::Internal)?;
+            require_atom_authorized(&partition, atom, true)?;
+        }
         let record = RetainedCompileRecord {
             schema_version: "cigar.retained-compile.v1".to_owned(),
             tenant_id: request.identity.tenant_id.clone(),
@@ -1373,6 +1675,12 @@ where
         };
         validate_compile_record(&record)?;
         Ok(PreparedCompile { record })
+    }
+
+    fn record_compile_phase(&self, phase: CompilePhase, elapsed: Duration) {
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_compile_phase(phase, elapsed);
+        }
     }
 
     fn persist_compile(
@@ -1613,25 +1921,43 @@ where
         retained: &RetainedCompileRecord,
         authorization: &CatalogContextAuthorization,
     ) -> Result<ContextBundle, cigar_protocol::ErrorCode> {
+        let partition = authorized_partition(request, authorization)?;
         let access = AccessContext::new(
             request.identity.tenant_id.clone(),
             authorization.purpose.clone(),
         )
         .map_err(map_store_error)?;
-        let bundle = self
+        let read = self
             .repository
             .begin_read(
                 access,
                 SnapshotSelection::Latest,
                 request.store_cancellation.clone(),
             )
-            .map_err(map_store_error)?
+            .map_err(map_store_error)?;
+        require_selected_atoms_authorized(
+            &read,
+            retained,
+            &partition,
+            true,
+            self.retriever.as_ref(),
+            request,
+        )?;
+        let bundle = read
             .get_bundle(&retained.bundle.bundle_id)
             .map_err(map_store_error)?
             .ok_or(cigar_protocol::ErrorCode::IntegrityFailure)?;
         if bundle != retained.bundle {
             return Err(cigar_protocol::ErrorCode::IntegrityFailure);
         }
+        require_selected_atoms_authorized(
+            &read,
+            retained,
+            &partition,
+            true,
+            self.retriever.as_ref(),
+            request,
+        )?;
         Ok(bundle)
     }
 
@@ -1659,6 +1985,7 @@ where
         monotonic_deadline: Instant,
         request: CompileContextDeltaRequest,
     ) -> Result<ContextDeltaResponse, cigar_protocol::ErrorCode> {
+        let phase_started = Instant::now();
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let base = self.retained_bundle(&state, &request.base_bundle_id)?;
         let target = self.retained_plan(&state, &request.target_plan_id)?;
@@ -1667,6 +1994,8 @@ where
         let base_bundle = self.stored_bundle(&state, &base.value, &base_authorization)?;
         let target_bundle = self.stored_bundle(&state, &target.value, &target_authorization)?;
         let sealed = generate_delta(&base_bundle, &target_bundle).map_err(map_delta_error)?;
+        apply_delta_verified(&base_bundle, &target_bundle, &sealed).map_err(map_delta_error)?;
+        self.record_compile_phase(CompilePhase::Reconcile, phase_started.elapsed());
         Ok(ContextDeltaResponse {
             delta: sealed.delta,
             delta_digest: sealed.delta_digest,
@@ -1696,7 +2025,37 @@ where
     ) -> Result<(SelectionManifest, String), cigar_protocol::ErrorCode> {
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let retained = self.retained_bundle(&state, &bundle_id)?;
-        let _authorization = self.authorize_retained(&state, &retained.value)?;
+        let authorization = self.authorize_retained(&state, &retained.value)?;
+        let partition = authorized_partition(&state, &authorization)?;
+        let access = AccessContext::new(
+            state.identity.tenant_id.clone(),
+            authorization.purpose.clone(),
+        )
+        .map_err(map_store_error)?;
+        let read = self
+            .repository
+            .begin_read(
+                access,
+                SnapshotSelection::Latest,
+                state.store_cancellation.clone(),
+            )
+            .map_err(map_store_error)?;
+        for entry in &retained.value.manifest.entries {
+            state.check()?;
+            require_index_authorized_version(
+                self.retriever.as_ref(),
+                &partition,
+                retained.value.catalog_store_revision,
+                &entry.version_id,
+                &state,
+            )?;
+            let atom = read
+                .get_atom(&entry.version_id)
+                .map_err(map_store_error)?
+                .ok_or(cigar_protocol::ErrorCode::PolicyDenied)?;
+            require_atom_authorized(&partition, &atom, false)?;
+        }
+        partition.validate().map_err(map_retrieval_error)?;
         Ok((
             retained.value.manifest,
             strong_etag(retained.digest.as_str()),
@@ -1713,6 +2072,7 @@ where
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let retained = self.retained_bundle(&state, &request.bundle_id)?;
         let authorization = self.authorize_retained(&state, &retained.value)?;
+        let partition = authorized_partition(&state, &authorization)?;
         let requested: BTreeSet<VersionId> = request.version_ids.into_iter().collect();
         let access = AccessContext::new(
             state.identity.tenant_id.clone(),
@@ -1733,21 +2093,28 @@ where
             if !requested.is_empty() && !requested.contains(&entry.version_id) {
                 continue;
             }
+            match require_index_authorized_version(
+                self.retriever.as_ref(),
+                &partition,
+                retained.value.catalog_store_revision,
+                &entry.version_id,
+                &state,
+            ) {
+                Ok(()) => {}
+                Err(cigar_protocol::ErrorCode::PolicyDenied) => continue,
+                Err(error) => return Err(error),
+            }
             let Some(atom) = read.get_atom(&entry.version_id).map_err(map_store_error)? else {
                 continue;
             };
-            if atom_visible(
-                &atom,
-                &authorization,
-                state.observed_at,
-                &retained.value.normalized_contract,
-            ) {
+            if atom_authorized(&partition, &atom, false)? {
                 entries.push(ContextExplanationEntry {
                     version_id: entry.version_id.clone(),
                     disposition: entry.disposition.clone(),
                 });
             }
         }
+        partition.validate().map_err(map_retrieval_error)?;
         Ok(ContextExplanationResponse { entries })
     }
 
@@ -1758,9 +2125,12 @@ where
         monotonic_deadline: Instant,
         request: MaterializeContextBundleRequest,
     ) -> Result<MaterializationResponse, cigar_protocol::ErrorCode> {
+        let phase_started = Instant::now();
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
         let retained = self.retained_bundle(&state, &request.bundle_id)?;
         let authorization = self.authorize_retained(&state, &retained.value)?;
+        let partition = authorized_partition(&state, &authorization)?;
+        let governance = compiler_governance(&state, &authorization)?;
         let reasons = self.revalidation_reasons(&state, &retained.value, &authorization)?;
         if !reasons.is_empty() {
             return Err(cigar_protocol::ErrorCode::BundleInvalidated);
@@ -1768,16 +2138,13 @@ where
         let bundle = self.stored_bundle(&state, &retained.value, &authorization)?;
         let tokenizer = self
             .tokenizers
-            .tokenizer(
-                &retained
-                    .value
-                    .normalized_contract
-                    .target
-                    .tokenizer_fingerprint,
-            )
+            .tokenizer(&retained.value.normalized_contract.target)
             .ok_or(cigar_protocol::ErrorCode::DependencyUnavailable)?;
-        let access = AccessContext::new(state.identity.tenant_id.clone(), authorization.purpose)
-            .map_err(map_store_error)?;
+        let access = AccessContext::new(
+            state.identity.tenant_id.clone(),
+            authorization.purpose.clone(),
+        )
+        .map_err(map_store_error)?;
         let read = self
             .repository
             .begin_read(
@@ -1797,14 +2164,100 @@ where
                 .get_atom(source_version)
                 .map_err(map_store_error)?
                 .ok_or(cigar_protocol::ErrorCode::BundleInvalidated)?;
-            bodies.insert(block.block_id.clone(), atom_body(&read, &atom)?);
+            require_atom_authorized(&partition, &atom, true)?;
+            let body = atom_body(&read, &atom)?;
+            require_atom_authorized(&partition, &atom, true)?;
+            bodies.insert(block.block_id.clone(), body);
         }
         let profile = match request.profile {
             MaterializationProfile::CanonicalJson => MaterializerProfile::Json,
             MaterializationProfile::ClaudePrompt => MaterializerProfile::ClaudePrompt,
         };
+        let cache_fingerprint = digest_json(&(
+            "cigar.materialization-cache.v1",
+            &bundle.bundle_id,
+            &retained.value.normalized_contract.target,
+            request.profile,
+        ))?;
+        let cache_key = CacheKey::new(
+            CacheLayer::Materialization,
+            state.identity.tenant_id.as_str(),
+            partition.partition_digest().as_str(),
+            cache_fingerprint,
+        )
+        .ok_or(cigar_protocol::ErrorCode::Internal)?;
+        let cached = self
+            .compiler_control_plane
+            .cache_get(
+                &cache_key,
+                governance.policy_digest(),
+                governance.revocation_epoch(),
+                |candidate| candidate == &cache_key,
+            )
+            .ok()
+            .flatten()
+            .and_then(|bytes| serde_json::from_slice::<MaterializationResponse>(&bytes).ok())
+            .filter(|response| {
+                response.context.validate().is_ok()
+                    && response.context.bundle_id == bundle.bundle_id
+                    && response.context.tokenizer_fingerprint
+                        == retained
+                            .value
+                            .normalized_contract
+                            .target
+                            .tokenizer_fingerprint
+                    && response.context.materializer_fingerprint
+                        == retained
+                            .value
+                            .normalized_contract
+                            .target
+                            .materializer_fingerprint
+                    && response.physical_input_tokens == response.context.token_count
+            });
+        if let Some(response) = cached {
+            require_selected_atoms_authorized(
+                &read,
+                &retained.value,
+                &partition,
+                true,
+                self.retriever.as_ref(),
+                &state,
+            )?;
+            if let Some(overflow) = VerifiedTargetOverflow::from_materialization(
+                &response.context,
+                &retained.value.normalized_contract.target,
+            )
+            .map_err(map_compiler_control_error)?
+            {
+                self.compiler_control_plane
+                    .record_target_overflow(&governance, &overflow, &state.store_cancellation)
+                    .map_err(map_compiler_control_error)?;
+                return Err(cigar_protocol::ErrorCode::BudgetUnsatisfiable);
+            }
+            if let Some(telemetry) = &self.telemetry {
+                telemetry.record_cache_outcome(CacheOutcome::Hit);
+                telemetry.record_materialization_tokens(
+                    u64::from(response.physical_input_tokens),
+                    0,
+                    0,
+                );
+            }
+            self.record_compile_phase(CompilePhase::Materialize, phase_started.elapsed());
+            return Ok(response);
+        }
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_cache_outcome(CacheOutcome::Miss);
+        }
         let (materialized, accounting) = materialize(profile, &bundle, &bodies, tokenizer.as_ref())
             .map_err(map_materialization_error)?;
+        require_selected_atoms_authorized(
+            &read,
+            &retained.value,
+            &partition,
+            true,
+            self.retriever.as_ref(),
+            &state,
+        )?;
         if materialized.materializer_fingerprint
             != retained
                 .value
@@ -1814,10 +2267,38 @@ where
         {
             return Err(cigar_protocol::ErrorCode::BundleInvalidated);
         }
-        Ok(MaterializationResponse {
+        if let Some(overflow) = VerifiedTargetOverflow::from_materialization(
+            &materialized,
+            &retained.value.normalized_contract.target,
+        )
+        .map_err(map_compiler_control_error)?
+        {
+            self.compiler_control_plane
+                .record_target_overflow(&governance, &overflow, &state.store_cancellation)
+                .map_err(map_compiler_control_error)?;
+            return Err(cigar_protocol::ErrorCode::BudgetUnsatisfiable);
+        }
+        let response = MaterializationResponse {
             context: materialized,
             physical_input_tokens: accounting.physical_input_tokens,
-        })
+        };
+        if let Ok(bytes) = encode_record(&response) {
+            let _cache_inserted = self.compiler_control_plane.cache_insert(
+                cache_key,
+                bytes,
+                governance.policy_digest().clone(),
+                governance.revocation_epoch(),
+            );
+        }
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_materialization_tokens(
+                u64::from(accounting.physical_input_tokens),
+                u64::from(accounting.provider_cache_read_tokens),
+                u64::from(accounting.provider_cache_write_tokens),
+            );
+        }
+        self.record_compile_phase(CompilePhase::Materialize, phase_started.elapsed());
+        Ok(response)
     }
 
     fn revalidate_context_bundle(
@@ -1831,6 +2312,11 @@ where
         let retained = self.retained_bundle(&state, &bundle_id)?;
         let authorization = self.authorize_retained(&state, &retained.value)?;
         let reasons = self.revalidation_reasons(&state, &retained.value, &authorization)?;
+        if !reasons.is_empty()
+            && let Some(telemetry) = &self.telemetry
+        {
+            telemetry.record_compile_stale(1);
+        }
         Ok(RevalidationResponse {
             bundle_id,
             valid: reasons.is_empty(),
@@ -1845,6 +2331,7 @@ where
         authorization: &CatalogContextAuthorization,
     ) -> Result<BTreeSet<String>, cigar_protocol::ErrorCode> {
         let mut reasons = BTreeSet::new();
+        let partition = authorized_partition(request, authorization)?;
         if authorization.policy_digest != retained.policy_digest {
             reasons.insert("policy_changed".to_owned());
         }
@@ -1857,7 +2344,7 @@ where
         }
         if self
             .tokenizers
-            .tokenizer(&retained.normalized_contract.target.tokenizer_fingerprint)
+            .tokenizer(&retained.normalized_contract.target)
             .is_none()
         {
             reasons.insert("tokenizer_unavailable".to_owned());
@@ -1889,21 +2376,42 @@ where
         }
         for candidate in retained.selected_candidates.values() {
             request.check()?;
+            match require_index_authorized_version(
+                self.retriever.as_ref(),
+                &partition,
+                retained.catalog_store_revision,
+                &candidate.version_id,
+                request,
+            ) {
+                Ok(()) => {}
+                Err(cigar_protocol::ErrorCode::PolicyDenied) => {
+                    reasons.insert("authorization_changed".to_owned());
+                    continue;
+                }
+                Err(cigar_protocol::ErrorCode::IndexUnavailable)
+                | Err(cigar_protocol::ErrorCode::IndexStale)
+                | Err(cigar_protocol::ErrorCode::DependencyUnavailable) => {
+                    reasons.insert("retrieval_unavailable".to_owned());
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
             let atom = read
                 .get_atom(&candidate.version_id)
                 .map_err(map_store_error)?;
-            let active = read
-                .get_active_atom_by_id(&candidate.atom_id)
-                .map_err(map_store_error)?;
             match atom {
-                Some(atom)
-                    if atom.content_digest == candidate.content_digest
-                        && atom_visible(
-                            &atom,
-                            authorization,
-                            request.observed_at,
-                            &retained.normalized_contract,
-                        ) => {}
+                Some(atom) if atom.content_digest == candidate.content_digest => {
+                    if !atom_authorized(&partition, &atom, true)? {
+                        reasons.insert("authorization_changed".to_owned());
+                        continue;
+                    }
+                    let active = read
+                        .get_active_atom_by_id(&candidate.atom_id)
+                        .map_err(map_store_error)?;
+                    if active.as_ref().map(|atom| &atom.version_id) != Some(&candidate.version_id) {
+                        reasons.insert("catalog_version_inactive".to_owned());
+                    }
+                }
                 Some(_atom) => {
                     reasons.insert("catalog_version_changed".to_owned());
                 }
@@ -1911,21 +2419,16 @@ where
                     reasons.insert("catalog_version_missing".to_owned());
                 }
             }
-            if active.as_ref().map(|atom| &atom.version_id) != Some(&candidate.version_id) {
-                reasons.insert("catalog_version_inactive".to_owned());
-            }
         }
-        let current_catalog_watermark = catalog_watermark(&read)?;
-        if current_catalog_watermark != retained.catalog_watermark {
-            reasons.insert("catalog_watermark_changed".to_owned());
-        }
-        let partition = authorized_partition(request, authorization)?;
-        let current_retrieval = QueryPlanner::default().plan(
+        let current_retrieval = QueryPlanner::default().plan_with_vector_processor(
             &retained.normalized_contract.requirements,
             &partition,
             retained.catalog_store_revision,
             RetrievalConsistency::Strong,
-            authorization.vector_allowed,
+            authorization
+                .vector_allowed
+                .then_some(self.query_vector_processor.as_deref())
+                .flatten(),
         );
         match current_retrieval.and_then(|plan| {
             StagedRetrieval.execute(
@@ -1965,6 +2468,18 @@ where
             .begin_read(access, SnapshotSelection::Latest, cancellation.clone())
             .map(|read| read.revision())
             .map_err(map_store_error)
+    }
+
+    fn current_catalog_revision(
+        &self,
+        access: AccessContext,
+        cancellation: &StoreCancellationToken,
+    ) -> Result<StoreRevision, cigar_protocol::ErrorCode> {
+        let read = self
+            .repository
+            .begin_read(access, SnapshotSelection::Latest, cancellation.clone())
+            .map_err(map_store_error)?;
+        catalog_revision(&read)
     }
 }
 
@@ -2440,33 +2955,123 @@ fn authorized_partition(
     request: &ApplicationRequest,
     authorization: &CatalogContextAuthorization,
 ) -> Result<AuthorizedPartition, cigar_protocol::ErrorCode> {
-    let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-AUTHORIZED-PARTITION\0v1\0");
-    hasher.update(request.identity.tenant_id.as_str().as_bytes());
-    hasher.update(request.identity.principal_id.as_str().as_bytes());
-    for project_id in &authorization.project_ids {
-        hasher.update(project_id.as_str().as_bytes());
-        hasher.update([0]);
+    authorized_partition_for_identity(&request.identity, request.observed_at, authorization)
+}
+
+fn compiler_governance(
+    request: &ApplicationRequest,
+    authorization: &CatalogContextAuthorization,
+) -> Result<CompilerGovernance, cigar_protocol::ErrorCode> {
+    let claims = authorization
+        .retrieval_authorization
+        .revalidate()
+        .map_err(|_error| cigar_protocol::ErrorCode::PolicyDenied)?;
+    if claims.tenant_id() != &request.identity.tenant_id
+        || claims.principal_id() != &request.identity.principal_id
+        || claims.policy_digest() != &authorization.policy_digest
+    {
+        return Err(cigar_protocol::ErrorCode::PolicyDenied);
     }
-    hasher.update(authorization.purpose.as_bytes());
-    hasher.update([0]);
-    hasher.update(authorization.processor.as_bytes());
-    hasher.update([0]);
-    hasher.update(authorization.policy_digest.as_str().as_bytes());
-    let partition = AuthorizedPartition {
-        tenant_id: request.identity.tenant_id.clone(),
-        project_ids: authorization.project_ids.clone(),
-        purpose: authorization.purpose.clone(),
-        processor: authorization.processor.clone(),
-        maximum_classification: authorization.maximum_classification,
-        maximum_instruction_authority: authorization.maximum_instruction_authority,
-        valid_at: request.observed_at,
-        observed_as_of: request.observed_at,
-        vector_allowed: authorization.vector_allowed,
-        partition_digest: digest_hasher(hasher)?,
-    };
+    Ok(CompilerGovernance::new(
+        request.identity.tenant_id.clone(),
+        claims.policy_digest().clone(),
+        claims.revocation_epoch(),
+        u64::try_from(request.observed_at.unix_nanos())
+            .map_err(|_error| cigar_protocol::ErrorCode::Internal)?,
+    ))
+}
+
+fn authorized_partition_for_identity(
+    identity: &ResolvedDomainIdentity,
+    observed_at: UtcTimestamp,
+    authorization: &CatalogContextAuthorization,
+) -> Result<AuthorizedPartition, cigar_protocol::ErrorCode> {
+    let partition = AuthorizedPartition::from_policy_authorization(
+        authorization.retrieval_authorization.clone(),
+    )
+    .map_err(map_retrieval_error)?;
+    if partition.principal_id() != &identity.principal_id
+        || partition.tenant_id() != &identity.tenant_id
+        || partition.project_ids() != &authorization.project_ids
+        || partition.purpose() != authorization.purpose.as_str()
+        || partition.processor() != authorization.processor.as_str()
+        || partition.maximum_classification() != authorization.maximum_classification
+        || partition.maximum_instruction_authority() != authorization.maximum_instruction_authority
+        || partition.valid_at() != observed_at
+        || partition.observed_as_of() != observed_at
+        || partition.claimed_policy_digest() != &authorization.policy_digest
+        || authorization.vector_allowed && !partition.vector_allowed()
+    {
+        return Err(cigar_protocol::ErrorCode::PolicyDenied);
+    }
     partition.validate().map_err(map_retrieval_error)?;
     Ok(partition)
+}
+
+fn require_index_authorized_version(
+    retriever: &dyn Retriever,
+    partition: &AuthorizedPartition,
+    revision: StoreRevision,
+    version_id: &VersionId,
+    request: &ApplicationRequest,
+) -> Result<(), cigar_protocol::ErrorCode> {
+    request.check()?;
+    let authorized = index_authorizes_version(
+        retriever,
+        partition,
+        revision,
+        version_id,
+        request.store_cancellation.clone(),
+        request.monotonic_deadline,
+    )
+    .map_err(map_retrieval_error)?;
+    request.check()?;
+    if authorized {
+        Ok(())
+    } else {
+        Err(cigar_protocol::ErrorCode::PolicyDenied)
+    }
+}
+
+fn index_authorizes_version(
+    retriever: &dyn Retriever,
+    partition: &AuthorizedPartition,
+    revision: StoreRevision,
+    version_id: &VersionId,
+    cancellation: StoreCancellationToken,
+    deadline: Instant,
+) -> Result<bool, RetrievalError> {
+    let exact = RetrievalRequest {
+        stage: RetrievalStage::Exact,
+        partition: partition.clone(),
+        required_revision: revision,
+        consistency: RetrievalConsistency::Strong,
+        exact_versions: BTreeSet::from([version_id.clone()]),
+        atom_ids: BTreeSet::new(),
+        lineage_ids: BTreeSet::new(),
+        content_digests: BTreeSet::new(),
+        canonical_uris: BTreeSet::new(),
+        source_revisions: BTreeSet::new(),
+        paths: BTreeSet::new(),
+        terms: BTreeSet::new(),
+        approved_vector: None,
+        graph_roots: BTreeSet::new(),
+        graph_depth: 0,
+        limit: 1,
+        allow_fallback: false,
+    };
+    let batch = retriever.retrieve(
+        &exact,
+        &RetrievalContext {
+            cancellation,
+            deadline,
+        },
+    )?;
+    Ok(batch.candidates.len() == 1
+        && batch
+            .candidates
+            .first()
+            .is_some_and(|candidate| &candidate.version_id == version_id))
 }
 
 fn validate_discovery_plan(
@@ -2502,32 +3107,27 @@ fn validate_discovery_plan(
     Ok(())
 }
 
-fn catalog_watermark<T: ReadTransaction>(
-    read: &T,
+fn authorized_catalog_watermark(
+    retrieval: &StagedRetrievalResult,
+    atoms: &BTreeMap<VersionId, ContextAtomV1>,
+    dependencies: &BTreeMap<VersionId, BTreeSet<VersionId>>,
 ) -> Result<ContentDigest, cigar_protocol::ErrorCode> {
     let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-CATALOG-CONTENT-WATERMARK\0v1\0");
-    let mut cursor = None;
-    let mut total = 0_usize;
-    loop {
-        let page = read
-            .query_atoms(AtomSelector::default(), 1_000, cursor.as_ref())
-            .map_err(map_store_error)?;
-        total = total
-            .checked_add(page.items.len())
-            .ok_or(cigar_protocol::ErrorCode::LimitExceeded)?;
-        if total > 100_000 {
-            return Err(cigar_protocol::ErrorCode::LimitExceeded);
+    hasher.update(b"CIGAR-AUTHORIZED-CATALOG-CONTENT-WATERMARK\0v1\0");
+    for stage in &retrieval.stages {
+        hasher.update(stage.query_fingerprint.as_str().as_bytes());
+        hasher.update(stage.batch.disclosure.index_fingerprint.as_str().as_bytes());
+    }
+    for (version_id, atom) in atoms {
+        hasher.update(version_id.as_str().as_bytes());
+        hasher.update(atom.content_digest.as_str().as_bytes());
+        hasher.update([atom.lifecycle as u8]);
+        if let Some(targets) = dependencies.get(version_id) {
+            for target in targets {
+                hasher.update(target.as_str().as_bytes());
+            }
         }
-        for atom in &page.items {
-            hasher.update(atom.version_id.as_str().as_bytes());
-            hasher.update(atom.content_digest.as_str().as_bytes());
-            hasher.update([atom.lifecycle as u8]);
-        }
-        cursor = page.next;
-        if cursor.is_none() {
-            break;
-        }
+        hasher.update([0]);
     }
     digest_hasher(hasher)
 }
@@ -2609,34 +3209,82 @@ fn atom_body<T: ReadTransaction>(
     Ok(body)
 }
 
-fn atom_visible(
+fn atom_authorized(
+    partition: &AuthorizedPartition,
     atom: &ContextAtomV1,
-    authorization: &CatalogContextAuthorization,
+    processor_required: bool,
+) -> Result<bool, cigar_protocol::ErrorCode> {
+    partition
+        .authorize_resource(
+            &RetrievalResourceAuthorizationRequest {
+                input_digest: atom.content_digest.clone(),
+                tenant_id: atom.scope.tenant_id.clone(),
+                project_ids: atom.scope.project_ids.iter().cloned().collect(),
+                allowed_purposes: atom.governance.allowed_purposes.iter().cloned().collect(),
+                allowed_processors: atom
+                    .governance
+                    .processor_constraints
+                    .iter()
+                    .cloned()
+                    .collect(),
+                classification: atom.governance.classification,
+                lifecycle: atom.lifecycle,
+                integrity_verified: true,
+                valid_from: atom.temporal.valid_from,
+                valid_until: atom.temporal.valid_until,
+                observed_at: atom.temporal.observed_at,
+                instruction_authority: atom.governance.instruction_authority,
+            },
+            processor_required,
+        )
+        .map_err(map_retrieval_error)
+}
+
+fn require_atom_authorized(
+    partition: &AuthorizedPartition,
+    atom: &ContextAtomV1,
+    processor_required: bool,
+) -> Result<(), cigar_protocol::ErrorCode> {
+    if atom_authorized(partition, atom, processor_required)? {
+        Ok(())
+    } else {
+        Err(cigar_protocol::ErrorCode::PolicyDenied)
+    }
+}
+
+fn require_selected_atoms_authorized<T: ReadTransaction>(
+    read: &T,
+    retained: &RetainedCompileRecord,
+    partition: &AuthorizedPartition,
+    processor_required: bool,
+    retriever: &dyn Retriever,
+    request: &ApplicationRequest,
+) -> Result<(), cigar_protocol::ErrorCode> {
+    for candidate in retained.selected_candidates.values() {
+        require_index_authorized_version(
+            retriever,
+            partition,
+            retained.catalog_store_revision,
+            &candidate.version_id,
+            request,
+        )?;
+        let atom = read
+            .get_atom(&candidate.version_id)
+            .map_err(map_store_error)?
+            .ok_or(cigar_protocol::ErrorCode::PolicyDenied)?;
+        if atom.atom_id != candidate.atom_id || atom.content_digest != candidate.content_digest {
+            return Err(cigar_protocol::ErrorCode::PolicyDenied);
+        }
+        require_atom_authorized(partition, &atom, processor_required)?;
+    }
+    partition.validate().map_err(map_retrieval_error)
+}
+
+fn atom_compile_policy(
+    atom: &ContextAtomV1,
     observed_at: UtcTimestamp,
     contract: &ContextContract,
-) -> bool {
-    let project_visible = atom
-        .scope
-        .project_ids
-        .iter()
-        .any(|project_id| authorization.project_ids.contains(project_id));
-    let purpose_visible = atom
-        .governance
-        .allowed_purposes
-        .binary_search(&authorization.purpose)
-        .is_ok();
-    let processor_visible = atom.governance.processor_constraints.is_empty()
-        || atom
-            .governance
-            .processor_constraints
-            .binary_search(&authorization.processor)
-            .is_ok();
-    let temporal = atom.temporal.valid_from <= observed_at
-        && atom
-            .temporal
-            .valid_until
-            .is_none_or(|valid_until| observed_at < valid_until)
-        && atom.temporal.observed_at <= observed_at;
+) -> (PolicyOutcome, Option<DispositionReason>) {
     let freshness = contract
         .requirements
         .iter()
@@ -2649,64 +3297,7 @@ fn atom_visible(
                 .and_then(|age| u64::try_from(age).ok())
                 .is_some_and(|age| age <= maximum_age.get())
         });
-    project_visible
-        && purpose_visible
-        && processor_visible
-        && temporal
-        && freshness
-        && atom.governance.classification <= authorization.maximum_classification
-        && atom.governance.instruction_authority <= authorization.maximum_instruction_authority
-        && atom.lifecycle == Lifecycle::Active
-}
-
-fn atom_policy(
-    atom: &ContextAtomV1,
-    authorization: &CatalogContextAuthorization,
-    observed_at: UtcTimestamp,
-    contract: &ContextContract,
-) -> (PolicyOutcome, Option<DispositionReason>) {
-    if atom.lifecycle != Lifecycle::Active {
-        return (
-            PolicyOutcome::Deny,
-            Some(DispositionReason::LifecycleIneligible),
-        );
-    }
-    if !atom
-        .scope
-        .project_ids
-        .iter()
-        .any(|project_id| authorization.project_ids.contains(project_id))
-        || atom.governance.classification > authorization.maximum_classification
-    {
-        return (PolicyOutcome::Deny, Some(DispositionReason::ScopeDenied));
-    }
-    if atom
-        .governance
-        .allowed_purposes
-        .binary_search(&authorization.purpose)
-        .is_err()
-    {
-        return (PolicyOutcome::Deny, Some(DispositionReason::PurposeDenied));
-    }
-    if !atom.governance.processor_constraints.is_empty()
-        && atom
-            .governance
-            .processor_constraints
-            .binary_search(&authorization.processor)
-            .is_err()
-    {
-        return (
-            PolicyOutcome::Deny,
-            Some(DispositionReason::ProcessorDenied),
-        );
-    }
-    if atom.governance.instruction_authority > authorization.maximum_instruction_authority {
-        return (
-            PolicyOutcome::Deny,
-            Some(DispositionReason::InstructionAuthorityDenied),
-        );
-    }
-    if !atom_visible(atom, authorization, observed_at, contract) {
+    if !freshness {
         return (
             PolicyOutcome::Deny,
             Some(DispositionReason::TemporalMismatch),
@@ -2913,6 +3504,24 @@ fn parse_idempotency(value: Option<&str>) -> Result<IdempotencyKey, cigar_protoc
         .map_err(|_error| cigar_protocol::ErrorCode::InvalidArgument)
 }
 
+fn catalog_revision(
+    read: &impl ReadTransaction,
+) -> Result<StoreRevision, cigar_protocol::ErrorCode> {
+    Ok(read
+        .outbox()
+        .map_err(map_store_error)?
+        .into_iter()
+        .filter(|record| {
+            matches!(
+                record.message.topic.as_str(),
+                CATALOG_COMMITTED_TOPIC | CATALOG_TOMBSTONED_TOPIC
+            )
+        })
+        .map(|record| record.causal_revision)
+        .max()
+        .unwrap_or(StoreRevision(0)))
+}
+
 fn strong_etag(value: &str) -> String {
     format!("\"{value}\"")
 }
@@ -3018,6 +3627,17 @@ const fn map_materialization_error(error: MaterializationError) -> cigar_protoco
         MaterializationError::ContentMismatch => cigar_protocol::ErrorCode::IntegrityFailure,
         MaterializationError::LimitExceeded => cigar_protocol::ErrorCode::LimitExceeded,
         MaterializationError::Serialization => cigar_protocol::ErrorCode::Internal,
+    }
+}
+
+const fn map_compiler_control_error(error: CompilerControlPlaneError) -> cigar_protocol::ErrorCode {
+    match error {
+        CompilerControlPlaneError::Unauthorized => cigar_protocol::ErrorCode::PolicyDenied,
+        CompilerControlPlaneError::InvalidInput => cigar_protocol::ErrorCode::InvalidArgument,
+        CompilerControlPlaneError::Integrity => cigar_protocol::ErrorCode::IntegrityFailure,
+        CompilerControlPlaneError::SequenceConflict => cigar_protocol::ErrorCode::RevisionConflict,
+        CompilerControlPlaneError::LimitExceeded => cigar_protocol::ErrorCode::LimitExceeded,
+        CompilerControlPlaneError::Unavailable => cigar_protocol::ErrorCode::DependencyUnavailable,
     }
 }
 
@@ -3162,7 +3782,7 @@ where
 {
     fn resolve_reference(
         &self,
-        _context: &cigar_api::RequestContext,
+        context: &cigar_api::RequestContext,
         identity: &ResolvedDomainIdentity,
         authorization: &crate::CurrentSpaceHandoffAuthorization,
         project_id: &RecordId,
@@ -3180,6 +3800,16 @@ where
             .clock
             .now()
             .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?;
+        context
+            .check_active(observed_at)
+            .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?;
+        let retrieval_deadline = context
+            .deadline()
+            .unix_nanos()
+            .checked_sub(observed_at.unix_nanos())
+            .and_then(|nanos| u64::try_from(nanos).ok())
+            .and_then(|nanos| Instant::now().checked_add(Duration::from_nanos(nanos)))
+            .ok_or(crate::SpaceHandoffDependencyError::Unavailable)?;
         let catalog = self
             .authorizer
             .authorize_catalog(identity, observed_at)
@@ -3199,12 +3829,29 @@ where
         {
             return Err(crate::SpaceHandoffDependencyError::Denied);
         }
+        let partition = authorized_partition_for_identity(identity, observed_at, &catalog)
+            .map_err(map_handoff_protocol_error)?;
         let access = AccessContext::new(identity.tenant_id.clone(), catalog.purpose.clone())
             .map_err(|_error| crate::SpaceHandoffDependencyError::Invalid)?;
-        let atom = self
+        let read = self
             .repository
             .begin_read(access, SnapshotSelection::Latest, cancellation.clone())
-            .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?
+            .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?;
+        let revision = catalog_revision(&read)
+            .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?;
+        let index_authorized = index_authorizes_version(
+            self.retriever.as_ref(),
+            &partition,
+            revision,
+            version_id,
+            cancellation.clone(),
+            retrieval_deadline,
+        )
+        .map_err(map_handoff_retrieval_error)?;
+        if !index_authorized {
+            return Err(crate::SpaceHandoffDependencyError::Denied);
+        }
+        let atom = read
             .get_atom(version_id)
             .map_err(|_error| crate::SpaceHandoffDependencyError::Unavailable)?
             .ok_or(crate::SpaceHandoffDependencyError::Denied)?;
@@ -3218,10 +3865,11 @@ where
             || atom.scope.tenant_id != identity.tenant_id
             || atom.kind != required_kind
             || atom.scope.project_ids.binary_search(project_id).is_err()
-            || !atom_visible_for_reference(&atom, &catalog, observed_at)
+            || !atom_authorized(&partition, &atom, false).map_err(map_handoff_protocol_error)?
         {
             return Err(crate::SpaceHandoffDependencyError::Denied);
         }
+        partition.validate().map_err(map_handoff_retrieval_error)?;
         Ok(crate::ResolvedHandoffReference {
             version_id: atom.version_id,
             kind: expected_kind,
@@ -3230,36 +3878,36 @@ where
     }
 }
 
-fn atom_visible_for_reference(
-    atom: &ContextAtomV1,
-    authorization: &CatalogContextAuthorization,
-    observed_at: UtcTimestamp,
-) -> bool {
-    atom.lifecycle == Lifecycle::Active
-        && atom
-            .scope
-            .project_ids
-            .iter()
-            .any(|project| authorization.project_ids.contains(project))
-        && atom
-            .governance
-            .allowed_purposes
-            .binary_search(&authorization.purpose)
-            .is_ok()
-        && (atom.governance.processor_constraints.is_empty()
-            || atom
-                .governance
-                .processor_constraints
-                .binary_search(&authorization.processor)
-                .is_ok())
-        && atom.governance.classification <= authorization.maximum_classification
-        && atom.governance.instruction_authority <= authorization.maximum_instruction_authority
-        && atom.temporal.valid_from <= observed_at
-        && atom
-            .temporal
-            .valid_until
-            .is_none_or(|valid_until| observed_at < valid_until)
-        && atom.temporal.observed_at <= observed_at
+const fn map_handoff_protocol_error(
+    error: cigar_protocol::ErrorCode,
+) -> crate::SpaceHandoffDependencyError {
+    match error {
+        cigar_protocol::ErrorCode::PolicyDenied | cigar_protocol::ErrorCode::UnknownPrincipal => {
+            crate::SpaceHandoffDependencyError::Denied
+        }
+        cigar_protocol::ErrorCode::InvalidArgument
+        | cigar_protocol::ErrorCode::IntegrityFailure => {
+            crate::SpaceHandoffDependencyError::Invalid
+        }
+        _ => crate::SpaceHandoffDependencyError::Unavailable,
+    }
+}
+
+const fn map_handoff_retrieval_error(error: RetrievalError) -> crate::SpaceHandoffDependencyError {
+    match error.code() {
+        RetrievalErrorCode::Denied => crate::SpaceHandoffDependencyError::Denied,
+        RetrievalErrorCode::InvalidMetadata
+        | RetrievalErrorCode::LimitExceeded
+        | RetrievalErrorCode::CorruptGeneration
+        | RetrievalErrorCode::RequiredCandidateMissing => {
+            crate::SpaceHandoffDependencyError::Invalid
+        }
+        RetrievalErrorCode::IndexUnavailable
+        | RetrievalErrorCode::IndexStale
+        | RetrievalErrorCode::Cancelled
+        | RetrievalErrorCode::DeadlineExceeded
+        | RetrievalErrorCode::ChannelUnavailable => crate::SpaceHandoffDependencyError::Unavailable,
+    }
 }
 
 fn accepted_handoff_reference_ids(
@@ -3343,9 +3991,9 @@ where
 mod tests {
     use super::{
         CatalogContextApplication, CatalogContextAuthorization, CatalogContextAuthorizationError,
-        CatalogContextAuthorizer, ConfiguredSourceRuntime, ContextTokenizerRegistry,
-        PinnedContextTokenizerRegistry, RetainedCompileRecord, SourceConfiguration,
-        SourceDiscoveryPolicyConfiguration,
+        CatalogContextAuthorizer, CatalogErrorCode, ConfiguredSourceRuntime,
+        ContextTokenizerRegistry, PinnedContextTokenizerRegistry, RetainedCompileRecord,
+        SourceConfiguration, SourceDiscoveryPolicyConfiguration, catalog_revision,
     };
     use crate::{
         AuthorityClock, AuthorityError, BlockingPool, DomainIdentityError, DomainIdentityResolver,
@@ -3355,15 +4003,22 @@ mod tests {
         AuthenticatedIdentity, BundleIdRequest, CancellationToken, CompileContextBundleOperation,
         CompileContextBundleRequest, CreateContextPlanOperation, CreateContextPlanRequest,
         DiscoverSourcesOperation, DiscoverSourcesRequest, FacadeErrorFactory,
-        GetSourceStatusOperation, MAX_OPERATION_PAYLOAD_BYTES, MaterializationProfile,
-        MaterializeContextBundleOperation, MaterializeContextBundleRequest, OperationId,
-        PathParameter, PrincipalId, RequestContext, RequestEnvelope,
-        RevalidateContextBundleOperation, SourceIdRequest, TenantId, TraceId, TypedUnaryAdapter,
-        UnaryOperationHandler, decode_operation_payload, encode_operation_payload,
+        GetSourceStatusOperation, IngestCatalogOperation, IngestCatalogRequest,
+        MAX_OPERATION_PAYLOAD_BYTES, MaterializationProfile, MaterializeContextBundleOperation,
+        MaterializeContextBundleRequest, OperationId, PathParameter, PrincipalId, RequestContext,
+        RequestEnvelope, RevalidateContextBundleOperation, SourceIdRequest, TenantId, TraceId,
+        TypedUnaryAdapter, UnaryOperationHandler, decode_operation_payload,
+        encode_operation_payload,
     };
     use cigar_catalog::{
-        AtomizationOutput, AtomizationRequest, Atomizer, AtomizerDescriptor, AtomizerInvalidation,
-        CatalogError, ConnectorContext, LocalFilesystemConnector,
+        Atomizer, FILESYSTEM_CONNECTOR_ID, LocalFilesystemConnector, atomizer_registry_digest,
+    };
+    use cigar_code_intel::{AtomizationProfile, BuiltinAtomizer, BuiltinAtomizerKind};
+    use cigar_compiler::{
+        ExactTokenizer, MaterializationError, ReferenceTokenizer, ReferenceTokenizerProfile,
+    };
+    use cigar_policy::{
+        CapabilityContext, CompiledPolicyEngine, PolicyProfile, PolicyRequest, PolicyResource,
     };
     use cigar_protocol::{
         AtomKind, AtomPayload, Budget, Classification, ContentDigest, ContextAtomV1, ContextBundle,
@@ -3374,16 +4029,310 @@ mod tests {
     };
     use cigar_retrieval::{InMemoryIndexManager, IndexBuild, RetrievalContext};
     use cigar_store::{
-        AccessContext, CancellationToken as StoreCancellationToken, InMemoryStore, ReadTransaction,
-        Repository, ServiceRecordLocator, ServiceRecordSelection, ServiceRepository,
+        AccessContext, CancellationToken as StoreCancellationToken, InMemoryStore, OutboxMessage,
+        ReadTransaction, Repository, ServiceBatch, ServiceExpectedVersion, ServiceRecordLocator,
+        ServiceRecordSelection, ServiceRecordWrite, ServiceRepository, ServiceResponse,
         SnapshotSelection, StoreRevision, WriteTransaction,
     };
     use sha2::{Digest as _, Sha256};
     use std::collections::{BTreeMap, BTreeSet};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    struct ConflictingTokenizer(ContentDigest);
+
+    impl ExactTokenizer for ConflictingTokenizer {
+        fn fingerprint(&self) -> &ContentDigest {
+            &self.0
+        }
+
+        fn count_exact(&self, bytes: &[u8]) -> Result<u32, MaterializationError> {
+            u32::try_from(bytes.len()).map_err(|_error| MaterializationError::LimitExceeded)
+        }
+    }
+
+    struct CountingTokenizer {
+        fingerprint: ContentDigest,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl ExactTokenizer for CountingTokenizer {
+        fn fingerprint(&self) -> &ContentDigest {
+            &self.fingerprint
+        }
+
+        fn count_exact(&self, bytes: &[u8]) -> Result<u32, MaterializationError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            u32::try_from(bytes.len()).map_err(|_error| MaterializationError::LimitExceeded)
+        }
+    }
+
+    struct CountingStore {
+        inner: InMemoryStore,
+        denied_version: VersionId,
+        denied_atom_reads: Arc<AtomicUsize>,
+    }
+
+    struct CountingRead {
+        inner: cigar_store::InMemoryReadTransaction,
+        denied_version: VersionId,
+        denied_atom_reads: Arc<AtomicUsize>,
+    }
+
+    impl ReadTransaction for CountingRead {
+        fn revision(&self) -> StoreRevision {
+            self.inner.revision()
+        }
+
+        fn get_atom(
+            &self,
+            version: &VersionId,
+        ) -> Result<Option<ContextAtomV1>, cigar_store::StoreError> {
+            if version == &self.denied_version {
+                self.denied_atom_reads.fetch_add(1, Ordering::SeqCst);
+            }
+            self.inner.get_atom(version)
+        }
+
+        fn get_atoms_by_id(
+            &self,
+            atom_ids: &[RecordId],
+        ) -> Result<Vec<Option<ContextAtomV1>>, cigar_store::StoreError> {
+            self.inner.get_atoms_by_id(atom_ids)
+        }
+
+        fn get_active_atom_by_id(
+            &self,
+            atom_id: &RecordId,
+        ) -> Result<Option<ContextAtomV1>, cigar_store::StoreError> {
+            self.inner.get_active_atom_by_id(atom_id)
+        }
+
+        fn query_atoms(
+            &self,
+            selector: cigar_store::AtomSelector,
+            limit: usize,
+            cursor: Option<&cigar_store::AtomCursor>,
+        ) -> Result<cigar_store::AtomPage, cigar_store::StoreError> {
+            self.inner.query_atoms(selector, limit, cursor)
+        }
+
+        fn edges_from(
+            &self,
+            version: &VersionId,
+            kind: Option<cigar_protocol::EdgeKind>,
+            limit: usize,
+        ) -> Result<Vec<cigar_protocol::ContextEdge>, cigar_store::StoreError> {
+            self.inner.edges_from(version, kind, limit)
+        }
+
+        fn get_bundle(
+            &self,
+            bundle: &VersionId,
+        ) -> Result<Option<ContextBundle>, cigar_store::StoreError> {
+            self.inner.get_bundle(bundle)
+        }
+
+        fn get_snapshot(
+            &self,
+            snapshot: &RecordId,
+        ) -> Result<Option<cigar_protocol::SourceSnapshot>, cigar_store::StoreError> {
+            self.inner.get_snapshot(snapshot)
+        }
+
+        fn context_commits(
+            &self,
+            space: &cigar_protocol::ContextSpaceId,
+        ) -> Result<Vec<cigar_protocol::ContextCommit>, cigar_store::StoreError> {
+            self.inner.context_commits(space)
+        }
+
+        fn get_effect(
+            &self,
+            effect: &RecordId,
+        ) -> Result<Vec<cigar_protocol::EffectJournalEvent>, cigar_store::StoreError> {
+            self.inner.get_effect(effect)
+        }
+
+        fn get_effect_record(
+            &self,
+            effect: &RecordId,
+        ) -> Result<Option<cigar_store::EffectRecordEnvelope>, cigar_store::StoreError> {
+            self.inner.get_effect_record(effect)
+        }
+
+        fn get_blob(
+            &self,
+            digest: &ContentDigest,
+        ) -> Result<Option<cigar_store::BlobRecord>, cigar_store::StoreError> {
+            self.inner.get_blob(digest)
+        }
+
+        fn outbox(&self) -> Result<Vec<cigar_store::OutboxRecord>, cigar_store::StoreError> {
+            self.inner.outbox()
+        }
+
+        fn idempotent_result(
+            &self,
+            identity: &cigar_store::IdempotencyIdentity,
+        ) -> Result<Option<cigar_store::CommitReceipt>, cigar_store::StoreError> {
+            self.inner.idempotent_result(identity)
+        }
+    }
+
+    impl Repository for CountingStore {
+        type Read<'store>
+            = CountingRead
+        where
+            Self: 'store;
+        type Write<'store>
+            = cigar_store::InMemoryWriteTransaction<'store>
+        where
+            Self: 'store;
+
+        fn begin_read(
+            &self,
+            context: AccessContext,
+            selection: SnapshotSelection,
+            cancellation: StoreCancellationToken,
+        ) -> Result<Self::Read<'_>, cigar_store::StoreError> {
+            Ok(CountingRead {
+                inner: self.inner.begin_read(context, selection, cancellation)?,
+                denied_version: self.denied_version.clone(),
+                denied_atom_reads: Arc::clone(&self.denied_atom_reads),
+            })
+        }
+
+        fn begin_write(
+            &self,
+            context: AccessContext,
+            expected_revision: StoreRevision,
+            cancellation: StoreCancellationToken,
+        ) -> Result<Self::Write<'_>, cigar_store::StoreError> {
+            self.inner
+                .begin_write(context, expected_revision, cancellation)
+        }
+    }
+
+    impl ServiceRepository for CountingStore {
+        fn service_get(
+            &self,
+            locator: &ServiceRecordLocator,
+            selection: ServiceRecordSelection,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<Option<cigar_store::ServiceRecord>, cigar_store::ServiceError> {
+            self.inner.service_get(locator, selection, cancellation)
+        }
+
+        fn service_list(
+            &self,
+            query: &cigar_store::ServiceListQuery,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<cigar_store::ServiceListPage, cigar_store::ServiceError> {
+            self.inner.service_list(query, cancellation)
+        }
+
+        fn service_commit(
+            &self,
+            batch: cigar_store::ServiceBatch,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<cigar_store::ServiceBatchReceipt, cigar_store::ServiceError> {
+            self.inner.service_commit(batch, cancellation)
+        }
+
+        fn effect_recovery(
+            &self,
+            query: &cigar_store::EffectRecoveryQuery,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<cigar_store::EffectRecoveryPage, cigar_store::ServiceError> {
+            self.inner.effect_recovery(query, cancellation)
+        }
+
+        fn outbox_recovery(
+            &self,
+            query: &cigar_store::OutboxRecoveryQuery,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<cigar_store::OutboxRecoveryPage, cigar_store::ServiceError> {
+            self.inner.outbox_recovery(query, cancellation)
+        }
+
+        fn worker_get(
+            &self,
+            locator: &cigar_store::WorkerLocator,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<Option<cigar_store::WorkerState>, cigar_store::ServiceError> {
+            self.inner.worker_get(locator, cancellation)
+        }
+
+        fn worker_update(
+            &self,
+            locator: &cigar_store::WorkerLocator,
+            update: cigar_store::WorkerUpdate,
+            cancellation: &StoreCancellationToken,
+        ) -> Result<cigar_store::WorkerState, cigar_store::ServiceError> {
+            self.inner.worker_update(locator, update, cancellation)
+        }
+    }
+
+    #[test]
+    fn tokenizer_registry_resolves_known_and_rejects_duplicate_conflicting_or_unknown_entries()
+    -> TestResult {
+        let registry = PinnedContextTokenizerRegistry::default();
+        let profile = ReferenceTokenizerProfile::Utf8BytesV1;
+        let target = profile.target_profile(
+            ContentDigest::new(format!("1220{}", "aa".repeat(32)))?,
+            4_096,
+        )?;
+        let tokenizer: Arc<dyn ExactTokenizer + Send + Sync> =
+            Arc::new(ReferenceTokenizer::new(profile)?);
+        let fingerprint = tokenizer.fingerprint().clone();
+        registry.register_for_target(
+            &target.provider,
+            &target.model_family,
+            Arc::clone(&tokenizer),
+        )?;
+        registry.register_for_target(
+            &target.provider,
+            &target.model_family,
+            Arc::clone(&tokenizer),
+        )?;
+        assert!(registry.tokenizer(&target).is_some());
+
+        assert_eq!(
+            registry.register_for_target(
+                &target.provider,
+                &target.model_family,
+                Arc::new(ReferenceTokenizer::new(profile)?),
+            ),
+            Err(CatalogContextAuthorizationError::InvalidDecision)
+        );
+        assert_eq!(
+            registry.register_for_target(
+                &target.provider,
+                &target.model_family,
+                Arc::new(ConflictingTokenizer(fingerprint.clone())),
+            ),
+            Err(CatalogContextAuthorizationError::InvalidDecision)
+        );
+
+        let mut external = target.clone();
+        external.provider = "anthropic".to_owned();
+        assert!(registry.tokenizer(&external).is_none());
+        external.provider = "openai".to_owned();
+        assert!(registry.tokenizer(&external).is_none());
+        let mut cross_paired = target.clone();
+        cross_paired.model_family = ReferenceTokenizerProfile::UnicodeScalarsV1
+            .identifier()
+            .to_owned();
+        assert!(registry.tokenizer(&cross_paired).is_none());
+        let mut unknown = target;
+        unknown.tokenizer_fingerprint = ContentDigest::new(format!("1220{}", "ff".repeat(32)))?;
+        assert!(registry.tokenizer(&unknown).is_none());
+        Ok(())
+    }
 
     struct Errors(RecordId);
 
@@ -3404,7 +4353,10 @@ mod tests {
         }
     }
 
-    struct FixedAuthorizer(CatalogContextAuthorization);
+    struct FixedAuthorizer {
+        authorization: CatalogContextAuthorization,
+        _policy: Arc<CompiledPolicyEngine>,
+    }
 
     impl CatalogContextAuthorizer for FixedAuthorizer {
         fn authorize_catalog(
@@ -3412,7 +4364,7 @@ mod tests {
             _identity: &ResolvedDomainIdentity,
             _observed_at: UtcTimestamp,
         ) -> Result<CatalogContextAuthorization, CatalogContextAuthorizationError> {
-            Ok(self.0.clone())
+            Ok(self.authorization.clone())
         }
 
         fn authorize_contract(
@@ -3424,9 +4376,9 @@ mod tests {
             if contract
                 .project_ids
                 .iter()
-                .all(|project_id| self.0.project_ids.contains(project_id))
+                .all(|project_id| self.authorization.project_ids.contains(project_id))
             {
-                Ok(self.0.clone())
+                Ok(self.authorization.clone())
             } else {
                 Err(CatalogContextAuthorizationError::Denied)
             }
@@ -3443,40 +4395,6 @@ mod tests {
         fn unix_seconds(&self) -> Result<i64, AuthorityError> {
             i64::try_from(self.0.unix_nanos() / 1_000_000_000)
                 .map_err(|_error| AuthorityError::InvalidClock)
-        }
-    }
-
-    struct NoopAtomizer {
-        media_type: MediaType,
-    }
-
-    impl Atomizer for NoopAtomizer {
-        fn descriptor(&self) -> AtomizerDescriptor {
-            AtomizerDescriptor {
-                id: "test.noop".to_owned(),
-                version: "1.0.0".to_owned(),
-                media_types: BTreeSet::from([self.media_type.clone()]),
-                max_input_bytes: 1_048_576,
-                produced_kinds: BTreeSet::from([AtomKind::Documentation]),
-                authority_ceiling: InstructionAuthority::Data,
-                invalidation: AtomizerInvalidation {
-                    source_bytes: true,
-                    source_metadata: true,
-                    adapter_version: true,
-                },
-            }
-        }
-
-        fn atomize(
-            &self,
-            _request: AtomizationRequest<'_>,
-            context: &ConnectorContext,
-        ) -> Result<AtomizationOutput, CatalogError> {
-            context.check()?;
-            Ok(AtomizationOutput {
-                atoms: Vec::new(),
-                edges: Vec::new(),
-            })
         }
     }
 
@@ -3508,6 +4426,92 @@ mod tests {
 
     fn timestamp() -> Result<UtcTimestamp, cigar_protocol::ValidationErrors> {
         UtcTimestamp::parse_rfc3339("2026-07-11T12:00:00Z")
+    }
+
+    fn fixed_authorizer(
+        tenant_id: &RecordId,
+        principal_id: &RecordId,
+        project_id: &RecordId,
+    ) -> Result<Arc<FixedAuthorizer>, Box<dyn std::error::Error>> {
+        let policy = Arc::new(CompiledPolicyEngine::default());
+        let observed_at = timestamp()?;
+        let snapshot = policy.install(
+            PolicyProfile {
+                schema_version: "cigar.policy-profile.v1".to_owned(),
+                revision: 1,
+                protected: true,
+                rules: Vec::new(),
+            },
+            observed_at,
+        )?;
+        let expires_at = UtcTimestamp::from_unix_nanos(
+            observed_at
+                .unix_nanos()
+                .checked_add(60_000_000_000)
+                .ok_or("authorization timestamp overflow")?,
+        )?;
+        let projects = BTreeSet::from([project_id.clone()]);
+        let processors = BTreeSet::from(["local".to_owned()]);
+        let policy_request = PolicyRequest {
+            resource: PolicyResource::Partition,
+            input_digest: digest_bytes(b"catalog-context-test-authorization")?,
+            principal_id: principal_id.clone(),
+            principal_active: true,
+            tenant_id: tenant_id.clone(),
+            authenticated_tenant_id: tenant_id.clone(),
+            project_id: Some(project_id.clone()),
+            allowed_project_ids: projects.clone(),
+            purpose: "coding".to_owned(),
+            allowed_purposes: BTreeSet::from(["coding".to_owned()]),
+            processor: Some("local".to_owned()),
+            allowed_processors: processors.clone(),
+            classification: Classification::Public,
+            maximum_classification: Classification::Internal,
+            residency_allowed: true,
+            egress_allowed: true,
+            lifecycle: Lifecycle::Active,
+            integrity_verified: true,
+            valid_at: observed_at,
+            valid_from: observed_at,
+            valid_until: Some(expires_at),
+            observed_at,
+            observed_as_of: observed_at,
+            freshness_expires_at: None,
+            instruction_authority: InstructionAuthority::Data,
+            maximum_instruction_authority: InstructionAuthority::Project,
+            excluded: false,
+            modality_supported: true,
+            capability: Some(CapabilityContext {
+                subject_id: principal_id.clone(),
+                grant_id: Some(record(900)?),
+                capabilities: BTreeSet::from([cigar_protocol::Capability::CompileContext]),
+                project_ids: projects.clone(),
+                processors,
+                expires_at,
+            }),
+            required_capability: Some(cigar_protocol::Capability::CompileContext),
+            bound_policy_digest: None,
+            effect_risk: None,
+            effect_approved: false,
+            effect_constraints_satisfied: true,
+            fencing_required: false,
+            fencing_verified: false,
+            decision_expires_at: expires_at,
+        };
+        let retrieval_authorization = policy.authorize_retrieval_partition(&[policy_request])?;
+        Ok(Arc::new(FixedAuthorizer {
+            authorization: CatalogContextAuthorization {
+                project_ids: projects,
+                purpose: "coding".to_owned(),
+                processor: "local".to_owned(),
+                maximum_classification: Classification::Internal,
+                maximum_instruction_authority: InstructionAuthority::Project,
+                policy_digest: snapshot.policy_digest,
+                vector_allowed: false,
+                retrieval_authorization,
+            },
+            _policy: policy,
+        }))
     }
 
     fn atom(
@@ -3580,7 +4584,7 @@ mod tests {
                 model_family: "byte-metered".to_owned(),
                 tokenizer_fingerprint: tokenizer,
                 materializer_fingerprint: materializer,
-                max_context_tokens: 256,
+                max_context_tokens: 4_096,
             },
             budget: Budget {
                 total_input_tokens: 128,
@@ -3669,29 +4673,23 @@ mod tests {
                 atoms: vec![atom],
                 edges: Vec::new(),
                 built_through_revision: StoreRevision(1),
+                tenant_watermarks: [(tenant_id.clone(), StoreRevision(1))]
+                    .into_iter()
+                    .collect(),
                 configuration_digest: ContentDigest::new(format!("1220{}", "c".repeat(64)))?,
                 verified_at: timestamp()?,
-                vector_fingerprint: None,
+                vector_binding: None,
             },
             &retrieval_context,
         )?;
         retriever.activate(&descriptor.generation_id, None)?;
         let tokenizer_registry = Arc::new(PinnedContextTokenizerRegistry::default());
-        tokenizer_registry.register_byte_tokenizer(tokenizer)?;
-        let authorization = CatalogContextAuthorization {
-            project_ids: BTreeSet::from([project_id]),
-            purpose: "coding".to_owned(),
-            processor: "local".to_owned(),
-            maximum_classification: Classification::Internal,
-            maximum_instruction_authority: InstructionAuthority::Project,
-            policy_digest: ContentDigest::new(format!("1220{}", "d".repeat(64)))?,
-            vector_allowed: false,
-        };
+        tokenizer_registry.register_byte_tokenizer("local", "byte-metered", tokenizer)?;
+        let authorizer = fixed_authorizer(&tenant_id, &principal_id, &project_id)?;
         let identities = Arc::new(IdentityResolver(ResolvedDomainIdentity {
             tenant_id: tenant_id.clone(),
             principal_id: principal_id.clone(),
         }));
-        let authorizer = Arc::new(FixedAuthorizer(authorization));
         let clock = Arc::new(FixedClock(timestamp()?));
         let errors: Arc<dyn FacadeErrorFactory> = Arc::new(Errors(record(50)?));
         let application = Arc::new(CatalogContextApplication::new(
@@ -3717,6 +4715,327 @@ mod tests {
             tenant_id,
             principal_id,
         })
+    }
+
+    #[test]
+    fn catalog_revision_ignores_later_non_catalog_store_revisions() -> TestResult {
+        let store = InMemoryStore::default();
+        let tenant_id = record(301)?;
+        let access = AccessContext::new(tenant_id.clone(), "coding")?;
+        let mut catalog = store.begin_write(
+            access.clone(),
+            StoreRevision(0),
+            StoreCancellationToken::default(),
+        )?;
+        catalog.publish_atoms(
+            vec![atom(&tenant_id, &record(304)?, "catalog revision")?],
+            Vec::new(),
+        )?;
+        catalog.enqueue_outbox(OutboxMessage {
+            message_id: record(302)?,
+            topic: "catalog.committed".to_owned(),
+            payload_digest: digest_bytes(b"catalog revision")?,
+        })?;
+        assert_eq!(catalog.commit(None)?.revision, StoreRevision(1));
+
+        let bytes = b"unrelated service state".to_vec();
+        let service = ServiceBatch::new(
+            tenant_id,
+            vec![ServiceRecordWrite::new(
+                "context.test-state.v1",
+                record(303)?.as_str(),
+                ServiceExpectedVersion::Absent,
+                bytes.clone(),
+            )?],
+            ServiceResponse::new(200, "application/octet-stream", bytes)?,
+        )?
+        .with_expected_store_revision(StoreRevision(1));
+        assert_eq!(
+            store
+                .service_commit(service, &StoreCancellationToken::default())?
+                .revision,
+            StoreRevision(2)
+        );
+
+        let read = store.begin_read(
+            access,
+            SnapshotSelection::Latest,
+            StoreCancellationToken::default(),
+        )?;
+        assert_eq!(read.revision(), StoreRevision(2));
+        assert_eq!(catalog_revision(&read), Ok(StoreRevision(1)));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn denied_dependency_is_rejected_before_full_atom_or_tokenizer_read() -> TestResult {
+        let tenant_id = record(201)?;
+        let principal_id = record(202)?;
+        let project_id = record(203)?;
+        let parent = atom(&tenant_id, &project_id, "authorized parent")?;
+        let denied_body = "denied dependency payload canary";
+        let mut denied = atom(&tenant_id, &project_id, denied_body)?;
+        denied.atom_id = record(204)?;
+        denied.lineage_id = cigar_protocol::LineageId::new("01890f47-8e7d-7b42-a1d2-000000000205")?;
+        denied.version_id = version(206)?;
+        denied.content_digest = digest_bytes(denied_body.as_bytes())?;
+        denied.payload = AtomPayload::InlineText(denied_body.to_owned());
+        denied.source.uri = SourceUri::new("file:///protected/denied-dependency.md")?;
+        denied.governance.classification = Classification::Restricted;
+        let dependency_edge = cigar_protocol::ContextEdge {
+            schema_version: SchemaVersion::new("cigar.edge", 1)?,
+            edge_id: record(207)?,
+            from_version: parent.version_id.clone(),
+            to_version: denied.version_id.clone(),
+            kind: cigar_protocol::EdgeKind::DependsOn,
+            provenance_digest: digest_bytes(b"dependency provenance")?,
+            lifecycle: Lifecycle::Active,
+            superseded_by: None,
+            extensions: ExtensionMap::default(),
+        };
+
+        let denied_reads = Arc::new(AtomicUsize::new(0));
+        let store = Arc::new(CountingStore {
+            inner: InMemoryStore::default(),
+            denied_version: denied.version_id.clone(),
+            denied_atom_reads: Arc::clone(&denied_reads),
+        });
+        let access = AccessContext::new(tenant_id.clone(), "coding")?;
+        let mut write =
+            store.begin_write(access, StoreRevision(0), StoreCancellationToken::default())?;
+        write.publish_atoms(
+            vec![parent.clone(), denied.clone()],
+            vec![dependency_edge.clone()],
+        )?;
+        write.commit(None)?;
+
+        let retriever = Arc::new(InMemoryIndexManager::default());
+        let retrieval_context = RetrievalContext {
+            cancellation: StoreCancellationToken::default(),
+            deadline: Instant::now() + Duration::from_secs(10),
+        };
+        let descriptor = retriever.build_generation(
+            IndexBuild {
+                atoms: vec![parent.clone(), denied.clone()],
+                edges: vec![dependency_edge],
+                built_through_revision: StoreRevision(1),
+                tenant_watermarks: [(tenant_id.clone(), StoreRevision(1))]
+                    .into_iter()
+                    .collect(),
+                configuration_digest: digest_bytes(b"denied-dependency-index")?,
+                verified_at: timestamp()?,
+                vector_binding: None,
+            },
+            &retrieval_context,
+        )?;
+        retriever.activate(&descriptor.generation_id, None)?;
+
+        let tokenizer_fingerprint = digest_bytes(b"counting-tokenizer")?;
+        let tokenizer_calls = Arc::new(AtomicUsize::new(0));
+        let tokenizers = Arc::new(PinnedContextTokenizerRegistry::default());
+        tokenizers.register_for_target(
+            "local",
+            "byte-metered",
+            Arc::new(CountingTokenizer {
+                fingerprint: tokenizer_fingerprint.clone(),
+                calls: Arc::clone(&tokenizer_calls),
+            }),
+        )?;
+        let materializer = digest_bytes(b"cigar.materializer.json.v1")?;
+        let compile_contract = contract(
+            record(299)?,
+            project_id.clone(),
+            parent.version_id,
+            tokenizer_fingerprint,
+            materializer,
+        )?;
+        let authorizer = fixed_authorizer(&tenant_id, &principal_id, &project_id)?;
+        let identities = Arc::new(IdentityResolver(ResolvedDomainIdentity {
+            tenant_id,
+            principal_id,
+        }));
+        let errors: Arc<dyn FacadeErrorFactory> = Arc::new(Errors(record(208)?));
+        let clock = Arc::new(FixedClock(timestamp()?));
+        let application = Arc::new(CatalogContextApplication::new(
+            Arc::clone(&store),
+            identities,
+            authorizer,
+            retriever,
+            tokenizers,
+            Arc::new(BlockingPool::new(2, 2)?),
+            clock.clone(),
+            Arc::clone(&errors),
+        ));
+        let adapter = TypedUnaryAdapter::<CreateContextPlanOperation, _>::new(application, errors);
+        let request = RequestEnvelope::new(
+            "createContextPlan",
+            encode_operation_payload(
+                &CreateContextPlanRequest {
+                    contract: compile_contract,
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some("denied-dependency-key".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let error = adapter
+            .call(request_context("createContextPlan", clock.0)?, request)
+            .await
+            .err()
+            .ok_or("denied dependency unexpectedly succeeded")?;
+        assert_eq!(error.code(), cigar_protocol::ErrorCode::PolicyDenied);
+        assert_eq!(denied_reads.load(Ordering::SeqCst), 0);
+        assert_eq!(tokenizer_calls.load(Ordering::SeqCst), 0);
+        let diagnostic = format!("{error:?} {error}");
+        assert!(!diagnostic.contains(denied_body));
+        assert!(!diagnostic.contains(denied.version_id.as_str()));
+        assert!(!diagnostic.contains(denied.source.uri.as_str()));
+        Ok(())
+    }
+
+    #[test]
+    fn wildcard_record_governance_uses_the_opaque_policy_gate() -> TestResult {
+        let tenant_id = record(220)?;
+        let principal_id = record(221)?;
+        let project_id = record(222)?;
+        let authorizer = fixed_authorizer(&tenant_id, &principal_id, &project_id)?;
+        let partition = cigar_retrieval::AuthorizedPartition::from_policy_authorization(
+            authorizer.authorization.retrieval_authorization.clone(),
+        )?;
+        let mut wildcard = atom(&tenant_id, &project_id, "wildcard governed body")?;
+        wildcard.governance.allowed_purposes = vec!["*".to_owned()];
+        assert!(
+            super::atom_authorized(&partition, &wildcard, true)
+                .map_err(|error| format!("wildcard authorization failed: {error:?}"))?
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn revocation_after_compile_hides_retained_bundle_and_materialization() -> TestResult {
+        let fixture = fixture()?;
+        let adapter = TypedUnaryAdapter::<CreateContextPlanOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let request = RequestEnvelope::new(
+            "createContextPlan",
+            encode_operation_payload(
+                &CreateContextPlanRequest {
+                    contract: fixture.contract.clone(),
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some("revocation-plan-key".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let response = adapter
+            .call(
+                request_context("createContextPlan", fixture.clock.0)?,
+                request,
+            )
+            .await?;
+        let plan: cigar_api::ContextPlanResponse =
+            decode_operation_payload(response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
+        let source_version = match &fixture
+            .contract
+            .requirements
+            .first()
+            .ok_or("fixture requirement missing")?
+            .selector
+        {
+            RequirementSelector::Exact(version_id) => version_id.clone(),
+            RequirementSelector::Query(_) => return Err("fixture selector changed".into()),
+        };
+        let read = fixture.store.begin_read(
+            AccessContext::new(fixture.tenant_id.clone(), "coding")?,
+            SnapshotSelection::Latest,
+            StoreCancellationToken::default(),
+        )?;
+        let selected = read
+            .get_atom(&source_version)?
+            .ok_or("fixture atom missing")?;
+        fixture.authorizer._policy.revoke_resource(
+            selected.content_digest.clone(),
+            UtcTimestamp::from_unix_nanos(
+                fixture
+                    .clock
+                    .0
+                    .unix_nanos()
+                    .checked_add(1_000_000_000)
+                    .ok_or("revocation time overflow")?,
+            )?,
+        )?;
+
+        let bundle_adapter = TypedUnaryAdapter::<CompileContextBundleOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let bundle_request = RequestEnvelope::new(
+            "compileContextBundle",
+            encode_operation_payload(
+                &CompileContextBundleRequest {
+                    plan_id: plan.plan.plan_id,
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some("revoked-bundle-key".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let bundle_error = bundle_adapter
+            .call(
+                request_context("compileContextBundle", fixture.clock.0)?,
+                bundle_request,
+            )
+            .await
+            .err()
+            .ok_or("revoked bundle unexpectedly returned")?;
+        assert_eq!(bundle_error.code(), cigar_protocol::ErrorCode::PolicyDenied);
+
+        let bundle_id = plan.bundle_id;
+        let materialize_adapter = TypedUnaryAdapter::<MaterializeContextBundleOperation, _>::new(
+            fixture.application,
+            Arc::clone(&fixture.errors),
+        );
+        let materialize_request = RequestEnvelope::new(
+            "materializeContextBundle",
+            encode_operation_payload(
+                &MaterializeContextBundleRequest {
+                    bundle_id: bundle_id.clone(),
+                    profile: MaterializationProfile::CanonicalJson,
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some("revoked-materialize-key".to_owned()),
+            None,
+            None,
+            None,
+            vec![PathParameter::new("bundle_id", bundle_id.as_str())?],
+        )?;
+        let materialize_error = materialize_adapter
+            .call(
+                request_context("materializeContextBundle", fixture.clock.0)?,
+                materialize_request,
+            )
+            .await
+            .err()
+            .ok_or("revoked body unexpectedly materialized")?;
+        assert_eq!(materialize_error.code(), bundle_error.code());
+        let diagnostic =
+            format!("{bundle_error:?} {bundle_error} {materialize_error:?} {materialize_error}");
+        assert!(!diagnostic.contains("retained documentation"));
+        assert!(!diagnostic.contains(selected.content_digest.as_str()));
+        assert!(!diagnostic.contains(selected.source.uri.as_str()));
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -3899,6 +5218,146 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn physical_target_overflow_is_publicly_rejected_and_restart_idempotent() -> TestResult {
+        let mut fixture = fixture()?;
+        fixture.contract.target.max_context_tokens = 256;
+        let plan_adapter = TypedUnaryAdapter::<CreateContextPlanOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let plan_request = RequestEnvelope::new(
+            "createContextPlan",
+            encode_operation_payload(
+                &CreateContextPlanRequest {
+                    contract: fixture.contract.clone(),
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some("overflow-plan-key".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let plan_response = plan_adapter
+            .call(
+                request_context("createContextPlan", fixture.clock.0)?,
+                plan_request,
+            )
+            .await?;
+        let plan: cigar_api::ContextPlanResponse =
+            decode_operation_payload(plan_response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
+
+        let materialize_payload = MaterializeContextBundleRequest {
+            bundle_id: plan.bundle_id.clone(),
+            profile: MaterializationProfile::CanonicalJson,
+        };
+        let materialize_adapter = TypedUnaryAdapter::<MaterializeContextBundleOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let materialize_request = RequestEnvelope::new(
+            "materializeContextBundle",
+            encode_operation_payload(&materialize_payload, MAX_OPERATION_PAYLOAD_BYTES)?,
+            Some("overflow-materialize-key".to_owned()),
+            None,
+            None,
+            None,
+            vec![PathParameter::new("bundle_id", plan.bundle_id.as_str())?],
+        )?;
+        let error = materialize_adapter
+            .call(
+                request_context("materializeContextBundle", fixture.clock.0)?,
+                materialize_request,
+            )
+            .await
+            .err()
+            .ok_or("physical target overflow unexpectedly materialized")?;
+        assert_eq!(error.code(), cigar_protocol::ErrorCode::BudgetUnsatisfiable);
+
+        let locator = cigar_store::WorkerLocator::new(
+            fixture.tenant_id.clone(),
+            "context-target-overflow-v1",
+        )?;
+        let before_restart = fixture
+            .store
+            .worker_get(&locator, &StoreCancellationToken::default())?
+            .ok_or("missing physical-overflow checkpoint")?;
+        assert!(before_restart.lease_owner().is_none());
+        let diagnostic: serde_json::Value = serde_json::from_slice(before_restart.cursor())?;
+        let diagnostic = diagnostic
+            .as_object()
+            .ok_or("physical-overflow checkpoint was not an object")?;
+        assert_eq!(
+            diagnostic
+                .get("schema_version")
+                .and_then(serde_json::Value::as_str),
+            Some("cigar.target-overflow-repair.v1")
+        );
+        assert_eq!(
+            diagnostic
+                .get("bundle_id")
+                .and_then(serde_json::Value::as_str),
+            Some(plan.bundle_id.as_str())
+        );
+        assert_eq!(
+            diagnostic
+                .get("maximum_input_tokens")
+                .and_then(serde_json::Value::as_u64),
+            Some(256)
+        );
+        assert!(
+            diagnostic
+                .get("observed_tokens")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|observed| observed > 256)
+        );
+        assert!(
+            !String::from_utf8_lossy(before_restart.cursor()).contains("retained documentation")
+        );
+
+        let restarted = Arc::new(CatalogContextApplication::new(
+            Arc::clone(&fixture.store),
+            fixture.identities.clone(),
+            fixture.authorizer.clone(),
+            fixture.retriever.clone(),
+            fixture.tokenizer_registry.clone() as Arc<dyn ContextTokenizerRegistry>,
+            Arc::new(BlockingPool::new(2, 2)?),
+            fixture.clock.clone(),
+            Arc::clone(&fixture.errors),
+        ));
+        let restarted_adapter = TypedUnaryAdapter::<MaterializeContextBundleOperation, _>::new(
+            restarted,
+            Arc::clone(&fixture.errors),
+        );
+        let retry_request = RequestEnvelope::new(
+            "materializeContextBundle",
+            encode_operation_payload(&materialize_payload, MAX_OPERATION_PAYLOAD_BYTES)?,
+            Some("overflow-materialize-restart-key".to_owned()),
+            None,
+            None,
+            None,
+            vec![PathParameter::new("bundle_id", plan.bundle_id.as_str())?],
+        )?;
+        let retry_error = restarted_adapter
+            .call(
+                request_context("materializeContextBundle", fixture.clock.0)?,
+                retry_request,
+            )
+            .await
+            .err()
+            .ok_or("physical target overflow materialized after restart")?;
+        assert_eq!(retry_error.code(), error.code());
+        let after_restart = fixture
+            .store
+            .worker_get(&locator, &StoreCancellationToken::default())?
+            .ok_or("physical-overflow checkpoint disappeared")?;
+        assert_eq!(after_restart.version(), before_restart.version());
+        assert_eq!(after_restart.cursor(), before_restart.cursor());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn source_configuration_and_discovery_are_tenant_durable_and_dry_run_safe() -> TestResult
     {
         let directory = tempfile::tempdir()?;
@@ -3909,45 +5368,110 @@ mod tests {
         let source_id = record(104)?;
         let root = SourceUri::new("file:///tenant-source")?;
         let media_type = MediaType::new("text/markdown")?;
+        let atomization_profile = AtomizationProfile {
+            scope: ScopeEnvelope {
+                tenant_id: tenant_id.clone(),
+                project_ids: vec![project_id.clone()],
+            },
+            governance: GovernanceEnvelope {
+                classification: Classification::Internal,
+                allowed_purposes: vec!["coding".to_owned()],
+                processor_constraints: Vec::new(),
+                instruction_authority: InstructionAuthority::Data,
+            },
+            quality: QualityEnvelope {
+                confidence: FixedPoint::new(FixedPoint::ONE)?,
+                coverage: FixedPoint::new(FixedPoint::ONE)?,
+                authority: 1,
+            },
+            lexical_enabled: true,
+            embedding_eligible: false,
+        };
         let connector = Arc::new(LocalFilesystemConnector::new(
             directory.path(),
             root.clone(),
         )?);
-        let runtime = Arc::new(ConfiguredSourceRuntime::new(
-            SourceConfiguration {
-                schema_version: "cigar.source-configuration.v1".to_owned(),
-                source_id: source_id.clone(),
-                root,
-                connector_identity: "local-filesystem.v1".to_owned(),
-                discovery_policy: SourceDiscoveryPolicyConfiguration {
-                    max_items: 100,
-                    max_total_bytes: 1_048_576,
-                    max_record_bytes: 1_048_576,
-                    excluded_prefixes: Vec::new(),
-                    allowed_media_types: BTreeSet::from([media_type.clone()]),
-                    allow_user_broadening: false,
-                    follow_internal_symlinks: false,
-                    secret_patterns: Vec::new(),
-                },
+        let atomizer = Arc::new(BuiltinAtomizer::new(
+            BuiltinAtomizerKind::Markdown,
+            atomization_profile.clone(),
+        )?);
+        let atomization_profile_digest = atomizer_registry_digest(&[atomizer.descriptor()])?;
+        let source_configuration = SourceConfiguration {
+            schema_version: "cigar.source-configuration.v1".to_owned(),
+            source_id: source_id.clone(),
+            root: root.clone(),
+            connector_identity: FILESYSTEM_CONNECTOR_ID.to_owned(),
+            atomization_profile_digest,
+            discovery_policy: SourceDiscoveryPolicyConfiguration {
+                max_items: 100,
+                max_total_bytes: 1_048_576,
+                max_record_bytes: 1_048_576,
+                excluded_prefixes: Vec::new(),
+                allowed_media_types: BTreeSet::from([media_type.clone()]),
+                allow_user_broadening: false,
+                follow_internal_symlinks: false,
+                secret_patterns: Vec::new(),
             },
+        };
+        let mismatched_connector = Arc::new(LocalFilesystemConnector::new(
+            directory.path(),
+            SourceUri::new("file:///substituted-root")?,
+        )?);
+        assert_eq!(
+            ConfiguredSourceRuntime::new(
+                source_configuration.clone(),
+                mismatched_connector,
+                vec![atomizer.clone()],
+            )
+            .err()
+            .map(|error| error.code()),
+            Some(CatalogErrorCode::InvalidMetadata)
+        );
+        let mut substituted_profile = source_configuration.clone();
+        substituted_profile.atomization_profile_digest =
+            ContentDigest::new(format!("1220{}", "f".repeat(64)))?;
+        assert_eq!(
+            ConfiguredSourceRuntime::new(
+                substituted_profile,
+                connector.clone(),
+                vec![atomizer.clone()],
+            )
+            .err()
+            .map(|error| error.code()),
+            Some(CatalogErrorCode::InvalidMetadata)
+        );
+        let json_atomizer = Arc::new(BuiltinAtomizer::new(
+            BuiltinAtomizerKind::StructuredJson,
+            atomization_profile,
+        )?);
+        let mut oversized_for_atomizer = source_configuration.clone();
+        oversized_for_atomizer.discovery_policy.allowed_media_types =
+            BTreeSet::from([MediaType::new("application/json")?]);
+        oversized_for_atomizer.discovery_policy.max_record_bytes = 2_000_000;
+        oversized_for_atomizer.discovery_policy.max_total_bytes = 2_000_000;
+        oversized_for_atomizer.atomization_profile_digest =
+            atomizer_registry_digest(&[json_atomizer.descriptor()])?;
+        assert_eq!(
+            ConfiguredSourceRuntime::new(
+                oversized_for_atomizer,
+                connector.clone(),
+                vec![json_atomizer],
+            )
+            .err()
+            .map(|error| error.code()),
+            Some(CatalogErrorCode::InvalidMetadata)
+        );
+        let runtime = Arc::new(ConfiguredSourceRuntime::new(
+            source_configuration,
             connector,
-            vec![Arc::new(NoopAtomizer { media_type })],
+            vec![atomizer],
         )?);
         let store = Arc::new(InMemoryStore::default());
-        let authorization = CatalogContextAuthorization {
-            project_ids: BTreeSet::from([project_id]),
-            purpose: "coding".to_owned(),
-            processor: "local".to_owned(),
-            maximum_classification: Classification::Internal,
-            maximum_instruction_authority: InstructionAuthority::Project,
-            policy_digest: ContentDigest::new(format!("1220{}", "e".repeat(64)))?,
-            vector_allowed: false,
-        };
+        let authorizer = fixed_authorizer(&tenant_id, &principal_id, &project_id)?;
         let identities = Arc::new(IdentityResolver(ResolvedDomainIdentity {
             tenant_id: tenant_id.clone(),
-            principal_id,
+            principal_id: principal_id.clone(),
         }));
-        let authorizer = Arc::new(FixedAuthorizer(authorization));
         let retriever = Arc::new(InMemoryIndexManager::default());
         let tokenizers = Arc::new(PinnedContextTokenizerRegistry::default());
         let clock = Arc::new(FixedClock(timestamp()?));
@@ -4028,6 +5552,70 @@ mod tests {
             decode_operation_payload(actual_response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
         assert_eq!(actual_plan, dry_plan);
         assert_eq!(store.revision()?, StoreRevision(2));
+
+        let ingest_adapter = TypedUnaryAdapter::<IngestCatalogOperation, _>::new(
+            Arc::clone(&restarted),
+            Arc::clone(&errors),
+        );
+        let ingest_payload = IngestCatalogRequest {
+            source_id: source_id.clone(),
+            plan_digest: actual_plan.plan_digest.clone(),
+        };
+        std::fs::write(
+            directory.path().join("README.md"),
+            b"substituted documentation",
+        )?;
+        let substituted_request = RequestEnvelope::new(
+            "ingestCatalog",
+            encode_operation_payload(&ingest_payload, MAX_OPERATION_PAYLOAD_BYTES)?,
+            Some("catalog-substitution-fixture".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let substitution_error = ingest_adapter
+            .call(
+                request_context("ingestCatalog", clock.0)?,
+                substituted_request,
+            )
+            .await
+            .err()
+            .ok_or("changed source crossed the accepted discovery boundary")?;
+        assert_eq!(
+            substitution_error.code(),
+            cigar_protocol::ErrorCode::SnapshotIncomplete
+        );
+        assert_eq!(store.revision()?, StoreRevision(2));
+        std::fs::write(directory.path().join("README.md"), b"bounded documentation")?;
+        let ingest_request = RequestEnvelope::new(
+            "ingestCatalog",
+            encode_operation_payload(&ingest_payload, MAX_OPERATION_PAYLOAD_BYTES)?,
+            Some("catalog-transaction-fixture-1".to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let ingestion = ingest_adapter
+            .call(request_context("ingestCatalog", clock.0)?, ingest_request)
+            .await?;
+        let ingestion: cigar_api::IngestionReceiptResponse =
+            decode_operation_payload(ingestion.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
+        assert!(ingestion.published_atoms > 0);
+        assert_eq!(ingestion.tombstoned_atoms, 0);
+        assert_eq!(ingestion.revision, 3);
+        let catalog = store.begin_read(
+            AccessContext::new(tenant_id.clone(), "coding")?,
+            SnapshotSelection::Latest,
+            StoreCancellationToken::default(),
+        )?;
+        assert!(
+            catalog
+                .outbox()?
+                .iter()
+                .any(|record| record.message.topic == "catalog.committed")
+        );
         let discovery_locator =
             ServiceRecordLocator::new(tenant_id, super::DISCOVERY_NAMESPACE, source_id.as_str())?;
         assert!(

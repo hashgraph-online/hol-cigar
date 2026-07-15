@@ -1,4 +1,4 @@
-.TH CIGAR 1 "2026-07-12" "CIGAR 0.1.0" "User Commands"
+.TH CIGAR 1 "2026-07-12" "CIGAR 1.0.0-dev.1" "User Commands"
 .SH NAME
 cigar \- deterministic context, coordination, effect, and replay client
 .SH SYNOPSIS
@@ -14,10 +14,40 @@ Mutations require explicit confirmation and support dry run.
 Select human or versioned JSON output.
 .TP
 .BI --deadline " Nms|Ns|Nm"
-Bound the complete operation.
+Bound the complete operation, up to five minutes.
+.TP
+.BI --config " path"
+Add an explicit CLI configuration layer.
 .TP
 .BI --target " embedded|local|remote"
 Select an explicit execution target.
+.TP
+.BR --embedded ,
+.BR --local ,
+or
+.BI --remote " URL"
+Select a target directly. The remote shortcut requires its HTTPS URL.
+.TP
+.BI --endpoint " URL"
+Override the selected target endpoint.
+.TP
+.BI --authorization-file " path"
+Read bounded authorization material from a protected regular file.
+.TP
+.BI --input " path"
+Read the strict JSON operation request from a bounded regular file.
+.TP
+.BI --idempotency-key " key"
+Reuse one exact mutation reservation.
+.TP
+.BI --expected-revision " revision"
+Bind an optimistic mutation to one exact revision.
+.TP
+.BI --page-cursor " cursor"
+Continue a bounded listing from an opaque cursor.
+.TP
+.BI --page-size " 1..1000"
+Bound one listing page.
 .TP
 .B --dry-run
 Validate and authorize a mutation without committing it.
@@ -25,8 +55,27 @@ Validate and authorize a mutation without committing it.
 .B --yes
 Confirm a reviewed state change.
 .TP
+.B --confirm
+Alias of
+.BR --yes .
+.TP
 .B --non-interactive
 Disable prompting; unconfirmed mutations fail.
+.TP
+.B --quiet
+Disable progress output.
+.TP
+.BI --color " auto|always|never"
+Control optional terminal color.
+.TP
+.BI --unicode " auto|always|never"
+Control optional Unicode status glyphs.
+.TP
+.BI --width " 20..1000"
+Bound human-readable layout width.
+.TP
+.B --explain-config
+Print effective configuration values and their provenance.
 .TP
 .B --security
 Run the bounded local security checks supported by
@@ -35,6 +84,14 @@ Run the bounded local security checks supported by
 .B --deep
 Run the complete content-integrity and projection checks supported by
 .BR doctor .
+.TP
+.BR --help ,
+.B -h
+Show command help.
+.TP
+.BR --version ,
+.B -V
+Show stable build metadata.
 .SH COMMANDS
 .TP
 .B init
@@ -46,6 +103,10 @@ operations.
 .TP
 .B ingest
 Ingest an accepted discovery plan.
+.TP
+.B catalog query
+Query authorized catalog metadata through the frozen governed retrieval
+operation.
 .TP
 .B status
 Report structured target readiness.
@@ -76,20 +137,43 @@ Reconstruct and evaluate replay jobs.
 Evaluate or explain the explicit local production policy profile.
 .TP
 .B backup create|verify|restore
-Create or verify a signed production archive, or restore it to an explicit
-empty target.
+Create or verify a signed format-two production archive containing the exact
+effect checkpoint, or restore it to an explicit empty target only when that
+checkpoint still equals current external monotonic truth.
 Create and verify take one archive path; restore takes the archive and target
 paths.
 .TP
 .B gc plan|run
 Plan or execute bounded, repository-owned encrypted-blob mark-and-sweep.
-Physical deletion requires a versioned JSON policy document proving expired
-retention and replay windows, no legal hold, a completed backup policy, and a
-positive bounded file limit.
+Plan takes a new signed-plan path and an optional versioned JSON policy
+document; run takes that owner-private plan. Physical deletion requires a
+current trusted signature, the exact planned repository revision and candidate
+set, expired retention and replay windows, no legal hold, a completed backup
+policy, and a positive bounded file limit. Before first deletion, run durably
+records an owner-private database-and-plan execution marker. An interrupted run
+may accept already-absent signed candidates only with that exact marker; newly
+visible orphans are retained.
 .TP
 .BI "diagnostics bundle " archive
 Create a deterministic, content-free support archive containing only bounded
 build, configuration, platform, inventory, and diagnostic metadata.
+.TP
+.BI "state inspect-beta " state.json
+Strictly inspect an owner-only regular 0.1.0-beta.1 state file. The content-free
+plan binds its bytes, generation, and entry counts without emitting identifiers
+or paths. It never rewrites the input.
+.TP
+.BI "state import-beta " "state.json new-backup-directory"
+On macOS, verify frozen beta semantics, atomically publish and re-verify
+an exact-byte owner-private backup, and then atomically publish the
+configured new full-only state directory. Requires confirmation. The
+imported schema blocks in-place beta downgrade.
+.TP
+.B "state restore-beta"
+.I "verified-backup-directory new-empty-recovery-directory"
+On macOS, re-verify a transition backup and restore its exact beta bytes
+into a distinct new empty recovery directory. The configured active full
+state is never rewritten.
 .TP
 .B doctor [--security] [--deep]
 Report actionable component diagnostics. Security mode validates protected
@@ -110,6 +194,18 @@ catalog data.
 .TP
 .B release verify
 Delegate offline release verification to the authoritative installed task.
+.TP
+.BI "completion " "bash|zsh|fish"
+Emit the checked shell-completion asset for the selected shell.
+.TP
+.B man
+Emit this checked manual page.
+.TP
+.B help
+Show the complete command and global-option surface.
+.TP
+.B version
+Show stable build metadata.
 .SH SECURITY
 Authorization material is read from a bounded regular file and is never emitted.
 JSON errors contain only stable public codes, messages, and remediation.

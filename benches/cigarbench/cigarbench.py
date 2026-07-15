@@ -28,6 +28,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Never
 
+HARNESS_ROOT = Path(__file__).resolve().parents[2]
+RELEASE_TOOLS = HARNESS_ROOT / "scripts" / "release"
+if str(RELEASE_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_TOOLS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    digest_secure_file,
+    safe_relative_path as safe_evidence_path,
+)
+
 SCHEMA = "cigar.benchmark-event.v1"
 PLAN_SCHEMA = "cigar.benchmark-plan.v1"
 REPORT_SCHEMA = "cigar.benchmark-report.v1"
@@ -105,6 +117,108 @@ class BenchError(Exception):
 
 def fail(message: str) -> Never:
     raise BenchError(message)
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment and Path(argument) != Path(environment):
+        fail("--evidence-dir conflicts with CIGAR_EVIDENCE_DIR")
+    selected = argument if argument is not None else environment
+    if selected is None or os.fspath(selected) == "":
+        return None
+    path = Path(selected)
+    if not path.is_absolute():
+        fail("benchmark evidence directory must be absolute")
+    return path
+
+
+class EvidenceExecution:
+    """Stage one command output before create-new external publication."""
+
+    def __init__(
+        self,
+        workspace: EvidenceWorkspace | None,
+        relative_output: str | None,
+        temporary: tempfile.TemporaryDirectory[str] | None,
+    ) -> None:
+        self.workspace = workspace
+        self.relative_output = relative_output
+        self.temporary = temporary
+
+    @classmethod
+    def open(cls, arguments: argparse.Namespace) -> EvidenceExecution:
+        selected = selected_evidence_directory(arguments)
+        if selected is None:
+            return cls(None, None, None)
+        workspace = EvidenceWorkspace.create(selected, repository_root=HARNESS_ROOT)
+        temporary: tempfile.TemporaryDirectory[str] | None = None
+        try:
+            relative_output: str | None = None
+            output = getattr(arguments, "output", None)
+            if output is not None:
+                try:
+                    relative_output = "/".join(safe_evidence_path(os.fspath(output)))
+                except EvidenceWorkspaceError as error:
+                    raise BenchError(
+                        "benchmark evidence output path is unsafe"
+                    ) from error
+                temporary = tempfile.TemporaryDirectory(prefix="cigarbench-evidence-")
+                staging_root = Path(temporary.name).resolve(strict=True)
+                # Raw benchmark attachments are unpublished and must remain owner-private.
+                os.chmod(staging_root, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+                staged = staging_root / "output"
+                arguments.output = staged
+            return cls(workspace, relative_output, temporary)
+        except BaseException:
+            if temporary is not None:
+                temporary.cleanup()
+            workspace.close()
+            raise
+
+    def publish(self, command: str) -> None:
+        if self.workspace is None:
+            return
+        attachment: dict[str, object] | None = None
+        if self.relative_output is not None:
+            if self.temporary is None:
+                fail("benchmark evidence staging is unavailable")
+            staged = Path(self.temporary.name).resolve(strict=True) / "output"
+            expected = digest_secure_file(staged, max_bytes=MAX_INPUT_BYTES)
+            published = self.workspace.attach_file(
+                staged,
+                self.relative_output,
+                expected_sha256=expected.sha256,
+                expected_bytes=expected.bytes,
+            )
+            attachment = published.as_dict()
+            receipt_path = f"{self.relative_output}.receipt.json"
+        else:
+            receipt_path = f"cigarbench/{command}.receipt.json"
+        tool = digest_secure_file(
+            Path(__file__).resolve(strict=True), max_bytes=MAX_INPUT_BYTES
+        )
+        self.workspace.write_json(
+            receipt_path,
+            {
+                "schema_version": "cigar.benchmark-evidence-publication.v1",
+                "command": command,
+                "status": "passed",
+                "qualifying_evidence": False,
+                "source_descriptor_bound": False,
+                "tool": {
+                    "sha256": tool.sha256,
+                    "bytes": tool.bytes,
+                },
+                "output": attachment,
+            },
+        )
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
+        if self.temporary is not None:
+            self.temporary.cleanup()
 
 
 def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -1796,6 +1910,8 @@ def execute_plan(args: argparse.Namespace) -> int:
 
 
 def capture_command(command: list[str]) -> str:
+    environment = dict(os.environ)
+    environment.pop("CIGAR_EVIDENCE_DIR", None)
     with tempfile.TemporaryFile() as output:
         try:
             subprocess.run(
@@ -1804,6 +1920,7 @@ def capture_command(command: list[str]) -> str:
                 stderr=subprocess.STDOUT,
                 timeout=10,
                 check=False,
+                env=environment,
             )
         except (OSError, subprocess.TimeoutExpired):
             return "unavailable"
@@ -1942,25 +2059,23 @@ def replay_report(args: argparse.Namespace) -> int:
         or sha256_multihash(canonical_bytes(unsigned)) != supplied_digest
     ):
         fail("benchmark report digest is invalid")
-    temporary = args.report.with_name(f".{args.report.name}.reproduced.{os.getpid()}")
-    replay_args = argparse.Namespace(
-        events=args.events,
-        plan=args.plan,
-        datasets=args.datasets,
-        baselines=args.baselines,
-        canaries=args.canaries,
-        environment=args.environment,
-        seed_file=args.seed_file,
-        attestation_key_file=args.attestation_key_file,
-        bootstrap_repetitions=repetitions,
-        output=temporary,
-        require_qualification=False,
-    )
-    try:
+    with tempfile.TemporaryDirectory(prefix="cigarbench-replay-") as directory:
+        temporary = Path(directory) / "report.json"
+        replay_args = argparse.Namespace(
+            events=args.events,
+            plan=args.plan,
+            datasets=args.datasets,
+            baselines=args.baselines,
+            canaries=args.canaries,
+            environment=args.environment,
+            seed_file=args.seed_file,
+            attestation_key_file=args.attestation_key_file,
+            bootstrap_repetitions=repetitions,
+            output=temporary,
+            require_qualification=False,
+        )
         compare(replay_args)
         actual = load_json(temporary)
-    finally:
-        temporary.unlink(missing_ok=True)
     if canonical_bytes(actual) != canonical_bytes(expected):
         fail("report does not reproduce exactly from raw events")
     return 0
@@ -2048,6 +2163,11 @@ def guard_profiles(args: argparse.Namespace) -> int:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     commands = result.add_subparsers(dest="command", required=True)
 
     manifest_digest = commands.add_parser(
@@ -2177,14 +2297,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             "cigarbench: bootstrap repetition count is outside bounds", file=sys.stderr
         )
         return 2
+    evidence: EvidenceExecution | None = None
     try:
-        return int(args.function(args))
+        evidence = EvidenceExecution.open(args)
+        status = int(args.function(args))
+        if status == 0:
+            evidence.publish(args.command)
+        return status
     except BenchError as error:
         print(f"cigarbench: {error}", file=sys.stderr)
         return 2
-    except OSError:
+    except (EvidenceWorkspaceError, OSError):
         print("cigarbench: local artifact operation failed", file=sys.stderr)
         return 2
+    finally:
+        if evidence is not None:
+            evidence.close()
 
 
 if __name__ == "__main__":

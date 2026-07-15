@@ -1,10 +1,12 @@
 //! Backend-neutral source discovery, streaming, atomization, and invalidation contracts.
 
 use cigar_protocol::{
-    AtomKind, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority, MediaType, RecordId,
-    RelativePath, SourceSnapshot, SourceUri, VersionId,
+    AtomKind, Classification, ContentDigest, ContextAtomV1, ContextEdge, GovernanceEnvelope,
+    InstructionAuthority, MediaType, QualityEnvelope, RecordId, RelativePath, ScopeEnvelope,
+    SourceSnapshot, SourceUri, VersionId,
 };
 use cigar_store::{CancellationToken, StoreRevision};
+use sha2::{Digest as _, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::time::Instant;
@@ -13,10 +15,97 @@ use std::time::Instant;
 pub const MAX_CONNECTOR_ITEMS: usize = 100_000;
 /// Maximum bytes returned by one bounded source read.
 pub const MAX_CONNECTOR_READ_BYTES: u64 = 67_108_864;
+/// Maximum aggregate bytes retained by one sealed local snapshot.
+pub const MAX_CONNECTOR_SNAPSHOT_BYTES: u64 = 268_435_456;
 /// Maximum atomization input bytes.
 pub const MAX_ATOMIZATION_BYTES: usize = 67_108_864;
 /// Maximum organization secret patterns attached to one discovery policy.
 pub const MAX_SECRET_PATTERNS: usize = 128;
+/// Stable identity for the capability-confined local filesystem connector.
+pub const FILESYSTEM_CONNECTOR_ID: &str = "cigar.builtin.filesystem.v1";
+/// Stable identity for the immutable committed-object Git connector.
+pub const GIT_CONNECTOR_ID: &str = "cigar.builtin.git.v1";
+
+/// Rejects traversal/platform-ambiguous paths and portable case/Unicode collisions.
+///
+/// Connector paths are exact bytes, but every downstream surface must still address one record
+/// unambiguously.  In particular, a case-sensitive source can otherwise publish two records that
+/// collapse to one name on the default macOS filesystem, and canonically equivalent Unicode names
+/// can be substituted by a client that normalizes paths.  Invalid UTF-8 remains supported and is
+/// compared with an ASCII-only fold.
+pub(crate) fn validate_source_paths<'a>(
+    paths: impl IntoIterator<Item = &'a [u8]>,
+) -> Result<(), CatalogError> {
+    let mut portable = BTreeSet::new();
+    for path in paths {
+        if path.is_empty()
+            || path.contains(&b'\\')
+            || path
+                .split(|byte| *byte == b'/')
+                .any(|component| component.is_empty() || matches!(component, b"." | b".."))
+        {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+        }
+        let key = portable_path_key(path);
+        if !portable.insert(key) {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+        }
+    }
+    Ok(())
+}
+
+/// Rejects well-known credential and repository-control names without relying on host casing.
+pub(crate) fn sensitive_source_path(path: &[u8]) -> bool {
+    const EXACT_NAMES: &[&[u8]] = &[
+        b".cigarignore",
+        b".env",
+        b".envrc",
+        b".git-credentials",
+        b".gitattributes",
+        b".gitignore",
+        b".gitmodules",
+        b".netrc",
+        b".npmrc",
+        b".pypirc",
+        b"_netrc",
+        b"application_default_credentials.json",
+        b"auth.json",
+        b"credentials",
+        b"credentials.json",
+        b"credentials.toml",
+        b"id_dsa",
+        b"id_ecdsa",
+        b"id_ed25519",
+        b"id_rsa",
+        b"secrets.json",
+        b"secrets.yaml",
+        b"secrets.yml",
+    ];
+    const SENSITIVE_SUFFIXES: &[&[u8]] =
+        &[b".jks", b".key", b".keystore", b".p12", b".pem", b".pfx"];
+
+    let name = path.split(|byte| *byte == b'/').next_back().unwrap_or(path);
+    EXACT_NAMES
+        .iter()
+        .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        || name
+            .get(..b".env.".len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b".env."))
+        || SENSITIVE_SUFFIXES.iter().any(|suffix| {
+            name.get(name.len().saturating_sub(suffix.len())..)
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(suffix))
+        })
+}
+
+fn portable_path_key(path: &[u8]) -> Vec<u8> {
+    if let Ok(value) = std::str::from_utf8(path) {
+        let normalized = cigar_canon::normalize_nfc(value);
+        let lowered: String = normalized.chars().flat_map(char::to_lowercase).collect();
+        cigar_canon::normalize_nfc(&lowered).into_bytes()
+    } else {
+        path.iter().map(u8::to_ascii_lowercase).collect()
+    }
+}
 
 /// Stable content-free catalog and connector failure categories.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -298,6 +387,7 @@ impl DiscoveryPolicy {
         if self.max_items == 0
             || self.max_items > MAX_CONNECTOR_ITEMS
             || self.max_total_bytes == 0
+            || self.max_total_bytes > MAX_CONNECTOR_SNAPSHOT_BYTES
             || self.max_record_bytes == 0
             || self.max_record_bytes > self.max_total_bytes
             || self.max_record_bytes > MAX_CONNECTOR_READ_BYTES
@@ -436,6 +526,8 @@ pub struct SourceHealth {
 
 /// Stable source connector contract shared by filesystem, Git, and future adapters.
 pub trait SourceConnector: Send + Sync {
+    /// Binds the injected implementation to its exact authorized root without exposing content.
+    fn descriptor(&self) -> SourceConnectorDescriptor;
     /// Produces an explicit preview before first ingestion.
     fn discover(
         &self,
@@ -466,6 +558,15 @@ pub trait SourceConnector: Send + Sync {
     fn health(&self) -> SourceHealth;
 }
 
+/// Content-free identity of one configured connector implementation and root.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceConnectorDescriptor {
+    /// Stable connector implementation identity.
+    pub id: String,
+    /// Exact root this connector capability was opened against.
+    pub root: SourceUri,
+}
+
 /// Immutable atomizer capability metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AtomizerDescriptor {
@@ -481,8 +582,262 @@ pub struct AtomizerDescriptor {
     pub produced_kinds: BTreeSet<AtomKind>,
     /// Maximum instruction authority this configured atomizer may assign.
     pub authority_ceiling: InstructionAuthority,
+    /// Digest of this atomizer identity, version, scope, governance, quality, and feature profile.
+    pub configuration_digest: ContentDigest,
+    /// Exact tenant/project scope the atomizer must assign.
+    pub scope: ScopeEnvelope,
+    /// Exact governance envelope the atomizer must assign.
+    pub governance: GovernanceEnvelope,
+    /// Exact quality envelope the atomizer must assign.
+    pub quality: QualityEnvelope,
+    /// Exact lexical-index eligibility the atomizer must assign.
+    pub lexical_enabled: bool,
+    /// Exact embedding eligibility the atomizer must assign.
+    pub embedding_eligible: bool,
     /// Inputs whose changes invalidate this atomizer's output.
     pub invalidation: AtomizerInvalidation,
+}
+
+/// Digests the exact trusted configuration one atomizer must declare and reproduce in its output.
+pub fn atomizer_configuration_digest(
+    id: &str,
+    version: &str,
+    scope: &ScopeEnvelope,
+    governance: &GovernanceEnvelope,
+    quality: QualityEnvelope,
+    lexical_enabled: bool,
+    embedding_eligible: bool,
+) -> Result<ContentDigest, CatalogError> {
+    if id.is_empty()
+        || id.len() > 256
+        || version.is_empty()
+        || version.len() > 64
+        || id
+            .bytes()
+            .chain(version.bytes())
+            .any(|byte| byte.is_ascii_control())
+        || scope.project_ids.is_empty()
+        || scope
+            .project_ids
+            .windows(2)
+            .any(|pair| pair.first() >= pair.get(1))
+        || governance.allowed_purposes.is_empty()
+        || governance
+            .allowed_purposes
+            .windows(2)
+            .any(|pair| pair.first() >= pair.get(1))
+        || governance
+            .processor_constraints
+            .windows(2)
+            .any(|pair| pair.first() >= pair.get(1))
+        || governance
+            .allowed_purposes
+            .iter()
+            .chain(&governance.processor_constraints)
+            .any(|value| {
+                value.is_empty()
+                    || value.len() > 256
+                    || value.bytes().any(|byte| byte.is_ascii_control())
+            })
+        || quality.authority == 0
+    {
+        return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(b"CIGAR-ATOMIZER-CONFIGURATION\0v1\0");
+    hash_framed(&mut hasher, id.as_bytes())?;
+    hash_framed(&mut hasher, version.as_bytes())?;
+    hash_framed(&mut hasher, scope.tenant_id.as_str().as_bytes())?;
+    hash_sequence(
+        &mut hasher,
+        scope
+            .project_ids
+            .iter()
+            .map(|project| project.as_str().as_bytes()),
+    )?;
+    hasher.update([classification_code(governance.classification)]);
+    hash_sequence(
+        &mut hasher,
+        governance.allowed_purposes.iter().map(String::as_bytes),
+    )?;
+    hash_sequence(
+        &mut hasher,
+        governance
+            .processor_constraints
+            .iter()
+            .map(String::as_bytes),
+    )?;
+    hasher.update([instruction_authority_code(governance.instruction_authority)]);
+    hasher.update(quality.confidence.millionths().to_be_bytes());
+    hasher.update(quality.coverage.millionths().to_be_bytes());
+    hasher.update(quality.authority.to_be_bytes());
+    hasher.update([u8::from(lexical_enabled), u8::from(embedding_eligible)]);
+    content_digest(hasher)
+}
+
+/// Digests one canonical, strictly ordered atomizer registry.
+///
+/// The digest deliberately binds ordering as well as implementation and profile identities. This
+/// prevents durable source configuration from being reattached to a substituted, partial, or
+/// differently ordered runtime registry after restart.
+pub fn atomizer_registry_digest(
+    descriptors: &[AtomizerDescriptor],
+) -> Result<ContentDigest, CatalogError> {
+    if descriptors.is_empty()
+        || descriptors.windows(2).any(|pair| {
+            pair.first().zip(pair.get(1)).is_none_or(|(left, right)| {
+                (&left.id, &left.version) >= (&right.id, &right.version)
+            })
+        })
+    {
+        return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(b"CIGAR-ATOMIZER-REGISTRY\0v1\0");
+    hasher.update(
+        u64::try_from(descriptors.len())
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+            .to_be_bytes(),
+    );
+    let mut media_registry = BTreeSet::new();
+    for descriptor in descriptors {
+        if descriptor.id.is_empty()
+            || descriptor.id.len() > 256
+            || descriptor.version.is_empty()
+            || descriptor.version.len() > 64
+            || descriptor.max_input_bytes == 0
+            || descriptor.max_input_bytes > MAX_ATOMIZATION_BYTES
+            || descriptor.media_types.is_empty()
+            || descriptor.produced_kinds.is_empty()
+            || descriptor.authority_ceiling != descriptor.governance.instruction_authority
+            || descriptor.id.bytes().any(|byte| byte.is_ascii_control())
+            || descriptor
+                .version
+                .bytes()
+                .any(|byte| byte.is_ascii_control())
+        {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+        }
+        for media_type in &descriptor.media_types {
+            if !media_registry.insert(media_type.clone()) {
+                return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+            }
+        }
+        if atomizer_configuration_digest(
+            &descriptor.id,
+            &descriptor.version,
+            &descriptor.scope,
+            &descriptor.governance,
+            descriptor.quality,
+            descriptor.lexical_enabled,
+            descriptor.embedding_eligible,
+        )? != descriptor.configuration_digest
+        {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
+        }
+        hash_framed(&mut hasher, descriptor.id.as_bytes())?;
+        hash_framed(&mut hasher, descriptor.version.as_bytes())?;
+        hash_framed(
+            &mut hasher,
+            descriptor.configuration_digest.as_str().as_bytes(),
+        )?;
+        hasher.update(
+            u64::try_from(descriptor.max_input_bytes)
+                .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+                .to_be_bytes(),
+        );
+        hasher.update([instruction_authority_code(descriptor.authority_ceiling)]);
+        hasher.update([
+            u8::from(descriptor.invalidation.source_bytes),
+            u8::from(descriptor.invalidation.source_metadata),
+            u8::from(descriptor.invalidation.adapter_version),
+        ]);
+        hasher.update(
+            u64::try_from(descriptor.media_types.len())
+                .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+                .to_be_bytes(),
+        );
+        for media_type in &descriptor.media_types {
+            hash_framed(&mut hasher, media_type.as_str().as_bytes())?;
+        }
+        hasher.update(
+            u64::try_from(descriptor.produced_kinds.len())
+                .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+                .to_be_bytes(),
+        );
+        for kind in &descriptor.produced_kinds {
+            hasher.update([atom_kind_code(*kind)]);
+        }
+    }
+    content_digest(hasher)
+}
+
+fn content_digest(hasher: Sha256) -> Result<ContentDigest, CatalogError> {
+    let mut encoded = String::from("1220");
+    use std::fmt::Write as _;
+    for byte in hasher.finalize() {
+        write!(&mut encoded, "{byte:02x}")
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
+    }
+    ContentDigest::new(encoded).map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))
+}
+
+fn hash_sequence<'a>(
+    hasher: &mut Sha256,
+    values: impl ExactSizeIterator<Item = &'a [u8]>,
+) -> Result<(), CatalogError> {
+    hasher.update(
+        u64::try_from(values.len())
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+            .to_be_bytes(),
+    );
+    for value in values {
+        hash_framed(hasher, value)?;
+    }
+    Ok(())
+}
+
+const fn instruction_authority_code(authority: InstructionAuthority) -> u8 {
+    match authority {
+        InstructionAuthority::Data => 0,
+        InstructionAuthority::Advisory => 1,
+        InstructionAuthority::Project => 2,
+        InstructionAuthority::System => 3,
+    }
+}
+
+const fn classification_code(classification: Classification) -> u8 {
+    match classification {
+        Classification::Public => 0,
+        Classification::Internal => 1,
+        Classification::Confidential => 2,
+        Classification::Restricted => 3,
+    }
+}
+
+const fn atom_kind_code(kind: AtomKind) -> u8 {
+    match kind {
+        AtomKind::Instruction => 0,
+        AtomKind::SourceCode => 1,
+        AtomKind::Documentation => 2,
+        AtomKind::Decision => 3,
+        AtomKind::Conversation => 4,
+        AtomKind::ToolResult => 5,
+        AtomKind::Schema => 6,
+        AtomKind::Policy => 7,
+        AtomKind::Test => 8,
+        AtomKind::Artifact => 9,
+    }
+}
+
+fn hash_framed(hasher: &mut Sha256, bytes: &[u8]) -> Result<(), CatalogError> {
+    hasher.update(
+        u64::try_from(bytes.len())
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?
+            .to_be_bytes(),
+    );
+    hasher.update(bytes);
+    Ok(())
 }
 
 /// Declared deterministic invalidation behavior for one atomizer version.
@@ -624,8 +979,14 @@ pub trait InvalidationWorker: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        BoundedBytes, ByteRange, CatalogErrorCode, ConnectorContext, DiscoveryPolicy,
-        MAX_CONNECTOR_ITEMS, MAX_CONNECTOR_READ_BYTES,
+        AtomizerDescriptor, AtomizerInvalidation, BoundedBytes, ByteRange, CatalogErrorCode,
+        ConnectorContext, DiscoveryPolicy, MAX_CONNECTOR_ITEMS, MAX_CONNECTOR_READ_BYTES,
+        MAX_CONNECTOR_SNAPSHOT_BYTES, atomizer_configuration_digest, atomizer_registry_digest,
+        validate_source_paths,
+    };
+    use cigar_protocol::{
+        AtomKind, Classification, FixedPoint, GovernanceEnvelope, InstructionAuthority, MediaType,
+        QualityEnvelope, RecordId, ScopeEnvelope,
     };
     use cigar_store::CancellationToken;
     use std::collections::BTreeSet;
@@ -654,6 +1015,20 @@ mod tests {
             policy.validate().map_err(|error| error.code()),
             Err(CatalogErrorCode::LimitExceeded)
         );
+        let aggregate = DiscoveryPolicy {
+            max_items: 1,
+            max_total_bytes: MAX_CONNECTOR_SNAPSHOT_BYTES + 1,
+            max_record_bytes: 1,
+            excluded_prefixes: Vec::new(),
+            allowed_media_types: BTreeSet::new(),
+            allow_user_broadening: false,
+            follow_internal_symlinks: false,
+            secret_patterns: Vec::new(),
+        };
+        assert_eq!(
+            aggregate.validate().map_err(|error| error.code()),
+            Err(CatalogErrorCode::LimitExceeded)
+        );
     }
 
     #[test]
@@ -672,5 +1047,113 @@ mod tests {
                 .map_err(|error| error.code()),
             Err(CatalogErrorCode::DeadlineExceeded)
         );
+    }
+
+    #[test]
+    fn connector_paths_reject_traversal_case_and_unicode_aliases() {
+        for invalid in [
+            vec![b"../escape.rs".as_slice()],
+            vec![b"nested//file.rs".as_slice()],
+            vec![b"windows\\alias.rs".as_slice()],
+            vec![b"Readme.md".as_slice(), b"README.md".as_slice()],
+            vec!["caf\u{e9}.md".as_bytes(), "cafe\u{301}.md".as_bytes()],
+        ] {
+            assert_eq!(
+                validate_source_paths(invalid).map_err(|error| error.code()),
+                Err(CatalogErrorCode::InvalidMetadata)
+            );
+        }
+        assert!(validate_source_paths([b"src/lib.rs".as_slice(), b"README.md"]).is_ok());
+    }
+
+    #[test]
+    fn atomizer_registry_digest_rejects_reordering_and_binds_substitution()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let descriptor = |id: &str,
+                          lexical_enabled: bool|
+         -> Result<AtomizerDescriptor, Box<dyn std::error::Error>> {
+            let version = "1.0.0".to_owned();
+            let scope = ScopeEnvelope {
+                tenant_id: RecordId::new("01890f47-8e7d-7b42-a1d2-000000000001")?,
+                project_ids: vec![RecordId::new("01890f47-8e7d-7b42-a1d2-000000000002")?],
+            };
+            let governance = GovernanceEnvelope {
+                classification: Classification::Internal,
+                allowed_purposes: vec!["coding".to_owned()],
+                processor_constraints: Vec::new(),
+                instruction_authority: InstructionAuthority::Data,
+            };
+            let quality = QualityEnvelope {
+                confidence: FixedPoint::new(FixedPoint::ONE)?,
+                coverage: FixedPoint::new(FixedPoint::ONE)?,
+                authority: 1,
+            };
+            let configuration_digest = atomizer_configuration_digest(
+                id,
+                &version,
+                &scope,
+                &governance,
+                quality,
+                lexical_enabled,
+                false,
+            )?;
+            Ok(AtomizerDescriptor {
+                id: id.to_owned(),
+                version,
+                media_types: BTreeSet::from([MediaType::new(if id == "a" {
+                    "text/plain"
+                } else {
+                    "text/markdown"
+                })?]),
+                max_input_bytes: 1_024,
+                produced_kinds: BTreeSet::from([AtomKind::Documentation]),
+                authority_ceiling: InstructionAuthority::Data,
+                configuration_digest,
+                scope,
+                governance,
+                quality,
+                lexical_enabled,
+                embedding_eligible: false,
+                invalidation: AtomizerInvalidation {
+                    source_bytes: true,
+                    source_metadata: true,
+                    adapter_version: true,
+                },
+            })
+        };
+        let first = descriptor("a", true)?;
+        let second = descriptor("b", true)?;
+        let baseline = atomizer_registry_digest(&[first.clone(), second.clone()])?;
+        assert_eq!(
+            atomizer_registry_digest(&[second.clone(), first.clone()])
+                .map_err(|error| error.code()),
+            Err(CatalogErrorCode::InvalidMetadata)
+        );
+        let substituted = descriptor("b", false)?;
+        assert_ne!(
+            baseline,
+            atomizer_registry_digest(&[first.clone(), substituted])?
+        );
+        let mut dishonest_profile = second.clone();
+        dishonest_profile.lexical_enabled = false;
+        assert_eq!(
+            atomizer_registry_digest(&[first.clone(), dishonest_profile])
+                .map_err(|error| error.code()),
+            Err(CatalogErrorCode::InvalidMetadata)
+        );
+        let mut overlapping_media = second.clone();
+        overlapping_media.media_types = first.media_types.clone();
+        assert_eq!(
+            atomizer_registry_digest(&[first.clone(), overlapping_media])
+                .map_err(|error| error.code()),
+            Err(CatalogErrorCode::InvalidMetadata)
+        );
+        let mut capability_substitution = second;
+        capability_substitution.max_input_bytes += 1;
+        assert_ne!(
+            baseline,
+            atomizer_registry_digest(&[first, capability_substitution])?
+        );
+        Ok(())
     }
 }

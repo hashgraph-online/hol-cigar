@@ -409,6 +409,9 @@ impl ExtensionHost {
             self.clock.as_ref(),
             request.invocation.deadline_at.unix_nanos(),
         )?;
+        if let Some(broker) = &request.broker {
+            broker.bind_attempt_runtime(deadline, request.cancellation.clone())?;
+        }
         if request.cancellation.is_cancelled() {
             return Err(error(ExtensionHostErrorCode::Cancelled));
         }
@@ -423,6 +426,9 @@ impl ExtensionHost {
             request.cancellation.clone(),
             request.broker.clone(),
         )?;
+        if self.clock.monotonic_now() >= deadline {
+            return Err(error(ExtensionHostErrorCode::DeadlineExceeded));
+        }
         if !runtime.completed_cleanly {
             return Err(error(ExtensionHostErrorCode::ExtensionCrashed));
         }

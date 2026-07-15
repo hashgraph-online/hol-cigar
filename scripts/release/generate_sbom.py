@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Generate deterministic SPDX 2.3 and CycloneDX 1.6 SBOMs from locked inputs and final artifacts."""
+"""Bind a deterministic repository lockfile-component union to supplied artifacts.
+
+This inventory is an input/dependency union. It does not claim that every listed component is
+reachable from every supplied artifact; final release evidence must reconcile it with unpacked
+artifact inventories.
+"""
 
 from __future__ import annotations
 
 import argparse
 import base64
 import datetime as dt
+import os
 import re
 import tomllib
 import urllib.parse
@@ -13,6 +19,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -30,9 +41,80 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=repo_root())
     parser.add_argument("--artifact", type=Path, action="append", required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external SBOM workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--require-reviewed-licenses", action="store_true")
     return parser.parse_args()
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one external output root without resolving untrusted components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+class SbomOutput:
+    """Publish the three SBOM documents to one pinned or development directory."""
+
+    def __init__(
+        self,
+        *,
+        direct: Path | None,
+        workspace: EvidenceWorkspace | None,
+        prefix: str | None,
+    ) -> None:
+        self.direct = direct
+        self.workspace = workspace
+        self.prefix = prefix
+
+    @classmethod
+    def open(cls, arguments: argparse.Namespace, root: Path) -> SbomOutput:
+        selected = selected_evidence_directory(arguments)
+        if selected is None:
+            direct = arguments.out.resolve()
+            if direct.exists() and (not direct.is_dir() or any(direct.iterdir())):
+                raise ReleaseError("SBOM output directory must be empty")
+            direct.mkdir(parents=True, exist_ok=True)
+            return cls(direct=direct, workspace=None, prefix=None)
+        try:
+            parts = safe_evidence_path(os.fspath(arguments.out))
+            workspace = EvidenceWorkspace.create(selected, repository_root=root)
+        except EvidenceWorkspaceError as error:
+            raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+        return cls(
+            direct=None,
+            workspace=workspace,
+            prefix="/".join(parts),
+        )
+
+    def publish(self, name: str, document: dict[str, Any]) -> None:
+        if self.workspace is None:
+            assert self.direct is not None
+            write_json(self.direct / name, document)
+            return
+        assert self.prefix is not None
+        self.workspace.write_json(f"{self.prefix}/{name}", document)
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
 
 
 def _purl(ecosystem: str, name: str, version: str) -> str:
@@ -231,7 +313,12 @@ def main() -> int:
         load_json(inventory_path) if inventory_path.is_file() else {"components": []}
     )
     policy_path = root / "packaging/licenses/third-party-policy.v1.json"
-    if inventory.get("policy_sha256") != sha256_file(policy_path):
+    upstream_evidence_path = (
+        root / "packaging/licenses/locked-upstream-license-evidence.v1.json"
+    )
+    if inventory.get("policy_sha256") != sha256_file(policy_path) or inventory.get(
+        "upstream_evidence_sha256"
+    ) != sha256_file(upstream_evidence_path):
         raise ReleaseError("third-party license inventory is missing or stale")
     if (
         arguments.require_reviewed_licenses
@@ -276,7 +363,9 @@ def main() -> int:
         missing = sorted(external_purls - set(inventory_purls))
         extra = sorted(set(inventory_purls) - external_purls)
         raise ReleaseError(
-            f"third-party license inventory differs from locked components; missing={missing[:10]}, extra={extra[:10]}"
+            "third-party license inventory differs from locked components; "
+            f"missing_count={len(missing)} missing={missing[:10]}, "
+            f"extra_count={len(extra)} extra={extra[:10]}"
         )
 
     def component_license(component: dict[str, Any]) -> tuple[str, str]:
@@ -302,6 +391,7 @@ def main() -> int:
         )
 
     artifact_binding = canonical_json_bytes(artifacts).decode("utf-8").rstrip("\n")
+    component_scope = "repository-locked-dependency-union"
     document_identity = {
         "artifacts": artifacts,
         "components": [
@@ -322,11 +412,6 @@ def main() -> int:
     timestamp = (
         dt.datetime.fromtimestamp(epoch, tz=dt.UTC).isoformat().replace("+00:00", "Z")
     )
-    output = arguments.out.resolve()
-    if output.exists() and (not output.is_dir() or any(output.iterdir())):
-        raise ReleaseError("SBOM output directory must be empty")
-    output.mkdir(parents=True, exist_ok=True)
-
     spdx_packages: list[dict[str, Any]] = []
     relationships: list[dict[str, str]] = []
     for component in components:
@@ -387,7 +472,10 @@ def main() -> int:
                 "annotationDate": timestamp,
                 "annotationType": "OTHER",
                 "annotator": "Tool: cigar-release-sbom-v1",
-                "comment": f"CIGAR artifact binding: {artifact_binding}",
+                "comment": (
+                    f"CIGAR component scope: {component_scope}; this is not per-artifact "
+                    f"reachability evidence. CIGAR artifact binding: {artifact_binding}"
+                ),
             }
         ],
     }
@@ -435,7 +523,10 @@ def main() -> int:
                 "type": "application",
                 "name": "cigar",
                 "version": product_version,
-                "properties": [{"name": "cigar:artifacts", "value": artifact_binding}],
+                "properties": [
+                    {"name": "cigar:artifacts", "value": artifact_binding},
+                    {"name": "cigar:component-scope", "value": component_scope},
+                ],
             },
         },
         "components": cdx_components,
@@ -447,16 +538,21 @@ def main() -> int:
             or sha256_file(path) != record["sha256"]
         ):
             raise ReleaseError(f"artifact changed during SBOM generation: {path}")
-    write_json(output / "sbom.spdx.json", spdx)
-    write_json(output / "sbom.cyclonedx.json", cyclonedx)
-    write_json(
-        output / "sbom-artifacts.json",
-        {
-            "schema_version": "cigar.sbom-artifacts.v1",
-            "artifacts": artifacts,
-            "component_count": len(components),
-        },
-    )
+    output = SbomOutput.open(arguments, root)
+    try:
+        output.publish("sbom.spdx.json", spdx)
+        output.publish("sbom.cyclonedx.json", cyclonedx)
+        output.publish(
+            "sbom-artifacts.json",
+            {
+                "schema_version": "cigar.sbom-artifacts.v1",
+                "artifacts": artifacts,
+                "component_count": len(components),
+                "component_scope": component_scope,
+            },
+        )
+    finally:
+        output.close()
     print(
         f"generated SPDX and CycloneDX SBOMs for {len(artifacts)} artifact(s), {len(components)} locked components"
     )
@@ -466,5 +562,10 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, tomllib.TOMLDecodeError, ReleaseError) as error:
+    except (
+        EvidenceWorkspaceError,
+        OSError,
+        tomllib.TOMLDecodeError,
+        ReleaseError,
+    ) as error:
         raise SystemExit(f"SBOM generation failed: {error}") from error

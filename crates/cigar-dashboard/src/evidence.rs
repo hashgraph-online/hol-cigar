@@ -121,7 +121,7 @@ pub struct EvidenceDescriptor {
 
 impl EvidenceDescriptor {
     /// Constructs a strict descriptor from the output of an independent receipt verifier.
-    pub fn verified(
+    pub(crate) fn verified(
         run_id: &str,
         schema_id: &str,
         category: EvidenceCategory,
@@ -222,6 +222,14 @@ impl EvidenceDescriptor {
     }
 
     pub(crate) fn validate(&self) -> Result<(), EvidenceError> {
+        let category_binding_is_valid = match self.category {
+            EvidenceCategory::Sample | EvidenceCategory::Development => true,
+            EvidenceCategory::InstalledArtifact => self.artifact_digest.is_some(),
+            // The v1 descriptor does not carry a source-tree/archive binding or an authenticated
+            // signature/provenance chain. Refuse stronger labels until a verifier supplies a
+            // versioned record that can represent those facts without inference.
+            EvidenceCategory::CandidateBound | EvidenceCategory::ReleaseQualifying => false,
+        };
         if self.schema_version != EVIDENCE_SCHEMA
             || !bounded_identifier(&self.evidence_id)
             || !self.evidence_id.starts_with("evidence-")
@@ -234,6 +242,7 @@ impl EvidenceDescriptor {
                 .artifact_digest
                 .as_deref()
                 .is_some_and(|digest| !sha256(digest))
+            || !category_binding_is_valid
         {
             return Err(EvidenceError::InvalidEvidence);
         }
@@ -277,6 +286,54 @@ mod tests {
             Some(&serde_json::json!("development"))
         );
         assert!(value.get("path").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn stronger_categories_require_representable_verified_bindings()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let run = RunRecord::queued("dashboard-contracts", DIGEST, DIGEST, "revision-1")?;
+        assert!(
+            EvidenceDescriptor::verified(
+                run.run_id(),
+                "cigar.dashboard-installed-artifact.v1",
+                EvidenceCategory::InstalledArtifact,
+                EvidenceStatus::Partial,
+                DIGEST,
+                "revision-1",
+                None,
+            )
+            .is_err()
+        );
+        assert!(
+            EvidenceDescriptor::verified(
+                run.run_id(),
+                "cigar.dashboard-installed-artifact.v1",
+                EvidenceCategory::InstalledArtifact,
+                EvidenceStatus::Partial,
+                DIGEST,
+                "revision-1",
+                Some(DIGEST),
+            )
+            .is_ok()
+        );
+        for category in [
+            EvidenceCategory::CandidateBound,
+            EvidenceCategory::ReleaseQualifying,
+        ] {
+            assert!(
+                EvidenceDescriptor::verified(
+                    run.run_id(),
+                    "cigar.dashboard-installed-artifact.v1",
+                    category,
+                    EvidenceStatus::Valid,
+                    DIGEST,
+                    "revision-1",
+                    Some(DIGEST),
+                )
+                .is_err()
+            );
+        }
         Ok(())
     }
 }

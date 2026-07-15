@@ -2,19 +2,19 @@
 # Qualifies WP18 production repository behavior through physical PostgreSQL failover.
 set -Eeuo pipefail
 
-readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+SOURCE_DIRECTORY="${BASH_SOURCE[0]%/*}"
+if [[ "$SOURCE_DIRECTORY" == "${BASH_SOURCE[0]}" ]]; then
+  SOURCE_DIRECTORY=.
+fi
+readonly ROOT="$(cd "$SOURCE_DIRECTORY/../.." && pwd -P)"
+unset SOURCE_DIRECTORY
 readonly COMPOSE_FILE="$ROOT/deploy/compose/failover/compose.yaml"
 readonly PROJECT="${CIGAR_FAILOVER_PROJECT:-cigar-wp18-failover-${PPID}-$$}"
-readonly STARTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-readonly RECEIPT_DIRECTORY="$ROOT/artifacts/qualification"
-readonly RECEIPT="$RECEIPT_DIRECTORY/wp18-failover.json"
-readonly LOG="$RECEIPT_DIRECTORY/wp18-failover.log"
-readonly RECEIPT_TEMP="$RECEIPT.tmp.$$"
-readonly LOG_TEMP="$LOG.tmp.$$"
-readonly LOG_PIPE="$LOG.pipe.$$"
 readonly ROUTER_PORT="${CIGAR_FAILOVER_ROUTER_PORT:-55433}"
 KEEP="${CIGAR_KEEP_FAILOVER_DEPS:-0}"
 SYNTAX_ONLY=0
+QUALIFICATION_STATE_FD=""
+TLS_DIRECTORY=""
 
 PRODUCTION_BEFORE=0
 PRODUCTION_OUTAGE=0
@@ -25,6 +25,7 @@ REPLICA_LAG_ACK_BLOCKED=0
 PHYSICAL_BACKUP_VERIFIED=0
 PHYSICAL_RESTORE_READY=0
 PHYSICAL_RESTORE_ROOT_MATCH=0
+POSTGRES_PRIVATE_CA_TLS=0
 CLEANUP_COMPLETE=0
 OLD_TIMELINE=""
 NEW_TIMELINE=""
@@ -51,8 +52,6 @@ PHYSICAL_RESTORE_MIGRATION_SEQUENCE=""
 PHYSICAL_SOURCE_SEMANTIC_ROOT=""
 PHYSICAL_RESTORED_SEMANTIC_ROOT=""
 LAG_WRITE_PID=""
-SOURCE_BEFORE=""
-LOG_TEE_PID=""
 
 usage() {
   printf 'usage: %s [--syntax-only]\n' "${0##*/}"
@@ -66,6 +65,33 @@ case "${1:-}" in
 esac
 [[ $# -le 1 ]] || { usage >&2; exit 64; }
 
+if [[ "$SYNTAX_ONLY" == 0 ]]; then
+  if [[ "${CIGAR_QUALIFICATION_INTERNAL_PROFILE:-}" != "failover" ]]; then
+    exec /usr/bin/python3 -I -B "$ROOT/tools/qualification_evidence.py" run \
+      --profile failover --repository "$ROOT"
+  fi
+  QUALIFICATION_STATE_FD="${CIGAR_QUALIFICATION_STATE_FD:-}"
+  [[ "$QUALIFICATION_STATE_FD" == 198 ]] \
+    && { true >&198; } 2>/dev/null || {
+    printf 'protected qualification state descriptor is unavailable\n' >&2
+    exit 70
+  }
+  unset CIGAR_EVIDENCE_DIR CIGAR_QUALIFICATION_INTERNAL_PROFILE \
+    CIGAR_QUALIFICATION_STATE_FD
+else
+  unset CIGAR_EVIDENCE_DIR CIGAR_QUALIFICATION_INTERNAL_PROFILE \
+    CIGAR_QUALIFICATION_STATE_FD
+fi
+readonly QUALIFICATION_STATE_FD
+
+external() {
+  /usr/bin/env -u CIGAR_EVIDENCE_DIR \
+    -u CIGAR_QUALIFICATION_INTERNAL_PROFILE \
+    -u CIGAR_QUALIFICATION_STATE_FD "$@" 198>&-
+}
+
+readonly STARTED_AT="$(external date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
 for command in bash docker openssl; do
   command -v "$command" >/dev/null 2>&1 || {
     printf 'required qualification command is unavailable: %s\n' "$command" >&2
@@ -74,7 +100,7 @@ for command in bash docker openssl; do
 done
 
 new_secret() {
-  openssl rand -hex 32
+  external openssl rand -hex 32
 }
 
 # Caller overrides must retain the generated format so URLs remain unambiguous and output
@@ -107,23 +133,44 @@ unset value
   exit 64
 }
 
+sanitize_output() {
+  local line matched
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//${CIGAR_FAILOVER_OWNER_PASSWORD}/[REDACTED]}"
+    line="${line//${CIGAR_FAILOVER_REPLICATION_PASSWORD}/[REDACTED]}"
+    line="${line//${CIGAR_FAILOVER_REWIND_PASSWORD}/[REDACTED]}"
+    line="${line//${CIGAR_FAILOVER_ROUTER_PASSWORD}/[REDACTED]}"
+    line="${line//${CIGAR_FAILOVER_RUNTIME_PASSWORD}/[REDACTED]}"
+    while [[ "$line" =~ postgres(ql)?://[^[:space:]]+ ]]; do
+      matched="${BASH_REMATCH[0]}"
+      line="${line//$matched/[REDACTED_DATABASE_URL]}"
+    done
+    printf '%s\n' "$line"
+  done
+}
+
+if [[ "$SYNTAX_ONLY" == 0 ]]; then
+  exec > >(sanitize_output 198>&-) 2>&1
+fi
+
 compose() {
-  docker compose --project-name "$PROJECT" --file "$COMPOSE_FILE" "$@"
+  external docker compose --project-name "$PROJECT" --file "$COMPOSE_FILE" "$@"
 }
 
 for script in \
   "$ROOT/deploy/compose/failover/primary-init.sh" \
+  "$ROOT/deploy/compose/failover/tls-entrypoint.sh" \
   "$ROOT/deploy/compose/failover/standby-entrypoint.sh" \
   "$ROOT/deploy/compose/failover/rejoin-primary.sh" \
   "$ROOT/deploy/compose/failover/physical-backup.sh" \
   "$ROOT/deploy/compose/failover/physical-restore-entrypoint.sh" \
   "$ROOT/tools/wp18-failover/qualify.sh"; do
-  bash -n "$script"
+  external bash -n "$script"
 done
 for script in \
   "$ROOT/deploy/compose/failover/check-primary.sh" \
   "$ROOT/deploy/compose/failover/client-psql.sh"; do
-  sh -n "$script"
+  external sh -n "$script"
 done
 compose --profile operations config --quiet
 
@@ -132,33 +179,12 @@ if [[ "$SYNTAX_ONLY" == 1 ]]; then
   exit 0
 fi
 
-for command in cargo find mkfifo python3 shasum sort tee; do
+for command in cargo find python3 shasum sort; do
   command -v "$command" >/dev/null 2>&1 || {
     printf 'required live qualification command is unavailable: %s\n' "$command" >&2
     exit 69
   }
 done
-
-workspace_digest() {
-  local digest
-  digest="$({
-    find \
-      "$ROOT/crates/cigar-store/src" \
-      "$ROOT/migrations/postgres" \
-      "$ROOT/deploy/compose/failover" \
-      -type f -print
-    printf '%s\n' \
-      "$ROOT/crates/cigar-store/tests/postgres_failover.rs" \
-      "$ROOT/crates/cigar-store/Cargo.toml" \
-      "$ROOT/Cargo.toml" \
-      "$ROOT/Cargo.lock" \
-      "$ROOT/tools/wp18-failover/qualify.sh"
-  } | LC_ALL=C sort | while IFS= read -r file; do
-    shasum -a 256 "$file"
-  done | shasum -a 256 | awk '{print $1}')"
-  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
-  printf 'workspace:sha256:%s' "$digest"
-}
 
 cleanup_topology() {
   local containers volumes networks image_id
@@ -173,15 +199,22 @@ cleanup_topology() {
   fi
   compose --profile operations down --volumes --remove-orphans --rmi local \
     >/dev/null 2>&1 || return 1
-  containers="$(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT")"
-  volumes="$(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT")"
-  networks="$(docker network ls -q --filter "label=com.docker.compose.project=$PROJECT")"
-  image_id="$(docker image ls -q "${PROJECT}-router:latest")"
+  containers="$(external docker ps -aq --filter "label=com.docker.compose.project=$PROJECT")"
+  volumes="$(external docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT")"
+  networks="$(external docker network ls -q --filter "label=com.docker.compose.project=$PROJECT")"
+  image_id="$(external docker image ls -q "${PROJECT}-router:latest")"
   if [[ -n "$containers" || -n "$volumes" || -n "$networks" || -n "$image_id" ]]; then
     printf 'Compose cleanup left resources for project %s\n' "$PROJECT" >&2
     return 1
   fi
   CLEANUP_COMPLETE=1
+}
+
+cleanup_tls_directory() {
+  if [[ -n "$TLS_DIRECTORY" ]]; then
+    external rm -rf "$TLS_DIRECTORY"
+    TLS_DIRECTORY=""
+  fi
 }
 
 diagnostics() {
@@ -213,22 +246,9 @@ json_integer_or_null() {
   fi
 }
 
-publish_running_receipt() {
-  printf '%s\n' \
-    '{' \
-    '  "schema_version": "cigar.wp18-failover-qualification.v1",' \
-    '  "result": "running",' \
-    '  "passed": false,' \
-    "  \"started_at\": \"$STARTED_AT\"," \
-    "  \"source\": \"$SOURCE_BEFORE\"," \
-    '  "zero_skips": false' \
-    '}' >"$RECEIPT_TEMP"
-  mv "$RECEIPT_TEMP" "$RECEIPT"
-}
-
 finish() {
   local exit_code="$?"
-  local finished_at source_after result passed_bool stable_source phase_count
+  local finished_at result passed_bool phase_count
   local lsn_pre_json lsn_pre_replay_json lsn_post_json lsn_post_replay_json
   local lsn_lag_commit_json lsn_lag_replay_json
   local manifest_digest_json manifest_checksum_json backup_start_json backup_end_json
@@ -237,26 +257,21 @@ finish() {
   local backup_timeline_json restore_timeline_json restore_source_timeline_json
   local source_revision_json restored_revision_json
   local restore_migration_json
-  local old_timeline_json new_timeline_json log_digest receipt_digest
+  local old_timeline_json new_timeline_json
   trap - ERR EXIT INT TERM
 
-  finished_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  source_after="$(workspace_digest 2>/dev/null || printf unavailable)"
-  stable_source=false
-  if [[ "$source_after" == "$SOURCE_BEFORE" ]]; then
-    stable_source=true
-  fi
+  finished_at="$(external date -u '+%Y-%m-%dT%H:%M:%SZ')"
   phase_count=$((PRODUCTION_BEFORE + PRODUCTION_OUTAGE + PRODUCTION_AFTER))
   result=fail
   passed_bool=false
   if [[ "$exit_code" == 0 \
-    && "$stable_source" == true \
     && "$phase_count" == 3 \
     && "$ROUTER_FAILED_CLOSED" == 1 \
     && "$REPLICA_LAG_ACK_BLOCKED" == 1 \
     && "$PHYSICAL_BACKUP_VERIFIED" == 1 \
     && "$PHYSICAL_RESTORE_READY" == 1 \
     && "$PHYSICAL_RESTORE_ROOT_MATCH" == 1 \
+    && "$POSTGRES_PRIVATE_CA_TLS" == 1 \
     && "$LIVE_COMPLETED" == 1 \
     && "$OLD_TIMELINE" =~ ^[0-9]+$ \
     && "$NEW_TIMELINE" =~ ^[0-9]+$ \
@@ -293,23 +308,9 @@ finish() {
     passed_bool=false
     exit_code=1
   fi
-  printf 'WP18 failover qualification result=%s production_phases=%s source_stable=%s cleanup=%s\n' \
-    "$result" "$phase_count" "$stable_source" "$CLEANUP_COMPLETE"
-
-  # Close the sanitized logging pipe before atomically publishing the complete log.
-  exec 1>&3 2>&4
-  if ! wait "$LOG_TEE_PID"; then
-    result=fail
-    passed_bool=false
-    exit_code=1
-  fi
-  rm -f "$LOG_PIPE"
-  if ! mv "$LOG_TEMP" "$LOG"; then
-    result=fail
-    passed_bool=false
-    exit_code=1
-  fi
-  log_digest="$(shasum -a 256 "$LOG" | awk '{print $1}')"
+  cleanup_tls_directory
+  printf 'WP18 failover qualification result=%s production_phases=%s cleanup=%s\n' \
+    "$result" "$phase_count" "$CLEANUP_COMPLETE"
 
   lsn_pre_json="$(json_string_or_null "$PRE_LSN")"
   lsn_pre_replay_json="$(json_string_or_null "$PRE_REPLAY_LSN")"
@@ -341,8 +342,6 @@ finish() {
     '  "schema_version": "cigar.wp18-failover-qualification.v1",' \
     "  \"result\": \"$result\"," \
     "  \"passed\": $passed_bool," \
-    "  \"source\": \"$SOURCE_BEFORE\"," \
-    "  \"source_stable\": $stable_source," \
     "  \"cleanup_complete\": $([[ "$CLEANUP_COMPLETE" == 1 ]] && printf true || printf false)," \
     "  \"started_at\": \"$STARTED_AT\"," \
     "  \"finished_at\": \"$finished_at\"," \
@@ -352,6 +351,7 @@ finish() {
     '  "skip_count": 0,' \
     "  \"production_phases_completed\": $phase_count," \
     "  \"production_postgres_store\": $passed_bool," \
+    "  \"postgres_private_ca_tls\": $([[ "$POSTGRES_PRIVATE_CA_TLS" == 1 ]] && printf true || printf false)," \
     '  "replication": "physical",' \
     '  "synchronous_commit": "remote_apply",' \
     '  "router_policy": "primary-only",' \
@@ -414,14 +414,8 @@ finish() {
     '    "boot isolated restore with recovery_target_lsn=backup_manifest.WAL-Ranges.End-LSN",' \
     '    "compare restored CIGAR revision and canonical semantic root"' \
     '  ],' \
-    '  "database_urls": "redacted",' \
-    "  \"log\": \"artifacts/qualification/wp18-failover.log\"," \
-    "  \"log_sha256\": \"$log_digest\"" \
-    '}' >"$RECEIPT_TEMP"
-  mv "$RECEIPT_TEMP" "$RECEIPT"
-  receipt_digest="$(shasum -a 256 "$RECEIPT" | awk '{print $1}')"
-  printf 'WP18 failover receipt: %s\n' "$RECEIPT"
-  printf 'WP18 failover receipt sha256: %s\n' "$receipt_digest"
+    '  "database_urls": "redacted"' \
+    '}' >&"$QUALIFICATION_STATE_FD"
   exit "$exit_code"
 }
 
@@ -454,7 +448,7 @@ wait_sql() {
       printf 'ready: %s\n' "$description"
       return 0
     fi
-    sleep 1
+    external sleep 1
   done
   printf 'timed out waiting for %s (last value: %q)\n' "$description" "$actual" >&2
   return 1
@@ -472,7 +466,7 @@ wait_client_value() {
       printf 'ready: %s\n' "$description"
       return 0
     fi
-    sleep 1
+    external sleep 1
   done
   printf 'timed out waiting for %s (last value: %q)\n' "$description" "$actual" >&2
   return 1
@@ -488,7 +482,13 @@ run_repository_phase() {
   CIGAR_WP18_FAILOVER_PHASE="$phase" \
   CIGAR_WP18_FAILOVER_OWNER_URL="$OWNER_URL" \
   CIGAR_WP18_FAILOVER_RUNTIME_URL="$RUNTIME_URL" \
-    cargo test --locked --package cigar-store --test postgres_failover -- --nocapture
+  CIGAR_WP18_FAILOVER_CA_PATH="$TLS_DIRECTORY/postgres-ca.pem" \
+  CIGAR_WP18_FAILOVER_SERVER_NAME='127.0.0.1' \
+    /usr/bin/env -u CIGAR_EVIDENCE_DIR \
+      -u CIGAR_QUALIFICATION_INTERNAL_PROFILE \
+      -u CIGAR_QUALIFICATION_STATE_FD \
+      cargo test --locked --package cigar-store --test postgres_failover -- --nocapture \
+        198>&-
   case "$phase" in
     before) PRODUCTION_BEFORE=1 ;;
     outage) PRODUCTION_OUTAGE=1 ;;
@@ -499,7 +499,7 @@ run_repository_phase() {
 
 qualify_replica_lag() {
   local marker deadline sync_wait
-  marker="lag_${PPID}_$$_$(date -u '+%s')"
+  marker="lag_${PPID}_$$_$(external date -u '+%s')"
   printf 'Pausing standby WAL replay to prove remote_apply does not acknowledge lagged writes.\n'
   sql standby postgres 'SELECT pg_wal_replay_pause()' >/dev/null
   wait_sql standby postgres \
@@ -525,7 +525,7 @@ qualify_replica_lag() {
       "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'cigar-wp18-lag-write' AND wait_event = 'SyncRep'" \
       2>/dev/null || true)"
     [[ "$sync_wait" == 1 ]] && break
-    sleep 1
+    external sleep 1
   done
   [[ "$sync_wait" == 1 ]] || {
     printf 'lag qualification write did not enter a synchronous replication wait\n' >&2
@@ -533,7 +533,7 @@ qualify_replica_lag() {
   }
 
   LAG_COMMIT_LSN="$(sql primary postgres 'SELECT pg_current_wal_flush_lsn()')"
-  sleep 3
+  external sleep 3
   kill -0 "$LAG_WRITE_PID" 2>/dev/null || {
     wait "$LAG_WRITE_PID" || true
     LAG_WRITE_PID=""
@@ -555,7 +555,7 @@ qualify_replica_lag() {
       printf 'lag qualification write did not acknowledge after replay resumed\n' >&2
       return 1
     fi
-    sleep 1
+    external sleep 1
   done
   wait "$LAG_WRITE_PID"
   LAG_WRITE_PID=""
@@ -588,7 +588,7 @@ semantic_material() {
 semantic_root() {
   local service="$1"
   local digest
-  digest="$(semantic_material "$service" | shasum -a 256 | awk '{print $1}')"
+  digest="$(semantic_material "$service" | external shasum -a 256 | external awk '{print $1}')"
   [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
   printf '1220%s' "$digest"
 }
@@ -607,14 +607,14 @@ qualify_physical_restore() {
   PHYSICAL_SOURCE_SEMANTIC_ROOT="$(semantic_root standby)"
   compose run --rm --no-deps physical-backup
 
-  manifest_sha="$(backup_file /backup/backup_manifest | shasum -a 256 | awk '{print $1}')"
+  manifest_sha="$(backup_file /backup/backup_manifest | external shasum -a 256 | external awk '{print $1}')"
   [[ "$manifest_sha" =~ ^[0-9a-f]{64}$ ]] || {
     printf 'physical backup manifest digest is invalid\n' >&2
     return 1
   }
   BACKUP_MANIFEST_DIGEST="sha256:$manifest_sha"
   fields="$(
-    backup_file /backup/backup_manifest | python3 -c '
+    backup_file /backup/backup_manifest | external python3 -c '
 import json, sys
 manifest = json.load(sys.stdin)
 ranges = manifest.get("WAL-Ranges")
@@ -693,7 +693,9 @@ print("{}|{}|{}|{}".format(
     'SELECT revision FROM cigar_repository_revision WHERE singleton = true')"
   schema_shape="$(sql physical-restore cigar \
     "SELECT count(*)::text || '|' || max(sequence)::text FROM schema_migrations")"
-  PHYSICAL_RESTORE_MIGRATION_SEQUENCE="${schema_shape##*|}"
+  # Parse the one-delimiter result directly. This is equivalent to the previous suffix expansion,
+  # while remaining visible to static analyzers whose Bash parser rejects `##*|` patterns.
+  IFS='|' read -r _ PHYSICAL_RESTORE_MIGRATION_SEQUENCE <<<"$schema_shape"
   probe_count="$(sql physical-restore cigar \
     "SELECT count(*) FROM public.wp18_failover_probe WHERE phase IN ('replica_lag', 'before', 'after')")"
   # PostgreSQL may place the promoted timeline fork at the next WAL segment boundary after the
@@ -717,39 +719,25 @@ print("{}|{}|{}|{}".format(
   printf 'Physical restore is writable and CIGAR semantic root/revision exact.\n'
 }
 
-sanitize_output() {
-  local line matched
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line//${CIGAR_FAILOVER_OWNER_PASSWORD}/[REDACTED]}"
-    line="${line//${CIGAR_FAILOVER_REPLICATION_PASSWORD}/[REDACTED]}"
-    line="${line//${CIGAR_FAILOVER_REWIND_PASSWORD}/[REDACTED]}"
-    line="${line//${CIGAR_FAILOVER_ROUTER_PASSWORD}/[REDACTED]}"
-    line="${line//${CIGAR_FAILOVER_RUNTIME_PASSWORD}/[REDACTED]}"
-    while [[ "$line" =~ postgres(ql)?://[^[:space:]]+ ]]; do
-      matched="${BASH_REMATCH[0]}"
-      line="${line//$matched/[REDACTED_DATABASE_URL]}"
-    done
-    printf '%s\n' "$line"
-  done
-}
-
-mkdir -p "$RECEIPT_DIRECTORY"
 umask 077
-SOURCE_BEFORE="$(workspace_digest)"
-publish_running_receipt
-: >"$LOG_TEMP"
-exec 3>&1 4>&2
-mkfifo "$LOG_PIPE"
-sanitize_output <"$LOG_PIPE" | tee -a "$LOG_TEMP" >&3 &
-LOG_TEE_PID="$!"
-exec >"$LOG_PIPE" 2>&1
 trap diagnostics ERR
 trap finish EXIT
 trap 'exit 130' INT TERM
 
 printf 'Starting required WP18 failover qualification project %s.\n' "$PROJECT"
-printf 'Source: %s\n' "$SOURCE_BEFORE"
 compose up --build --detach --wait primary standby router
+
+readonly PRIMARY_CONTAINER="$(compose ps -q primary)"
+[[ -n "$PRIMARY_CONTAINER" ]] || {
+  printf 'primary container identity is unavailable\n' >&2
+  exit 1
+}
+TLS_DIRECTORY="$(external mktemp -d "${TMPDIR:-/tmp}/cigar-wp18-failover-tls.XXXXXX")"
+external chmod 0700 "$TLS_DIRECTORY"
+external docker cp \
+  "$PRIMARY_CONTAINER:/var/lib/postgresql/cigar-failover-tls/ca.crt" \
+  "$TLS_DIRECTORY/postgres-ca.pem" >/dev/null
+external chmod 0600 "$TLS_DIRECTORY/postgres-ca.pem"
 
 # The standby must exist before the synchronous gate is enabled; otherwise first-time database
 # initialization would correctly block waiting for a synchronous receiver that cannot yet exist.
@@ -770,9 +758,10 @@ wait_client_value \
   primary "HAProxy admits only the original primary"
 
 run_repository_phase before
+POSTGRES_PRIVATE_CA_TLS=1
 qualify_replica_lag
 
-readonly PRE_MARKER="pre_${PPID}_$$_$(date -u '+%s')"
+readonly PRE_MARKER="pre_${PPID}_$$_$(external date -u '+%s')"
 client_sql "INSERT INTO public.wp18_failover_probe(marker, phase, revision_id, effect_id, claim_id) VALUES ('$PRE_MARKER', 'before', 1001, 'effect_$PRE_MARKER', 'claim_$PRE_MARKER') RETURNING marker" \
   >/dev/null
 PRE_LSN="$(sql primary postgres 'SELECT pg_current_wal_flush_lsn()')"
@@ -789,7 +778,7 @@ for _ in {1..20}; do
     ROUTER_FAILED_CLOSED=1
     break
   fi
-  sleep 1
+  external sleep 1
 done
 [[ "$ROUTER_FAILED_CLOSED" == 1 ]] || {
   printf 'HAProxy continued admitting a backend while both nodes lacked primary authority\n' >&2
@@ -843,7 +832,7 @@ wait_sql standby postgres \
 
 run_repository_phase after
 
-readonly POST_MARKER="post_${PPID}_$$_$(date -u '+%s')"
+readonly POST_MARKER="post_${PPID}_$$_$(external date -u '+%s')"
 client_sql "INSERT INTO public.wp18_failover_probe(marker, phase, revision_id, effect_id, claim_id) VALUES ('$POST_MARKER', 'after', 1002, 'effect_$POST_MARKER', 'claim_$POST_MARKER') RETURNING marker" \
   >/dev/null
 POST_LSN="$(sql standby postgres 'SELECT pg_current_wal_flush_lsn()')"

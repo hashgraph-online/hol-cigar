@@ -1,0 +1,381 @@
+name: macos-release-candidate-diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: macos-release-candidate-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+# This manual workflow exercises only unsigned, non-publishing local-authority
+# prerequisites. It does not execute fuzz, soak, the 100-GiB scale campaign,
+# signing, notarization, installation qualification, or release promotion.
+jobs:
+  source-security-reproducibility:
+    name: source, security, and reproducibility diagnostics / macOS 15 arm64
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      CARGO_TERM_COLOR: never
+      NEXTEST_HIDE_PROGRESS_BAR: "1"
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate private workspaces
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-rc-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          target="${canonical_temp}/cigar-rc-source-target-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          test ! -e "${target}"
+          mkdir -m 0700 "${evidence}" "${target}"
+          printf 'CIGAR_RC_SOURCE_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+          printf 'CARGO_TARGET_DIR=%s\n' "${target}" >>"${GITHUB_ENV}"
+
+      - name: Install the pinned native test and Protocol Buffers tools
+        run: |
+          umask 077
+          protoc_root="${RUNNER_TEMP}/protoc-33.2"
+          protoc_archive="${RUNNER_TEMP}/protoc-33.2-osx-aarch_64.zip"
+          test ! -e "${protoc_root}"
+          test ! -e "${protoc_archive}"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --output "${protoc_archive}" \
+            https://github.com/protocolbuffers/protobuf/releases/download/v33.2/protoc-33.2-osx-aarch_64.zip
+          printf '%s  %s\n' \
+            '5be1427127788c9f7dd7d606c3e69843dd3587327dea993917ffcb77e7234b44' \
+            "${protoc_archive}" \
+            | shasum -a 256 --check
+          mkdir -m 0700 "${protoc_root}"
+          unzip -q "${protoc_archive}" -d "${protoc_root}"
+          test "$("${protoc_root}/bin/protoc" --version)" = "libprotoc 33.2"
+          printf '%s\n' "${protoc_root}/bin" >>"${GITHUB_PATH}"
+          cargo install cargo-nextest --version 0.9.140 --locked
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
+
+      - name: Hydrate the locked native dependency cache
+        run: cargo fetch --locked --target aarch64-apple-darwin
+
+      - name: Run source-bound security and reproducibility diagnostics offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          command_binding='cargo xtask test security; cargo xtask release reproduce (locked, offline, native macOS diagnostic)'
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            cargo xtask \
+              --evidence-dir "${CIGAR_RC_SOURCE_EVIDENCE}/security" \
+              test security
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            cargo xtask \
+              --evidence-dir "${CIGAR_RC_SOURCE_EVIDENCE}/reproducibility" \
+              release reproduce
+          security_raw="${CIGAR_RC_SOURCE_EVIDENCE}/security/command-plane/test-security.raw.json"
+          security_receipt="${CIGAR_RC_SOURCE_EVIDENCE}/security/command-plane/test-security.receipt.json"
+          reproducibility_report="${CIGAR_RC_SOURCE_EVIDENCE}/reproducibility/release/reproducibility-result.v1.json"
+          reproducibility_receipt="${CIGAR_RC_SOURCE_EVIDENCE}/reproducibility/command-plane/release-reproduce.receipt.json"
+          workflow_evidence="${CIGAR_RC_SOURCE_EVIDENCE}/workflow"
+          mkdir -m 0700 "${workflow_evidence}"
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${workflow_evidence}/workflow-receipt.json" \
+            --lane rc-source-security-reproducibility \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "reproducibility-receipt=${reproducibility_receipt}" \
+            --attachment "reproducibility-report=${reproducibility_report}" \
+            --attachment "security-raw=${security_raw}" \
+            --attachment "security-receipt=${security_receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${workflow_evidence}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "reproducibility-receipt=${reproducibility_receipt}" \
+            --attachment "reproducibility-report=${reproducibility_report}" \
+            --attachment "security-raw=${security_raw}" \
+            --attachment "security-receipt=${security_receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve only content-free source prerequisite receipts
+        id: upload_source
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-rc-source-prerequisite-receipts-${{ github.sha }}
+          path: |
+            ${{ env.CIGAR_RC_SOURCE_EVIDENCE }}/workflow/workflow-receipt.json
+            ${{ env.CIGAR_RC_SOURCE_EVIDENCE }}/security/command-plane/test-security.raw.json
+            ${{ env.CIGAR_RC_SOURCE_EVIDENCE }}/security/command-plane/test-security.receipt.json
+            ${{ env.CIGAR_RC_SOURCE_EVIDENCE }}/reproducibility/release/reproducibility-result.v1.json
+            ${{ env.CIGAR_RC_SOURCE_EVIDENCE }}/reproducibility/command-plane/release-reproduce.receipt.json
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable source receipt upload digest
+        if: ${{ steps.upload_source.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload_source.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY
+
+  package-chain:
+    name: unsigned native archive and Homebrew package chain / macOS 15 arm64
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: never
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate private workspaces
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-rc-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          target="${canonical_temp}/cigar-rc-package-target-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          test ! -e "${target}"
+          mkdir -m 0700 "${evidence}" "${target}" "${evidence}/workflow"
+          printf 'CIGAR_RC_PACKAGE_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+          printf 'CARGO_TARGET_DIR=%s\n' "${target}" >>"${GITHUB_ENV}"
+
+      - name: Install the pinned Protocol Buffers compiler
+        run: |
+          umask 077
+          protoc_root="${RUNNER_TEMP}/protoc-33.2"
+          protoc_archive="${RUNNER_TEMP}/protoc-33.2-osx-aarch_64.zip"
+          test ! -e "${protoc_root}"
+          test ! -e "${protoc_archive}"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --output "${protoc_archive}" \
+            https://github.com/protocolbuffers/protobuf/releases/download/v33.2/protoc-33.2-osx-aarch_64.zip
+          printf '%s  %s\n' \
+            '5be1427127788c9f7dd7d606c3e69843dd3587327dea993917ffcb77e7234b44' \
+            "${protoc_archive}" \
+            | shasum -a 256 --check
+          mkdir -m 0700 "${protoc_root}"
+          unzip -q "${protoc_archive}" -d "${protoc_root}"
+          test "$("${protoc_root}/bin/protoc" --version)" = "libprotoc 33.2"
+          printf '%s\n' "${protoc_root}/bin" >>"${GITHUB_PATH}"
+
+      - name: Hydrate the locked native dependency cache
+        run: cargo fetch --locked --target aarch64-apple-darwin
+
+      - name: Build and independently verify the unsigned package chain offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          umask 077
+          command_binding='build native macOS archive; build Homebrew bottle/tap; independently reconstruct and verify (unsigned diagnostic)'
+          epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          native_root="${CIGAR_RC_PACKAGE_EVIDENCE}/native"
+          homebrew_root="${CIGAR_RC_PACKAGE_EVIDENCE}/homebrew"
+          native_receipt="${native_root}/macos-aarch64-development-build.json"
+          homebrew_receipt="${homebrew_root}/macos-homebrew-development-build.json"
+          verification="${CIGAR_RC_PACKAGE_EVIDENCE}/workflow/homebrew-verification.json"
+          CIGAR_EVIDENCE_DIR="${native_root}" \
+            SOURCE_DATE_EPOCH="${epoch}" \
+            python3 scripts/release/build_macos_aarch64_archive.py \
+              >"${CIGAR_RC_PACKAGE_EVIDENCE}/native-build-stdout.json"
+          native_archive="$(python3 - "${native_receipt}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt_path = Path(sys.argv[1]).resolve(strict=True)
+          relative = json.loads(receipt_path.read_bytes())["archive"]["path"]
+          candidate = (receipt_path.parent / relative).resolve(strict=True)
+          if candidate.parent != receipt_path.parent or candidate.name != relative:
+              raise SystemExit("native archive receipt path escaped its workspace")
+          print(candidate)
+          PY
+          )"
+          CIGAR_EVIDENCE_DIR="${homebrew_root}" \
+            SOURCE_DATE_EPOCH="${epoch}" \
+            python3 scripts/release/build_macos_homebrew_artifacts.py \
+              --native-archive "${native_archive}" \
+              --native-build-receipt "${native_receipt}" \
+              >"${CIGAR_RC_PACKAGE_EVIDENCE}/homebrew-build-stdout.json"
+          bottle="$(python3 - "${homebrew_receipt}" homebrew-bottle <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt_path = Path(sys.argv[1]).resolve(strict=True)
+          matches = [item["path"] for item in json.loads(receipt_path.read_bytes())["artifacts"] if item["kind"] == sys.argv[2]]
+          if len(matches) != 1:
+              raise SystemExit("package receipt artifact inventory is invalid")
+          candidate = (receipt_path.parent / matches[0]).resolve(strict=True)
+          if candidate.parent != receipt_path.parent or candidate.name != matches[0]:
+              raise SystemExit("package receipt artifact path escaped its workspace")
+          print(candidate)
+          PY
+          )"
+          tap_archive="$(python3 - "${homebrew_receipt}" homebrew-tap-archive <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt_path = Path(sys.argv[1]).resolve(strict=True)
+          matches = [item["path"] for item in json.loads(receipt_path.read_bytes())["artifacts"] if item["kind"] == sys.argv[2]]
+          if len(matches) != 1:
+              raise SystemExit("package receipt artifact inventory is invalid")
+          candidate = (receipt_path.parent / matches[0]).resolve(strict=True)
+          if candidate.parent != receipt_path.parent or candidate.name != matches[0]:
+              raise SystemExit("package receipt artifact path escaped its workspace")
+          print(candidate)
+          PY
+          )"
+          SOURCE_DATE_EPOCH="${epoch}" \
+            python3 scripts/release/verify_macos_homebrew_artifacts.py \
+              --native-archive "${native_archive}" \
+              --native-build-receipt "${native_receipt}" \
+              --bottle "${bottle}" \
+              --tap-archive "${tap_archive}" \
+              --homebrew-build-receipt "${homebrew_receipt}" \
+              >"${verification}"
+          chmod 0400 "${verification}"
+          python3 - "${native_receipt}" "${homebrew_receipt}" "${verification}" "${GITHUB_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          native, homebrew, verification = [json.loads(Path(path).read_bytes()) for path in sys.argv[1:4]]
+          revision = sys.argv[4]
+          if any(item["source"]["revision"] != revision for item in (native, homebrew, verification)):
+              raise SystemExit("package chain is not bound to the event SHA")
+          for item in (native, homebrew, verification):
+              claims = item["claims"]
+              for name in ("distribution_signed", "notarized", "qualified", "published", "release"):
+                  if claims[name] is not False:
+                      raise SystemExit(f"package chain overclaims {name}")
+          PY
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_RC_PACKAGE_EVIDENCE}/workflow/workflow-receipt.json" \
+            --lane rc-macos-package-chain \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "homebrew-receipt=${homebrew_receipt}" \
+            --attachment "homebrew-verification=${verification}" \
+            --attachment "native-receipt=${native_receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_RC_PACKAGE_EVIDENCE}/workflow/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "homebrew-receipt=${homebrew_receipt}" \
+            --attachment "homebrew-verification=${verification}" \
+            --attachment "native-receipt=${native_receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve only content-free package-chain receipts
+        id: upload_package
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-rc-package-chain-receipts-${{ github.sha }}
+          path: |
+            ${{ env.CIGAR_RC_PACKAGE_EVIDENCE }}/workflow/workflow-receipt.json
+            ${{ env.CIGAR_RC_PACKAGE_EVIDENCE }}/workflow/homebrew-verification.json
+            ${{ env.CIGAR_RC_PACKAGE_EVIDENCE }}/native/macos-aarch64-development-build.json
+            ${{ env.CIGAR_RC_PACKAGE_EVIDENCE }}/homebrew/macos-homebrew-development-build.json
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable package receipt upload digest
+        if: ${{ steps.upload_package.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload_package.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY

@@ -3,7 +3,8 @@
 use crate::generated::{HttpMethod, OPERATIONS, OperationContract, StreamKind};
 use crate::service::{
     ContextInput, EnvelopeError, EventEnvelope, FacadeEventStream, MAX_OPERATION_PAYLOAD_BYTES,
-    PathParameter, RequestEnvelope, ResponseEnvelope, ServiceKernel, VerifiedClientIdentity,
+    PathParameter, RequestEnvelope, ResponseEnvelope, ServiceKernel, TransportMetricEvent,
+    TransportMetricsObserver, VerifiedClientIdentity,
 };
 use crate::{ApiError, CancellationToken, TraceId};
 use axum::Router;
@@ -427,6 +428,7 @@ async fn execute_http(
                     cancellation,
                     kernel.config().stream_buffer_capacity(),
                     trace_id,
+                    kernel.metrics_observer(),
                 ),
                 Err(error) => problem_response(error),
             }
@@ -506,8 +508,9 @@ fn sse_response(
     cancellation: CancellationToken,
     capacity: usize,
     trace_id: String,
+    metrics: Option<Arc<dyn TransportMetricsObserver>>,
 ) -> Response {
-    let receiver = bounded_receiver(stream, cancellation, capacity);
+    let receiver = bounded_receiver(stream, cancellation, capacity, metrics);
     let stream = HttpEventStream { receiver };
     let mut response = Sse::new(stream).into_response();
     response.headers_mut().insert(
@@ -526,6 +529,7 @@ fn sse_response(
 struct ReceiverEventStream {
     receiver: mpsc::Receiver<Result<EventEnvelope, ApiError>>,
     cancellation: CancellationToken,
+    metrics: Option<Arc<dyn TransportMetricsObserver>>,
 }
 
 impl Stream for ReceiverEventStream {
@@ -538,6 +542,11 @@ impl Stream for ReceiverEventStream {
 
 impl Drop for ReceiverEventStream {
     fn drop(&mut self) {
+        if !self.cancellation.is_cancelled()
+            && let Some(metrics) = &self.metrics
+        {
+            metrics.record_transport_metric(TransportMetricEvent::StreamCancelled);
+        }
         self.cancellation.cancel();
     }
 }
@@ -546,9 +555,11 @@ fn bounded_receiver(
     mut source: FacadeEventStream,
     cancellation: CancellationToken,
     capacity: usize,
+    metrics: Option<Arc<dyn TransportMetricsObserver>>,
 ) -> ReceiverEventStream {
     let (sender, receiver) = mpsc::channel(capacity);
     let producer_cancellation = cancellation.clone();
+    let producer_metrics = metrics.clone();
     tokio::spawn(async move {
         loop {
             let item = poll_fn(|context| source.as_mut().poll_next(context)).await;
@@ -556,7 +567,19 @@ fn bounded_receiver(
                 break;
             };
             let terminal = item.is_err();
-            if sender.send(item).await.is_err() || terminal {
+            match sender.try_send(item) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(item)) => {
+                    if let Some(metrics) = &producer_metrics {
+                        metrics.record_transport_metric(TransportMetricEvent::StreamBlocked);
+                    }
+                    if sender.send(item).await.is_err() {
+                        break;
+                    }
+                }
+                Err(mpsc::error::TrySendError::Closed(_item)) => break,
+            }
+            if terminal {
                 break;
             }
         }
@@ -565,6 +588,7 @@ fn bounded_receiver(
     ReceiverEventStream {
         receiver,
         cancellation,
+        metrics,
     }
 }
 
@@ -832,14 +856,57 @@ fn header_value(value: &str) -> Option<HeaderValue> {
 #[cfg(test)]
 mod tests {
     use super::{
-        OPENMETRICS_CONTENT_TYPE, match_http_operation, registered_http_routes, unary_response,
+        OPENMETRICS_CONTENT_TYPE, bounded_receiver, match_http_operation, registered_http_routes,
+        unary_response,
     };
-    use crate::ResponseEnvelope;
     use crate::generated::{HttpMethod, OPERATION_COUNT, OPERATIONS};
+    use crate::{
+        CancellationToken, EventEnvelope, FacadeEventStream, ResponseEnvelope,
+        TransportMetricEvent, TransportMetricsObserver,
+    };
     use axum::body::to_bytes;
     use axum::http::header::CONTENT_TYPE;
     use cigar_canon::{parse_strict_json, to_deterministic_cbor};
+    use futures_core::Stream;
     use std::collections::BTreeSet;
+    use std::collections::VecDeque;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::task::{Context, Poll};
+
+    #[derive(Default)]
+    struct TestMetrics {
+        blocked: AtomicU64,
+        cancelled: AtomicU64,
+    }
+
+    impl TransportMetricsObserver for TestMetrics {
+        fn record_transport_metric(&self, event: TransportMetricEvent) {
+            match event {
+                TransportMetricEvent::StreamBlocked => {
+                    self.blocked.fetch_add(1, Ordering::Relaxed);
+                }
+                TransportMetricEvent::StreamCancelled => {
+                    self.cancelled.fetch_add(1, Ordering::Relaxed);
+                }
+                TransportMetricEvent::ApiFailure | TransportMetricEvent::StreamOpened => {}
+            }
+        }
+    }
+
+    struct BurstStream(VecDeque<Result<EventEnvelope, crate::ApiError>>);
+
+    impl Stream for BurstStream {
+        type Item = Result<EventEnvelope, crate::ApiError>;
+
+        fn poll_next(
+            mut self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Option<Self::Item>> {
+            Poll::Ready(self.0.pop_front())
+        }
+    }
 
     #[test]
     fn exact_registry_has_all_45_routes_without_aliases() {
@@ -901,6 +968,37 @@ mod tests {
             body.as_ref(),
             b"# HELP cigar_ready Ready.\n# TYPE cigar_ready gauge\ncigar_ready 1\n# EOF\n"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bounded_stream_reports_real_full_buffer_and_early_cancellation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let events = VecDeque::from([
+            Ok(EventEnvelope::new(
+                "subscribeSpaceEvents",
+                "event-1",
+                vec![0xa0],
+            )?),
+            Ok(EventEnvelope::new(
+                "subscribeSpaceEvents",
+                "event-2",
+                vec![0xa0],
+            )?),
+        ]);
+        let source: FacadeEventStream = Box::pin(BurstStream(events));
+        let metrics = Arc::new(TestMetrics::default());
+        let observer: Arc<dyn TransportMetricsObserver> = metrics.clone();
+        let receiver = bounded_receiver(source, CancellationToken::new(), 1, Some(observer));
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while metrics.blocked.load(Ordering::Relaxed) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await?;
+        assert_eq!(metrics.blocked.load(Ordering::Relaxed), 1);
+        drop(receiver);
+        assert_eq!(metrics.cancelled.load(Ordering::Relaxed), 1);
         Ok(())
     }
 }

@@ -6,7 +6,7 @@
     {
       "id": "CHAOS-BLOB-001",
       "title": "Every encrypted blob publication failpoint is atomic and reconcilable.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib", "-E", "test(=blob::tests::every_publication_failpoint_is_atomic_and_reconcilable)"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-store", "--lib", "-E", "test(=blob::tests::every_publication_failpoint_is_atomic_and_reconcilable)"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -15,7 +15,7 @@
     {
       "id": "CHAOS-DAEMON-001",
       "title": "Durable snapshot loss and semantic tampering fail closed across restart.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-daemon", "--lib", "-E", "test(=durable_snapshot::tests::missing_chunk_and_semantically_tampered_snapshot_fail_closed)"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-daemon", "--lib", "-E", "test(=durable_snapshot::tests::missing_chunk_and_semantically_tampered_snapshot_fail_closed)"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -24,7 +24,7 @@
     {
       "id": "CHAOS-EFFECT-001",
       "title": "All 24 effect boundaries use process kill, fresh recovery, and a 100000-operation ambiguity campaign.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_faults"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-effects", "--test", "wp12_faults"],
       "timeout_seconds": 2400,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -33,7 +33,7 @@
     {
       "id": "CHAOS-EFFECT-002",
       "title": "Remote commit followed by SQLite receipt loss recovers without a duplicate effect.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_sqlite"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-effects", "--test", "wp12_sqlite"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -42,7 +42,7 @@
     {
       "id": "CHAOS-EXTENSION-001",
       "title": "Extension subprocess resource exhaustion is terminated and output floods are rejected.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-extension-host", "--lib", "-E", "test(=tests::isolated_subprocess_kills_infinite_loop_and_rejects_output_flood)"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-extension-host", "--lib", "-E", "test(=tests::isolated_subprocess_kills_infinite_loop_and_rejects_output_flood)"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos"],
@@ -60,7 +60,7 @@
     {
       "id": "CHAOS-SQLITE-001",
       "title": "Process termination and WAL truncation preserve the exact SQLite commit boundary.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--test", "sqlite_process_kill"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-store", "--test", "sqlite_process_kill"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],

@@ -2,9 +2,15 @@
 
 ## Preconditions
 
-Use PostgreSQL and S3-compatible services in the same failure domain as the latency target. The
-migrator and runtime URLs must name different roles. The migrator owns CIGAR tables; the runtime
-role is `NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS` and receives only schema usage plus DML.
+Use PostgreSQL and S3-compatible services in the same failure domain as the latency target. Use four
+non-interchangeable PostgreSQL principals: migrator, runtime, backup, and garbage collection. The
+migrator owns CIGAR tables; none of the other three may own the database or schema. The runtime role
+is `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS` and receives only schema usage plus
+DML. Backup and GC are non-superuser, read-only `BYPASSRLS` roles. Backup alone may execute
+`pg_control_system()`; GC alone may execute `cigar_gc_lock_repository_revision()`. Revoke both
+functions from PUBLIC and never grant either authority to runtime. CIGAR verifies the exact
+session/current role, rejects every SET-able role membership and role-creation/database/replication
+authority, and rechecks this disjoint privilege shape inside each authority-bearing transaction.
 Require TLS verification on PostgreSQL, object storage, OIDC, OTLP, HTTP, and gRPC. Object runtime
 credentials may create/read immutable final objects and clean staging/probe objects, but cannot
 delete `*/objects/*`; a separately authorized GC/restore identity owns final deletion.
@@ -25,13 +31,19 @@ with the address. Runtime and migration both force TLS and use the same explicit
 
 1. Provision object versioning and a deny-overwrite policy. Confirm a conditional second PUT cannot
    replace an existing final key and an ordinary runtime DELETE is denied.
-2. Create the owner role, then the runtime role and default privileges. Confirm
-   `rolsuper = false` and `rolbypassrls = false` for runtime.
+2. Create the migrator, runtime, backup, and GC roles. Confirm the migrator is the only owner; all
+   serving/operations roles have `rolsuper = false`, runtime has `rolbypassrls = false`, and backup
+   and GC have `rolbypassrls = true`. Revoke PUBLIC execution of `pg_control_system()` and every
+   migration-owned function. Grant `pg_control_system()` only to backup and the GC revision guard
+   only to GC. The checked-in Compose profile applies
+   `deploy/compose/postgres-shared-post-migration.sql` after migrations as its development policy.
 3. Prepare the strict object wrapping-key map. Its sorted tenant set must exactly equal active
    authority tenants; each referenced key must be an active tenant-scoped blob-encryption key.
 4. Render `deploy/kubernetes/shared` only after replacing all `.invalid` endpoints and pinning the
    release image digest. Review the rendered Secret names, network policy, resources, and image list.
-5. Apply Namespace/configuration/Secrets and the `cigard-migrate` Job. Read its content-free receipt;
+5. Apply Namespace/configuration/Secrets and the `cigard-migrate` Job. Apply the reviewed,
+   environment-specific post-migration grants before any repository process connects. Read the
+   migration's content-free receipt;
    `latest_sequence` and `checksums_verified` must equal the packaged migration count. A failed or
    interrupted Job is rerun with the same image and owner credential; never edit an applied SQL file.
 6. Verify every tenant table has both RLS and forced RLS:

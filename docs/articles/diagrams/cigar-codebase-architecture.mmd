@@ -1,0 +1,52 @@
+flowchart TB
+    subgraph surfaces ["Product surfaces"]
+        cli["CLI"]
+        mcp["MCP"]
+        sdk["API and SDKs"]
+    end
+
+    subgraph runtime ["Runtime composition"]
+        daemon["Daemon"]
+        extensionHost["Extension host"]
+        observe["Observability"]
+    end
+
+    subgraph services ["Governed services"]
+        contextPath["Catalog, retrieval, compiler"]
+        coordination["Spaces and handoffs"]
+        effectPath["Effects and replay"]
+        policy["Policy engine"]
+    end
+
+    subgraph foundation ["Trusted foundation"]
+        protocol["Protocol types"]
+        canon["Canonicalization"]
+        crypto["Cryptography"]
+        store[("SQLite, PostgreSQL, blobs")]
+    end
+
+    cli --> daemon
+    mcp --> daemon
+    sdk --> daemon
+    daemon --> contextPath
+    daemon --> coordination
+    daemon --> effectPath
+    daemon --> extensionHost
+    daemon -.-> observe
+    contextPath --> policy
+    coordination --> policy
+    effectPath --> policy
+    contextPath --> protocol
+    coordination --> protocol
+    effectPath --> protocol
+    policy --> protocol
+    protocol --> canon
+    canon --> crypto
+    contextPath --> store
+    coordination --> store
+    effectPath --> store
+
+    style surfaces fill:#C2E5FF,stroke:#3DADFF
+    style runtime fill:#C6FAF6,stroke:#5AD8CC
+    style services fill:#FFECBD,stroke:#FFC943
+    style foundation fill:#DCCCFF,stroke:#874FFF

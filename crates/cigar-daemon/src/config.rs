@@ -17,6 +17,9 @@ const MAX_ISSUER_BYTES: usize = 2_048;
 const MAX_AUDIENCE_BYTES: usize = 256;
 const MAX_OBJECT_ENDPOINT_BYTES: usize = 2_048;
 const MAX_OBJECT_SELECTOR_BYTES: usize = 512;
+const DEFAULT_LOCAL_VECTOR_DIMENSION: usize = 64;
+const DEFAULT_LOCAL_VECTOR_MAXIMUM_ENTRIES: usize = 100_000;
+const DEFAULT_LOCAL_VECTOR_MAXIMUM_NEIGHBORS: usize = 128;
 
 /// Stable daemon configuration failure category.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,6 +153,8 @@ impl ApplicationResourceLimits {
 pub struct TelemetrySettings {
     /// HTTPS or loopback OTLP/gRPC collector; omitted for no outbound exporter.
     pub otlp_endpoint: Option<String>,
+    /// Explicit owner-controlled CA bundle required for every HTTPS collector.
+    pub otlp_ca_certificate_file: Option<PathBuf>,
     /// Maximum one exporter operation duration.
     pub export_timeout_ms: u64,
     /// Periodic metric export interval.
@@ -167,27 +172,61 @@ impl TelemetrySettings {
         {
             return Err(ConfigError::new(ConfigErrorCode::InvalidLimit));
         }
-        if let Some(endpoint) = &self.otlp_endpoint {
-            crate::OtlpConfig::new(endpoint, export_timeout, metric_interval)
+        match (&self.otlp_endpoint, &self.otlp_ca_certificate_file) {
+            (None, None) => {}
+            (Some(endpoint), ca_certificate_file) => {
+                if let Some(path) = ca_certificate_file {
+                    normalized_absolute(path)?;
+                }
+                crate::OtlpConfig::validate_configuration_shape(
+                    endpoint,
+                    export_timeout,
+                    metric_interval,
+                    ca_certificate_file.is_some(),
+                )
                 .map_err(|_error| ConfigError::new(ConfigErrorCode::InvalidLimit))?;
+            }
+            (None, Some(_ca_certificate_file)) => {
+                return Err(ConfigError::new(ConfigErrorCode::InvalidLimit));
+            }
         }
         Ok(())
     }
 
-    /// Returns validated OTLP settings or `None` for local-only telemetry.
-    pub fn otlp_config(&self) -> Result<Option<crate::OtlpConfig>, ConfigError> {
+    /// Returns validated OTLP settings using bytes read from the configured explicit CA file.
+    ///
+    /// Callers must use a descriptor-safe, bounded reader. `None` is required for loopback HTTP
+    /// and for disabled export; HTTPS requires `Some` bytes from the exact configured file.
+    pub fn otlp_config(
+        &self,
+        ca_certificate_pem: Option<Vec<u8>>,
+    ) -> Result<Option<crate::OtlpConfig>, ConfigError> {
         self.validate()?;
-        self.otlp_endpoint
-            .as_ref()
-            .map(|endpoint| {
-                crate::OtlpConfig::new(
+        match (
+            self.otlp_endpoint.as_ref(),
+            self.otlp_ca_certificate_file.as_ref(),
+            ca_certificate_pem,
+        ) {
+            (None, None, None) => Ok(None),
+            (Some(endpoint), None, None) => crate::OtlpConfig::new(
+                endpoint,
+                Duration::from_millis(self.export_timeout_ms),
+                Duration::from_millis(self.metric_interval_ms),
+            )
+            .map(Some)
+            .map_err(|_error| ConfigError::new(ConfigErrorCode::InvalidLimit)),
+            (Some(endpoint), Some(_path), Some(ca_certificate_pem)) => {
+                crate::OtlpConfig::new_with_ca_certificate(
                     endpoint,
                     Duration::from_millis(self.export_timeout_ms),
                     Duration::from_millis(self.metric_interval_ms),
+                    ca_certificate_pem,
                 )
+                .map(Some)
                 .map_err(|_error| ConfigError::new(ConfigErrorCode::InvalidLimit))
-            })
-            .transpose()
+            }
+            _ => Err(ConfigError::new(ConfigErrorCode::InvalidLimit)),
+        }
     }
 }
 
@@ -302,6 +341,88 @@ pub struct ProductionPaths {
     pub effect_registry_file: PathBuf,
 }
 
+/// Disabled-by-default macOS local deterministic vector projection settings.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalVectorSettings {
+    /// Explicit opt-in. Absence of this section is always disabled.
+    pub enabled: bool,
+    /// Owner-private durable immutable-generation root, required only when enabled.
+    pub root_directory: Option<PathBuf>,
+    /// Exact bounded signed-integer feature dimension.
+    pub dimension: usize,
+    /// Maximum processor-approved document vectors in one generation.
+    pub maximum_entries: usize,
+    /// Maximum neighbors returned by one authorized vector stage.
+    pub maximum_neighbors: usize,
+}
+
+impl Default for LocalVectorSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            root_directory: None,
+            dimension: DEFAULT_LOCAL_VECTOR_DIMENSION,
+            maximum_entries: DEFAULT_LOCAL_VECTOR_MAXIMUM_ENTRIES,
+            maximum_neighbors: DEFAULT_LOCAL_VECTOR_MAXIMUM_NEIGHBORS,
+        }
+    }
+}
+
+impl LocalVectorSettings {
+    fn validate(
+        &self,
+        mode: DeploymentMode,
+        state_directory: &Path,
+        production: &ProductionPaths,
+    ) -> Result<(), ConfigError> {
+        if !self.enabled {
+            return if self == &Self::default() {
+                Ok(())
+            } else {
+                Err(ConfigError::new(
+                    ConfigErrorCode::IncompleteProductionInputs,
+                ))
+            };
+        }
+        if mode != DeploymentMode::Local {
+            return Err(ConfigError::new(
+                ConfigErrorCode::IncompleteProductionInputs,
+            ));
+        }
+        #[cfg(not(target_os = "macos"))]
+        return Err(ConfigError::new(
+            ConfigErrorCode::IncompleteProductionInputs,
+        ));
+
+        #[cfg(target_os = "macos")]
+        {
+            let root = self
+                .root_directory
+                .as_ref()
+                .ok_or_else(|| ConfigError::new(ConfigErrorCode::IncompleteProductionInputs))?;
+            normalized_absolute(root)?;
+            if root == state_directory
+                || !root.starts_with(state_directory)
+                || root == &production.blob_directory
+                || root == &production.blob_key_reference_directory
+                || production.blob_directory.starts_with(root)
+                || production.blob_key_reference_directory.starts_with(root)
+                || !(8..=cigar_retrieval::MAX_VECTOR_DIMENSIONS).contains(&self.dimension)
+                || !(1..=cigar_retrieval::MAX_LOCAL_VECTOR_ENTRIES).contains(&self.maximum_entries)
+                || self.maximum_neighbors == 0
+                || self.maximum_neighbors > self.maximum_entries
+                || self.maximum_neighbors > cigar_retrieval::MAX_CANDIDATES
+            {
+                return Err(ConfigError::new(
+                    ConfigErrorCode::IncompleteProductionInputs,
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
 /// DDL-free runtime pool plus a separately mounted owner migration credential.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -393,9 +514,7 @@ impl SharedObjectSettings {
         if let Some(token) = &self.security_token_file {
             normalized_absolute(token)?;
         }
-        let endpoint_allowed = self.endpoint.starts_with("https://")
-            || self.endpoint.starts_with("http://127.0.0.1:")
-            || self.endpoint.starts_with("http://localhost:");
+        let endpoint_allowed = valid_shared_object_endpoint(&self.endpoint);
         let selectors_valid = !self.region.is_empty()
             && self.region.len() <= 128
             && !self.bucket.is_empty()
@@ -425,6 +544,26 @@ impl SharedObjectSettings {
         }
         Ok(())
     }
+}
+
+fn valid_shared_object_endpoint(value: &str) -> bool {
+    reqwest::Url::parse(value).is_ok_and(|endpoint| {
+        let root_path = endpoint.path().is_empty() || endpoint.path() == "/";
+        let no_ambient_authority = endpoint.username().is_empty()
+            && endpoint.password().is_none()
+            && endpoint.query().is_none()
+            && endpoint.fragment().is_none();
+        let secure = endpoint.scheme() == "https" && endpoint.host_str().is_some();
+        let loopback_http = endpoint.scheme() == "http"
+            && endpoint.port().is_some()
+            && endpoint
+                .host_str()
+                .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]"));
+        root_path
+            && no_ambient_authority
+            && !endpoint.cannot_be_a_base()
+            && (secure || loopback_http)
+    })
 }
 
 impl fmt::Debug for SharedObjectSettings {
@@ -568,6 +707,9 @@ impl fmt::Debug for OidcSettings {
 pub struct DaemonConfig {
     /// Local or shared security profile.
     pub mode: DeploymentMode,
+    /// Explicit bounded SQLite capacity profile; `large_local` is macOS arm64 local-only.
+    #[serde(default)]
+    pub local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile,
     /// Durable metadata and blob state root.
     pub state_directory: PathBuf,
     /// Socket, token, and process-runtime root.
@@ -588,6 +730,9 @@ pub struct DaemonConfig {
     pub oidc: Option<OidcSettings>,
     /// Mandatory trusted production application paths.
     pub production: ProductionPaths,
+    /// Optional local deterministic vector projection; absent is disabled.
+    #[serde(default)]
+    pub local_vector: LocalVectorSettings,
     /// PostgreSQL/object profile; mandatory in shared mode and forbidden in local mode.
     #[serde(default)]
     pub shared_storage: Option<SharedStorageSettings>,
@@ -621,6 +766,8 @@ impl DaemonConfig {
         normalized_absolute(&self.state_directory)?;
         normalized_absolute(&self.runtime_directory)?;
         self.production.validate(&self.state_directory)?;
+        self.local_vector
+            .validate(self.mode, &self.state_directory, &self.production)?;
         if let Some(socket) = &self.unix_socket {
             absolute(socket)?;
             if socket.parent() != Some(self.runtime_directory.as_path()) {
@@ -675,6 +822,13 @@ impl DaemonConfig {
         if self.tls.is_some() || self.oidc.is_some() || self.shared_storage.is_some() {
             return Err(ConfigError::new(ConfigErrorCode::UnsafeLocalBind));
         }
+        if self.local_sqlite_capacity_profile == cigar_store::SqliteCapacityProfile::LargeLocal
+            && !cfg!(all(target_os = "macos", target_arch = "aarch64"))
+        {
+            return Err(ConfigError::new(
+                ConfigErrorCode::IncompleteProductionInputs,
+            ));
+        }
         let tcp = [self.http_listen, self.grpc_listen];
         let has_tcp = tcp.into_iter().flatten().next().is_some();
         let tcp_safe = tcp
@@ -689,7 +843,8 @@ impl DaemonConfig {
     }
 
     fn validate_shared(&self) -> Result<(), ConfigError> {
-        if self.unix_socket.is_some()
+        if self.local_sqlite_capacity_profile != cigar_store::SqliteCapacityProfile::Standard
+            || self.unix_socket.is_some()
             || self.windows_named_pipe.is_some()
             || self.local_token_file.is_some()
             || self.http_listen.is_none()
@@ -836,7 +991,32 @@ secret_key_file = "/tmp/cigar-secrets/object-secret-key"
 security_token_file = "/tmp/cigar-secrets/object-session-token"
 wrapping_keys_file = "/tmp/cigar-config/object-wrapping-keys.json"
 blinding_key_file = "/tmp/cigar-secrets/object-blinding-key"
-"#
+        "#
+    }
+
+    fn shared_config() -> String {
+        let extra = format!(
+            r#"http_listen = "127.0.0.1:7443"
+grpc_listen = "127.0.0.1:7444"
+
+[tls]
+certificate_chain = "/tmp/server.pem"
+private_key = "/tmp/server.key"
+
+[oidc]
+issuer = "https://issuer.example"
+audience = "cigar-api"
+tenant_claim = "tenant"
+jwks_max_age_seconds = 300
+jwks_refresh_timeout_ms = 100
+clock_skew_seconds = 30
+max_token_bytes = 4096
+{}"#,
+            shared_storage_config()
+        );
+        local_config(&extra)
+            .replace("mode = \"local\"", "mode = \"shared\"")
+            .replace("unix_socket = \"/tmp/cigar-run/cigard.sock\"\n", "")
     }
 
     #[test]
@@ -844,6 +1024,72 @@ blinding_key_file = "/tmp/cigar-secrets/object-blinding-key"
         let config = DaemonConfig::from_toml(&local_config(""))?;
         assert_eq!(config.workers.outbox, 8);
         assert_eq!(config.request_deadline().as_secs(), 30);
+        assert!(!config.local_vector.enabled);
+        assert_eq!(
+            config.local_sqlite_capacity_profile,
+            cigar_store::SqliteCapacityProfile::Standard
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn large_local_sqlite_is_an_explicit_macos_arm64_only_profile() {
+        let configured = DaemonConfig::from_toml(&local_config(
+            "local_sqlite_capacity_profile = \"large_local\"",
+        ));
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            assert!(matches!(
+                configured,
+                Ok(config)
+                    if config.local_sqlite_capacity_profile
+                        == cigar_store::SqliteCapacityProfile::LargeLocal
+            ));
+        } else {
+            assert!(matches!(
+                configured,
+                Err(error) if error.code() == ConfigErrorCode::IncompleteProductionInputs
+            ));
+        }
+    }
+
+    #[test]
+    fn local_vector_is_explicit_macos_only_bounded_and_shared_forbidden()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let table = r#"[local_vector]
+enabled = true
+root_directory = "/tmp/cigar-state/vectors"
+dimension = 64
+maximum_entries = 100000
+maximum_neighbors = 128
+"#;
+        let enabled = DaemonConfig::from_toml(&local_config(table))?;
+        assert!(enabled.local_vector.enabled);
+        assert_eq!(enabled.local_vector.dimension, 64);
+
+        for invalid in [
+            local_config(table).replace(
+                "root_directory = \"/tmp/cigar-state/vectors\"",
+                "root_directory = \"/tmp/outside-vectors\"",
+            ),
+            local_config(table).replace("dimension = 64", "dimension = 0"),
+            local_config(table).replace("maximum_neighbors = 128", "maximum_neighbors = 100001"),
+            local_config(table).replace("enabled = true", "enabled = false"),
+        ] {
+            assert_eq!(
+                DaemonConfig::from_toml(&invalid)
+                    .err()
+                    .map(|error| error.code()),
+                Some(ConfigErrorCode::IncompleteProductionInputs)
+            );
+        }
+
+        let shared = shared_config().replace("[workers]", &format!("{table}\n[workers]"));
+        assert_eq!(
+            DaemonConfig::from_toml(&shared)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::IncompleteProductionInputs)
+        );
         Ok(())
     }
 
@@ -969,28 +1215,7 @@ max_token_bytes = 4096"#,
     #[test]
     fn shared_profile_allows_tls_oidc_without_optional_service_mtls()
     -> Result<(), Box<dyn std::error::Error>> {
-        let extra = format!(
-            r#"http_listen = "127.0.0.1:7443"
-grpc_listen = "127.0.0.1:7444"
-
-[tls]
-certificate_chain = "/tmp/server.pem"
-private_key = "/tmp/server.key"
-
-[oidc]
-issuer = "https://issuer.example"
-audience = "cigar-api"
-tenant_claim = "tenant"
-jwks_max_age_seconds = 300
-jwks_refresh_timeout_ms = 100
-clock_skew_seconds = 30
-max_token_bytes = 4096
-{}"#,
-            shared_storage_config()
-        );
-        let shared = local_config(&extra)
-            .replace("mode = \"local\"", "mode = \"shared\"")
-            .replace("unix_socket = \"/tmp/cigar-run/cigard.sock\"\n", "");
+        let shared = shared_config();
         let config = DaemonConfig::from_toml(&shared)?;
         assert!(
             config
@@ -999,6 +1224,41 @@ max_token_bytes = 4096
                 .is_some_and(|tls| tls.client_ca.is_none())
         );
         Ok(())
+    }
+
+    #[test]
+    fn shared_object_endpoint_is_one_closed_origin_without_url_authority() {
+        let base = shared_config();
+        for invalid in [
+            "https://user@objects.example",
+            "https://user:password@objects.example",
+            "https://objects.example/path",
+            "https://objects.example?tenant=other",
+            "https://objects.example#fragment",
+            "http://objects.example:9000",
+            "http://localhost",
+        ] {
+            let candidate = base.replace("https://objects.example", invalid);
+            assert_eq!(
+                DaemonConfig::from_toml(&candidate)
+                    .err()
+                    .map(|error| error.code()),
+                Some(ConfigErrorCode::IncompleteProductionInputs),
+                "endpoint {invalid:?} must fail closed"
+            );
+        }
+        for allowed in [
+            "https://objects.example",
+            "http://localhost:9000",
+            "http://127.0.0.1:9000",
+            "http://[::1]:9000",
+        ] {
+            let candidate = base.replace("https://objects.example", allowed);
+            assert!(
+                DaemonConfig::from_toml(&candidate).is_ok(),
+                "endpoint {allowed:?} should satisfy the closed origin policy"
+            );
+        }
     }
 
     #[test]
@@ -1043,6 +1303,50 @@ max_token_bytes = 4096
         );
         assert_eq!(
             DaemonConfig::from_toml(&unsafe_export)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::InvalidLimit)
+        );
+
+        let https_without_ca = local_config("").replace(
+            "[telemetry]",
+            "[telemetry]\notlp_endpoint = \"https://collector.example:4317\"",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&https_without_ca)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::InvalidLimit)
+        );
+        let https_with_ca = local_config("").replace(
+            "[telemetry]",
+            "[telemetry]\notlp_endpoint = \"https://collector.example:4317\"\notlp_ca_certificate_file = \"/tmp/collector-ca.pem\"",
+        );
+        assert!(DaemonConfig::from_toml(&https_with_ca).is_ok());
+        let https_with_relative_ca =
+            https_with_ca.replace("/tmp/collector-ca.pem", "relative/collector-ca.pem");
+        assert_eq!(
+            DaemonConfig::from_toml(&https_with_relative_ca)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::RelativePath)
+        );
+        let loopback_with_ca = local_config("").replace(
+            "[telemetry]",
+            "[telemetry]\notlp_endpoint = \"http://127.0.0.1:4317\"\notlp_ca_certificate_file = \"/tmp/collector-ca.pem\"",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&loopback_with_ca)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::InvalidLimit)
+        );
+        let ca_without_endpoint = local_config("").replace(
+            "[telemetry]",
+            "[telemetry]\notlp_ca_certificate_file = \"/tmp/collector-ca.pem\"",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&ca_without_endpoint)
                 .err()
                 .map(|error| error.code()),
             Some(ConfigErrorCode::InvalidLimit)

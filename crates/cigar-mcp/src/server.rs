@@ -1,14 +1,17 @@
 //! MCP 2025-06-18 stdio protocol implementation.
 
 use std::collections::{BTreeMap, VecDeque};
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::backend::{
     Backend, BackendError, BackendMetadata, BackendRequest, BackendRequestKind, BackendResponse,
+    CancellationToken,
 };
 use crate::json::{self, Value, number, object, string};
+use crate::operation_mappings::{McpOperationMapping, mcp_operation_mapping};
 
 /// MCP protocol revision implemented by this server.
 pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
@@ -33,6 +36,9 @@ const BACKEND_MAX_DEPTH: usize = 64;
 const BACKEND_MAX_NODES: usize = 65_536;
 const BACKEND_MAX_STRING_BYTES: usize = 4 * 1024 * 1024;
 const MAX_INTEROPERABLE_RPC_INTEGER_ID: i64 = 9_007_199_254_740_991;
+const MAX_INTEROPERABLE_RPC_STRING_ID_BYTES: usize = 256;
+const INPUT_QUEUE_CAPACITY: usize = 64;
+const OUTPUT_FRAMING_RESERVE_BYTES: usize = 512;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SessionState {
@@ -48,118 +54,179 @@ struct StoredOutput {
     created: Instant,
 }
 
+#[derive(Clone, Debug)]
+struct CancellationEntry {
+    token: CancellationToken,
+    pending: usize,
+    active: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CancellationRegistry {
+    entries: Arc<Mutex<BTreeMap<String, CancellationEntry>>>,
+}
+
+impl CancellationRegistry {
+    fn pre_register(&self, id: &Value) {
+        let key = id.render();
+        let mut entries = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let entry = entries.entry(key).or_insert_with(|| CancellationEntry {
+            token: CancellationToken::new(),
+            pending: 0,
+            active: 0,
+        });
+        entry.pending = entry.pending.saturating_add(1);
+    }
+
+    fn claim(&self, id: &Value) -> CancellationToken {
+        let key = id.render();
+        let mut entries = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let entry = entries.entry(key).or_insert_with(|| CancellationEntry {
+            token: CancellationToken::new(),
+            pending: 0,
+            active: 0,
+        });
+        entry.pending = entry.pending.saturating_sub(1);
+        entry.active = entry.active.saturating_add(1);
+        entry.token.clone()
+    }
+
+    fn cancel(&self, id: &Value) {
+        let key = id.render();
+        let entries = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(entry) = entries.get(&key) {
+            entry.token.cancel();
+        }
+    }
+
+    fn finish(&self, id: &Value) {
+        let key = id.render();
+        let mut entries = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let remove = entries.get_mut(&key).is_some_and(|entry| {
+            entry.active = entry.active.saturating_sub(1);
+            entry.active == 0 && entry.pending == 0
+        });
+        if remove {
+            entries.remove(&key);
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ToolSpec {
     name: &'static str,
-    daemon_operation: &'static str,
     description: &'static str,
     allowed: &'static [&'static str],
     required: &'static [&'static str],
     always_required: &'static [&'static str],
     exact_request_only: bool,
-    lane: &'static str,
 }
 
 const TOOLS: [ToolSpec; 10] = [
     ToolSpec {
         name: "context_compile",
-        daemon_operation: "createContextPlan",
         description: "Compile a bounded context bundle from an explicit contract and source set.",
-        allowed: &["request", "contract", "max_tokens"],
+        allowed: &["request", "contract", "idempotency_key", "max_tokens"],
         required: &["contract"],
-        always_required: &[],
+        always_required: &["idempotency_key"],
         exact_request_only: false,
-        lane: "context_read",
     },
     ToolSpec {
         name: "context_expand",
-        daemon_operation: "materializeContextBundle",
         description: "Expand one bundle or page an opaque large-output handle within a strict budget.",
-        allowed: &["request", "bundle_id", "handle", "cursor", "max_tokens"],
+        allowed: &[
+            "request",
+            "bundle_id",
+            "handle",
+            "cursor",
+            "idempotency_key",
+            "max_tokens",
+        ],
         required: &[],
         always_required: &[],
         exact_request_only: false,
-        lane: "context_read",
     },
     ToolSpec {
         name: "context_explain",
-        daemon_operation: "explainContextBundle",
         description: "Explain bounded compiler selection evidence for one immutable bundle.",
-        allowed: &["request", "bundle_id", "selection_id", "max_tokens"],
+        allowed: &[
+            "request",
+            "bundle_id",
+            "selection_id",
+            "idempotency_key",
+            "max_tokens",
+        ],
         required: &["bundle_id"],
-        always_required: &[],
+        always_required: &["idempotency_key"],
         exact_request_only: false,
-        lane: "context_read",
     },
     ToolSpec {
         name: "catalog_query",
-        daemon_operation: "queryCatalog",
         description: "Query catalog metadata with an exact QueryCatalogRequest and bounded result page.",
         allowed: &["request", "max_tokens"],
         required: &[],
         always_required: &[],
         exact_request_only: true,
-        lane: "catalog_read",
     },
     ToolSpec {
         name: "checkpoint_create",
-        daemon_operation: "createSpaceCheckpoint",
         description: "Create a durable checkpoint from an exact CheckpointSpaceRequest.",
         allowed: &["request", "idempotency_key", "max_tokens"],
         required: &[],
         always_required: &["idempotency_key"],
         exact_request_only: true,
-        lane: "coordination_write",
     },
     ToolSpec {
         name: "handoff_create",
-        daemon_operation: "createHandoff",
         description: "Create a signed bounded handoff from an exact CreateHandoffRequest.",
         allowed: &["request", "idempotency_key", "max_tokens"],
         required: &[],
         always_required: &["idempotency_key"],
         exact_request_only: true,
-        lane: "coordination_write",
     },
     ToolSpec {
         name: "handoff_accept",
-        daemon_operation: "acceptHandoff",
         description: "Accept a signed handoff from an exact AcceptHandoffRequest after revalidation.",
         allowed: &["request", "idempotency_key", "max_tokens"],
         required: &[],
         always_required: &["idempotency_key"],
         exact_request_only: true,
-        lane: "coordination_write",
     },
     ToolSpec {
         name: "effect_prepare",
-        daemon_operation: "prepareEffect",
         description: "Prepare, but do not commit, an idempotent governed external effect.",
         allowed: &["request", "intent", "idempotency_key", "max_tokens"],
         required: &["intent"],
         always_required: &["idempotency_key"],
         exact_request_only: false,
-        lane: "effect_prepare",
     },
     ToolSpec {
         name: "effect_commit",
-        daemon_operation: "dispatchEffect",
         description: "Commit one authoritative prepared effect; unavailable authority fails closed.",
         allowed: &["request", "preparation_id", "idempotency_key", "max_tokens"],
         required: &["preparation_id"],
         always_required: &["idempotency_key"],
         exact_request_only: false,
-        lane: "effect_commit",
     },
     ToolSpec {
         name: "effect_status",
-        daemon_operation: "getEffectStatus",
         description: "Read bounded status and receipt metadata for one governed effect.",
         allowed: &["request", "effect_id", "max_tokens"],
         required: &["effect_id"],
         always_required: &[],
         exact_request_only: false,
-        lane: "effect_read",
     },
 ];
 
@@ -197,26 +264,24 @@ pub struct Server<B> {
     handles: BTreeMap<String, StoredOutput>,
     handle_order: VecDeque<String>,
     stored_bytes: usize,
-    handle_seed: u128,
-    next_handle: u64,
+    cancellations: CancellationRegistry,
 }
 
 impl<B: Backend> Server<B> {
     /// Creates a fresh server. No backend call is made until a protocol request needs one.
     #[must_use]
     pub fn new(backend: B) -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos())
-            ^ u128::from(std::process::id());
+        Self::with_cancellations(backend, CancellationRegistry::default())
+    }
+
+    fn with_cancellations(backend: B, cancellations: CancellationRegistry) -> Self {
         Self {
             backend,
             session: SessionState::AwaitInitialize,
             handles: BTreeMap::new(),
             handle_order: VecDeque::new(),
             stored_bytes: 0,
-            handle_seed: seed,
-            next_handle: 0,
+            cancellations,
         }
     }
 
@@ -248,15 +313,12 @@ impl<B: Backend> Server<B> {
                 "request_not_object",
             ));
         };
+        let notification = request.object_field("id").is_none();
         if !only_keys(fields, &["jsonrpc", "id", "method", "params"])
             || request.object_field("jsonrpc").and_then(Value::as_str) != Some("2.0")
         {
-            return Some(rpc_error(
-                Value::Null,
-                -32_600,
-                "Invalid Request",
-                "invalid_envelope",
-            ));
+            return (!notification)
+                .then(|| rpc_error(Value::Null, -32_600, "Invalid Request", "invalid_envelope"));
         }
 
         let id = match request.object_field("id") {
@@ -272,12 +334,9 @@ impl<B: Backend> Server<B> {
             None => None,
         };
         let Some(method) = request.object_field("method").and_then(Value::as_str) else {
-            return Some(rpc_error(
-                id.unwrap_or(Value::Null),
-                -32_600,
-                "Invalid Request",
-                "missing_method",
-            ));
+            return id.map(|request_id| {
+                rpc_error(request_id, -32_600, "Invalid Request", "missing_method")
+            });
         };
         let params = request
             .object_field("params")
@@ -289,7 +348,15 @@ impl<B: Backend> Server<B> {
             });
         }
 
-        let outcome = self.dispatch(method, &params, id.is_none());
+        let cancellation = id
+            .as_ref()
+            .map_or_else(CancellationToken::new, |request_id| {
+                self.cancellations.claim(request_id)
+            });
+        let outcome = self.dispatch(method, &params, id.is_none(), &cancellation);
+        if let Some(request_id) = &id {
+            self.cancellations.finish(request_id);
+        }
         match (id, outcome) {
             (None, _) => None,
             (Some(request_id), Ok(Some(result))) => Some(rpc_result(request_id, result)),
@@ -313,6 +380,7 @@ impl<B: Backend> Server<B> {
         method: &str,
         params: &Value,
         notification: bool,
+        cancellation: &CancellationToken,
     ) -> Result<Option<Value>, RpcFailure> {
         match method {
             "initialize" => self.initialize(params, notification).map(Some),
@@ -323,6 +391,9 @@ impl<B: Backend> Server<B> {
             "notifications/cancelled" => {
                 require_notification(notification)?;
                 validate_cancelled(params)?;
+                if let Some(request_id) = params.object_field("requestId") {
+                    self.cancellations.cancel(request_id);
+                }
                 Ok(None)
             }
             "ping" => {
@@ -343,7 +414,7 @@ impl<B: Backend> Server<B> {
             }
             "tools/call" => {
                 require_request(notification)?;
-                self.call_tool(params).map(Some)
+                self.call_tool(params, cancellation).map(Some)
             }
             "resources/list" => {
                 require_request(notification)?;
@@ -351,7 +422,7 @@ impl<B: Backend> Server<B> {
             }
             "resources/read" => {
                 require_request(notification)?;
-                self.read_resource(params).map(Some)
+                self.read_resource(params, cancellation).map(Some)
             }
             "roots/list" => {
                 require_request(notification)?;
@@ -380,15 +451,19 @@ impl<B: Backend> Server<B> {
         ) || params
             .object_field("protocolVersion")
             .and_then(Value::as_str)
-            .is_none()
+            .is_none_or(|version| {
+                version.is_empty() || version.len() > 32 || version.chars().any(char::is_control)
+            })
             || params
                 .object_field("capabilities")
                 .and_then(Value::as_object)
                 .is_none()
-            || params
+            || !params
                 .object_field("clientInfo")
-                .and_then(Value::as_object)
-                .is_none()
+                .is_some_and(valid_client_info)
+            || params
+                .object_field("_meta")
+                .is_some_and(|metadata| metadata.as_object().is_none())
         {
             return Err(RpcFailure::invalid_params("invalid_initialize"));
         }
@@ -456,7 +531,11 @@ impl<B: Backend> Server<B> {
         Ok(Value::Object(fields))
     }
 
-    fn call_tool(&mut self, params: &Value) -> Result<Value, RpcFailure> {
+    fn call_tool(
+        &mut self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcFailure> {
         let fields = params_object(params)?;
         if !only_keys(fields, &["name", "arguments", "_meta"]) {
             return Err(RpcFailure::invalid_params("unknown_tool_call_field"));
@@ -469,6 +548,8 @@ impl<B: Backend> Server<B> {
             .iter()
             .find(|tool| tool.name == name)
             .ok_or_else(|| RpcFailure::invalid_params("unknown_tool"))?;
+        let mapping = mcp_operation_mapping(name)
+            .ok_or_else(|| RpcFailure::new(-32_003, "Internal error", "missing_tool_mapping"))?;
         let arguments = params
             .object_field("arguments")
             .cloned()
@@ -477,78 +558,65 @@ impl<B: Backend> Server<B> {
         let output_tokens = output_tokens(&arguments)?;
 
         if spec.name == "context_expand" && arguments.object_field("handle").is_some() {
-            return self.expand_handle(spec, &arguments, output_tokens);
+            return self.expand_handle(mapping, &arguments, output_tokens);
         }
 
         let rendered_arguments = arguments.render();
-        let response = self.backend.call(BackendRequest {
-            kind: BackendRequestKind::Tool,
-            operation: spec.daemon_operation,
-            arguments_json: &rendered_arguments,
-        });
+        let response = self.backend.call_cancellable(
+            BackendRequest {
+                kind: BackendRequestKind::Tool,
+                operation: mapping.operation_id,
+                arguments_json: &rendered_arguments,
+            },
+            cancellation,
+        );
         match response {
-            Ok(response) => self.backend_tool_result(spec, response, output_tokens),
-            Err(error) => Ok(tool_backend_error(spec, error)),
+            Ok(response) => self.backend_tool_result(mapping, response, output_tokens),
+            Err(error) => Ok(tool_backend_error(spec, mapping, error)),
         }
     }
 
     fn backend_tool_result(
         &mut self,
-        spec: &ToolSpec,
+        mapping: &McpOperationMapping,
         response: BackendResponse,
         output_tokens: usize,
     ) -> Result<Value, RpcFailure> {
         validate_backend_response(&response)?;
-        let max_bytes = output_tokens.saturating_mul(4);
-        if response.body.len().saturating_add(1_024) > max_bytes {
-            let approximate_tokens = approximate_tokens(response.body.len());
-            let (handle, metadata) = self.store_output(response)?;
-            let visible = object([
-                ("output_handle", string(handle)),
-                ("cursor", string("0")),
-                ("approximate_tokens", number(approximate_tokens)),
-                ("metadata", result_metadata(&metadata, false, spec.lane)),
-            ]);
-            return Ok(object([
-                (
-                    "content",
-                    Value::Array(vec![object([
-                        ("type", string("text")),
-                        ("text", string(visible.render())),
-                    ])]),
-                ),
-                ("structuredContent", visible),
-                ("_meta", result_metadata(&metadata, false, spec.lane)),
-            ]));
-        }
         let data = json::parse(&response.body)
             .map_err(|_| RpcFailure::new(-32_003, "Internal error", "invalid_backend_json"))?;
+        let metadata = result_metadata(&response.metadata, false, mapping.authority_lane);
+        let inline_visible = object([("data", data), ("metadata", metadata.clone())]);
+        let inline = tool_result(inline_visible, metadata);
+        if fits_output_budget(&inline, output_tokens) {
+            return Ok(inline);
+        }
+
+        let approximate_tokens = approximate_tokens(response.body.len());
+        let (handle, stored_metadata) = self.store_output(response)?;
+        let metadata = result_metadata(&stored_metadata, false, mapping.authority_lane);
         let visible = object([
-            ("data", data),
-            (
-                "metadata",
-                result_metadata(&response.metadata, false, spec.lane),
-            ),
+            ("output_handle", string(handle.clone())),
+            ("cursor", string("0")),
+            ("approximate_tokens", number(approximate_tokens)),
+            ("metadata", metadata.clone()),
         ]);
-        Ok(object([
-            (
-                "content",
-                Value::Array(vec![object([
-                    ("type", string("text")),
-                    ("text", string(visible.render())),
-                ])]),
-            ),
-            ("structuredContent", visible),
-            (
-                "_meta",
-                result_metadata(&response.metadata, false, spec.lane),
-            ),
-        ]))
+        let paged = tool_result(visible, metadata);
+        if fits_output_budget(&paged, output_tokens) {
+            Ok(paged)
+        } else {
+            self.remove_handle(&handle);
+            Err(RpcFailure::new(
+                -32_003,
+                "Internal error",
+                "output_budget_unrepresentable",
+            ))
+        }
     }
 
     fn expand_handle(
         &mut self,
-        spec: &ToolSpec,
+        mapping: &McpOperationMapping,
         arguments: &Value,
         output_tokens: usize,
     ) -> Result<Value, RpcFailure> {
@@ -566,44 +634,23 @@ impl<B: Backend> Server<B> {
             .is_some_and(|stored| stored.created.elapsed() > HANDLE_TTL);
         if expired {
             self.remove_handle(handle);
-            return Ok(tool_local_error(spec, "output handle expired", false));
+            return Ok(tool_local_error(mapping, "output handle expired", false));
         }
         let Some(stored) = self.handles.get(handle).cloned() else {
             return Ok(tool_local_error(
-                spec,
+                mapping,
                 "output handle is unavailable",
                 false,
             ));
         };
-        let page_bytes = output_tokens.saturating_mul(4).saturating_sub(1_024);
-        let (page, next) = text_page(&stored.body, cursor, page_bytes)?;
-        let mut structured = vec![
-            ("output_handle".to_owned(), string(handle)),
-            ("cursor".to_owned(), string(cursor.to_string())),
-            (
-                "data".to_owned(),
-                json::parse(&page).unwrap_or_else(|_| string(page.clone())),
-            ),
-            (
-                "metadata".to_owned(),
-                result_metadata(&stored.metadata, false, spec.lane),
-            ),
-        ];
-        if let Some(next) = next {
-            structured.push(("next_cursor".to_owned(), string(next.to_string())));
-        }
-        let visible = Value::Object(structured);
-        Ok(object([
-            (
-                "content",
-                Value::Array(vec![object([
-                    ("type", string("text")),
-                    ("text", string(visible.render())),
-                ])]),
-            ),
-            ("structuredContent", visible),
-            ("_meta", result_metadata(&stored.metadata, false, spec.lane)),
-        ]))
+        bounded_tool_page(
+            handle,
+            cursor,
+            &stored.body,
+            &stored.metadata,
+            mapping.authority_lane,
+            output_tokens,
+        )
     }
 
     fn list_resources(&self, params: &Value) -> Result<Value, RpcFailure> {
@@ -631,7 +678,11 @@ impl<B: Backend> Server<B> {
         Ok(Value::Object(fields))
     }
 
-    fn read_resource(&mut self, params: &Value) -> Result<Value, RpcFailure> {
+    fn read_resource(
+        &mut self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcFailure> {
         let fields = params_object(params)?;
         if !only_keys(fields, &["uri", "cursor", "max_tokens", "_meta"]) {
             return Err(RpcFailure::invalid_params("unknown_resource_field"));
@@ -649,14 +700,17 @@ impl<B: Backend> Server<B> {
         }
 
         let rendered_arguments = params.render();
-        let response = self.backend.call(BackendRequest {
-            kind: BackendRequestKind::Resource,
-            operation: "read",
-            arguments_json: &rendered_arguments,
-        });
+        let response = self.backend.call_cancellable(
+            BackendRequest {
+                kind: BackendRequestKind::Resource,
+                operation: "read",
+                arguments_json: &rendered_arguments,
+            },
+            cancellation,
+        );
         match response {
             Ok(response) => self.backend_resource_result(uri, response, output_tokens),
-            Err(error) => Ok(resource_backend_error(uri, error)),
+            Err(error) => Err(resource_backend_failure(error)),
         }
     }
 
@@ -667,25 +721,33 @@ impl<B: Backend> Server<B> {
         output_tokens: usize,
     ) -> Result<Value, RpcFailure> {
         validate_backend_response(&response)?;
-        let mut metadata = response.metadata.clone();
-        let max_bytes = output_tokens.saturating_mul(4);
-        let text = if response.body.len().saturating_add(1_024) > max_bytes {
-            let approximate_tokens = approximate_tokens(response.body.len());
-            let (handle, handle_metadata) = self.store_output(response)?;
-            let artifact_uri = format!("cigar://artifact/{handle}");
-            metadata = handle_metadata.clone();
-            object([
-                ("output_handle", string(handle)),
-                ("uri", string(artifact_uri)),
-                ("cursor", string("0")),
-                ("approximate_tokens", number(approximate_tokens)),
-                ("expiry", string(handle_metadata.expiry)),
-            ])
-            .render()
+        let inline = resource_result(uri, response.body.clone(), &response.metadata, false);
+        if fits_output_budget(&inline, output_tokens) {
+            return Ok(inline);
+        }
+
+        let approximate_tokens = approximate_tokens(response.body.len());
+        let (handle, metadata) = self.store_output(response)?;
+        let artifact_uri = format!("cigar://artifact/{handle}");
+        let visible = object([
+            ("output_handle", string(handle.clone())),
+            ("uri", string(artifact_uri)),
+            ("cursor", string("0")),
+            ("approximate_tokens", number(approximate_tokens)),
+            ("expiry", string(metadata.expiry.clone())),
+        ])
+        .render();
+        let paged = resource_result(uri, visible, &metadata, false);
+        if fits_output_budget(&paged, output_tokens) {
+            Ok(paged)
         } else {
-            response.body
-        };
-        Ok(resource_result(uri, text, &metadata, false))
+            self.remove_handle(&handle);
+            Err(RpcFailure::new(
+                -32_003,
+                "Internal error",
+                "output_budget_unrepresentable",
+            ))
+        }
     }
 
     fn read_artifact_handle(
@@ -705,25 +767,12 @@ impl<B: Backend> Server<B> {
             .is_some_and(|stored| stored.created.elapsed() > HANDLE_TTL);
         if expired {
             self.remove_handle(handle);
+            return Err(RpcFailure::invalid_params("artifact_handle_expired"));
         }
         let Some(stored) = self.handles.get(handle).cloned() else {
-            return Ok(resource_local_error(uri, "output handle is unavailable"));
+            return Err(RpcFailure::invalid_params("artifact_handle_unavailable"));
         };
-        let page_bytes = output_tokens.saturating_mul(4).saturating_sub(1_024);
-        let (page, next) = text_page(&stored.body, cursor, page_bytes)?;
-        let mut content = object([
-            ("data", string(page)),
-            ("cursor", string(cursor.to_string())),
-        ]);
-        if let (Some(next), Value::Object(fields)) = (next, &mut content) {
-            fields.push(("next_cursor".to_owned(), string(next.to_string())));
-        }
-        Ok(resource_result(
-            uri,
-            content.render(),
-            &stored.metadata,
-            false,
-        ))
+        bounded_resource_page(uri, cursor, &stored.body, &stored.metadata, output_tokens)
     }
 
     fn list_roots(&self, params: &Value) -> Result<Value, RpcFailure> {
@@ -760,13 +809,25 @@ impl<B: Backend> Server<B> {
                 self.stored_bytes = self.stored_bytes.saturating_sub(removed.body.len());
             }
         }
-        let handle = loop {
-            self.next_handle = self.next_handle.wrapping_add(1);
-            let candidate = opaque_handle(self.handle_seed, self.next_handle);
+        if self.handles.len() >= MAX_STORED_HANDLES
+            || self.stored_bytes.saturating_add(response.body.len()) > MAX_STORED_BYTES
+        {
+            return Err(RpcFailure::new(
+                -32_003,
+                "Internal error",
+                "output_storage_limit",
+            ));
+        }
+        let mut handle = None;
+        for _attempt in 0..8 {
+            let candidate = opaque_handle()?;
             if !self.handles.contains_key(&candidate) {
-                break candidate;
+                handle = Some(candidate);
+                break;
             }
-        };
+        }
+        let handle = handle
+            .ok_or_else(|| RpcFailure::new(-32_003, "Internal error", "handle_collision_limit"))?;
         response.metadata.expiry = "handle-ttl-300s".to_owned();
         let metadata = response.metadata.clone();
         self.stored_bytes = self.stored_bytes.saturating_add(response.body.len());
@@ -791,42 +852,109 @@ impl<B: Backend> Server<B> {
 }
 
 /// Runs a newline-delimited stdio server until clean EOF.
-pub fn serve<B: Backend, R: Read, W: Write>(
+pub fn serve<B: Backend, R: Read + Send, W: Write>(
     reader: R,
     mut writer: W,
     backend: B,
 ) -> io::Result<()> {
-    let mut reader = BufReader::new(reader);
-    let mut server = Server::new(backend);
-    loop {
-        match read_frame(&mut reader)? {
-            Frame::Eof => return Ok(()),
-            Frame::Empty => {}
-            Frame::Oversized => {
-                writer.write_all(
-                    rpc_error(Value::Null, -32_600, "Invalid Request", "request_too_large")
-                        .as_bytes(),
-                )?;
-                writer.write_all(b"\n")?;
-                writer.flush()?;
-            }
-            Frame::Message(message) => {
-                let response = match std::str::from_utf8(&message) {
-                    Ok(line) => server.process_line(line),
-                    Err(_) => Some(rpc_error(
-                        Value::Null,
-                        -32_700,
-                        "Parse error",
-                        "invalid_utf8",
-                    )),
-                };
-                if let Some(response) = response {
-                    writer.write_all(response.as_bytes())?;
-                    writer.write_all(b"\n")?;
-                    writer.flush()?;
+    let cancellations = CancellationRegistry::default();
+    let reader_cancellations = cancellations.clone();
+    let (sender, receiver) = mpsc::sync_channel(INPUT_QUEUE_CAPACITY);
+    thread::scope(|scope| {
+        let reader_thread = scope.spawn(move || -> io::Result<()> {
+            let mut reader = BufReader::new(reader);
+            loop {
+                let frame = read_frame(&mut reader)?;
+                if let Frame::Message(message) = &frame {
+                    observe_incoming_frame(message, &reader_cancellations);
+                }
+                let eof = matches!(frame, Frame::Eof);
+                if sender.send(frame).is_err() || eof {
+                    return Ok(());
                 }
             }
+        });
+
+        let mut server = Server::with_cancellations(backend, cancellations);
+        let writer_result = (|| -> io::Result<()> {
+            while let Ok(frame) = receiver.recv() {
+                match frame {
+                    Frame::Eof => return Ok(()),
+                    Frame::Empty => {}
+                    Frame::Oversized => {
+                        writer.write_all(
+                            rpc_error(Value::Null, -32_600, "Invalid Request", "request_too_large")
+                                .as_bytes(),
+                        )?;
+                        writer.write_all(b"\n")?;
+                        writer.flush()?;
+                    }
+                    Frame::Message(message) => {
+                        let response = match std::str::from_utf8(&message) {
+                            Ok(line) => server.process_line(line),
+                            Err(_) => Some(rpc_error(
+                                Value::Null,
+                                -32_700,
+                                "Parse error",
+                                "invalid_utf8",
+                            )),
+                        };
+                        if let Some(response) = response {
+                            writer.write_all(response.as_bytes())?;
+                            writer.write_all(b"\n")?;
+                            writer.flush()?;
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })();
+        drop(receiver);
+        let reader_result = reader_thread
+            .join()
+            .map_err(|_| io::Error::other("MCP input worker panicked"))?;
+        writer_result.and(reader_result)
+    })
+}
+
+fn observe_incoming_frame(message: &[u8], cancellations: &CancellationRegistry) {
+    let Some(line) = std::str::from_utf8(message).ok() else {
+        return;
+    };
+    let Some(request) = json::parse(line).ok() else {
+        return;
+    };
+    let Some(fields) = request.as_object() else {
+        return;
+    };
+    if !only_keys(fields, &["jsonrpc", "id", "method", "params"])
+        || request.object_field("jsonrpc").and_then(Value::as_str) != Some("2.0")
+        || request
+            .object_field("params")
+            .is_some_and(|params| params.as_object().is_none())
+    {
+        return;
+    }
+    let Some(method) = request.object_field("method").and_then(Value::as_str) else {
+        return;
+    };
+    if method == "notifications/cancelled" && request.object_field("id").is_none() {
+        let params = request
+            .object_field("params")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Vec::new()));
+        if validate_cancelled(&params).is_ok()
+            && let Some(request_id) = params.object_field("requestId")
+        {
+            cancellations.cancel(request_id);
         }
+        return;
+    }
+    if let Some(id) = request
+        .object_field("id")
+        .filter(|id| is_interoperable_rpc_id(id))
+    {
+        cancellations.pre_register(id);
     }
 }
 
@@ -962,9 +1090,30 @@ fn validate_cancelled(params: &Value) -> Result<(), RpcFailure> {
 }
 
 fn params_object(params: &Value) -> Result<&[(String, Value)], RpcFailure> {
-    params
+    let fields = params
         .as_object()
-        .ok_or_else(|| RpcFailure::invalid_params("params_not_object"))
+        .ok_or_else(|| RpcFailure::invalid_params("params_not_object"))?;
+    if params
+        .object_field("_meta")
+        .is_some_and(|metadata| metadata.as_object().is_none())
+    {
+        return Err(RpcFailure::invalid_params("invalid_metadata"));
+    }
+    Ok(fields)
+}
+
+fn valid_client_info(value: &Value) -> bool {
+    let Some(_fields) = value.as_object() else {
+        return false;
+    };
+    ["name", "version"].iter().all(|field| {
+        value
+            .object_field(field)
+            .and_then(Value::as_str)
+            .is_some_and(|text| {
+                !text.is_empty() && text.len() <= 256 && !text.chars().any(char::is_control)
+            })
+    })
 }
 
 fn only_keys(fields: &[(String, Value)], allowed: &[&str]) -> bool {
@@ -975,7 +1124,13 @@ fn only_keys(fields: &[(String, Value)], allowed: &[&str]) -> bool {
 
 fn is_interoperable_rpc_id(value: &Value) -> bool {
     match value {
-        Value::String(_) => true,
+        Value::String(value) => {
+            !value.is_empty()
+                && value.len() <= MAX_INTEROPERABLE_RPC_STRING_ID_BYTES
+                && value.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
+                })
+        }
         Value::Number(number) => number.parse::<i64>().is_ok_and(|number| {
             (-MAX_INTEROPERABLE_RPC_INTEGER_ID..=MAX_INTEROPERABLE_RPC_INTEGER_ID).contains(&number)
         }),
@@ -1020,6 +1175,9 @@ fn pagination(
 }
 
 fn cursor_offset(cursor: &str, total: usize, expected_prefix: char) -> Result<usize, RpcFailure> {
+    if cursor.len() > 64 {
+        return Err(RpcFailure::invalid_params("invalid_cursor"));
+    }
     let offset = cursor
         .get(1..)
         .and_then(|value| value.parse::<usize>().ok())
@@ -1052,10 +1210,15 @@ fn tool_definition(spec: &ToolSpec) -> Value {
         ("required".to_owned(), Value::Array(required)),
         ("additionalProperties".to_owned(), Value::Bool(false)),
     ];
+    let mutation = mcp_operation_mapping(spec.name).is_none_or(|mapping| mapping.mutation);
     object([
         ("name", string(spec.name)),
         ("description", string(spec.description)),
         ("inputSchema", Value::Object(schema)),
+        (
+            "annotations",
+            object([("readOnlyHint", Value::Bool(!mutation))]),
+        ),
     ])
 }
 
@@ -1103,7 +1266,19 @@ fn validate_tool_arguments(spec: &ToolSpec, arguments: &Value) -> Result<(), Rpc
             return Err(RpcFailure::invalid_params("missing_tool_argument"));
         }
     }
+    if spec.name == "context_expand"
+        && arguments.object_field("handle").is_none()
+        && arguments.object_field("idempotency_key").is_none()
+    {
+        return Err(RpcFailure::invalid_params("missing_tool_argument"));
+    }
     let exact_request = arguments.object_field("request");
+    let has_shorthand = fields
+        .iter()
+        .any(|(name, _)| !matches!(name.as_str(), "request" | "idempotency_key" | "max_tokens"));
+    if exact_request.is_some() && has_shorthand {
+        return Err(RpcFailure::invalid_params("ambiguous_tool_arguments"));
+    }
     if exact_request.is_none() {
         if spec.exact_request_only {
             return Err(RpcFailure::invalid_params("missing_tool_argument"));
@@ -1122,6 +1297,15 @@ fn validate_tool_arguments(spec: &ToolSpec, arguments: &Value) -> Result<(), Rpc
         && arguments.object_field("request").is_none()
     {
         return Err(RpcFailure::invalid_params("missing_expand_target"));
+    }
+    if spec.name == "context_expand"
+        && ((arguments.object_field("handle").is_some()
+            && (arguments.object_field("bundle_id").is_some()
+                || arguments.object_field("request").is_some()))
+            || (arguments.object_field("cursor").is_some()
+                && arguments.object_field("handle").is_none()))
+    {
+        return Err(RpcFailure::invalid_params("ambiguous_expand_target"));
     }
     for (name, value) in fields {
         match name.as_str() {
@@ -1162,7 +1346,7 @@ fn validate_tool_arguments(spec: &ToolSpec, arguments: &Value) -> Result<(), Rpc
             _ => {
                 if value
                     .as_str()
-                    .is_none_or(|text| text.is_empty() || text.len() > 256)
+                    .is_none_or(|text| !safe_identifier_text(text))
                 {
                     return Err(RpcFailure::invalid_params("invalid_identifier"));
                 }
@@ -1170,6 +1354,14 @@ fn validate_tool_arguments(spec: &ToolSpec, arguments: &Value) -> Result<(), Rpc
         }
     }
     Ok(())
+}
+
+fn safe_identifier_text(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
 }
 
 fn output_tokens(arguments: &Value) -> Result<usize, RpcFailure> {
@@ -1240,7 +1432,11 @@ fn unavailable_metadata(lane: &str) -> Value {
     )
 }
 
-fn tool_backend_error(spec: &ToolSpec, error: BackendError) -> Value {
+fn tool_backend_error(
+    spec: &ToolSpec,
+    mapping: &McpOperationMapping,
+    error: BackendError,
+) -> Value {
     let unavailable = error == BackendError::Unavailable;
     let effect_closed = unavailable && matches!(spec.name, "effect_prepare" | "effect_commit");
     let message = if effect_closed {
@@ -1253,16 +1449,28 @@ fn tool_backend_error(spec: &ToolSpec, error: BackendError) -> Value {
             BackendError::Rejected => "Authoritative backend rejected the request.",
             BackendError::ResponseTooLarge => "Authoritative response exceeded the hard limit.",
             BackendError::InvalidResponse => "Authoritative backend response was invalid.",
+            BackendError::Cancelled if mapping.mutation => {
+                "Cancellation requested after a mutation began; authoritative outcome may be unknown. Inspect state and retry only with the same idempotency key."
+            }
+            BackendError::Cancelled => {
+                "Request cancelled before an authoritative result was available."
+            }
         }
     };
-    let metadata = if unavailable {
-        unavailable_metadata(spec.lane)
-    } else {
-        result_metadata(
-            &BackendMetadata::new("rejected", "daemon", "immediate"),
+    let metadata = match error {
+        BackendError::Unavailable => unavailable_metadata(mapping.authority_lane),
+        BackendError::Cancelled => result_metadata(
+            &BackendMetadata::new("cancelled", "request", "immediate"),
             false,
-            spec.lane,
-        )
+            mapping.authority_lane,
+        ),
+        BackendError::Rejected | BackendError::ResponseTooLarge | BackendError::InvalidResponse => {
+            result_metadata(
+                &BackendMetadata::new("rejected", "daemon", "immediate"),
+                false,
+                mapping.authority_lane,
+            )
+        }
     };
     let visible = object([("error", string(message)), ("metadata", metadata.clone())]);
     object([
@@ -1279,11 +1487,11 @@ fn tool_backend_error(spec: &ToolSpec, error: BackendError) -> Value {
     ])
 }
 
-fn tool_local_error(spec: &ToolSpec, message: &str, degraded: bool) -> Value {
+fn tool_local_error(mapping: &McpOperationMapping, message: &str, degraded: bool) -> Value {
     let metadata = result_metadata(
         &BackendMetadata::new("unavailable", "local-output-store", "immediate"),
         degraded,
-        spec.lane,
+        mapping.authority_lane,
     );
     let visible = object([("error", string(message)), ("metadata", metadata.clone())]);
     object([
@@ -1322,43 +1530,146 @@ fn resource_result(uri: &str, text: String, metadata: &BackendMetadata, degraded
     ])
 }
 
-fn resource_backend_error(uri: &str, error: BackendError) -> Value {
-    let unavailable = error == BackendError::Unavailable;
-    let message = match error {
-        BackendError::Unavailable => {
-            "Authoritative backend unavailable; no resource was synthesized."
-        }
-        BackendError::Rejected => "Authoritative backend rejected the resource request.",
-        BackendError::ResponseTooLarge => "Authoritative resource exceeded the hard limit.",
-        BackendError::InvalidResponse => "Authoritative resource response was invalid.",
-    };
-    resource_result(
-        uri,
-        object([("error", string(message))]).render(),
-        &BackendMetadata::new(
-            if unavailable {
-                "unavailable"
-            } else {
-                "rejected"
-            },
-            if unavailable {
-                "daemon-unavailable"
-            } else {
-                "daemon"
-            },
-            "immediate",
+fn tool_result(visible: Value, metadata: Value) -> Value {
+    object([
+        (
+            "content",
+            Value::Array(vec![object([
+                ("type", string("text")),
+                ("text", string(visible.render())),
+            ])]),
         ),
-        unavailable,
-    )
+        ("structuredContent", visible),
+        ("_meta", metadata),
+    ])
 }
 
-fn resource_local_error(uri: &str, message: &str) -> Value {
-    resource_result(
-        uri,
-        object([("error", string(message))]).render(),
-        &BackendMetadata::new("unavailable", "local-output-store", "immediate"),
-        false,
-    )
+fn output_byte_budget(output_tokens: usize) -> usize {
+    output_tokens
+        .saturating_mul(4)
+        .saturating_sub(OUTPUT_FRAMING_RESERVE_BYTES)
+}
+
+fn fits_output_budget(value: &Value, output_tokens: usize) -> bool {
+    value.render().len() <= output_byte_budget(output_tokens)
+}
+
+fn bounded_tool_page(
+    handle: &str,
+    cursor: usize,
+    body: &str,
+    metadata: &BackendMetadata,
+    lane: &str,
+    output_tokens: usize,
+) -> Result<Value, RpcFailure> {
+    let remaining = body
+        .get(cursor..)
+        .ok_or_else(|| RpcFailure::invalid_params("invalid_output_cursor"))?;
+    let mut low = 0_usize;
+    let mut high = remaining.len().min(output_tokens.saturating_mul(4));
+    let mut best = None;
+    while low <= high {
+        let candidate_bytes = low.saturating_add(high.saturating_sub(low) / 2);
+        let (page, next) = text_page(body, cursor, candidate_bytes)?;
+        let metadata_value = result_metadata(metadata, false, lane);
+        let mut structured = vec![
+            ("output_handle".to_owned(), string(handle)),
+            ("cursor".to_owned(), string(cursor.to_string())),
+            ("data".to_owned(), string(page.clone())),
+            ("metadata".to_owned(), metadata_value.clone()),
+        ];
+        if let Some(next) = next {
+            structured.push(("next_cursor".to_owned(), string(next.to_string())));
+        }
+        let result = tool_result(Value::Object(structured), metadata_value);
+        if fits_output_budget(&result, output_tokens) {
+            best = Some((page.len(), result));
+            low = candidate_bytes.saturating_add(1);
+        } else if candidate_bytes == 0 {
+            break;
+        } else {
+            high = candidate_bytes.saturating_sub(1);
+        }
+    }
+    let (page_bytes, result) = best.ok_or_else(|| {
+        RpcFailure::new(-32_003, "Internal error", "output_budget_unrepresentable")
+    })?;
+    if page_bytes == 0 && !remaining.is_empty() {
+        return Err(RpcFailure::new(
+            -32_003,
+            "Internal error",
+            "output_budget_unrepresentable",
+        ));
+    }
+    Ok(result)
+}
+
+fn bounded_resource_page(
+    uri: &str,
+    cursor: usize,
+    body: &str,
+    metadata: &BackendMetadata,
+    output_tokens: usize,
+) -> Result<Value, RpcFailure> {
+    let remaining = body
+        .get(cursor..)
+        .ok_or_else(|| RpcFailure::invalid_params("invalid_output_cursor"))?;
+    let mut low = 0_usize;
+    let mut high = remaining.len().min(output_tokens.saturating_mul(4));
+    let mut best = None;
+    while low <= high {
+        let candidate_bytes = low.saturating_add(high.saturating_sub(low) / 2);
+        let (page, next) = text_page(body, cursor, candidate_bytes)?;
+        let mut content = object([
+            ("data", string(page.clone())),
+            ("cursor", string(cursor.to_string())),
+        ]);
+        if let (Some(next), Value::Object(fields)) = (next, &mut content) {
+            fields.push(("next_cursor".to_owned(), string(next.to_string())));
+        }
+        let result = resource_result(uri, content.render(), metadata, false);
+        if fits_output_budget(&result, output_tokens) {
+            best = Some((page.len(), result));
+            low = candidate_bytes.saturating_add(1);
+        } else if candidate_bytes == 0 {
+            break;
+        } else {
+            high = candidate_bytes.saturating_sub(1);
+        }
+    }
+    let (page_bytes, result) = best.ok_or_else(|| {
+        RpcFailure::new(-32_003, "Internal error", "output_budget_unrepresentable")
+    })?;
+    if page_bytes == 0 && !remaining.is_empty() {
+        return Err(RpcFailure::new(
+            -32_003,
+            "Internal error",
+            "output_budget_unrepresentable",
+        ));
+    }
+    Ok(result)
+}
+
+fn resource_backend_failure(error: BackendError) -> RpcFailure {
+    match error {
+        BackendError::Unavailable => RpcFailure::new(
+            -32_001,
+            "Authoritative backend unavailable",
+            "backend_unavailable",
+        ),
+        BackendError::Rejected => {
+            RpcFailure::new(-32_004, "Resource request rejected", "backend_rejected")
+        }
+        BackendError::ResponseTooLarge => {
+            RpcFailure::new(-32_003, "Internal error", "backend_response_too_large")
+        }
+        BackendError::InvalidResponse => {
+            RpcFailure::new(-32_003, "Internal error", "invalid_backend_response")
+        }
+        BackendError::Cancelled => {
+            RpcFailure::new(-32_800, "Request cancelled", "request_cancelled")
+        }
+    }
 }
 
 fn valid_resource_uri(uri: &str) -> bool {
@@ -1382,7 +1693,7 @@ fn valid_resource_uri(uri: &str) -> bool {
 
 fn parse_output_cursor(cursor: Option<&Value>) -> Result<usize, RpcFailure> {
     match cursor {
-        Some(Value::String(value)) => value
+        Some(Value::String(value)) if value.len() <= 64 => value
             .parse::<usize>()
             .ok()
             .filter(|parsed| parsed.to_string() == *value)
@@ -1423,30 +1734,46 @@ fn approximate_tokens(bytes: usize) -> usize {
     bytes.saturating_add(3) / 4
 }
 
-fn opaque_handle(seed: u128, counter: u64) -> String {
-    let mut first = DefaultHasher::new();
-    seed.hash(&mut first);
-    counter.hash(&mut first);
-    let first = first.finish();
-    let mut second = DefaultHasher::new();
-    seed.rotate_left(41).hash(&mut second);
-    counter.rotate_left(17).hash(&mut second);
-    let second = second.finish();
-    format!("{first:016x}{second:016x}")
+fn opaque_handle() -> Result<String, RpcFailure> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes)
+        .map_err(|_| RpcFailure::new(-32_003, "Internal error", "handle_entropy_unavailable"))?;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut handle = String::with_capacity(32);
+    for byte in bytes {
+        let high = HEX
+            .get(usize::from(byte >> 4))
+            .copied()
+            .ok_or_else(|| RpcFailure::new(-32_003, "Internal error", "handle_encoding"))?;
+        let low = HEX
+            .get(usize::from(byte & 0x0f))
+            .copied()
+            .ok_or_else(|| RpcFailure::new(-32_003, "Internal error", "handle_encoding"))?;
+        handle.push(char::from(high));
+        handle.push(char::from(low));
+    }
+    Ok(handle)
 }
 
 fn valid_handle(handle: &str) -> bool {
-    handle.len() == 32 && handle.bytes().all(|byte| byte.is_ascii_hexdigit())
+    handle.len() == 32
+        && handle
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
+    use std::collections::{BTreeSet, VecDeque};
+    use std::time::{Duration, Instant};
+
+    use crate::operation_mappings::MCP_OPERATION_MAPPINGS;
 
     use super::{
         Backend, BackendError, BackendMetadata, BackendRequest, BackendRequestKind,
-        BackendResponse, MAX_REQUEST_BYTES, MCP_PROTOCOL_VERSION, RESOURCE_FAMILIES,
-        SERVER_INSTRUCTIONS, Server, TOOLS, Value, json, serve, validate_cancelled,
+        BackendResponse, HANDLE_TTL, MAX_INTEROPERABLE_RPC_STRING_ID_BYTES, MAX_REQUEST_BYTES,
+        MCP_PROTOCOL_VERSION, RESOURCE_FAMILIES, SERVER_INSTRUCTIONS, Server, TOOLS, Value, json,
+        serve, validate_cancelled,
     };
 
     #[derive(Default)]
@@ -1522,6 +1849,16 @@ mod tests {
     #[test]
     fn handshake_ping_and_notification_sequence_are_strict() -> Result<(), String> {
         let mut server = Server::new(MockBackend::default());
+        assert!(
+            server
+                .process_line(r#"{"jsonrpc":"1.0","method":"ping","params":{}}"#)
+                .is_none()
+        );
+        assert!(
+            server
+                .process_line(r#"{"jsonrpc":"2.0","params":{}}"#)
+                .is_none()
+        );
         let early = call(&mut server, 1, "tools/list", "{}");
         assert_eq!(
             early
@@ -1565,6 +1902,41 @@ mod tests {
             names,
             TOOLS.iter().map(|tool| tool.name).collect::<Vec<_>>()
         );
+        let mapped_names = MCP_OPERATION_MAPPINGS
+            .iter()
+            .map(|mapping| mapping.exposed_name)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            mapped_names,
+            TOOLS.iter().map(|tool| tool.name).collect::<BTreeSet<_>>()
+        );
+        assert_eq!(mapped_names.len(), 10);
+        for listed in &listed_tools {
+            let name = listed
+                .object_field("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "tool name missing".to_owned())?;
+            let mapping = MCP_OPERATION_MAPPINGS
+                .iter()
+                .find(|mapping| mapping.exposed_name == name)
+                .ok_or_else(|| "tool mapping missing".to_owned())?;
+            assert_eq!(
+                listed
+                    .object_field("annotations")
+                    .and_then(|annotations| annotations.object_field("readOnlyHint")),
+                Some(&Value::Bool(!mapping.mutation))
+            );
+            let spec = TOOLS
+                .iter()
+                .find(|spec| spec.name == name)
+                .ok_or_else(|| "tool spec missing".to_owned())?;
+            if mapping.mutation {
+                assert!(spec.allowed.contains(&"idempotency_key"));
+                if spec.name != "context_expand" {
+                    assert!(spec.always_required.contains(&"idempotency_key"));
+                }
+            }
+        }
 
         let page = call(&mut server, 3, "resources/list", r#"{"page_size":3}"#);
         assert_eq!(
@@ -1604,7 +1976,7 @@ mod tests {
             &mut server,
             2,
             "tools/call",
-            r#"{"name":"context_compile","arguments":{"contract":{},"max_tokens":500}}"#,
+            r#"{"name":"context_compile","arguments":{"contract":{},"idempotency_key":"compile-1","max_tokens":500}}"#,
         );
         let result = response
             .object_field("result")
@@ -1716,8 +2088,13 @@ mod tests {
             .ok_or_else(|| "missing handle".to_owned())?
             .to_owned();
         assert_eq!(handle.len(), 32);
-        assert!(handle.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert!(
+            handle
+                .bytes()
+                .all(|byte| { byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte) })
+        );
         assert!(!response.render().contains(&"x".repeat(100)));
+        assert!(response.render().len() <= 2_000);
 
         let page = call(
             &mut server,
@@ -1738,6 +2115,7 @@ mod tests {
             .and_then(Value::as_str)
             .ok_or_else(|| "missing page".to_owned())?;
         assert!(text.len() <= 2_000);
+        assert!(page.render().len() <= 2_000);
         assert!(
             page.object_field("result")
                 .and_then(|result| result.object_field("structuredContent"))
@@ -1778,6 +2156,46 @@ mod tests {
         assert_eq!(result.object_field("isError"), Some(&Value::Bool(true)));
         assert!(result.render().contains("refused"));
         assert_eq!(effect_server.backend.calls.len(), 1);
+
+        let mut resource_server = Server::new(MockBackend::unavailable());
+        initialize(&mut resource_server)?;
+        let resource = call(
+            &mut resource_server,
+            4,
+            "resources/read",
+            r#"{"uri":"cigar://bundle/b1","max_tokens":500}"#,
+        );
+        assert!(resource.object_field("result").is_none());
+        assert_eq!(
+            resource
+                .object_field("error")
+                .and_then(|error| error.object_field("data"))
+                .and_then(|data| data.object_field("reason"))
+                .and_then(Value::as_str),
+            Some("backend_unavailable")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cancelled_mutation_never_claims_a_definitive_outcome() -> Result<(), String> {
+        let mut server = Server::new(MockBackend {
+            responses: VecDeque::from([Err(BackendError::Cancelled)]),
+            calls: Vec::new(),
+        });
+        initialize(&mut server)?;
+        let response = call(
+            &mut server,
+            2,
+            "tools/call",
+            r#"{"name":"context_compile","arguments":{"contract":{},"idempotency_key":"compile-cancelled","max_tokens":500}}"#,
+        );
+        let result = response
+            .object_field("result")
+            .ok_or_else(|| "missing cancelled result".to_owned())?;
+        assert_eq!(result.object_field("isError"), Some(&Value::Bool(true)));
+        assert!(response.render().contains("outcome may be unknown"));
+        assert!(response.render().contains("same idempotency key"));
         Ok(())
     }
 
@@ -1883,7 +2301,54 @@ mod tests {
             .and_then(Value::as_str)
             .ok_or_else(|| "missing artifact page".to_owned())?;
         assert!(page_text.len() <= 2_200);
+        assert!(page.render().len() <= 2_000);
         assert_eq!(server.backend.calls.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn output_budget_accounts_for_json_escaping_and_handle_expiry() -> Result<(), String> {
+        let escaped = format!(r#"{{"data":"{}"}}"#, "\\\"".repeat(3_000));
+        let mut server = Server::new(MockBackend::success(escaped));
+        initialize(&mut server)?;
+        let response = call(
+            &mut server,
+            2,
+            "tools/call",
+            r#"{"name":"catalog_query","arguments":{"request":{"requirements":[],"max_results":1},"max_tokens":500}}"#,
+        );
+        assert!(response.render().len() <= 2_000);
+        let handle = response
+            .object_field("result")
+            .and_then(|result| result.object_field("structuredContent"))
+            .and_then(|structured| structured.object_field("output_handle"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| "escaping-heavy result was not paged".to_owned())?
+            .to_owned();
+        let created = Instant::now()
+            .checked_sub(HANDLE_TTL.saturating_add(Duration::from_secs(1)))
+            .ok_or_else(|| "instant underflow".to_owned())?;
+        server
+            .handles
+            .get_mut(&handle)
+            .ok_or_else(|| "stored output missing".to_owned())?
+            .created = created;
+        let expired = call(
+            &mut server,
+            3,
+            "tools/call",
+            &format!(
+                "{{\"name\":\"context_expand\",\"arguments\":{{\"handle\":\"{handle}\",\"max_tokens\":500}}}}"
+            ),
+        );
+        assert_eq!(
+            expired
+                .object_field("result")
+                .and_then(|result| result.object_field("isError")),
+            Some(&Value::Bool(true))
+        );
+        assert!(expired.render().contains("expired"));
+        assert!(!server.handles.contains_key(&handle));
         Ok(())
     }
 
@@ -1908,10 +2373,10 @@ mod tests {
     }
 
     #[test]
-    fn backend_numbers_must_remain_interoperable_in_mcp_output() -> Result<(), String> {
-        let mut server = Server::new(MockBackend::success(
-            r#"{"safe":[1,{"protected-overflow":1e999}]}"#,
-        ));
+    fn exact_nonfinite_backend_number_fixture_fails_closed() -> Result<(), String> {
+        const NONFINITE_BACKEND_FIXTURE: &str =
+            include_str!("../../../fuzz/regressions/mcp_messages/backend-nonfinite-number.json");
+        let mut server = Server::new(MockBackend::success(NONFINITE_BACKEND_FIXTURE));
         initialize(&mut server)?;
         let response = call(
             &mut server,
@@ -2029,6 +2494,24 @@ mod tests {
                 Some(&Value::Number(valid_id.to_owned()))
             );
         }
+        for invalid_request in [
+            r#"{"jsonrpc":"2.0","id":"","method":"ping","params":{}}"#.to_owned(),
+            format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":\"{}\",\"method\":\"ping\",\"params\":{{}}}}",
+                "a".repeat(MAX_INTEROPERABLE_RPC_STRING_ID_BYTES + 1)
+            ),
+            r#"{"jsonrpc":"2.0","id":"line\nfeed","method":"ping","params":{}}"#.to_owned(),
+            r#"{"jsonrpc":"2.0","id":"request/unsafe","method":"ping","params":{}}"#.to_owned(),
+        ] {
+            let response = server
+                .process_line(&invalid_request)
+                .ok_or_else(|| "invalid string request id produced no response".to_owned())?;
+            assert!(response.contains("invalid_id"));
+        }
+        let string_id = server
+            .process_line(r#"{"jsonrpc":"2.0","id":"request-1","method":"ping","params":{}}"#)
+            .ok_or_else(|| "bounded string request id produced no response".to_owned())?;
+        assert!(string_id.contains(r#""id":"request-1""#));
         assert!(server.backend.calls.is_empty());
         Ok(())
     }
@@ -2086,6 +2569,20 @@ mod tests {
         assert!(budget.object_field("error").is_some());
         let wrong_cursor = call(&mut server, 4, "tools/list", r#"{"cursor":"r1"}"#);
         assert!(wrong_cursor.object_field("error").is_some());
+        let ambiguous = call(
+            &mut server,
+            5,
+            "tools/call",
+            r#"{"name":"context_compile","arguments":{"request":{"contract":{}},"contract":{},"idempotency_key":"compile-1"}}"#,
+        );
+        assert!(ambiguous.render().contains("ambiguous_tool_arguments"));
+        let mixed_expand = call(
+            &mut server,
+            6,
+            "tools/call",
+            r#"{"name":"context_expand","arguments":{"handle":"0123456789abcdef0123456789abcdef","bundle_id":"b1"}}"#,
+        );
+        assert!(mixed_expand.render().contains("ambiguous_expand_target"));
         assert!(server.backend.calls.is_empty());
         Ok(())
     }

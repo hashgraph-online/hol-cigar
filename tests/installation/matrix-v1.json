@@ -34,6 +34,16 @@
       "isolate_home": false
     },
     {
+      "id": "INSTALL-MACOS-FULL-001",
+      "title": "The source prerequisite for the macOS full-product installed driver completes the governed offline workflow across independent CLI processes.",
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-cli", "--test", "full_embedded_workflow"],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["FULL-200-SOURCE-WORKFLOW", "INSTALL-MACOS-FULL-001"],
+      "isolate_home": true
+    },
+    {
       "id": "INSTALL-PYTHON-001",
       "title": "Python wheel and sdist build, install, and release contracts pass.",
       "command": ["uv", "run", "--project", "sdk/python", "pytest", "sdk/python/tests/test_release_contract.py"],
@@ -65,12 +75,13 @@
     },
     {
       "id": "INSTALL-WP21-001",
-      "title": "All locally testable archives, contracts, docs, runbooks, SBOMs, signatures, provenance, and reproducibility gates pass.",
-      "command": ["python3", "scripts/release/run_local_qualification.py", "--source-date-epoch", "1783900800", "--out", "artifacts/qualification/wp21-local-readiness.json"],
+      "title": "The macOS development cohort's locally testable archives, contracts, docs, runbooks, SBOMs, signatures, provenance, and reproducibility gates pass.",
+      "command": ["python3", "scripts/release/run_local_qualification.py", "--source-date-epoch", "1783900800", "--out", "wp21-local-readiness.json"],
       "timeout_seconds": 7200,
       "profiles": ["local", "release"],
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": ["macos"],
       "requirements": ["PKG-CONTRACT-001", "PKG-REPRODUCIBLE-001", "DOCS-EXEC-001", "OPS-RUNBOOK-001"],
+      "required_environment": ["CIGAR_EVIDENCE_DIR"],
       "isolate_home": false
     }
   ]

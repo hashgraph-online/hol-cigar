@@ -5,7 +5,8 @@ use cigar_crypto::{CreateKeyRequest, KeyAlgorithm, KeyProvider, KeyPurpose, Memo
 use cigar_policy::{
     CallerDisposition, CapabilityAuthority, CapabilityContext, CompiledPolicyEngine,
     DisclosureClass, PolicyEngine, PolicyErrorCode, PolicyOutcome, PolicyProfile, PolicyReason,
-    PolicyRequest, PolicyResource, PolicyRule, StructuralRedactor, TimingClass,
+    PolicyRequest, PolicyResource, PolicyRule, RetrievalResourceAuthorizationRequest,
+    StructuralRedactor, TimingClass,
 };
 use cigar_protocol::{
     Capability, CapabilityGrant, Classification, ContentDigest, ExtensionMap, InstructionAuthority,
@@ -14,6 +15,7 @@ use cigar_protocol::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::sync::Arc;
+use std::time::Duration;
 
 fn record(value: u16) -> Result<RecordId, Box<dyn Error>> {
     Ok(RecordId::new(format!(
@@ -120,6 +122,13 @@ fn request(
 
 fn installed() -> Result<(CompiledPolicyEngine, cigar_policy::PolicySnapshot), Box<dyn Error>> {
     let engine = CompiledPolicyEngine::default();
+    let snapshot = engine.install(empty_profile(1), time("2026-07-10T00:00:00Z")?)?;
+    Ok((engine, snapshot))
+}
+
+fn installed_arc()
+-> Result<(Arc<CompiledPolicyEngine>, cigar_policy::PolicySnapshot), Box<dyn Error>> {
+    let engine = Arc::new(CompiledPolicyEngine::default());
     let snapshot = engine.install(empty_profile(1), time("2026-07-10T00:00:00Z")?)?;
     Ok((engine, snapshot))
 }
@@ -310,6 +319,248 @@ fn revocation_and_policy_change_block_old_artifacts_immediately() -> Result<(), 
 }
 
 #[test]
+fn retrieval_authorization_is_opaque_scope_bound_and_live_revalidated() -> Result<(), Box<dyn Error>>
+{
+    let (engine, first_snapshot) = installed_arc()?;
+    let first_project = record(3)?;
+    let second_project = record(5)?;
+    let projects = BTreeSet::from([first_project.clone(), second_project.clone()]);
+    let mut first = request(PolicyResource::Partition, digest('6')?)?;
+    first.allowed_project_ids.clone_from(&projects);
+    first
+        .capability
+        .as_mut()
+        .ok_or("missing capability")?
+        .project_ids
+        .clone_from(&projects);
+    first.required_capability = Some(Capability::CompileContext);
+    first
+        .capability
+        .as_mut()
+        .ok_or("missing capability")?
+        .capabilities
+        .insert(Capability::CompileContext);
+    let mut second = first.clone();
+    second.project_id = Some(second_project);
+
+    let authorization = engine.authorize_retrieval_partition(&[first.clone(), second])?;
+    let claims = authorization.revalidate()?;
+    assert_eq!(claims.principal_id(), &first.principal_id);
+    assert_eq!(claims.tenant_id(), &first.tenant_id);
+    assert_eq!(claims.project_ids(), &projects);
+    assert_eq!(claims.purpose(), "coding");
+    assert_eq!(claims.processor(), "local");
+    assert_eq!(claims.maximum_classification(), Classification::Internal);
+    assert_eq!(
+        claims.maximum_instruction_authority(),
+        InstructionAuthority::Project
+    );
+    assert!(claims.vector_allowed());
+    assert_eq!(claims.policy_digest(), &first_snapshot.policy_digest);
+    assert_eq!(claims.policy_revision(), 1);
+    let rendered = format!("{authorization:?} {claims:?}");
+    assert!(!rendered.contains(first.principal_id.as_str()));
+    assert!(!rendered.contains(first.tenant_id.as_str()));
+    assert!(!rendered.contains("coding"));
+    assert!(!rendered.contains("local"));
+    assert!(!rendered.contains(first_snapshot.policy_digest.as_str()));
+
+    engine.install(empty_profile(2), time("2026-07-10T00:01:00Z")?)?;
+    assert_eq!(
+        authorization.revalidate().map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+    Ok(())
+}
+
+#[test]
+fn retrieval_partition_digest_is_semantic_while_live_proof_time_remains_enforced()
+-> Result<(), Box<dyn Error>> {
+    let (engine, _) = installed_arc()?;
+    let base = request(PolicyResource::Partition, digest('d')?)?;
+    let first = engine.authorize_retrieval_partition(std::slice::from_ref(&base))?;
+    let first_digest = first.revalidate()?.partition_digest().clone();
+
+    let mut later = base.clone();
+    later.valid_at = time("2026-07-10T03:00:00Z")?;
+    later.observed_at = time("2026-07-10T02:59:59Z")?;
+    later.observed_as_of = time("2026-07-10T03:00:00Z")?;
+    later.decision_expires_at = time("2026-07-10T19:00:00Z")?;
+    let later_digest = engine
+        .authorize_retrieval_partition(std::slice::from_ref(&later))?
+        .revalidate()?
+        .partition_digest()
+        .clone();
+    assert_eq!(first_digest, later_digest);
+
+    let mut different_grant = base.clone();
+    different_grant
+        .capability
+        .as_mut()
+        .ok_or("missing capability")?
+        .grant_id = Some(record(40)?);
+    let grant_digest = engine
+        .authorize_retrieval_partition(std::slice::from_ref(&different_grant))?
+        .revalidate()?
+        .partition_digest()
+        .clone();
+    assert_ne!(first_digest, grant_digest);
+
+    let mut different_scope = base.clone();
+    let other_project = record(41)?;
+    different_scope.project_id = Some(other_project.clone());
+    different_scope.allowed_project_ids = BTreeSet::from([other_project.clone()]);
+    different_scope
+        .capability
+        .as_mut()
+        .ok_or("missing capability")?
+        .project_ids = BTreeSet::from([other_project]);
+    let scope_digest = engine
+        .authorize_retrieval_partition(std::slice::from_ref(&different_scope))?
+        .revalidate()?
+        .partition_digest()
+        .clone();
+    assert_ne!(first_digest, scope_digest);
+
+    engine.revoke_resource(digest('e')?, time("2026-07-10T00:05:00Z")?)?;
+    let revoked_epoch_digest = engine
+        .authorize_retrieval_partition(std::slice::from_ref(&base))?
+        .revalidate()?
+        .partition_digest()
+        .clone();
+    assert_ne!(first_digest, revoked_epoch_digest);
+
+    let policy_engine = Arc::new(CompiledPolicyEngine::default());
+    policy_engine.install(empty_profile(2), time("2026-07-10T00:00:00Z")?)?;
+    let policy_digest = policy_engine
+        .authorize_retrieval_partition(std::slice::from_ref(&base))?
+        .revalidate()?
+        .partition_digest()
+        .clone();
+    assert_ne!(first_digest, policy_digest);
+
+    let mut expiring = base;
+    expiring.decision_expires_at = UtcTimestamp::from_unix_nanos(
+        expiring
+            .observed_as_of
+            .unix_nanos()
+            .checked_add(1)
+            .ok_or("timestamp overflow")?,
+    )?;
+    let expiring = engine.authorize_retrieval_partition(&[expiring])?;
+    std::thread::sleep(Duration::from_millis(1));
+    assert_eq!(
+        expiring.revalidate().map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+    Ok(())
+}
+
+#[test]
+fn retrieval_authorization_rejects_processor_denial_scope_mix_and_revocation()
+-> Result<(), Box<dyn Error>> {
+    let mut profile = empty_profile(1);
+    let mut processor_deny = rule("deny-processor", 0, PolicyOutcome::Deny);
+    processor_deny.resources.insert(PolicyResource::Processor);
+    profile.rules.push(processor_deny);
+    let denied_engine = Arc::new(CompiledPolicyEngine::default());
+    denied_engine.install(profile, time("2026-07-10T00:00:00Z")?)?;
+    let partition = request(PolicyResource::Partition, digest('7')?)?;
+    assert_eq!(
+        denied_engine
+            .authorize_retrieval_partition(std::slice::from_ref(&partition))
+            .map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+
+    let (engine, _) = installed_arc()?;
+    let mut mixed = partition.clone();
+    mixed.purpose = "review".to_owned();
+    assert_eq!(
+        engine
+            .authorize_retrieval_partition(&[partition.clone(), mixed])
+            .map_err(|error| error.code()),
+        Err(PolicyErrorCode::InvalidInput)
+    );
+    let authorization = engine.authorize_retrieval_partition(std::slice::from_ref(&partition))?;
+    engine.revoke_principal(partition.principal_id, time("2026-07-10T00:02:00Z")?)?;
+    assert_eq!(
+        authorization.revalidate().map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+    Ok(())
+}
+
+fn retrieval_resource(
+    request: &PolicyRequest,
+    input_digest: ContentDigest,
+) -> Result<RetrievalResourceAuthorizationRequest, Box<dyn Error>> {
+    Ok(RetrievalResourceAuthorizationRequest {
+        input_digest,
+        tenant_id: request.tenant_id.clone(),
+        project_ids: request.allowed_project_ids.clone(),
+        allowed_purposes: request.allowed_purposes.clone(),
+        allowed_processors: request.allowed_processors.clone(),
+        classification: Classification::Internal,
+        lifecycle: Lifecycle::Active,
+        integrity_verified: true,
+        valid_from: time("2026-07-10T00:00:00Z")?,
+        valid_until: Some(time("2026-07-12T00:00:00Z")?),
+        observed_at: time("2026-07-10T00:00:01Z")?,
+        instruction_authority: InstructionAuthority::Data,
+    })
+}
+
+#[test]
+fn retrieval_authorization_fails_when_issuer_is_dropped() -> Result<(), Box<dyn Error>> {
+    let authorization = {
+        let (engine, _) = installed_arc()?;
+        let partition = request(PolicyResource::Partition, digest('8')?)?;
+        engine.authorize_retrieval_partition(&[partition])?
+    };
+    assert_eq!(
+        authorization.revalidate().map_err(|error| error.code()),
+        Err(PolicyErrorCode::Unavailable)
+    );
+    Ok(())
+}
+
+#[test]
+fn retrieval_resource_rechecks_revocation_and_content_policy_before_scoring()
+-> Result<(), Box<dyn Error>> {
+    let (engine, _) = installed_arc()?;
+    let partition = request(PolicyResource::Partition, digest('9')?)?;
+    let authorization = engine.authorize_retrieval_partition(std::slice::from_ref(&partition))?;
+    let resource_digest = digest('a')?;
+    let resource = retrieval_resource(&partition, resource_digest.clone())?;
+    assert!(authorization.authorize_resource(&resource, false)?);
+    engine.revoke_resource(resource_digest, time("2026-07-10T00:00:03Z")?)?;
+    assert_eq!(
+        authorization
+            .authorize_resource(&resource, false)
+            .map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+
+    let (revoked_engine, _) = installed_arc()?;
+    revoked_engine.revoke_resource(resource.input_digest.clone(), time("2026-07-10T00:00:03Z")?)?;
+    let revoked_authorization =
+        revoked_engine.authorize_retrieval_partition(std::slice::from_ref(&partition))?;
+    assert!(!revoked_authorization.authorize_resource(&resource, false)?);
+
+    let mut profile = empty_profile(1);
+    let mut deny_content = rule("deny-content-only", 0, PolicyOutcome::Deny);
+    deny_content.resources.insert(PolicyResource::Content);
+    profile.rules.push(deny_content);
+    let content_engine = Arc::new(CompiledPolicyEngine::default());
+    content_engine.install(profile, time("2026-07-10T00:00:00Z")?)?;
+    let content_authorization =
+        content_engine.authorize_retrieval_partition(std::slice::from_ref(&partition))?;
+    assert!(!content_authorization.authorize_resource(&resource, false)?);
+    Ok(())
+}
+
+#[test]
 fn protected_policy_outage_fails_closed() -> Result<(), Box<dyn Error>> {
     let (engine, _) = installed()?;
     engine.set_available(false)?;
@@ -482,6 +733,19 @@ fn capability_signature_attenuation_tamper_time_and_revocation_fail_closed()
                 &recipient,
                 time("2026-07-10T01:00:00Z")?,
                 &[child.grant_id].into_iter().collect(),
+                Some(&signed_parent),
+            )
+            .map_err(|error| error.code()),
+        Err(PolicyErrorCode::Revoked)
+    );
+    assert_eq!(
+        authority
+            .verify(
+                &signed_child,
+                "tenant-a",
+                &recipient,
+                time("2026-07-10T01:00:00Z")?,
+                &[parent.grant_id].into_iter().collect(),
                 Some(&signed_parent),
             )
             .map_err(|error| error.code()),

@@ -6,6 +6,7 @@ services:
   primary:
     image: postgres:18.2-bookworm@sha256:120230d04218c2acb30d7bb427798bd6c5beb0ef225883132aad653ccad44bce
     hostname: primary
+    entrypoint: [/bin/bash, /usr/local/bin/failover-tls-entrypoint.sh]
     environment:
       POSTGRES_DB: cigar
       POSTGRES_USER: cigar_owner
@@ -29,6 +30,16 @@ services:
       - hot_standby=on
       - -c
       - password_encryption=scram-sha-256
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/cigar-failover-tls/ca.crt
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/cigar-failover-tls/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/cigar-failover-tls/server.key
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -U cigar_owner -d cigar"]
       interval: 1s
@@ -37,6 +48,8 @@ services:
     volumes:
       - primary-data:/var/lib/postgresql
       - ./primary-init.sh:/docker-entrypoint-initdb.d/20-failover-roles.sh:ro
+      - tls-data:/var/lib/postgresql/cigar-failover-tls
+      - ./tls-entrypoint.sh:/usr/local/bin/failover-tls-entrypoint.sh:ro
     secrets:
       - owner_password
       - replication_password
@@ -69,6 +82,16 @@ services:
       - hot_standby=on
       - -c
       - password_encryption=scram-sha-256
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/cigar-failover-tls/ca.crt
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/cigar-failover-tls/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/cigar-failover-tls/server.key
     depends_on:
       primary:
         condition: service_healthy
@@ -83,6 +106,7 @@ services:
       retries: 90
     volumes:
       - standby-data:/var/lib/postgresql
+      - tls-data:/var/lib/postgresql/cigar-failover-tls:ro
       - ./standby-entrypoint.sh:/usr/local/bin/standby-entrypoint.sh:ro
     secrets:
       - replication_password
@@ -172,6 +196,16 @@ services:
       - synchronous_standby_names=
       - -c
       - password_encryption=scram-sha-256
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/cigar-failover-tls/ca.crt
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/cigar-failover-tls/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/cigar-failover-tls/server.key
     healthcheck:
       test:
         - CMD-SHELL
@@ -185,6 +219,7 @@ services:
     volumes:
       - physical-backup-data:/backup:ro
       - physical-restore-data:/var/lib/postgresql
+      - tls-data:/var/lib/postgresql/cigar-failover-tls:ro
       - ./physical-restore-entrypoint.sh:/usr/local/bin/physical-restore-entrypoint.sh:ro
     network_mode: none
     stop_grace_period: 30s
@@ -195,6 +230,7 @@ volumes:
   standby-data: {}
   physical-backup-data: {}
   physical-restore-data: {}
+  tls-data: {}
 
 networks:
   failover:

@@ -1336,13 +1336,17 @@ mod tests {
             .ok_or("hanging refresh unexpectedly authenticated")?;
         assert_eq!(failure.code(), AuthenticationErrorCode::KeySetUnavailable);
         assert!(started.elapsed() < Duration::from_millis(250));
+        // The end-to-end deadline includes blocking-pool queue time, so a loaded runtime may
+        // expire before provider construction begins. No second attempt may be admitted.
+        let attempts_after_timeout = calls.load(Ordering::SeqCst);
+        assert!(attempts_after_timeout <= 1);
         assert!(
             authenticator
                 .authenticate(&candidate, None, None, 1_000)
                 .await
                 .is_err()
         );
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), attempts_after_timeout);
         Ok(())
     }
 
@@ -1374,6 +1378,10 @@ mod tests {
             Some(AuthenticationErrorCode::KeySetUnavailable)
         );
         assert!(started.elapsed() < Duration::from_millis(75));
+        // A constructor still queued when the deadline expires is the one admitted attempt; the
+        // permanent circuit must reject a second attempt without invoking the provider again.
+        let attempts_after_timeout = calls.load(Ordering::SeqCst);
+        assert!(attempts_after_timeout <= 1);
         assert_eq!(
             authenticator
                 .authenticate(&candidate, None, None, 1_000)
@@ -1382,7 +1390,7 @@ mod tests {
                 .map(|error| error.code()),
             Some(AuthenticationErrorCode::KeySetUnavailable)
         );
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), attempts_after_timeout);
         Ok(())
     }
 

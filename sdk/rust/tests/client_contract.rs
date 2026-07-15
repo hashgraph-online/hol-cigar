@@ -2,8 +2,8 @@
 
 use cigar_sdk::api::{
     DispatchEffectOperation, EffectIdRequest, EmptyRequest, GetLivenessOperation,
-    IngestCatalogRequest, LivenessResponse, TYPED_OPERATION_MAPPINGS, TypedOperation,
-    encode_operation_payload,
+    IngestCatalogRequest, LivenessResponse, RequestEnvelope, TYPED_OPERATION_MAPPINGS,
+    TypedOperation, encode_operation_payload,
 };
 use cigar_sdk::protocol::{ContentDigest, ExpectedRevision, IdempotencyKey, RecordId};
 use cigar_sdk::{
@@ -13,9 +13,11 @@ use cigar_sdk::{
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 const PAYLOAD_SCHEMA: &[u8] =
     include_bytes!("../../../schemas/json/api-payload-types-v1.schema.json");
+const SDK_CAPABILITIES: &[u8] = include_bytes!("../../capabilities-v1.json");
 
 #[derive(Deserialize)]
 struct PayloadSchema {
@@ -32,10 +34,31 @@ struct PayloadOperation {
     event_type: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct CapabilityRegistry {
+    operation_count: usize,
+    operations: Vec<PayloadOperation>,
+    sdks: BTreeMap<String, SdkCapability>,
+}
+
+#[derive(Deserialize)]
+struct SdkCapability {
+    operation_count: usize,
+    operations: Vec<String>,
+    transport: Vec<String>,
+}
+
 #[derive(Default)]
 struct RecordingTransport {
-    calls: Mutex<Vec<(String, Option<String>)>>,
+    calls: Mutex<Vec<RecordedCall>>,
     fail: bool,
+}
+
+#[derive(Clone)]
+struct RecordedCall {
+    operation_id: String,
+    envelope: RequestEnvelope,
+    deadline: Instant,
 }
 
 impl ClientTransport for RecordingTransport {
@@ -47,10 +70,11 @@ impl ClientTransport for RecordingTransport {
             self.calls
                 .lock()
                 .map_err(|_failure| SdkError::transport())?
-                .push((
-                    call.contract().operation_id.to_owned(),
-                    call.envelope().idempotency_key().map(str::to_owned),
-                ));
+                .push(RecordedCall {
+                    operation_id: call.contract().operation_id.to_owned(),
+                    envelope: call.envelope().clone(),
+                    deadline: call.deadline(),
+                });
             if self.fail {
                 return Err(SdkError::transport());
             }
@@ -118,6 +142,30 @@ fn generated_payload_schema_matches_every_rust_mapping() -> Result<(), Box<dyn s
     Ok(())
 }
 
+#[test]
+fn sdk_capability_authority_matches_every_rust_mapping() -> Result<(), Box<dyn std::error::Error>> {
+    let capabilities: CapabilityRegistry = serde_json::from_slice(SDK_CAPABILITIES)?;
+    assert_eq!(capabilities.operation_count, RUST_OPERATION_COUNT);
+    assert_eq!(capabilities.operations.len(), RUST_OPERATION_COUNT);
+    for (capability, typed) in capabilities.operations.iter().zip(TYPED_OPERATION_MAPPINGS) {
+        assert_eq!(capability.operation_id, typed.operation_id);
+        assert_eq!(capability.request_type, typed.request_schema);
+        assert_eq!(capability.response_type, typed.response_schema);
+        assert_eq!(capability.event_type.as_deref(), typed.event_schema);
+    }
+    let rust = capabilities
+        .sdks
+        .get("rust")
+        .ok_or("Rust SDK capability row is missing")?;
+    assert_eq!(rust.operation_count, RUST_OPERATION_COUNT);
+    assert_eq!(rust.operations.as_slice(), RUST_OPERATION_IDS.as_slice());
+    assert_eq!(
+        rust.transport,
+        vec!["embedded".to_owned(), "http".to_owned()]
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn repeat_safe_mutation_preserves_one_idempotency_key()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -144,8 +192,33 @@ async fn repeat_safe_mutation_preserves_one_idempotency_key()
     assert!(
         calls
             .iter()
-            .all(|call| call.1.as_deref() == Some("stable-ingest-key"))
+            .all(|call| call.envelope.idempotency_key() == Some("stable-ingest-key"))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn safe_read_retry_preserves_exact_envelope_and_absolute_deadline()
+-> Result<(), Box<dyn std::error::Error>> {
+    let transport = Arc::new(RecordingTransport {
+        calls: Mutex::default(),
+        fail: true,
+    });
+    let client = Client::from_transport(transport.clone());
+    let result = client
+        .get_liveness(EmptyRequest {}, CallOptions::read())
+        .await;
+    let Err(error) = result else {
+        return Err("transport unexpectedly succeeded".into());
+    };
+    assert_eq!(error.kind(), ErrorKind::Transport);
+    let calls = transport.calls.lock().map_err(|_| "poisoned test mutex")?;
+    assert_eq!(calls.len(), 3);
+    let Some(first) = calls.first() else {
+        return Err("safe read was not attempted".into());
+    };
+    assert!(calls.iter().all(|call| call.envelope == first.envelope));
+    assert!(calls.iter().all(|call| call.deadline == first.deadline));
     Ok(())
 }
 
@@ -173,7 +246,7 @@ async fn dispatch_is_never_automatically_retried() -> Result<(), Box<dyn std::er
     let Some(first) = calls.first() else {
         return Err("dispatch was not attempted".into());
     };
-    assert_eq!(first.0, DispatchEffectOperation::OPERATION_ID);
-    assert_eq!(first.1.as_deref(), Some("dispatch-key"));
+    assert_eq!(first.operation_id, DispatchEffectOperation::OPERATION_ID);
+    assert_eq!(first.envelope.idempotency_key(), Some("dispatch-key"));
     Ok(())
 }

@@ -5,6 +5,127 @@ candidate/baseline comparator for raw `cigard` performance measurements. It is
 an analysis harness, not a benchmark collector. This repository intentionally
 contains no claimed release performance result.
 
+## Native macOS local-scale gate
+
+The `local_scale` load fields in a performance manifest are declarations made
+by a collector; they are not physical-row evidence. Before attempting the
+1,000,000-atom, 10,000,000-edge, 100-GiB-referenced-blob run, execute the
+source-bound capacity preflight on native Apple-silicon macOS:
+
+```sh
+EVIDENCE_ROOT="$(mktemp -d /private/tmp/cigar-local-scale.XXXXXX)"
+CAPACITY_ROOT="$(mktemp -d /private/tmp/cigar-local-scale-capacity.XXXXXX)"
+chmod 0700 "$EVIDENCE_ROOT" "$CAPACITY_ROOT"
+python3 benches/cigarbench/local_scale.py preflight \
+  --evidence-dir "$EVIDENCE_ROOT" \
+  --capacity-path "$CAPACITY_ROOT" \
+  --output local-scale-preflight.json
+```
+
+The preflight binds the production v4 layout: append-only normalized atom and
+edge rows, catalog-free residual revisions, indexed snapshot visibility,
+streamed 16-bit integrity buckets, and an immutable database capacity profile.
+The default profile remains capped at 4 GiB. The explicitly selected
+`large_local` profile is native Apple-silicon macOS only and caps the database at
+64 GiB, requires 300 GiB available before first activation and a 16 GiB reopen
+reserve, and rejects more than 1.25 million atoms, 12.5 million edges, or 128 GiB
+of logical blob references.
+
+A pinned Rust probe validates and CBOR-serializes real deterministic protocol
+fixtures: one atom record is 938 bytes and one edge record is 373 bytes. At the
+target counts, normalized record payloads alone total 4,668,000,000 bytes. That
+is a lower bound, not a file-size prediction: scalar columns, B-trees, indexes,
+checksums, lineage rows, integrity buckets, residual revisions, projections,
+WAL, backup workspace, and blob metadata remain excluded. Physical
+qualification is therefore mandatory even when the model and hard quotas cover
+the target.
+
+The command exits 3 with a source-bound `blocked` receipt when the exact
+canonical owner-private `--capacity-path` filesystem lacks the 300-GiB
+activation headroom (or when a requested clean-source condition is not met).
+The receipt binds that directory's device and inode as well as its filesystem
+capacity. On a suitable volume it may publish `passed-preflight`, which means
+only that generation can safely proceed. Either receipt records no observed scale
+metrics and makes no physical atom, edge, or blob claim. This run also records
+that fuzz and soak were not executed. The installed macOS artifact still needs
+the separate full-scale run, integrity verification, and verified backup and
+restore before the scale gate can be marked complete.
+
+The macOS CIGARBench package now includes the native
+`cigarbench-local-scale` physical driver and the immutable
+`libexec/cigarbench/benches/cigarbench/profiles/large-local-v1.json` profile.
+The release binary accepts no count, batch-size, blob-size, or capacity
+override. Its only qualifying workload is exactly 1,000,000 distinct
+authoritative atoms, 10,000,000 distinct authoritative edges, and 1,600
+distinct encrypted 64-MiB objects (exactly 100 GiB of logical blob
+references). Debug builds have a scaled-fixture entry point for hostile tests;
+that entry point is absent from release builds and can never emit a qualifying
+receipt.
+
+On the reviewed native Apple-silicon host, create three non-aliasing locations:
+an owner-private evidence directory, a separate empty owner-private scratch
+directory on the qualifying volume, and the installed candidate. Evidence and
+scratch must be absolute, canonical, mode `0700`, outside the source tree, and
+must not be symlinks or share an inode. The candidate, installed driver,
+profile, and binding must be stable owner-controlled single-link regular files.
+The initial scratch filesystem must report at least 300 GiB available; every
+resume must retain at least the 16-GiB runtime reserve. Backup and restored blob
+trees are retained in scratch, so the full run needs capacity for the live,
+backup, and restored encrypted object sets.
+
+Prepare an immutable create-new binding using the source revision and source
+tree digest from the reviewed build receipt (paths below are illustrative
+installation locations):
+
+```sh
+chmod 0700 "$CIGAR_SCALE_EVIDENCE" "$CIGAR_SCALE_SCRATCH"
+
+/opt/cigar/bin/cigarbench-local-scale prepare \
+  --profile /opt/cigar/libexec/cigarbench/benches/cigarbench/profiles/large-local-v1.json \
+  --candidate /opt/cigar/bin/cigard \
+  --repository-root "$CIGAR_REVIEWED_SOURCE" \
+  --source-revision "$CIGAR_SOURCE_REVISION" \
+  --source-tree-sha256 "$CIGAR_SOURCE_TREE_SHA256" \
+  --run-id "$CIGAR_SCALE_RUN_ID" \
+  --output "$CIGAR_SCALE_EVIDENCE/local-scale-binding.json"
+```
+
+Run the physical gate. It streams bounded atom/edge batches and one blob at a
+time, atomically persists and reads back a root-bound checkpoint after every
+commit, rebuilds and verifies the projection, authenticates every referenced
+blob, tests one-over-quota rejection, closes and reopens the keystore/store,
+creates and verifies a signed backup, restores it, and requires identical
+catalog statistics and semantic roots. Re-run the identical command after an
+interruption; it accepts only an untampered checkpoint no more than one commit
+behind the integrity-checked database. A result is published create-new at
+mode `0400` only after every check succeeds.
+
+```sh
+/opt/cigar/bin/cigarbench-local-scale run \
+  --profile /opt/cigar/libexec/cigarbench/benches/cigarbench/profiles/large-local-v1.json \
+  --binding "$CIGAR_SCALE_EVIDENCE/local-scale-binding.json" \
+  --workspace "$CIGAR_SCALE_SCRATCH" \
+  --output "$CIGAR_SCALE_EVIDENCE/local-scale-result.json"
+
+/opt/cigar/bin/cigarbench-local-scale verify \
+  --profile /opt/cigar/libexec/cigarbench/benches/cigarbench/profiles/large-local-v1.json \
+  --binding "$CIGAR_SCALE_EVIDENCE/local-scale-binding.json" \
+  --receipt "$CIGAR_SCALE_EVIDENCE/local-scale-result.json"
+```
+
+After independently retaining the result, the optional `cleanup` subcommand
+removes only the exact marker-bound scratch tree. It refuses an unowned,
+aliased, tampered, cross-device, special-file, or unexpectedly populated tree;
+it never removes the external evidence directory. Neither fuzzing nor soak is
+part of this physical driver.
+
+Verify an immutable receipt without treating it as a pass:
+
+```sh
+python3 benches/cigarbench/local_scale.py verify \
+  --receipt "$EVIDENCE_ROOT/local-scale-preflight.json"
+```
+
 ## Evidence contract
 
 A qualifying run has three inputs:

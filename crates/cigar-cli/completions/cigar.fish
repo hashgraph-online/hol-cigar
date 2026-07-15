@@ -1,6 +1,7 @@
 complete -c cigar -f
-complete -c cigar -n '__fish_use_subcommand' -a 'init source ingest status context project focus space handoff effect replay policy backup gc diagnostics doctor serve mcp plugin release completion man help version'
+complete -c cigar -n '__fish_use_subcommand' -a 'init source ingest catalog status context project focus space handoff effect replay policy backup gc diagnostics state doctor serve mcp plugin release completion man help version'
 complete -c cigar -n '__fish_seen_subcommand_from source' -a 'add list refresh inspect remove'
+complete -c cigar -n '__fish_seen_subcommand_from catalog' -a 'query'
 complete -c cigar -n '__fish_seen_subcommand_from context' -a 'plan compile explain diff revalidate materialize'
 complete -c cigar -n '__fish_seen_subcommand_from project' -a 'list attach detach switch link unlink'
 complete -c cigar -n '__fish_seen_subcommand_from focus' -a 'new switch checkpoint close'
@@ -12,6 +13,7 @@ complete -c cigar -n '__fish_seen_subcommand_from policy' -a 'check explain'
 complete -c cigar -n '__fish_seen_subcommand_from backup' -a 'create verify restore'
 complete -c cigar -n '__fish_seen_subcommand_from gc' -a 'plan run'
 complete -c cigar -n '__fish_seen_subcommand_from diagnostics' -a 'bundle'
+complete -c cigar -n '__fish_seen_subcommand_from state' -a 'inspect-beta import-beta restore-beta'
 complete -c cigar -n '__fish_seen_subcommand_from mcp' -a 'serve'
 complete -c cigar -n '__fish_seen_subcommand_from plugin' -a 'install uninstall doctor'
 complete -c cigar -n '__fish_seen_subcommand_from release' -a 'verify'
@@ -26,11 +28,20 @@ complete -c cigar -l remote -r
 complete -c cigar -l endpoint -r
 complete -c cigar -l authorization-file -r
 complete -c cigar -l input -r
+complete -c cigar -l idempotency-key -r
+complete -c cigar -l expected-revision -r
+complete -c cigar -l page-cursor -r
+complete -c cigar -l page-size -r
 complete -c cigar -l dry-run
 complete -c cigar -l yes
+complete -c cigar -l confirm
 complete -c cigar -l non-interactive
 complete -c cigar -l quiet
 complete -c cigar -l color -a 'auto always never'
 complete -c cigar -l unicode -a 'auto always never'
+complete -c cigar -l width -r
+complete -c cigar -l explain-config
 complete -c cigar -l security
 complete -c cigar -l deep
+complete -c cigar -l help -s h
+complete -c cigar -l version -s V

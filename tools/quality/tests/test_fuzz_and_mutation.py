@@ -236,6 +236,74 @@ class FuzzEvidenceTests(unittest.TestCase):
         self.assertFalse(
             fuzz_and_mutation.mutation_campaign_passed({"exit_code": 2}, 100.0, 0, 0)
         )
+        self.assertTrue(
+            fuzz_and_mutation.mutation_campaign_passed({"exit_code": 0}, 90.0, 0, 0)
+        )
+        self.assertFalse(
+            fuzz_and_mutation.mutation_campaign_passed(
+                {"exit_code": 0}, 89.999, 0, 0
+            )
+        )
+
+    def test_release_mutation_policy_is_stricter_than_representative_scope(
+        self,
+    ) -> None:
+        requirements = json.loads(
+            (ROOT / "packaging" / "release-requirements.v1.json").read_text()
+        )
+        gates = {
+            gate["name"]: gate
+            for gate in requirements["metric_gates"]
+            if gate["category"] == "mutation"
+        }
+        self.assertEqual(
+            gates,
+            {
+                "mutation.score_percent": {
+                    "name": "mutation.score_percent",
+                    "category": "mutation",
+                    "aggregation": "min",
+                    "comparison": "gte",
+                    "threshold": 90.0,
+                    "valid_min": 0,
+                    "valid_max": 100,
+                },
+                "mutation.duration_seconds": {
+                    "name": "mutation.duration_seconds",
+                    "category": "mutation",
+                    "aggregation": "sum",
+                    "comparison": "gte",
+                    "threshold": 14_400,
+                    "valid_min": 0,
+                },
+                "mutation.production_package_fraction": {
+                    "name": "mutation.production_package_fraction",
+                    "category": "mutation",
+                    "aggregation": "min",
+                    "comparison": "gte",
+                    "threshold": 1.0,
+                    "valid_min": 0,
+                    "valid_max": 1,
+                },
+                "mutation.timeout_count": {
+                    "name": "mutation.timeout_count",
+                    "category": "mutation",
+                    "aggregation": "sum",
+                    "comparison": "lte",
+                    "threshold": 0,
+                    "valid_min": 0,
+                },
+                "mutation.critical_viable_survivor_count": {
+                    "name": "mutation.critical_viable_survivor_count",
+                    "category": "mutation",
+                    "aggregation": "sum",
+                    "comparison": "lte",
+                    "threshold": 0,
+                    "valid_min": 0,
+                },
+            },
+        )
+        self.assertEqual(fuzz_and_mutation.MUTATION_THRESHOLD_PERCENT, 90.0)
 
     def test_combined_verifier_is_unconditionally_fail_closed(self) -> None:
         with mock.patch("builtins.print") as print_mock:

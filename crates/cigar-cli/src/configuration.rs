@@ -120,7 +120,10 @@ impl EffectiveConfiguration {
             )?;
         }
         if let Some(path) = &invocation.options.config {
-            accumulator.apply(read_layer(path)?, ConfigurationOrigin::ExplicitConfig)?;
+            accumulator.apply(
+                read_layer(path, ConfigurationOrigin::ExplicitConfig)?,
+                ConfigurationOrigin::ExplicitConfig,
+            )?;
         }
         accumulator.apply(environment_layer()?, ConfigurationOrigin::Environment)?;
 
@@ -291,9 +294,13 @@ impl EffectiveConfiguration {
             return Ok(None);
         }
         let Some(path) = &self.authorization_file.value else {
-            return Ok(None);
+            return if self.target.value == TargetKind::Remote {
+                Err(CliError::credential_unavailable())
+            } else {
+                Ok(None)
+            };
         };
-        let bytes = read_bounded_regular(path, MAX_CREDENTIAL_BYTES)
+        let bytes = read_bounded_regular(path, MAX_CREDENTIAL_BYTES, FilePolicy::Credential)
             .map_err(|_error| CliError::credential_unavailable())?;
         let text =
             std::str::from_utf8(&bytes).map_err(|_error| CliError::credential_unavailable())?;
@@ -464,6 +471,29 @@ impl ConfigurationAccumulator {
         if layer.schema_version.is_some_and(|version| version != 1) {
             return Err(CliError::invalid_configuration());
         }
+        let local_transports = usize::from(layer.local_endpoint.is_some())
+            + usize::from(layer.local_socket.is_some())
+            + usize::from(layer.windows_named_pipe.is_some());
+        if local_transports > 1
+            || (local_transports != 0 && layer.remote_endpoint.is_some())
+            || (origin == ConfigurationOrigin::ProjectConfig && layer.authorization_file.is_some())
+        {
+            return Err(CliError::invalid_configuration());
+        }
+        if let Some(target) = layer.target.as_deref().map(parse_target).transpose()? {
+            let incompatible = match target {
+                TargetKind::Embedded => {
+                    local_transports != 0
+                        || layer.remote_endpoint.is_some()
+                        || layer.authorization_file.is_some()
+                }
+                TargetKind::Local => layer.remote_endpoint.is_some(),
+                TargetKind::Remote => local_transports != 0,
+            };
+            if incompatible {
+                return Err(CliError::invalid_configuration());
+            }
+        }
         if let Some(target) = layer.target {
             self.target = Some(Sourced {
                 value: parse_target(&target)?,
@@ -552,6 +582,8 @@ fn parse_target(value: &str) -> Result<TargetKind, CliError> {
 }
 
 fn environment_layer() -> Result<ConfigurationLayer, CliError> {
+    let has_raw_authorization = std::env::var_os("CIGAR_AUTHORIZATION").is_some();
+    let has_raw_token = std::env::var_os("CIGAR_TOKEN").is_some();
     let target = std::env::var("CIGAR_TARGET").ok();
     let endpoint = std::env::var("CIGAR_ENDPOINT").ok();
     let authorization_file = std::env::var_os("CIGAR_AUTHORIZATION_FILE").map(PathBuf::from);
@@ -560,7 +592,12 @@ fn environment_layer() -> Result<ConfigurationLayer, CliError> {
     let project_state_directory =
         std::env::var_os("CIGAR_PROJECT_STATE_DIRECTORY").map(PathBuf::from);
     let daemon_config = std::env::var_os("CIGAR_DAEMON_CONFIG").map(PathBuf::from);
-    let parsed_target = target.as_deref().map(parse_target).transpose()?;
+    let parsed_target = validate_environment_authority(
+        has_raw_authorization,
+        has_raw_token,
+        target.as_deref(),
+        endpoint.is_some(),
+    )?;
     Ok(ConfigurationLayer {
         schema_version: Some(1),
         target,
@@ -582,6 +619,22 @@ fn environment_layer() -> Result<ConfigurationLayer, CliError> {
     })
 }
 
+fn validate_environment_authority(
+    has_raw_authorization: bool,
+    has_raw_token: bool,
+    target: Option<&str>,
+    has_endpoint: bool,
+) -> Result<Option<TargetKind>, CliError> {
+    if has_raw_authorization || has_raw_token {
+        return Err(CliError::invalid_configuration());
+    }
+    let parsed_target = target.map(parse_target).transpose()?;
+    if has_endpoint && parsed_target.is_none() {
+        return Err(CliError::invalid_configuration());
+    }
+    Ok(parsed_target)
+}
+
 fn user_configuration_path() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -599,47 +652,250 @@ fn apply_optional_file(
     origin: ConfigurationOrigin,
 ) -> Result<(), CliError> {
     match std::fs::symlink_metadata(path) {
-        Ok(_metadata) => accumulator.apply(read_layer(path)?, origin),
+        Ok(_metadata) => accumulator.apply(read_layer(path, origin)?, origin),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(_error) => Err(CliError::configuration_io()),
     }
 }
 
-fn read_layer(path: &Path) -> Result<ConfigurationLayer, CliError> {
-    let bytes = read_bounded_regular(path, MAX_CONFIGURATION_BYTES)?;
+fn read_layer(path: &Path, _origin: ConfigurationOrigin) -> Result<ConfigurationLayer, CliError> {
+    let bytes = read_bounded_regular(path, MAX_CONFIGURATION_BYTES, FilePolicy::Configuration)?;
     let text = std::str::from_utf8(&bytes).map_err(|_error| CliError::invalid_configuration())?;
     toml::from_str(text).map_err(|_error| CliError::invalid_configuration())
 }
 
-fn read_bounded_regular(path: &Path, maximum: u64) -> Result<Vec<u8>, CliError> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FilePolicy {
+    Configuration,
+    Credential,
+}
+
+fn file_error(policy: FilePolicy) -> CliError {
+    match policy {
+        FilePolicy::Configuration => CliError::configuration_io(),
+        FilePolicy::Credential => CliError::credential_unavailable(),
+    }
+}
+
+fn read_bounded_regular(
+    path: &Path,
+    maximum: u64,
+    policy: FilePolicy,
+) -> Result<Vec<u8>, CliError> {
     let link = std::fs::symlink_metadata(path).map_err(|_error| CliError::configuration_io())?;
     if link.file_type().is_symlink() || !link.is_file() || link.len() > maximum {
-        return Err(CliError::configuration_io());
+        return Err(file_error(policy));
     }
+    let mut file = open_bounded_read(path).map_err(|_error| file_error(policy))?;
+    let opened = file.metadata().map_err(|_error| file_error(policy))?;
+    if !opened.is_file()
+        || opened.len() > maximum
+        || !same_file(&link, &opened)
+        || !safe_file_metadata(&opened, policy)
+    {
+        return Err(file_error(policy));
+    }
+    let capacity = usize::try_from(opened.len()).map_err(|_error| file_error(policy))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take(maximum.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_error| file_error(policy))?;
+    let after_read = file.metadata().map_err(|_error| file_error(policy))?;
+    let final_link = std::fs::symlink_metadata(path).map_err(|_error| file_error(policy))?;
+    if final_link.file_type().is_symlink()
+        || !same_file(&opened, &after_read)
+        || !same_file(&after_read, &final_link)
+        || !stable_file(&opened, &after_read)
+        || u64::try_from(bytes.len()).map_or(true, |length| {
+            length > maximum || length != after_read.len()
+        })
+    {
+        return Err(file_error(policy));
+    }
+    Ok(bytes)
+}
+
+#[cfg(unix)]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    open_bounded_read_before_final(path, || Ok(()))
+}
+
+#[cfg(unix)]
+fn open_bounded_read_before_final(
+    path: &Path,
+    before_final: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<File> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::path::Component;
+
+    let normalized_path = trusted_platform_read_path(path)?;
+    let mut absolute = false;
+    let mut names = Vec::new();
+    for component in normalized_path.components() {
+        match component {
+            Component::RootDir if names.is_empty() && !absolute => absolute = true,
+            Component::Normal(name) => names.push(name),
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::ParentDir => return Err(invalid_read_path()),
+        }
+    }
+    let (file_name, ancestors) = names.split_last().ok_or_else(invalid_read_path)?;
+    let base = if absolute {
+        Path::new("/")
+    } else {
+        Path::new(".")
+    };
+    let mut directory = open(
+        base,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)?;
+    validate_read_ancestor(&directory.metadata()?)?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            *ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(std::io::Error::from)?;
+        validate_read_ancestor(&directory.metadata()?)?;
+    }
+    before_final()?;
+    openat(
+        &directory,
+        *file_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)
+}
+
+#[cfg(target_os = "macos")]
+fn trusted_platform_read_path(path: &Path) -> std::io::Result<PathBuf> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    // macOS exposes these root-owned, system-managed aliases on normal installations. Resolve
+    // only the closed aliases after verifying their owner and exact target; arbitrary symlinked
+    // ancestors remain rejected by the descriptor walk below.
+    for (alias, relative_target, absolute_target) in [
+        ("/etc", "private/etc", "/private/etc"),
+        ("/tmp", "private/tmp", "/private/tmp"),
+        ("/var", "private/var", "/private/var"),
+    ] {
+        let alias_path = Path::new(alias);
+        let Ok(remainder) = path.strip_prefix(alias_path) else {
+            continue;
+        };
+        let metadata = std::fs::symlink_metadata(alias_path)?;
+        if !metadata.file_type().is_symlink() {
+            return Ok(path.to_path_buf());
+        }
+        let target = std::fs::read_link(alias_path)?;
+        if metadata.uid() != 0
+            || (target != Path::new(relative_target) && target != Path::new(absolute_target))
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "untrusted platform path alias",
+            ));
+        }
+        return Ok(Path::new(absolute_target).join(remainder));
+    }
+    Ok(path.to_path_buf())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn trusted_platform_read_path(path: &Path) -> std::io::Result<PathBuf> {
+    Ok(path.to_path_buf())
+}
+
+#[cfg(unix)]
+fn validate_read_ancestor(metadata: &std::fs::Metadata) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let owner = metadata.uid();
+    let mode = metadata.mode();
+    let writable_by_others = mode & 0o022 != 0;
+    let protected_sticky_root = owner == 0 && mode & 0o1000 != 0;
+    if metadata.is_dir()
+        && (owner == 0 || owner == rustix::process::geteuid().as_raw())
+        && (!writable_by_others || protected_sticky_root)
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "unsafe file ancestor",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn invalid_read_path() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid file path")
+}
+
+#[cfg(not(unix))]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    File::open(path)
+}
+
+#[cfg(unix)]
+fn same_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.is_file() == right.is_file()
+}
+
+#[cfg(unix)]
+fn stable_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+        && left.mode() == right.mode()
+        && left.uid() == right.uid()
+        && left.nlink() == right.nlink()
+}
+
+#[cfg(not(unix))]
+fn stable_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.modified().ok() == right.modified().ok()
+}
+
+fn safe_file_metadata(metadata: &std::fs::Metadata, policy: FilePolicy) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt as _;
-        if maximum == MAX_CREDENTIAL_BYTES && link.mode() & 0o077 != 0 {
-            return Err(CliError::credential_unavailable());
+        let effective_uid = rustix::process::geteuid().as_raw();
+        let owner = metadata.uid();
+        if metadata.nlink() != 1 || (owner != 0 && owner != effective_uid) {
+            return false;
+        }
+        match policy {
+            FilePolicy::Configuration => metadata.mode() & 0o022 == 0,
+            FilePolicy::Credential => {
+                metadata.uid() == effective_uid && metadata.mode() & 0o077 == 0
+            }
         }
     }
-    let file = File::open(path).map_err(|_error| CliError::configuration_io())?;
-    let metadata = file
-        .metadata()
-        .map_err(|_error| CliError::configuration_io())?;
-    if !metadata.is_file() || metadata.len() > maximum {
-        return Err(CliError::configuration_io());
+    #[cfg(not(unix))]
+    {
+        let _ = policy;
+        metadata.is_file()
     }
-    let capacity =
-        usize::try_from(metadata.len()).map_err(|_error| CliError::configuration_io())?;
-    let mut bytes = Vec::with_capacity(capacity);
-    file.take(maximum + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_error| CliError::configuration_io())?;
-    if u64::try_from(bytes.len()).map_or(true, |length| length > maximum) {
-        return Err(CliError::configuration_io());
-    }
-    Ok(bytes)
 }
 
 fn validate_credential_origin(
@@ -670,7 +926,11 @@ fn validate_transport(
     has_authorization_file: bool,
 ) -> Result<(), CliError> {
     if target == TargetKind::Embedded {
-        return if endpoint.is_none() && local_socket.is_none() && windows_named_pipe.is_none() {
+        return if endpoint.is_none()
+            && local_socket.is_none()
+            && windows_named_pipe.is_none()
+            && !has_authorization_file
+        {
             Ok(())
         } else {
             Err(CliError::invalid_configuration())
@@ -684,14 +944,14 @@ fn validate_transport(
             return Err(CliError::invalid_configuration());
         }
         if let Some(path) = local_socket {
-            return if cfg!(unix) && path.is_absolute() {
+            return if cfg!(unix) && path.is_absolute() && !has_authorization_file {
                 Ok(())
             } else {
                 Err(CliError::invalid_configuration())
             };
         }
         if let Some(pipe) = windows_named_pipe {
-            return if cfg!(windows) && safe_windows_pipe(pipe) {
+            return if cfg!(windows) && safe_windows_pipe(pipe) && !has_authorization_file {
                 Ok(())
             } else {
                 Err(CliError::invalid_configuration())
@@ -720,7 +980,11 @@ fn validate_transport(
         {
             Ok(())
         }
-        TargetKind::Remote if url.scheme() == "https" && url.host_str().is_some() => Ok(()),
+        TargetKind::Remote
+            if url.scheme() == "https" && url.host_str().is_some() && has_authorization_file =>
+        {
+            Ok(())
+        }
         _ => Err(CliError::invalid_configuration()),
     }
 }
@@ -738,23 +1002,52 @@ fn safe_windows_pipe(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::EffectiveConfiguration;
+    #[cfg(unix)]
+    use super::open_bounded_read_before_final;
+    #[cfg(target_os = "macos")]
+    use super::trusted_platform_read_path;
+    use super::{
+        ConfigurationAccumulator, ConfigurationLayer, ConfigurationOrigin, EffectiveConfiguration,
+        FilePolicy, MAX_CONFIGURATION_BYTES, MAX_CREDENTIAL_BYTES, read_bounded_regular,
+        validate_environment_authority, validate_transport,
+    };
     use crate::TerminalContext;
-    use crate::arguments::{OutputFormat, parse};
+    use crate::arguments::{OutputFormat, TargetKind, parse};
     use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn root_owned_macos_aliases_normalize_without_allowing_arbitrary_symlinks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            trusted_platform_read_path(std::path::Path::new("/var/folders/example"))?,
+            PathBuf::from("/private/var/folders/example")
+        );
+        assert_eq!(
+            trusted_platform_read_path(std::path::Path::new("/tmp/example"))?,
+            PathBuf::from("/private/tmp/example")
+        );
+        assert_eq!(
+            trusted_platform_read_path(std::path::Path::new("/etc/cigar/cli.toml"))?,
+            PathBuf::from("/private/etc/cigar/cli.toml")
+        );
+        Ok(())
+    }
 
     #[test]
     fn explicit_configuration_explains_sources_and_redacts_credentials()
     -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
-        let token = directory.path().join("token with space");
+        let root = std::fs::canonicalize(directory.path())?;
+        let token = root.join("token with space");
         std::fs::write(&token, "do-not-echo")?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt as _;
             std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o600))?;
         }
-        let config = directory.path().join("cli config.toml");
+        let config = root.join("cli config.toml");
         std::fs::write(
             &config,
             format!(
@@ -788,8 +1081,9 @@ mod tests {
     fn authorization_rejects_non_graphic_non_ascii_and_over_bound_tokens()
     -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
-        let token = directory.path().join("token");
-        let config = directory.path().join("cli.toml");
+        let root = std::fs::canonicalize(directory.path())?;
+        let token = root.join("token");
+        let config = root.join("cli.toml");
         std::fs::write(
             &config,
             format!(
@@ -830,5 +1124,329 @@ mod tests {
         }
         assert!(effective.authorization().is_err());
         Ok(())
+    }
+
+    #[test]
+    fn one_layer_cannot_ambiguously_select_multiple_transports() {
+        let local_fields = [
+            ConfigurationLayer {
+                local_endpoint: Some("http://127.0.0.1:7443".to_owned()),
+                ..ConfigurationLayer::default()
+            },
+            ConfigurationLayer {
+                local_socket: Some(PathBuf::from("/tmp/cigard.sock")),
+                ..ConfigurationLayer::default()
+            },
+            ConfigurationLayer {
+                windows_named_pipe: Some(r"\\.\pipe\cigar-local".to_owned()),
+                ..ConfigurationLayer::default()
+            },
+        ];
+        for (left_index, left) in local_fields.iter().enumerate() {
+            for (right_index, right) in local_fields.iter().enumerate().skip(left_index + 1) {
+                let mut candidate = ConfigurationLayer::default();
+                for selected in [left, right] {
+                    candidate.local_endpoint = candidate
+                        .local_endpoint
+                        .take()
+                        .or_else(|| selected.local_endpoint.clone());
+                    candidate.local_socket = candidate
+                        .local_socket
+                        .take()
+                        .or_else(|| selected.local_socket.clone());
+                    candidate.windows_named_pipe = candidate
+                        .windows_named_pipe
+                        .take()
+                        .or_else(|| selected.windows_named_pipe.clone());
+                }
+                assert!(
+                    ConfigurationAccumulator::default()
+                        .apply(candidate, ConfigurationOrigin::ExplicitConfig)
+                        .is_err(),
+                    "transport pair {left_index}/{right_index} must fail closed"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn credentials_and_remote_url_authority_are_exact_and_unambiguous() {
+        assert!(
+            validate_transport(TargetKind::Embedded, None, None, None, true).is_err(),
+            "embedded execution must not silently discard an authorization file"
+        );
+        #[cfg(unix)]
+        assert!(
+            validate_transport(
+                TargetKind::Local,
+                None,
+                Some(std::path::Path::new("/tmp/cigard.sock")),
+                None,
+                true,
+            )
+            .is_err(),
+            "owner-private Unix IPC must not silently discard an authorization file"
+        );
+        assert!(
+            validate_transport(
+                TargetKind::Local,
+                Some("http://127.0.0.1:7443"),
+                None,
+                None,
+                true,
+            )
+            .is_ok(),
+            "loopback TCP must consume an explicit authorization file"
+        );
+        assert!(
+            validate_transport(
+                TargetKind::Remote,
+                Some("https://cigar.example"),
+                None,
+                None,
+                true,
+            )
+            .is_ok(),
+            "remote HTTPS may consume an explicit authorization file"
+        );
+        assert!(
+            validate_transport(
+                TargetKind::Remote,
+                Some("https://cigar.example"),
+                None,
+                None,
+                false,
+            )
+            .is_err(),
+            "remote HTTPS must never start without explicit authorization authority"
+        );
+
+        for endpoint in [
+            "http://cigar.example/",
+            "https://user@cigar.example/",
+            "https://%75ser:%70ass@cigar.example/",
+            "https://cigar.example/?authorization=Bearer%20secret",
+            "https://cigar.example/#Bearer-secret",
+            "https://cigar.example/v1",
+        ] {
+            assert!(
+                validate_transport(TargetKind::Remote, Some(endpoint), None, None, true).is_err(),
+                "ambiguous remote authority unexpectedly accepted: {endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn layer_target_and_project_secret_authority_fail_closed() {
+        let cases = [
+            (
+                ConfigurationLayer {
+                    target: Some("embedded".to_owned()),
+                    remote_endpoint: Some("https://example.test".to_owned()),
+                    ..ConfigurationLayer::default()
+                },
+                ConfigurationOrigin::ExplicitConfig,
+            ),
+            (
+                ConfigurationLayer {
+                    target: Some("local".to_owned()),
+                    remote_endpoint: Some("https://example.test".to_owned()),
+                    ..ConfigurationLayer::default()
+                },
+                ConfigurationOrigin::ExplicitConfig,
+            ),
+            (
+                ConfigurationLayer {
+                    target: Some("remote".to_owned()),
+                    local_socket: Some(PathBuf::from("/tmp/cigard.sock")),
+                    ..ConfigurationLayer::default()
+                },
+                ConfigurationOrigin::ExplicitConfig,
+            ),
+            (
+                ConfigurationLayer {
+                    authorization_file: Some(PathBuf::from("/tmp/token")),
+                    ..ConfigurationLayer::default()
+                },
+                ConfigurationOrigin::ProjectConfig,
+            ),
+        ];
+        for (layer, origin) in cases {
+            assert!(
+                ConfigurationAccumulator::default()
+                    .apply(layer, origin)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn precedence_is_low_to_high_and_provenance_tracks_the_winner()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut accumulator = ConfigurationAccumulator::default();
+        for (index, origin) in [
+            ConfigurationOrigin::CompiledDefault,
+            ConfigurationOrigin::SystemConfig,
+            ConfigurationOrigin::UserConfig,
+            ConfigurationOrigin::ProjectConfig,
+            ConfigurationOrigin::ExplicitConfig,
+            ConfigurationOrigin::Environment,
+            ConfigurationOrigin::CliFlag,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            accumulator.apply(
+                ConfigurationLayer {
+                    schema_version: Some(1),
+                    project_state_directory: Some(PathBuf::from(format!("/tmp/cigar-{index}"))),
+                    ..ConfigurationLayer::default()
+                },
+                origin,
+            )?;
+        }
+        let winner = accumulator
+            .project_state_directory
+            .ok_or("missing winner")?;
+        assert_eq!(winner.value, PathBuf::from("/tmp/cigar-6"));
+        assert_eq!(winner.source, "CLI flag");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn configuration_and_secret_files_are_descriptor_bound_and_owner_safe()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::hard_link;
+        use std::os::unix::fs::{PermissionsExt as _, symlink};
+
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let config = root.join("cli.toml");
+        std::fs::write(&config, "schema_version = 1\n")?;
+        std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o644))?;
+        assert!(
+            read_bounded_regular(&config, MAX_CONFIGURATION_BYTES, FilePolicy::Configuration)
+                .is_ok()
+        );
+
+        std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o666))?;
+        assert!(
+            read_bounded_regular(&config, MAX_CONFIGURATION_BYTES, FilePolicy::Configuration)
+                .is_err()
+        );
+        std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600))?;
+
+        let hardlink = root.join("hardlink.toml");
+        hard_link(&config, &hardlink)?;
+        assert!(
+            read_bounded_regular(&config, MAX_CONFIGURATION_BYTES, FilePolicy::Configuration)
+                .is_err()
+        );
+        std::fs::remove_file(hardlink)?;
+
+        let symlink_path = root.join("symlink.toml");
+        symlink(&config, &symlink_path)?;
+        assert!(
+            read_bounded_regular(
+                &symlink_path,
+                MAX_CONFIGURATION_BYTES,
+                FilePolicy::Configuration,
+            )
+            .is_err()
+        );
+
+        let fifo = root.join("config.fifo");
+        let status = std::process::Command::new("mkfifo").arg(&fifo).status()?;
+        assert!(status.success());
+        assert!(
+            read_bounded_regular(&fifo, MAX_CONFIGURATION_BYTES, FilePolicy::Configuration)
+                .is_err(),
+            "a project configuration FIFO must fail without a blocking open"
+        );
+
+        let credential = root.join("credential");
+        std::fs::write(&credential, "token")?;
+        std::fs::set_permissions(&credential, std::fs::Permissions::from_mode(0o640))?;
+        assert!(
+            read_bounded_regular(&credential, MAX_CREDENTIAL_BYTES, FilePolicy::Credential)
+                .is_err()
+        );
+        std::fs::set_permissions(&credential, std::fs::Permissions::from_mode(0o600))?;
+        assert_eq!(
+            read_bounded_regular(&credential, MAX_CREDENTIAL_BYTES, FilePolicy::Credential)?,
+            b"token"
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_reads_reject_symlinked_ancestors_and_pin_open_directories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Read as _;
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let trusted = root.join("trusted");
+        let replacement = root.join("replacement");
+        std::fs::create_dir(&trusted)?;
+        std::fs::create_dir(&replacement)?;
+        std::fs::write(trusted.join("value"), b"trusted")?;
+        std::fs::write(replacement.join("value"), b"substituted")?;
+
+        let alias = root.join("alias");
+        symlink(&trusted, &alias)?;
+        assert!(open_bounded_read_before_final(&alias.join("value"), || Ok(())).is_err());
+
+        let moved = root.join("moved");
+        let requested = trusted.join("value");
+        let mut opened = open_bounded_read_before_final(&requested, || {
+            std::fs::rename(&trusted, &moved)?;
+            std::fs::rename(&replacement, &trusted)?;
+            Ok(())
+        })?;
+        let mut value = String::new();
+        opened.read_to_string(&mut value)?;
+        assert_eq!(value, "trusted");
+        assert_eq!(std::fs::read_to_string(&requested)?, "substituted");
+        Ok(())
+    }
+
+    #[test]
+    fn target_values_remain_closed() {
+        let mut accumulator = ConfigurationAccumulator::default();
+        assert!(
+            accumulator
+                .apply(
+                    ConfigurationLayer {
+                        target: Some("shared".to_owned()),
+                        ..ConfigurationLayer::default()
+                    },
+                    ConfigurationOrigin::ExplicitConfig,
+                )
+                .is_err()
+        );
+        assert_eq!(TargetKind::default(), TargetKind::Local);
+    }
+
+    #[test]
+    fn environment_rejects_raw_secrets_and_untyped_endpoints() {
+        for (raw_authorization, raw_token) in [(true, false), (false, true), (true, true)] {
+            assert!(
+                validate_environment_authority(raw_authorization, raw_token, Some("remote"), true,)
+                    .is_err()
+            );
+        }
+        assert!(validate_environment_authority(false, false, None, true).is_err());
+        assert!(matches!(
+            validate_environment_authority(false, false, Some("remote"), true),
+            Ok(Some(TargetKind::Remote))
+        ));
+        assert!(matches!(
+            validate_environment_authority(false, false, Some("local"), true),
+            Ok(Some(TargetKind::Local))
+        ));
     }
 }

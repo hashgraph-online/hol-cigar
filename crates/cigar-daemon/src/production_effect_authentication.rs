@@ -2,8 +2,12 @@
 
 use cigar_canon::parse_strict_json;
 use cigar_crypto::KeyRef;
-use cigar_effects::{EffectError, EffectErrorCode, EffectRecordAuthenticator, EffectRecordSeal};
+use cigar_effects::{
+    EffectError, EffectErrorCode, EffectRecordAuthenticator, EffectRecordSeal,
+    persisted_effect_checkpoint_observation,
+};
 use cigar_protocol::{ContentDigest, RecordId};
+use cigar_store::{SqliteStore, StoreErrorCode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use std::cmp::Ordering;
@@ -210,6 +214,23 @@ pub struct EffectCheckpointFile {
     lock_path: PathBuf,
 }
 
+/// Opaque cross-process lock proving that current checkpoint truth equals a backup snapshot.
+///
+/// Keeping this value alive prevents a production effect worker from publishing a newer external
+/// checkpoint while an offline restore is copied and verified. It grants no checkpoint mutation
+/// capability and releases the operating-system lock when dropped.
+pub struct ExactEffectCheckpointGuard {
+    _lock: File,
+}
+
+impl std::fmt::Debug for ExactEffectCheckpointGuard {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExactEffectCheckpointGuard")
+            .finish_non_exhaustive()
+    }
+}
+
 impl EffectCheckpointFile {
     /// Opens and validates a preprovisioned checkpoint, optionally creating the initial empty
     /// document only after the caller has independently proved that the effect store is empty.
@@ -247,6 +268,101 @@ impl EffectCheckpointFile {
         };
         checkpoint.load_locked()?;
         Ok(checkpoint)
+    }
+
+    /// Captures one exact checkpoint file only when it completely matches a locked backup DB.
+    ///
+    /// The caller must hold the source repository's SQLite writer exclusion while this method
+    /// runs. The checkpoint lock then freezes monotonic observations through validation and copy.
+    pub fn capture_backup_snapshot(
+        &self,
+        backup_database: impl AsRef<Path>,
+        destination: impl AsRef<Path>,
+    ) -> Result<(), EffectError> {
+        let destination = destination.as_ref();
+        let parent = destination.parent().ok_or_else(unavailable)?;
+        validate_restricted_directory(parent)?;
+        if destination.exists() {
+            return Err(unavailable());
+        }
+        let lock = self.open_lock()?;
+        lock.lock().map_err(|_error| unavailable())?;
+        let document = self.load_locked()?;
+        validate_checkpoint_against_database(backup_database.as_ref(), &document)?;
+        let bytes = serde_json::to_vec(&document).map_err(|_error| unavailable())?;
+        if bytes.is_empty()
+            || u64::try_from(bytes.len()).map_or(true, |length| length > MAX_CHECKPOINT_BYTES)
+        {
+            return Err(EffectError::new(EffectErrorCode::LimitExceeded));
+        }
+        let mut file =
+            create_owner_only_temporary_file(destination).map_err(|_error| unavailable())?;
+        let mut cleanup = TemporaryCleanup::new(destination.to_path_buf());
+        file.write_all(&bytes)
+            .and_then(|()| file.flush())
+            .and_then(|()| file.sync_all())
+            .map_err(|_error| unavailable())?;
+        drop(file);
+        sync_directory(parent)?;
+        cleanup.persisted = true;
+        Ok(())
+    }
+
+    /// Verifies that an immutable backup checkpoint completely matches its backup database.
+    pub fn verify_backup_snapshot(
+        backup_database: impl AsRef<Path>,
+        checkpoint_path: impl Into<PathBuf>,
+    ) -> Result<(), EffectError> {
+        let checkpoint = Self::open_read_only(checkpoint_path)?;
+        let document = checkpoint.load_locked()?;
+        validate_checkpoint_against_database(backup_database.as_ref(), &document)
+    }
+
+    /// Compares current and archived checkpoint truth without creating or acquiring a lock.
+    ///
+    /// This is suitable only for a no-mutation preview. A committing restore must instead use
+    /// [`Self::lock_exact_backup_snapshot`] and retain its guard through publication.
+    pub fn verify_exact_backup_snapshot_read_only(
+        current_checkpoint_path: impl Into<PathBuf>,
+        backup_checkpoint_path: impl Into<PathBuf>,
+    ) -> Result<(), EffectError> {
+        let current = Self::open_read_only(current_checkpoint_path)?;
+        let backup = Self::open_read_only(backup_checkpoint_path)?;
+        if current.load_locked()? == backup.load_locked()? {
+            Ok(())
+        } else {
+            Err(corrupt())
+        }
+    }
+
+    /// Requires a signed backup's checkpoint to equal current monotonic external truth exactly.
+    ///
+    /// A newer live checkpoint, an older/rolled-back live checkpoint, or any substitution fails;
+    /// this method never overwrites or repairs the external checkpoint.
+    pub fn require_exact_backup_snapshot(
+        &self,
+        checkpoint_path: impl Into<PathBuf>,
+    ) -> Result<(), EffectError> {
+        self.lock_exact_backup_snapshot(checkpoint_path).map(drop)
+    }
+
+    /// Locks current checkpoint truth only when it exactly equals a signed backup snapshot.
+    ///
+    /// The returned guard must remain alive through restore copy, verification, and publication.
+    /// The checkpoint is never overwritten or repaired, including when either side is older.
+    pub fn lock_exact_backup_snapshot(
+        &self,
+        checkpoint_path: impl Into<PathBuf>,
+    ) -> Result<ExactEffectCheckpointGuard, EffectError> {
+        let backup = Self::open_read_only(checkpoint_path)?;
+        let backup_document = backup.load_locked()?;
+        let lock = self.open_lock()?;
+        lock.lock().map_err(|_error| unavailable())?;
+        if self.load_locked()? == backup_document {
+            Ok(ExactEffectCheckpointGuard { _lock: lock })
+        } else {
+            Err(corrupt())
+        }
     }
 
     fn observe(
@@ -347,6 +463,33 @@ impl EffectCheckpointFile {
         validate_restricted_file(&self.path, &published, false)?;
         Ok(())
     }
+}
+
+fn validate_checkpoint_against_database(
+    database: &Path,
+    document: &EffectCheckpointDocument,
+) -> Result<(), EffectError> {
+    document.validate()?;
+    let inventory = SqliteStore::backup_effect_record_inventory_at(database).map_err(|error| {
+        match error.code() {
+            StoreErrorCode::InvalidRecord | StoreErrorCode::MixedSnapshot => corrupt(),
+            _ => unavailable(),
+        }
+    })?;
+    if inventory.len() != document.checkpoints.len() {
+        return Err(corrupt());
+    }
+    for (tenant_id, envelope) in inventory {
+        let observation = persisted_effect_checkpoint_observation(&envelope)?;
+        document.verify_exact(
+            &tenant_id,
+            &observation.effect_id,
+            &observation.intent_digest,
+            observation.effect_version,
+            &observation.authenticator,
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -717,7 +860,9 @@ mod tests {
         EffectCheckpointFile, EffectRecordSignature, EffectRecordSignatureAuthority,
         ProductionEffectRecordAuthenticator, raw_multihash,
     };
-    use cigar_crypto::KeyRef;
+    use cigar_crypto::{
+        CreateKeyRequest, KeyAlgorithm, KeyProvider as _, KeyPurpose, KeyRef, MemoryKeyProvider,
+    };
     use cigar_effects::reference::{DemoIssueConnector, DemoIssueRequest, DemoIssueService};
     use cigar_effects::{
         EffectAuthorization, EffectEngine, EffectError, EffectErrorCode, EffectRecordAuthenticator,
@@ -728,8 +873,9 @@ mod tests {
         RecordId, RetryPolicy, RiskLevel, SchemaVersion, UtcTimestamp, VersionId,
     };
     use cigar_store::{
-        AccessContext, CancellationToken, InMemoryStore, ReadTransaction as _, Repository as _,
-        SnapshotSelection,
+        AccessContext, BACKUP_DATABASE_FILE, BACKUP_EFFECT_CHECKPOINT_FILE, BackupErrorCode,
+        BackupIdentity, CancellationToken, ReadTransaction as _, Repository as _,
+        SnapshotSelection, SqliteStore, create_backup_with_effect_checkpoint, verify_backup,
     };
     use sha2::{Digest as _, Sha256};
     use std::collections::BTreeSet;
@@ -878,6 +1024,25 @@ mod tests {
     }
 
     #[test]
+    fn read_only_backup_checkpoint_preview_creates_no_lock_or_state() -> TestResult {
+        let directory = tempfile::tempdir()?;
+        let root = checkpoint_directory(directory.path())?;
+        let current = root.join("current-checkpoint.json");
+        let backup = root.join("backup-checkpoint.json");
+        drop(EffectCheckpointFile::open(current.clone(), true)?);
+        std::fs::copy(&current, &backup)?;
+        let current_lock = super::checkpoint_lock_path(&current)?;
+        let backup_lock = super::checkpoint_lock_path(&backup)?;
+        std::fs::remove_file(&current_lock)?;
+        assert!(!backup_lock.exists());
+
+        EffectCheckpointFile::verify_exact_backup_snapshot_read_only(&current, &backup)?;
+        assert!(!current_lock.exists());
+        assert!(!backup_lock.exists());
+        Ok(())
+    }
+
+    #[test]
     fn signed_record_proof_binds_tenant_bytes_and_external_checkpoint() -> TestResult {
         let directory = tempfile::tempdir()?;
         let checkpoint_directory = checkpoint_directory(directory.path())?;
@@ -925,11 +1090,13 @@ mod tests {
     }
 
     #[test]
-    fn production_authenticator_prepares_version_zero_and_reopens_engine() -> TestResult {
+    fn production_authenticator_backup_is_complete_and_rejects_checkpoint_rollback() -> TestResult {
         let directory = tempfile::tempdir()?;
-        let checkpoint = checkpoint_directory(directory.path())?.join("effect-checkpoints.json");
+        let root = checkpoint_directory(directory.path())?;
+        let checkpoint = root.join("effect-checkpoints.json");
+        let database = root.join("metadata.sqlite3");
         let tenant = record(20)?;
-        let repository = Arc::new(InMemoryStore::default());
+        let repository = Arc::new(SqliteStore::open(&database)?);
         let connector = Arc::new(DemoIssueConnector::new(
             "production-auth-test",
             Arc::new(DemoIssueService::default()),
@@ -1002,16 +1169,81 @@ mod tests {
         )?;
         verify_persisted_effect_record(&tenant, &envelope, &read_only)?;
 
-        let second_authenticator: Arc<dyn EffectRecordAuthenticator> = Arc::new(
-            ProductionEffectRecordAuthenticator::open(Arc::new(TestSignatures), checkpoint, false)?,
-        );
+        let second_authenticator: Arc<dyn EffectRecordAuthenticator> =
+            Arc::new(ProductionEffectRecordAuthenticator::open(
+                Arc::new(TestSignatures),
+                checkpoint.clone(),
+                false,
+            )?);
         let reopened = EffectEngine::new_with_authenticator(
-            repository,
-            AccessContext::new(tenant, "effect-version-zero-reopen")?,
+            Arc::clone(&repository),
+            AccessContext::new(tenant.clone(), "effect-version-zero-reopen")?,
             second_authenticator,
         );
         reopened.register_connector(connector)?;
         assert_eq!(reopened.get(&prepared.intent.effect_id)?, prepared);
+        drop(reopened);
+
+        let checkpoint_file = EffectCheckpointFile::open(checkpoint.clone(), false)?;
+        let provider = MemoryKeyProvider::default();
+        let signing = provider.create(CreateKeyRequest {
+            tenant: tenant.as_str().to_owned(),
+            purpose: KeyPurpose::Signing,
+            algorithm: KeyAlgorithm::Ed25519,
+            created_at: 1,
+            activated_at: 1,
+        })?;
+        let archive = root.join("signed-backup");
+        let manifest = create_backup_with_effect_checkpoint(
+            repository.as_ref(),
+            root.join("empty-blobs"),
+            &archive,
+            &provider,
+            BackupIdentity {
+                signing_key: &signing.key_ref,
+                tenant: tenant.as_str(),
+                signer: "backup-operator",
+                created_at_unix_nanos: 2,
+            },
+            |backup_database, backup_checkpoint| {
+                checkpoint_file
+                    .capture_backup_snapshot(backup_database, backup_checkpoint)
+                    .map_err(|error| match error.code() {
+                        EffectErrorCode::CorruptJournal | EffectErrorCode::InvalidInput => {
+                            BackupErrorCode::Corrupt
+                        }
+                        EffectErrorCode::LimitExceeded => BackupErrorCode::LimitExceeded,
+                        _ => BackupErrorCode::Unavailable,
+                    })
+            },
+        )?;
+        assert_eq!(manifest.format_version, 2);
+        assert_eq!(
+            verify_backup(&archive, &provider, tenant.as_str(), "backup-operator", 3,)?,
+            manifest
+        );
+        EffectCheckpointFile::verify_backup_snapshot(
+            archive.join(BACKUP_DATABASE_FILE),
+            archive.join(BACKUP_EFFECT_CHECKPOINT_FILE),
+        )?;
+        checkpoint_file
+            .require_exact_backup_snapshot(archive.join(BACKUP_EFFECT_CHECKPOINT_FILE))?;
+
+        checkpoint_file.observe(
+            &tenant,
+            &prepared.intent.effect_id,
+            &prepared.intent_digest,
+            prepared.effect_version.saturating_add(1),
+            &digest(99)?,
+        )?;
+        let restarted = EffectCheckpointFile::open(checkpoint, false)?;
+        assert_eq!(
+            restarted
+                .require_exact_backup_snapshot(archive.join(BACKUP_EFFECT_CHECKPOINT_FILE))
+                .err()
+                .map(|error| error.code()),
+            Some(EffectErrorCode::CorruptJournal)
+        );
         Ok(())
     }
 }

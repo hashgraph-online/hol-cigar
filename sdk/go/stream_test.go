@@ -34,7 +34,7 @@ func TestScanEventAcceptsNormalAndProblemFrames(t *testing.T) {
 		t.Fatalf("normal multi-line event failed: event=%+v present=%t err=%v", event, present, err)
 	}
 
-	fixture, err := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+	fixture, err := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 	if err != nil {
 		t.Fatal(err)
 	}

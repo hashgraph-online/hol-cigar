@@ -149,7 +149,8 @@ def private_mkdir(path: Path, *, exist_ok: bool = True) -> None:
         raise CorpusFailure(f"unsafe directory ancestor: {current}")
     for directory in reversed(missing):
         directory.mkdir(mode=0o700)
-        os.chmod(directory, 0o700)
+        # Corpus state is mutable worker input and must deny group/world access.
+        os.chmod(directory, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     if not missing and not exist_ok:
         raise CorpusFailure(f"refusing existing directory: {absolute}")
     if absolute.is_symlink() or not absolute.is_dir():
@@ -1438,7 +1439,8 @@ def atomic_remove_verified_transient(
     holding_directory = Path(
         tempfile.mkdtemp(prefix=".cigar-reconcile-", dir=source.parent)
     )
-    os.chmod(holding_directory, 0o700)
+    # Reconciliation quarantines untrusted transient bytes in an owner-private directory.
+    os.chmod(holding_directory, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     holding = holding_directory / "verified-transient"
     try:
         os.rename(source, holding)

@@ -1,0 +1,310 @@
+{
+  "$defs": {
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "disclose_identity": {
+          "type": "boolean"
+        },
+        "grpc_status": {
+          "pattern": "^[A-Z][A-Z_]{0,63}$",
+          "type": "string"
+        },
+        "http_status": {
+          "maximum": 599,
+          "minimum": 400,
+          "type": "integer"
+        },
+        "numeric_code": {
+          "maximum": 999999,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "retry": {
+          "enum": [
+            "never",
+            "safe",
+            "after_backoff",
+            "after_reauthorization",
+            "after_reconciliation"
+          ]
+        },
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "numeric_code",
+        "symbol",
+        "http_status",
+        "grpc_status",
+        "retry",
+        "disclose_identity"
+      ],
+      "type": "object"
+    },
+    "field": {
+      "additionalProperties": false,
+      "properties": {
+        "bound": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[a-z0-9_,.=]+$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "caller",
+            "envelope",
+            "path",
+            "server",
+            "transport"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "source",
+        "bound"
+      ],
+      "type": "object"
+    },
+    "operation": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "enum": [
+            "tenant",
+            "operator",
+            "health",
+            "anonymous"
+          ]
+        },
+        "http_method": {
+          "enum": [
+            "GET",
+            "POST"
+          ]
+        },
+        "http_path": {
+          "maxLength": 512,
+          "pattern": "^/\\S*$",
+          "type": "string"
+        },
+        "idempotency": {
+          "enum": [
+            "required",
+            "not_applicable"
+          ]
+        },
+        "mutation": {
+          "type": "boolean"
+        },
+        "operation_id": {
+          "maxLength": 128,
+          "pattern": "^[a-z][A-Za-z0-9]*$",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        },
+        "revision": {
+          "enum": [
+            "none",
+            "required"
+          ]
+        },
+        "rpc": {
+          "maxLength": 128,
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "type": "string"
+        },
+        "service": {
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Za-z0-9]*Service$",
+          "type": "string"
+        },
+        "stream": {
+          "enum": [
+            "unary",
+            "server_stream"
+          ]
+        }
+      },
+      "required": [
+        "service",
+        "rpc",
+        "operation_id",
+        "http_method",
+        "http_path",
+        "mutation",
+        "idempotency",
+        "revision",
+        "stream",
+        "auth",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "payload": {
+      "additionalProperties": false,
+      "properties": {
+        "event_fields": {
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "event_max_bytes": {
+          "maximum": 1048576,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event_schema": {
+          "oneOf": [
+            {
+              "maxLength": 128,
+              "pattern": "^[A-Z][A-Za-z0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_fields": {
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "request_max_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "request_schema": {
+          "maxLength": 128,
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "type": "string"
+        },
+        "response_fields": {
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "response_max_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "response_schema": {
+          "maxLength": 128,
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_schema",
+        "response_schema",
+        "event_schema",
+        "request_max_bytes",
+        "response_max_bytes",
+        "event_max_bytes",
+        "request_fields",
+        "response_fields",
+        "event_fields"
+      ],
+      "type": "object"
+    },
+    "service": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Za-z0-9]*Service$",
+          "type": "string"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/operation"
+          },
+          "maxItems": 45,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "operations"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-protocol-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "envelope_fields": {
+      "items": {
+        "$ref": "#/$defs/field"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "type": "array"
+    },
+    "error_count": {
+      "const": 34
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/error"
+      },
+      "maxItems": 34,
+      "minItems": 34,
+      "type": "array"
+    },
+    "operation_count": {
+      "const": 45
+    },
+    "schema_version": {
+      "const": "cigar.dashboard-protocol.v1"
+    },
+    "service_count": {
+      "const": 7
+    },
+    "services": {
+      "items": {
+        "$ref": "#/$defs/service"
+      },
+      "maxItems": 7,
+      "minItems": 7,
+      "type": "array"
+    },
+    "source": {
+      "const": "cargo-xtask-interface-projection"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source",
+    "service_count",
+    "operation_count",
+    "error_count",
+    "envelope_fields",
+    "services",
+    "errors"
+  ],
+  "title": "CIGAR dashboard generated protocol catalog v1",
+  "type": "object"
+}

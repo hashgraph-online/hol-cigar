@@ -33,8 +33,10 @@ from release_lib import (
     ReleaseError,
     canonical_json_bytes,
     load_json_bytes,
+    reject_evidence_directory,
     repo_root,
     safe_relative_path,
+    selected_evidence_directory,
     sha256_bytes,
     sha256_file,
 )
@@ -476,7 +478,10 @@ def _snapshot_files(
         (path for path in destination.rglob("*") if path.is_dir()),
         key=lambda path: len(path.parts),
     ):
-        os.chmod(directory, 0o700)
+        # Snapshot directories contain prepublication release material and stay owner-private.
+        os.chmod(
+            directory, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     for relative, expected in captured.items():
         observed = _stable_file_bytes(
             source_root.joinpath(*relative.split("/")),
@@ -1090,7 +1095,10 @@ def _verify_candidate_offline(candidate: Path) -> dict[str, object]:
     source_archive = candidate / f"artifacts/{source_entry['filename']}"
     with tempfile.TemporaryDirectory(prefix="cigar-beta-offline-") as raw:
         temporary = Path(raw)
-        os.chmod(temporary, 0o700)
+        # Offline verification staging contains exact candidate bytes and trust inputs.
+        os.chmod(
+            temporary, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         source_root = temporary / "source"
         candidate_copy = temporary / "candidate"
         committed = _extract_source_archive(source_archive, source_root, source_epoch)
@@ -1666,7 +1674,10 @@ def _prepare_inputs(
     temporary = tempfile.TemporaryDirectory(prefix="cigar-beta-inputs-")
     try:
         base = Path(temporary.name).resolve(strict=True)
-        os.chmod(base, 0o700)
+        # Captured signer inputs must never be visible to another local account.
+        os.chmod(
+            base, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         candidate = candidate.resolve(strict=True)
         qualification_directory = qualification_directory.resolve(strict=True)
         signature_directory = signature_directory.resolve(strict=True)
@@ -2010,7 +2021,10 @@ def _verify_final_snapshot(
     signature_staging = tempfile.TemporaryDirectory(prefix="cigar-beta-signatures-")
     try:
         staging = Path(signature_staging.name)
-        os.chmod(staging, 0o700)
+        # Signature verification staging is intentionally accessible only to its owner.
+        os.chmod(
+            staging, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         for source, final_path in signatures.paths:
             target = staging / Path(final_path).name
             with source.open("rb") as input_file, target.open("xb") as output_file:
@@ -2076,7 +2090,10 @@ def verify_final_release(
     temporary = tempfile.TemporaryDirectory(prefix="cigar-beta-final-snapshot-")
     try:
         base = Path(temporary.name).resolve(strict=True)
-        os.chmod(base, 0o700)
+        # Final verification uses a private immutable snapshot before any publication decision.
+        os.chmod(
+            base, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         release_directory = release_directory.resolve(strict=True)
         trust_policy = trust_policy.resolve(strict=True)
         snapshot_release = _snapshot_directory(
@@ -2115,12 +2132,17 @@ def parse_arguments() -> argparse.Namespace:
             type=Path,
             help="absolute OpenSSL executable matching the trust-policy digest",
         )
+        command.add_argument(
+            "--evidence-dir",
+            type=Path,
+            help="absolute external beta release workspace (or set CIGAR_EVIDENCE_DIR)",
+        )
     plan = subparsers.choices["plan"]
-    plan.add_argument("--out", type=Path, required=True)
+    plan.add_argument("--out", type=Path)
     assemble = subparsers.choices["assemble"]
     assemble.add_argument("--release-evidence", type=Path, required=True)
     assemble.add_argument("--release-signature", type=Path, required=True)
-    assemble.add_argument("--out", type=Path, required=True)
+    assemble.add_argument("--out", type=Path)
     verify = subparsers.add_parser("verify")
     verify.add_argument("--release", type=Path, required=True)
     verify.add_argument("--trust-policy", type=Path, required=True)
@@ -2129,7 +2151,32 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         help="absolute OpenSSL executable matching the trust-policy digest",
     )
+    verify.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="reserved selector; final release verification is stdout-only",
+    )
     return parser.parse_args()
+
+
+def _selected_output(arguments: argparse.Namespace) -> Path:
+    selected = selected_evidence_directory(arguments.evidence_dir)
+    legacy = arguments.out
+    if selected is not None and legacy is not None:
+        raise BetaReleaseError(
+            f"beta release {arguments.action} received both --out and an "
+            "evidence-directory selector"
+        )
+    if selected is not None:
+        if arguments.action == "plan":
+            return selected / RELEASE_EVIDENCE_NAME
+        return selected
+    if legacy is None:
+        raise BetaReleaseError(
+            f"beta release {arguments.action} requires --out, --evidence-dir, "
+            "or CIGAR_EVIDENCE_DIR"
+        )
+    return legacy
 
 
 def main() -> int:
@@ -2143,7 +2190,7 @@ def main() -> int:
             signature_directory=arguments.signatures,
             trust_policy=arguments.trust_policy,
             verification_time=verification_time,
-            output=arguments.out,
+            output=_selected_output(arguments),
             openssl_path=arguments.openssl,
         )
         print(canonical_json_bytes(document).decode("utf-8"), end="")
@@ -2157,11 +2204,15 @@ def main() -> int:
             verification_time=verification_time,
             release_evidence=arguments.release_evidence,
             release_signature=arguments.release_signature,
-            output=arguments.out,
+            output=_selected_output(arguments),
             openssl_path=arguments.openssl,
         )
         print(canonical_json_bytes(report).decode("utf-8"), end="")
     else:
+        reject_evidence_directory(
+            arguments.evidence_dir,
+            "beta final-release verification",
+        )
         report = verify_final_release(
             release_directory=arguments.release,
             trust_policy=arguments.trust_policy,

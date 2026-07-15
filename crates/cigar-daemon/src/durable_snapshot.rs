@@ -1735,8 +1735,8 @@ mod tests {
     };
     use cigar_policy::EffectiveCapabilities;
     use cigar_protocol::{
-        Budget, Capability, CoordinationTopic, ExtensionMap, HandoffDelta, HandoffReferences,
-        LaneKind, RecipientSelector, ResultClaim, SchemaVersion,
+        Budget, Capability, CoordinationEventKind, CoordinationTopic, ExtensionMap, HandoffDelta,
+        HandoffReferences, LaneKind, LeaseKind, RecipientSelector, ResultClaim, SchemaVersion,
     };
     use cigar_space::SpaceHierarchy;
     use cigar_store::{InMemoryStore, SqliteFailpoint, SqliteStore};
@@ -1999,6 +1999,160 @@ mod tests {
         reopened.create_space(second.clone(), &CancellationToken::default())?;
         assert_eq!(reopened.generation()?, 2);
         assert_eq!(reopened.head(&second.space_id)?.sequence, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn sqlite_restart_retains_scoped_event_resume_and_monotonic_lease_fences()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempdir()?;
+        let path = directory.path().join("space-coordination.sqlite3");
+        let tenant = record(20)?;
+        let request = create_space_request(260)?;
+        let space_id = request.space_id.clone();
+        let visible_project = request.hierarchy.active_project_id.clone();
+        let hidden_project = record(261)?;
+        let holder = request.author_id.clone();
+        let replacement_holder = record(262)?;
+        let resource = version(263)?;
+
+        let store = Arc::new(SqliteStore::open(&path)?);
+        let service = DurableContextSpaceService::open(
+            store.clone(),
+            tenant.clone(),
+            &CancellationToken::default(),
+        )?;
+        let genesis = service.create_space(request, &CancellationToken::default())?;
+        service.append_events(
+            &space_id,
+            hidden_project.clone(),
+            PublishRequest {
+                expected_head: ExpectedRevision(1),
+                actor_id: holder.clone(),
+                purpose: "hidden project checkpoint".to_owned(),
+                policy_snapshot_digest: content(264)?,
+                committed_at: time(2)?,
+                event_id: record(264)?,
+            },
+            vec![CoordinationEvent {
+                event_id: record(265)?,
+                kind: CoordinationEventKind::TaskCheckpointed,
+                payload_digest: content(265)?,
+            }],
+            &CancellationToken::default(),
+        )?;
+        service.append_events(
+            &space_id,
+            visible_project.clone(),
+            PublishRequest {
+                expected_head: ExpectedRevision(2),
+                actor_id: holder.clone(),
+                purpose: "visible project checkpoint".to_owned(),
+                policy_snapshot_digest: content(266)?,
+                committed_at: time(3)?,
+                event_id: record(266)?,
+            },
+            vec![CoordinationEvent {
+                event_id: record(267)?,
+                kind: CoordinationEventKind::TaskCheckpointed,
+                payload_digest: content(267)?,
+            }],
+            &CancellationToken::default(),
+        )?;
+
+        let visible = BTreeSet::from([visible_project.clone()]);
+        let first_page = service.poll_events(&space_id, &visible, EventCursor(0), 1)?;
+        assert_eq!(first_page.events.len(), 1);
+        assert_eq!(
+            first_page.events.first().map(|event| &event.event.event_id),
+            genesis.events.first().map(|event| &event.event_id)
+        );
+        assert_eq!(first_page.resume_cursor, EventCursor(2));
+        assert!(first_page.has_more);
+        let resumed = service.poll_events(&space_id, &visible, first_page.resume_cursor, 1)?;
+        assert_eq!(resumed.events.len(), 1);
+        assert_eq!(
+            resumed.events.first().map(|event| &event.event.event_id),
+            Some(&record(267)?)
+        );
+        assert_eq!(resumed.resume_cursor, EventCursor(3));
+        assert!(!resumed.has_more);
+        assert_eq!(
+            service
+                .event_cursor_for_id(&space_id, &visible, &record(265)?)
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Space(SpaceError::NotFound))
+        );
+
+        let first_lease = service.acquire_lease(
+            &space_id,
+            AcquireLeaseRequest {
+                lease_id: record(268)?,
+                resource_id: resource.clone(),
+                holder_id: holder.clone(),
+                kind: LeaseKind::Publication,
+                acquired_at: time(10)?,
+                expires_at: time(20)?,
+            },
+            &CancellationToken::default(),
+        )?;
+        assert_eq!(first_lease.fencing_token, 1);
+        drop(service);
+        drop(store);
+
+        let reopened_store = Arc::new(SqliteStore::open(&path)?);
+        let reopened = DurableContextSpaceService::open(
+            reopened_store.clone(),
+            tenant.clone(),
+            &CancellationToken::default(),
+        )?;
+        assert!(
+            reopened
+                .verify_fence(&space_id, &resource, &holder, 1, &time(19)?)
+                .is_ok()
+        );
+        assert_eq!(
+            reopened
+                .verify_fence(&space_id, &resource, &holder, 1, &time(20)?)
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Space(SpaceError::Conflict))
+        );
+        let second_lease = reopened.acquire_lease(
+            &space_id,
+            AcquireLeaseRequest {
+                lease_id: record(269)?,
+                resource_id: resource.clone(),
+                holder_id: replacement_holder.clone(),
+                kind: LeaseKind::Publication,
+                acquired_at: time(20)?,
+                expires_at: time(30)?,
+            },
+            &CancellationToken::default(),
+        )?;
+        assert_eq!(second_lease.fencing_token, 2);
+        assert_eq!(
+            reopened
+                .verify_fence(&space_id, &resource, &holder, 1, &time(21)?)
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Space(SpaceError::Conflict))
+        );
+        drop(reopened);
+        drop(reopened_store);
+
+        let restarted = DurableContextSpaceService::open(
+            Arc::new(SqliteStore::open(&path)?),
+            tenant,
+            &CancellationToken::default(),
+        )?;
+        assert!(
+            restarted
+                .verify_fence(&space_id, &resource, &replacement_holder, 2, &time(21)?,)
+                .is_ok()
+        );
+        assert_eq!(
+            restarted.poll_events(&space_id, &visible, first_page.resume_cursor, 1)?,
+            resumed
+        );
         Ok(())
     }
 
@@ -2365,7 +2519,18 @@ mod tests {
         );
         assert_eq!(
             reopened.persisted_results(&capsule.handoff_id, &acceptance.recipient_id)?,
-            vec![result]
+            vec![result.clone()]
+        );
+        assert!(
+            reopened
+                .verified_merge_material(
+                    &result.delta.delta_id,
+                    &capsule.issuer_id,
+                    "tenant-a",
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                )
+                .is_ok()
         );
         assert_eq!(
             reopened.handoff_revision(&capsule.handoff_id, &capsule.issuer_id, &BTreeSet::new(),)?,
@@ -2384,6 +2549,18 @@ mod tests {
             &CancellationToken::default(),
         )?;
         assert_eq!(revocation.revision, 3);
+        assert_eq!(
+            reopened
+                .verified_merge_material(
+                    &result.delta.delta_id,
+                    &capsule.issuer_id,
+                    "tenant-a",
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                )
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Handoff(HandoffError::Forbidden))
+        );
         assert_eq!(reopened.generation()?, 4);
         drop(reopened);
 
@@ -2403,9 +2580,23 @@ mod tests {
         );
         assert_eq!(
             restored
-                .inspect_acceptance(&acceptance_request(capsule, 329)?, |_reference| true,)
+                .inspect_acceptance(&acceptance_request(capsule.clone(), 329)?, |_reference| {
+                    true
+                },)
                 .map_err(|error| error.code()),
             Err(DurableStateErrorCode::Handoff(HandoffError::Revoked))
+        );
+        assert_eq!(
+            restored
+                .verified_merge_material(
+                    &result.delta.delta_id,
+                    &capsule.issuer_id,
+                    "tenant-a",
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                )
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Handoff(HandoffError::Forbidden))
         );
         Ok(())
     }

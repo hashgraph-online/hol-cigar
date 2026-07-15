@@ -24,6 +24,12 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, Never
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from cigarbench import EvidenceExecution, EvidenceWorkspaceError  # noqa: E402
+
 
 RUN_SCHEMA = "cigar.performance-run.v1"
 SAMPLE_SCHEMA = "cigar.performance-sample.v1"
@@ -1365,6 +1371,27 @@ def validation_report(
 
 
 def assert_comparable(candidate: dict[str, Any], baseline: dict[str, Any]) -> None:
+    distinct_bindings = (
+        ("run id", candidate["run_id"], baseline["run_id"]),
+        (
+            "build digest",
+            candidate["bindings"]["build_digest"],
+            baseline["bindings"]["build_digest"],
+        ),
+        (
+            "installed artifact digest",
+            candidate["daemon"]["artifact_digest"],
+            baseline["daemon"]["artifact_digest"],
+        ),
+        (
+            "installation receipt digest",
+            candidate["daemon"]["installation_receipt_digest"],
+            baseline["daemon"]["installation_receipt_digest"],
+        ),
+    )
+    for label, candidate_value, baseline_value in distinct_bindings:
+        if candidate_value == baseline_value:
+            fail(f"candidate and baseline must have distinct {label}")
     if (
         candidate["bindings"]["dataset_digest"]
         != baseline["bindings"]["dataset_digest"]
@@ -1569,6 +1596,17 @@ def comparison_report(
     integer(bootstrap_repetitions, "bootstrap repetitions", 1)
     if bootstrap_repetitions > MAX_BOOTSTRAP_REPETITIONS:
         fail("bootstrap repetitions exceed the bounded evaluator limit")
+    if candidate_samples_digest == baseline_samples_digest:
+        fail("candidate and baseline must have distinct sample streams")
+    if (
+        candidate_attestation is not None
+        and baseline_attestation is not None
+        and candidate_attestation.get("verified") is True
+        and baseline_attestation.get("verified") is True
+        and candidate_attestation.get("attestation_digest")
+        == baseline_attestation.get("attestation_digest")
+    ):
+        fail("candidate and baseline must have distinct attestations")
     assert_comparable(candidate_manifest, baseline_manifest)
     candidate = evaluate_run(
         candidate_manifest,
@@ -1808,6 +1846,11 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description="Validate digest-bound CIGAR section 22 performance evidence"
     )
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     subcommands = result.add_subparsers(dest="command", required=True)
 
     attest = subcommands.add_parser(
@@ -1861,18 +1904,24 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
+    evidence: EvidenceExecution | None = None
     try:
+        evidence = EvidenceExecution.open(arguments)
         arguments.function(arguments)
+        evidence.publish(f"performance-{arguments.command}")
         return 0
     except PerformanceError as error:
         print(f"performance evidence error: {error}", file=sys.stderr)
         return 2
-    except OSError:
+    except (EvidenceWorkspaceError, OSError):
         print(
             "performance evidence error: operating system operation failed",
             file=sys.stderr,
         )
         return 2
+    finally:
+        if evidence is not None:
+            evidence.close()
 
 
 if __name__ == "__main__":

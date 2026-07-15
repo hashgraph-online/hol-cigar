@@ -3,8 +3,9 @@
 use crate::connector::{
     BoundedBytes, ByteRange, CatalogError, CatalogErrorCode, ChangeKind, ChangeWatermark,
     ConnectorContext, DiscoveryDisposition, DiscoveryEntry, DiscoveryPlan, DiscoveryPolicy,
-    DiscoveryReason, DiscoveryRequest, MAX_CONNECTOR_ITEMS, SourceChange, SourceConnector,
-    SourceHealth, SourceHealthState, SourceRecord, SourceSnapshotBatch,
+    DiscoveryReason, DiscoveryRequest, FILESYSTEM_CONNECTOR_ID, MAX_CONNECTOR_ITEMS, SourceChange,
+    SourceConnector, SourceConnectorDescriptor, SourceHealth, SourceHealthState, SourceRecord,
+    SourceSnapshotBatch,
 };
 use crate::ignore::{IgnorePatterns, IgnoreWorkBudget, MAX_IGNORE_BYTES, path_has_prefix};
 use crate::secret::scan_secrets_with_patterns;
@@ -13,7 +14,6 @@ use cap_fs_ext::{
 };
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, File, Metadata, OpenOptions};
-use cigar_crypto::MonotonicUuidV7Generator;
 use cigar_protocol::{
     ContentDigest, ExtensionMap, MediaType, RecordId, RelativePath, SourceSnapshot, SourceUri,
     UtcTimestamp,
@@ -23,20 +23,20 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_RETAINED_EVENTS: usize = 100_000;
 const MAX_FILESYSTEM_DEPTH: usize = 256;
 const MAX_FILE_BYTES: u64 = 67_108_864;
 const READ_CHUNK_BYTES: usize = 64 * 1_024;
+const MAX_AGGREGATE_GIT_IGNORE_BYTES: usize = 8 * 1_048_576;
+const MAX_AGGREGATE_GIT_IGNORE_PATTERNS: usize = 32_768;
 
 #[derive(Clone, Eq, PartialEq)]
 struct LocatedRecord {
     record: SourceRecord,
-    relative_path: PathBuf,
-    identity: FileIdentity,
-    follow_final_symlink: bool,
+    bytes: Arc<[u8]>,
 }
 
 #[derive(Default)]
@@ -54,7 +54,6 @@ pub struct LocalFilesystemConnector {
     root: Dir,
     root_uri: SourceUri,
     state: Mutex<FilesystemState>,
-    ids: MonotonicUuidV7Generator,
 }
 
 impl LocalFilesystemConnector {
@@ -66,7 +65,6 @@ impl LocalFilesystemConnector {
             root,
             root_uri,
             state: Mutex::new(FilesystemState::default()),
-            ids: MonotonicUuidV7Generator::default(),
         })
     }
 
@@ -89,10 +87,11 @@ impl LocalFilesystemConnector {
         for change in changes {
             append_change(&mut state, change);
         }
-        if state.records_by_id != current {
+        if state.records_by_id != current || state.overflowed {
             state.last_snapshot = None;
         }
         state.records_by_id = current;
+        state.overflowed = false;
         Ok(plan)
     }
 
@@ -103,6 +102,7 @@ impl LocalFilesystemConnector {
             .lock()
             .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
         state.overflowed = true;
+        state.last_snapshot = None;
         let next = next_watermark(state.watermark)?;
         state.watermark = next;
         state.events.push_back(SourceChange {
@@ -126,13 +126,21 @@ impl LocalFilesystemConnector {
             return Err(CatalogError::new(CatalogErrorCode::Denied));
         }
         let cigar_ignore = load_ignore(&self.root, Path::new(".cigarignore"), context)?;
-        let git_ignore = load_ignore(&self.root, Path::new(".gitignore"), context)?;
         let mut candidates = Vec::new();
+        let mut git_ignores = Vec::new();
         let mut walk_budget = WalkBudget::default();
+        let mut traversal_ignore_work = IgnoreWorkBudget::default();
         {
             let mut walker = FilesystemWalker {
                 root: &self.root,
                 policy: &request.policy,
+                include_overrides: &request.include_overrides,
+                cigar_ignore: &cigar_ignore,
+                active_git_ignores: Vec::new(),
+                collected_git_ignores: &mut git_ignores,
+                loaded_git_ignore_bytes: 0,
+                loaded_git_ignore_patterns: 0,
+                ignore_work: &mut traversal_ignore_work,
                 context,
                 budget: &mut walk_budget,
                 output: &mut candidates,
@@ -143,6 +151,11 @@ impl LocalFilesystemConnector {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
         }
         candidates.sort_by(|left, right| left.relative.cmp(&right.relative));
+        crate::connector::validate_source_paths(
+            candidates
+                .iter()
+                .map(|candidate| candidate.relative.as_slice()),
+        )?;
 
         let mut entries = Vec::with_capacity(candidates.len());
         let mut included = BTreeMap::new();
@@ -153,7 +166,7 @@ impl LocalFilesystemConnector {
         let mut classifier = MetadataClassifier {
             policy: &request.policy,
             cigar_ignore: &cigar_ignore,
-            git_ignore: &git_ignore,
+            git_ignores: &git_ignores,
             ignore_work: &mut ignore_work,
             context,
         };
@@ -200,11 +213,7 @@ impl LocalFilesystemConnector {
                     } else {
                         let located = LocatedRecord {
                             record: record.clone(),
-                            relative_path: candidate.relative_path,
-                            identity: candidate.identity.ok_or_else(|| {
-                                CatalogError::new(CatalogErrorCode::SourceChanged)
-                            })?,
-                            follow_final_symlink: candidate.follow_final_symlink,
+                            bytes: Arc::from(bytes),
                         };
                         if included.insert(record.record_id.clone(), located).is_some() {
                             return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
@@ -246,6 +255,13 @@ impl fmt::Debug for LocalFilesystemConnector {
 }
 
 impl SourceConnector for LocalFilesystemConnector {
+    fn descriptor(&self) -> SourceConnectorDescriptor {
+        SourceConnectorDescriptor {
+            id: FILESYSTEM_CONNECTOR_ID.to_owned(),
+            root: self.root_uri.clone(),
+        }
+    }
+
     fn discover(
         &self,
         request: &DiscoveryRequest,
@@ -297,12 +313,11 @@ impl SourceConnector for LocalFilesystemConnector {
                 .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))
         })?;
         let captured_at = now_utc()?;
-        let snapshot_id = RecordId::new(
-            self.ids
-                .generate()
-                .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?
-                .to_string(),
-        )
+        let snapshot_id = RecordId::new(deterministic_uuid(&[
+            b"CIGAR-FILESYSTEM-SNAPSHOT\0v1\0",
+            self.root_uri.as_str().as_bytes(),
+            manifest_digest.as_str().as_bytes(),
+        ]))
         .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
         let snapshot = SourceSnapshot {
             schema_version: "cigar.source-snapshot.v1"
@@ -342,16 +357,9 @@ impl SourceConnector for LocalFilesystemConnector {
         if located.record != *record {
             return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
         }
-        let bytes = read_capability_file(
-            &self.root,
-            &located.relative_path,
-            located.follow_final_symlink,
-            located.identity,
-            record.size_bytes,
-            context,
-        )?;
+        let bytes = located.bytes;
         if Some(
-            ContentDigest::new(raw_digest(&bytes)?)
+            ContentDigest::new(raw_digest(bytes.as_ref())?)
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?,
         ) != record.content_digest
         {
@@ -468,6 +476,13 @@ impl WalkBudget {
 struct FilesystemWalker<'a> {
     root: &'a Dir,
     policy: &'a DiscoveryPolicy,
+    include_overrides: &'a std::collections::BTreeSet<RelativePath>,
+    cigar_ignore: &'a IgnorePatterns,
+    active_git_ignores: Vec<ScopedIgnorePatterns>,
+    collected_git_ignores: &'a mut Vec<ScopedIgnorePatterns>,
+    loaded_git_ignore_bytes: usize,
+    loaded_git_ignore_patterns: usize,
+    ignore_work: &'a mut IgnoreWorkBudget,
     context: &'a ConnectorContext,
     budget: &'a mut WalkBudget,
     output: &'a mut Vec<Candidate>,
@@ -485,6 +500,26 @@ impl FilesystemWalker<'_> {
         if depth > MAX_FILESYSTEM_DEPTH {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
         }
+        let patterns = load_ignore(directory, Path::new(".gitignore"), self.context)?;
+        self.loaded_git_ignore_bytes = self
+            .loaded_git_ignore_bytes
+            .checked_add(patterns.source_bytes())
+            .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+        self.loaded_git_ignore_patterns = self
+            .loaded_git_ignore_patterns
+            .checked_add(patterns.pattern_count())
+            .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+        if self.loaded_git_ignore_bytes > MAX_AGGREGATE_GIT_IGNORE_BYTES
+            || self.loaded_git_ignore_patterns > MAX_AGGREGATE_GIT_IGNORE_PATTERNS
+        {
+            return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+        }
+        let scoped = ScopedIgnorePatterns {
+            base: relative_directory_bytes.to_vec(),
+            patterns,
+        };
+        self.collected_git_ignores.push(scoped.clone());
+        self.active_git_ignores.push(scoped);
         let iterator = directory
             .read_dir(".")
             .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
@@ -505,11 +540,11 @@ impl FilesystemWalker<'_> {
                 .file_type()
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
             if file_type.is_dir() {
-                if !is_hard_directory(&relative_bytes) {
+                if !is_hard_directory(&relative_bytes) && !self.prune_directory(&relative_bytes)? {
                     let child = directory
                         .open_dir_nofollow(&name)
                         .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
-                    if !has_nested_git_marker(&child)? {
+                    if !has_nested_git_marker(&child, self.context)? {
                         let next_depth = depth
                             .checked_add(1)
                             .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
@@ -564,7 +599,45 @@ impl FilesystemWalker<'_> {
                 });
             }
         }
+        let _scoped = self.active_git_ignores.pop();
         Ok(())
+    }
+
+    fn prune_directory(&mut self, path: &[u8]) -> Result<bool, CatalogError> {
+        if self.policy.allow_user_broadening
+            && self.include_overrides.iter().any(|override_path| {
+                override_path.as_bytes() != path && path_has_prefix(override_path.as_bytes(), path)
+            })
+        {
+            return Ok(false);
+        }
+        if self
+            .cigar_ignore
+            .matches_filesystem(path, self.ignore_work, self.context)?
+        {
+            return Ok(true);
+        }
+        for scoped in &self.active_git_ignores {
+            let Some(scoped_path) = scoped.path(path) else {
+                continue;
+            };
+            if scoped
+                .patterns
+                .matches_filesystem(scoped_path, self.ignore_work, self.context)?
+            {
+                return Ok(true);
+            }
+            let mut directory_path = scoped_path.to_vec();
+            directory_path.push(b'/');
+            if scoped.patterns.matches_filesystem(
+                &directory_path,
+                self.ignore_work,
+                self.context,
+            )? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -620,7 +693,7 @@ fn apply_content_revision(record: &mut SourceRecord, bytes: &[u8]) -> Result<(),
 struct MetadataClassifier<'a> {
     policy: &'a DiscoveryPolicy,
     cigar_ignore: &'a IgnorePatterns,
-    git_ignore: &'a IgnorePatterns,
+    git_ignores: &'a [ScopedIgnorePatterns],
     ignore_work: &'a mut IgnoreWorkBudget,
     context: &'a ConnectorContext,
 }
@@ -656,12 +729,16 @@ impl MetadataClassifier<'_> {
         )? {
             return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::CigarIgnore));
         }
-        if self.git_ignore.matches_filesystem(
-            relative.as_bytes(),
-            self.ignore_work,
-            self.context,
-        )? {
-            return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::GitIgnore));
+        for scoped in self.git_ignores {
+            if let Some(scoped_path) = scoped.path(relative.as_bytes())
+                && scoped.patterns.matches_filesystem(
+                    scoped_path,
+                    self.ignore_work,
+                    self.context,
+                )?
+            {
+                return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::GitIgnore));
+            }
         }
         if record.size_bytes > self.policy.max_record_bytes {
             return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::SizeLimit));
@@ -670,6 +747,22 @@ impl MetadataClassifier<'_> {
             return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::MediaType));
         }
         Ok((DiscoveryDisposition::Include, DiscoveryReason::Eligible))
+    }
+}
+
+#[derive(Clone)]
+struct ScopedIgnorePatterns {
+    base: Vec<u8>,
+    patterns: IgnorePatterns,
+}
+
+impl ScopedIgnorePatterns {
+    fn path<'a>(&self, path: &'a [u8]) -> Option<&'a [u8]> {
+        if self.base.is_empty() {
+            Some(path)
+        } else {
+            path.strip_prefix(self.base.as_slice())?.strip_prefix(b"/")
+        }
     }
 }
 
@@ -846,12 +939,28 @@ fn link_count(metadata: &Metadata) -> u64 {
     CapabilityMetadataExt::nlink(metadata)
 }
 
-fn has_nested_git_marker(directory: &Dir) -> Result<bool, CatalogError> {
-    match directory.symlink_metadata(".git") {
-        Ok(_metadata) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(_error) => Err(CatalogError::new(CatalogErrorCode::Unavailable)),
+fn has_nested_git_marker(
+    directory: &Dir,
+    context: &ConnectorContext,
+) -> Result<bool, CatalogError> {
+    let entries = directory
+        .read_dir(".")
+        .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+    let mut inspected = 0_usize;
+    for entry in entries {
+        context.check()?;
+        inspected = inspected
+            .checked_add(1)
+            .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+        if inspected > MAX_CONNECTOR_ITEMS {
+            return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+        }
+        let entry = entry.map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+        if os_bytes(entry.file_name()).eq_ignore_ascii_case(b".git") {
+            return Ok(true);
+        }
     }
+    Ok(false)
 }
 
 fn join_relative_bytes(parent: &[u8], name: Vec<u8>) -> Result<Vec<u8>, CatalogError> {
@@ -1016,28 +1125,13 @@ fn load_ignore(
 }
 
 fn is_hard_directory(relative: &[u8]) -> bool {
-    relative
-        .split(|byte| *byte == b'/')
-        .any(|component| matches!(component, b".git" | b".cigar"))
+    relative.split(|byte| *byte == b'/').any(|component| {
+        component.eq_ignore_ascii_case(b".git") || component.eq_ignore_ascii_case(b".cigar")
+    })
 }
 
 fn is_hard_file(relative: &[u8]) -> bool {
-    let name = relative
-        .split(|byte| *byte == b'/')
-        .next_back()
-        .unwrap_or(relative);
-    matches!(
-        name,
-        b".env"
-            | b".npmrc"
-            | b".pypirc"
-            | b"credentials"
-            | b"credentials.json"
-            | b"id_rsa"
-            | b"id_ed25519"
-            | b".cigarignore"
-    ) || name.ends_with(b".pem")
-        || name.ends_with(b".key")
+    crate::connector::sensitive_source_path(relative)
 }
 
 fn detect_media_type(path: &[u8]) -> Result<MediaType, CatalogError> {
@@ -1118,6 +1212,21 @@ fn encode_multihash(digest: &[u8]) -> Result<String, CatalogError> {
     Ok(value)
 }
 
+fn deterministic_uuid(parts: &[&[u8]]) -> String {
+    let mut hasher = Sha256::new();
+    for part in parts {
+        hasher.update(part);
+        hasher.update([0]);
+    }
+    let digest: [u8; 32] = hasher.finalize().into();
+    let [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, ..] = digest;
+    let g = (g & 0x0f) | 0x70;
+    let i = (i & 0x3f) | 0x80;
+    format!(
+        "{a:02x}{b:02x}{c:02x}{d:02x}-{e:02x}{f:02x}-{g:02x}{h:02x}-{i:02x}{j:02x}-{k:02x}{l:02x}{m:02x}{n:02x}{o:02x}{p:02x}"
+    )
+}
+
 fn now_utc() -> Result<UtcTimestamp, CatalogError> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1164,10 +1273,10 @@ fn path_bytes(value: &Path) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::LocalFilesystemConnector;
+    use super::{LocalFilesystemConnector, MAX_FILESYSTEM_DEPTH};
     use crate::{
         ByteRange, ChangeKind, ChangeWatermark, ConnectorContext, DiscoveryDisposition,
-        DiscoveryPolicy, DiscoveryReason, DiscoveryRequest, SourceConnector,
+        DiscoveryPolicy, DiscoveryReason, DiscoveryRequest, SourceConnector, SourceHealthState,
     };
     use cigar_protocol::{MediaType, RelativePath, SourceUri};
     use cigar_store::CancellationToken;
@@ -1292,6 +1401,11 @@ mod tests {
             events.first().map(|event| event.kind),
             Some(ChangeKind::Overflow)
         );
+        assert_eq!(connector.health().state, SourceHealthState::Degraded);
+        assert!(!connector.snapshot(None, &context())?.snapshot.complete);
+        connector.refresh(&context())?;
+        assert_eq!(connector.health().state, SourceHealthState::Ready);
+        assert!(connector.snapshot(None, &context())?.snapshot.complete);
         let restarted = LocalFilesystemConnector::new(root.path(), request.root.clone())?;
         restarted.discover(&request, &context())?;
         assert!(
@@ -1310,9 +1424,20 @@ mod tests {
         fs::write(root.path().join(".gitignore"), b"git_ignored.rs\n")?;
         fs::write(root.path().join("ignored.rs"), b"fn ignored() {}")?;
         fs::write(root.path().join("git_ignored.rs"), b"fn ignored() {}")?;
+        fs::create_dir(root.path().join("nested"))?;
+        fs::write(root.path().join("nested/.gitignore"), b"private.rs\n")?;
+        fs::write(
+            root.path().join("nested/private.rs"),
+            b"fn nested_private() {}",
+        )?;
         fs::write(
             root.path().join("organization.rs"),
             b"ORG_RULE_fixture_value",
+        )?;
+        fs::write(root.path().join(".ENV.PRODUCTION"), b"TOKEN=fixture")?;
+        fs::write(
+            root.path().join("application_default_credentials.json"),
+            b"{}",
         )?;
         fs::create_dir(root.path().join("protected"))?;
         fs::write(root.path().join("protected/denied.rs"), b"fn denied() {}")?;
@@ -1344,6 +1469,11 @@ mod tests {
                 && entry.disposition == DiscoveryDisposition::Exclude
         }));
         assert!(plan.entries.iter().any(|entry| {
+            entry.record.relative_path.as_bytes() == b"nested/private.rs"
+                && entry.reason == DiscoveryReason::GitIgnore
+                && entry.disposition == DiscoveryDisposition::Exclude
+        }));
+        assert!(plan.entries.iter().any(|entry| {
             entry.reason == DiscoveryReason::PolicyExclusion
                 && entry.disposition == DiscoveryDisposition::Exclude
         }));
@@ -1351,6 +1481,122 @@ mod tests {
             entry.reason == DiscoveryReason::SecretDetected
                 && entry.disposition == DiscoveryDisposition::Quarantine
         }));
+        for sensitive_path in [
+            b".ENV.PRODUCTION".as_slice(),
+            b"application_default_credentials.json".as_slice(),
+            b".gitignore".as_slice(),
+        ] {
+            assert!(plan.entries.iter().any(|entry| {
+                entry.record.relative_path.as_bytes() == sensitive_path
+                    && entry.reason == DiscoveryReason::HardExclusion
+                    && entry.disposition == DiscoveryDisposition::Exclude
+            }));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ignored_directory_is_pruned_before_hostile_depth_is_charged()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        fs::write(root.path().join(".gitignore"), b"ignored\n")?;
+        let mut nested = root.path().join("ignored");
+        fs::create_dir(&nested)?;
+        for _index in 0..=MAX_FILESYSTEM_DEPTH {
+            nested = nested.join("d");
+            fs::create_dir(&nested)?;
+        }
+        fs::write(nested.join("unreachable.rs"), b"fn unreachable() {}")?;
+
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: policy()?,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert!(plan.entries.iter().all(|entry| {
+            !entry
+                .record
+                .relative_path
+                .as_bytes()
+                .starts_with(b"ignored/")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn aggregate_nested_ignore_inputs_are_bounded() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::CatalogErrorCode;
+
+        let root = tempfile::tempdir()?;
+        let mut comment = vec![b'a'; 1_048_576];
+        *comment.first_mut().ok_or("missing ignore comment byte")? = b'#';
+        let mut directory = root.path().to_path_buf();
+        for _depth in 0..9 {
+            fs::write(directory.join(".gitignore"), &comment)?;
+            directory = directory.join("d");
+            fs::create_dir(&directory)?;
+        }
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let error = connector
+            .discover(
+                &DiscoveryRequest {
+                    root: uri,
+                    policy: policy()?,
+                    include_overrides: BTreeSet::new(),
+                },
+                &context(),
+            )
+            .err()
+            .ok_or("aggregate ignore input must be bounded")?;
+        assert_eq!(error.code(), CatalogErrorCode::LimitExceeded);
+        Ok(())
+    }
+
+    #[test]
+    fn nested_repository_is_not_traversed_and_unapproved_media_is_excluded()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        fs::create_dir_all(root.path().join("nested-repository/.git"))?;
+        fs::write(
+            root.path().join("nested-repository/private.rs"),
+            b"fn private() {}",
+        )?;
+        fs::create_dir_all(root.path().join("uppercase-repository/.GIT"))?;
+        fs::write(
+            root.path().join("uppercase-repository/private.rs"),
+            b"fn private() {}",
+        )?;
+        fs::write(
+            root.path().join("opaque.bin"),
+            b"not an approved media type",
+        )?;
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: policy()?,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert!(plan.entries.iter().all(|entry| {
+            let path = entry.record.relative_path.as_bytes();
+            !path.starts_with(b"nested-repository/") && !path.starts_with(b"uppercase-repository/")
+        }));
+        let opaque = plan
+            .entries
+            .iter()
+            .find(|entry| entry.record.relative_path.as_bytes() == b"opaque.bin")
+            .ok_or("missing opaque file preview")?;
+        assert_eq!(opaque.disposition, DiscoveryDisposition::Exclude);
+        assert_eq!(opaque.reason, DiscoveryReason::MediaType);
         Ok(())
     }
 
@@ -1413,7 +1659,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn read_rejects_same_size_symlink_replacement_after_discovery()
+    fn sealed_snapshot_survives_path_substitution_and_refresh_rejects_the_old_record()
     -> Result<(), Box<dyn std::error::Error>> {
         use crate::CatalogErrorCode;
         use std::os::unix::fs::symlink;
@@ -1443,11 +1689,21 @@ mod tests {
 
         fs::remove_file(&source)?;
         symlink(outside.path(), &source)?;
+        assert_eq!(
+            connector
+                .read(&record, ByteRange::new(0, 4)?, &context())?
+                .as_slice(),
+            b"same"
+        );
+        connector.refresh(&context())?;
         let error = connector
             .read(&record, ByteRange::new(0, 4)?, &context())
             .err()
-            .ok_or("a path substitution must invalidate the discovered record")?;
-        assert_eq!(error.code(), CatalogErrorCode::SourceChanged);
+            .ok_or("refresh must retire a substituted path from the sealed snapshot")?;
+        assert!(matches!(
+            error.code(),
+            CatalogErrorCode::NotFound | CatalogErrorCode::SourceChanged
+        ));
         Ok(())
     }
 

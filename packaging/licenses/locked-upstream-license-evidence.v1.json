@@ -1,0 +1,749 @@
+{
+  "schema_version": "cigar.locked-upstream-license-evidence.v1",
+  "scope": "locked-source-license-metadata-only",
+  "limitations": [
+    "This source authority records technical metadata and is not legal approval.",
+    "Final packaged bytes and transitive native members require separate reconciliation."
+  ],
+  "license_files": [
+    {
+      "id": "colorama-0.4.6-license",
+      "path": "colorama-0.4.6/LICENSE.txt",
+      "sha256": "cac35c02686e5d04a5a7140bfb3b36e73aed496656e891102e428886d7930318",
+      "bytes": 1491
+    },
+    {
+      "id": "typescript-7.0.2-license",
+      "path": "package/LICENSE",
+      "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47",
+      "bytes": 9197
+    },
+    {
+      "id": "typescript-7.0.2-notice",
+      "path": "package/NOTICE.txt",
+      "sha256": "f5c708b59114507b8b27b48181b6883d106bbca0c1634bbee45b5e344237b66b",
+      "bytes": 48860
+    }
+  ],
+  "records": [
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-aix-ppc64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-aix-ppc64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "31328a91607ba7fd04f718b5775b47b59e4f88b90610c22af3ca4ad82b9b6633ac2ed6132ea8602208bacdea456bef461d9ea1d3934c0a443118a88f5ccc57b5"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-aix-ppc64/-/typescript-aix-ppc64-7.0.2.tgz",
+        "sha256": "b6e558bbdc9206b7b99f6f4f4ce4fa4f6157640ab580cc7d563703767d43d8cc",
+        "bytes": 9671145
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-aix-ppc64/7.0.2",
+        "canonical_subset_sha256": "58f1f023ef2e8417bc1a3a233d64c68aefc7d2e70e897e9d73c7df96dc5767bc",
+        "subset": {
+          "name": "@typescript/typescript-aix-ppc64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==",
+            "shasum": "cdc7ce81d60f1e09034960ddfb1fb880d7a776b6",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-aix-ppc64/-/typescript-aix-ppc64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-darwin-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-darwin-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "499f716489ea02936534673db345b5552b24b5848e7bd705a8d388aa63751acf129a48ca65816dd35ec6e15c0fc404889ce0ee01d6d35bbb1788551ff3ddd180"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-darwin-x64/-/typescript-darwin-x64-7.0.2.tgz",
+        "sha256": "eba158cb54050f723d5ff781438f33de5640054440bb4f2bd170cfe9bc2eb551",
+        "bytes": 10057523
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-darwin-x64/7.0.2",
+        "canonical_subset_sha256": "5f1add66d383c965992213115ec07eb64e2f28782e9292da026aa01fde011cf7",
+        "subset": {
+          "name": "@typescript/typescript-darwin-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-SZ9xZInqApNlNGc9s0W1VSsktYSOe9cFqNOIqmN1Gs8SmkjKZYFt017G4VwPxASInODuAdbTW7sXiFUf893RgA==",
+            "shasum": "38d1c9172800a91d707bec64d2a370a016634db4",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-darwin-x64/-/typescript-darwin-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-freebsd-arm64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-freebsd-arm64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "5b9347e32fc9d29948212e5bdb1bd312453b245c72a9d3003a07fe225865d2f1d05ca3b9759a3177e0bf8c4b6ae7a738177c24ef5441e013114365dd23e6f061"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-freebsd-arm64/-/typescript-freebsd-arm64-7.0.2.tgz",
+        "sha256": "42d23a91be92d7e761cc808b10c34430f1f5f6cb6dc9c594e832fdf7d65d4c5b",
+        "bytes": 8865805
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-freebsd-arm64/7.0.2",
+        "canonical_subset_sha256": "6a2a9abae90873e9dbf54e2158f6800a10180b3011e109db38260c7f73b8355b",
+        "subset": {
+          "name": "@typescript/typescript-freebsd-arm64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-W5NH4y/J0plIIS5b2xvTEkU7JFxyqdMAOgf+Ilhl0vHQXKO5dZoxd+C/jEtq56c4F3wk71RB4BMRQ2XdI+bwYQ==",
+            "shasum": "f1ff8810030b35d2b5be0db6a2dc650460ea94fa",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-freebsd-arm64/-/typescript-freebsd-arm64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-freebsd-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-freebsd-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "50c183c79b13a73370dd688f79b1fb97dd0859f26080477e7a01edfeaea9eff0a6df3aa857b5719065edfb70f13c8c3c09c9af001d23dec5557db857f8ce13a7"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-freebsd-x64/-/typescript-freebsd-x64-7.0.2.tgz",
+        "sha256": "d982b0db967346becc4ccbc8cdac69e0335995c419bf129616e18a87832edb8c",
+        "bytes": 9636659
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-freebsd-x64/7.0.2",
+        "canonical_subset_sha256": "8a8f24acd17c92a14f7d4c49c20985c7fbcbce0fb817081034eb2398e86d9dc6",
+        "subset": {
+          "name": "@typescript/typescript-freebsd-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-UMGDx5sTpzNw3WiPebH7l90IWfJggEd+egHt/q6p7/Cm3zqoV7VxkGXt+3DxPIw8CcmvAB0j3sVVfbhX+M4Tpw==",
+            "shasum": "3d86b03f353c5b1ba95162eb6ce35533bfc294bd",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-freebsd-x64/-/typescript-freebsd-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-arm",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-arm@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "81f7d3df13f3f6c47b8ff6091319323e7b6b2343f610ff576cec96ced876fc6b3446cb4afbdd1105c3b49dc5e85f2fdb798965d525f0f38e8d7f6cdd9c4cf441"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-arm/-/typescript-linux-arm-7.0.2.tgz",
+        "sha256": "33a15a7badb207a38957373c410b970319baac8960109232ab64502497caea06",
+        "bytes": 9123633
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-arm/7.0.2",
+        "canonical_subset_sha256": "5d6c9fa6fc06909834708c7669925d7fe9581dd3171a5cbc0b34a080a1a91718",
+        "subset": {
+          "name": "@typescript/typescript-linux-arm",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-gffT3xPz9sR7j/YJExkyPntrI0P2EP9XbOyWzth2/Gs0RstK+90RBcO0ncXoXy/beYll1SXw846Nf2zdnEz0QQ==",
+            "shasum": "ad94b41e1aee2a4dcc6a298c7b67c43345fde32e",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-arm/-/typescript-linux-arm-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-arm64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-arm64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "421e1e538ff2df20e39df8e3c8f62284c8f9fce0c8966b7e073bb5ece23e7e24910d6e7b4265394a237addec4f44d24f294cdc73520d6b535776b27e32a1e351"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-arm64/-/typescript-linux-arm64-7.0.2.tgz",
+        "sha256": "c83d931ac9dd7549cde6e71246aa9d6a9812843023df3e277fe3b5dcf41dd0ea",
+        "bytes": 8900516
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-arm64/7.0.2",
+        "canonical_subset_sha256": "dbd11731e7c4bd21ef16d4675ddd80d5f8dcb9e1300f993874ee9eeb76f2f7c6",
+        "subset": {
+          "name": "@typescript/typescript-linux-arm64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-Qh4eU4/y3yDjnfjjyPYihMj5/ODIlmt+Bzu17OI+fiSRDW57QmU5SiN63exPRNJPKUzcc1INa1NXdrJ+MqHjUQ==",
+            "shasum": "d9334d96d6dac6ff85da9c865588948de939e91f",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-arm64/-/typescript-linux-arm64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-loong64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-loong64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "b841dc93d8bc8680335cf8984626f53bb9a23a7cf6dd2c4879597a1782d7a31faaa2fd4adf98c77045ba5472af648fa9caf97b7d910fe0c094e4b62f22ad46b9"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-loong64/-/typescript-linux-loong64-7.0.2.tgz",
+        "sha256": "4d0a2d19f0563df4d12b1e4197a5aefc9827b2977aa48282e7647926085d3c1f",
+        "bytes": 9258075
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-loong64/7.0.2",
+        "canonical_subset_sha256": "d67bd2c3507e62ffb2cff3af4321682a5f722b9a4d5375dd429e347547a5f895",
+        "subset": {
+          "name": "@typescript/typescript-linux-loong64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-uEHck9i8hoAzXPiYRib1O7miOnz23SxIeVl6F4LXox+qov1K35jHcEW6VHKvZI+pyvl7fZEP4MCU5LYvIq1GuQ==",
+            "shasum": "2965aee4fc873360139d893daafe6397a29138ad",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-loong64/-/typescript-linux-loong64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-mips64el",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-mips64el@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "4782af00c9c4e375b941ea9bd0bcb9e8ede658c588020b0ccb3dfa0c26b271de676e0ffd9339b4962c3726871f46ac8963428f9b31636ecc28cd7c96d039c860"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-mips64el/-/typescript-linux-mips64el-7.0.2.tgz",
+        "sha256": "6743a786c65e33b5b17d34bd9f2a66446dce95dc028cf21b6e6a975e7f576352",
+        "bytes": 8613623
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-mips64el/7.0.2",
+        "canonical_subset_sha256": "5a1b3b13d842f7b74b3ea7424161fe3f88087e3984fa808e9cec1753226b2af9",
+        "subset": {
+          "name": "@typescript/typescript-linux-mips64el",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-R4KvAMnE43W5Qeqb0Ly56O3mWMWIAgsMyz36DCaycd5nbg/9kzm0liw3JocfRqyJY0KPmzFjbswozXyW0DnIYA==",
+            "shasum": "1a887a311bed3a833f80bfd4a9ed37c271936cf0",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-mips64el/-/typescript-linux-mips64el-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-ppc64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-ppc64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "0ce471e5bdec77fe12ede6b2c66e0542ff80ec2ae45081916878b023ca221d3008d5f00f5a1178274bc09640bc6e20251d2555c31310ded8d9dbf0d56e742288"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-ppc64/-/typescript-linux-ppc64-7.0.2.tgz",
+        "sha256": "8c30ad95ff40cff8bba2ab294abde3bfee6fa12b2b649f80ec90ef3188842db1",
+        "bytes": 8984686
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-ppc64/7.0.2",
+        "canonical_subset_sha256": "330d533a93e2ec127fd2049c4764e39dfc9fb0c40ccce847f89f6b81adf5b90c",
+        "subset": {
+          "name": "@typescript/typescript-linux-ppc64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-DORx5b3sd/4S7eayxm4FQv+A7CrkUIGRaHiwI8oiHTAI1fAPWhF4J0vAlkC8biAlHSVVwxMQ3tjZ2/DVbnQiiA==",
+            "shasum": "8b63c9b2f445b393eb4e43ec21da225dade3577d",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-ppc64/-/typescript-linux-ppc64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-riscv64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-riscv64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "c1fd23a840ce8eb3d19cac18472c890d1a35d4a31bbcc16b53eab8cea2b20a1383073be591b84d41f2af2f14027304e974369748765356e8742680ab28250c1d"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-riscv64/-/typescript-linux-riscv64-7.0.2.tgz",
+        "sha256": "b5afba89cef6c1c9e6142893018fdbd04183abe1e281a710fe31bb9578d2dc72",
+        "bytes": 9119178
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-riscv64/7.0.2",
+        "canonical_subset_sha256": "72b43f0849d88460edb6a87dbb3c12cc8fbe89c531876786aaab5da7da8699fe",
+        "subset": {
+          "name": "@typescript/typescript-linux-riscv64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-wf0jqEDOjrPRnKwYRyyJDRo11KMbvMFrU+q4zqKyChODBzvlkbhNQfKvLxQCcwTpdDaXSHZTVuh0JoCrKCUMHQ==",
+            "shasum": "b6e8a35c289b3ea97a92a41d461aaeed0d3b36e1",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-riscv64/-/typescript-linux-riscv64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-s390x",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-s390x@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "224c097372fbca1cad59dfdec23cb13437ce9acc029bd1963094ffb9efdd53869935bc1979801eb6ae365722e6b264a3be85fbcfbe17e996980adcc0af412e1b"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-s390x/-/typescript-linux-s390x-7.0.2.tgz",
+        "sha256": "badc50ce68cd84c462fcbddfe0c8a7acf9b16a334397cc73e889f6e783f1903d",
+        "bytes": 9418111
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-s390x/7.0.2",
+        "canonical_subset_sha256": "8ab70454d15fa6eabe08c3044dcbaea7fc99c322321c07c9daff5e0469e37960",
+        "subset": {
+          "name": "@typescript/typescript-linux-s390x",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-IkwJc3L7yhytWd/ewjyxNDfOmswCm9GWMJT/ue/dU4aZNbwZeYAetq42VyLmsmSjvoX7z74X6ZaYCtzAr0EuGw==",
+            "shasum": "2ef96693be4861f6d17965427e5b009cbbed1a3e",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-s390x/-/typescript-linux-s390x-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-linux-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-linux-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "11875fd9c360eeb8025899f109d27e177577f4ef2285bdfb78702ed4b2bca00162ce04d06cf38aef31c75db3edf2b5f6e023aa3835de237b087f47c25c6ec7fc"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz",
+        "sha256": "7ecad6f67377e831856367ab062ef394f21506a611405bf8ac0ff039348637d3",
+        "bytes": 9669334
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-linux-x64/7.0.2",
+        "canonical_subset_sha256": "ec243583cfc1ff4853621bda1a81663b9807060da75daef7b98dbbe0be4d9b7b",
+        "subset": {
+          "name": "@typescript/typescript-linux-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A==",
+            "shasum": "73269cb0baba50aea0ca060445a6b88e583f1ce2",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-netbsd-arm64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-netbsd-arm64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "fa9a25605e0c174e1a3e93b9153907ada9fdc94403497ab2e468920caa6c965e63cb7977fa0f502e1a5fdfd4fe78fb5e7e15cb386acb9744088e440fe959de94"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-netbsd-arm64/-/typescript-netbsd-arm64-7.0.2.tgz",
+        "sha256": "afc662ba78fe126f96209b39d6c64c08088ff12b6df363c4bae04a6b79a26000",
+        "bytes": 8847820
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-netbsd-arm64/7.0.2",
+        "canonical_subset_sha256": "60c0a2bb7ea76b3d093693a0ee590c566f069bc10c1e542c72e4ac302eae5ee3",
+        "subset": {
+          "name": "@typescript/typescript-netbsd-arm64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-+polYF4MF04aPpO5FTkHran9yUQDSXqy5GiSDKpsll5jy3l3+g9QLhpf39T+ePtefhXLOGrLl0QIjkQP6VnelA==",
+            "shasum": "3a3649f97fafa210b4e6e3798c15e06605c8a901",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-netbsd-arm64/-/typescript-netbsd-arm64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-netbsd-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-netbsd-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "f18213d041ccff776ad7464e545fc0ee973f61232d6dc79c72de2b5ad7b1ae74821ce3dca42d8a4cb5df4c247abc3a674a2635da178d6f51a237fc2ef93fc5c8"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-netbsd-x64/-/typescript-netbsd-x64-7.0.2.tgz",
+        "sha256": "9eb8b25b298b61912cb821e598d883742fa24778267fa88dc94b86acfe3edfe7",
+        "bytes": 9615512
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-netbsd-x64/7.0.2",
+        "canonical_subset_sha256": "43f216947a225a3642c64b92e9496155e24b4d09ef2e5d08371d517a044a0bff",
+        "subset": {
+          "name": "@typescript/typescript-netbsd-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-8YIT0EHM/3dq10ZOVF/A7pc/YSMtbcecct4rWtexrnSCHOPcpC2KTLXfTCR6vDpnSiY12heNb1GiN/wu+T/FyA==",
+            "shasum": "47ec59491a40c470d2807dc4d2b825528fd979ab",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-netbsd-x64/-/typescript-netbsd-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-openbsd-arm64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-openbsd-arm64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "00f4fcf829589ee626d6ef7e920197a0c8f65735b37329b087680d4905724877e444318e4d592858b8c298e41268ef8fa2a439ec1d1f951a7d480fbb1a79e4cd"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-openbsd-arm64/-/typescript-openbsd-arm64-7.0.2.tgz",
+        "sha256": "c8729f2a2ea9a0f0efb0c36ea7b638ebdaad0eaf31943406a488ab3083e13b5a",
+        "bytes": 8857975
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-openbsd-arm64/7.0.2",
+        "canonical_subset_sha256": "dc6822e1096300473e2a40b31934387a20669f091537180ef5c94a42dd40058e",
+        "subset": {
+          "name": "@typescript/typescript-openbsd-arm64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-APT8+ClYnuYm1u9+kgGXoMj2VzWzcymwh2gNSQVySHfkRDGOTVkoWLjCmOQSaO+PoqQ57B0flRp9SA+7GnnkzQ==",
+            "shasum": "796be8da0bd989d8a3fb96f2801e38a8365b4baf",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-openbsd-arm64/-/typescript-openbsd-arm64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-openbsd-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-openbsd-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "c97eecf90d03967d03b7db44cd9b008d75d1ffecad04cec096095aab278c3f142ccc9d4986525d67a8cb03e23395d1ed7e55fcd5e9bb9436a8d715eef9a45192"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-openbsd-x64/-/typescript-openbsd-x64-7.0.2.tgz",
+        "sha256": "90aeadb743517361f902c6e7ef1e57113175aaf483fb5f2abc1701c8246c66a4",
+        "bytes": 9624925
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-openbsd-x64/7.0.2",
+        "canonical_subset_sha256": "53bc21fa773e8e90ea4ad83c1312d7ae85246dde1515038eaf7ac9636588e75d",
+        "subset": {
+          "name": "@typescript/typescript-openbsd-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-yX7s+Q0Dln0Dt9tEzZsAjXXR/+ytBM7AlglaqyeMPxQszJ1JhlJdZ6jLA+IzldHtflX81em7lDao1xXu+aRRkg==",
+            "shasum": "d37fe2a729eb942c076c454ee7f1815faf7d560f",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-openbsd-x64/-/typescript-openbsd-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-sunos-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-sunos-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "74b24319a2d9d43e073d09fadaed67f26043909444c0cb00902764c1de087aac3ec774d4c93b2a634622042b44e87e8ecf38069378ae677bc55914be13cfddd6"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-sunos-x64/-/typescript-sunos-x64-7.0.2.tgz",
+        "sha256": "a625970be8f04944de633929eb0777c2c60c6c242590b79fc37750cf4a577e85",
+        "bytes": 9600388
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-sunos-x64/7.0.2",
+        "canonical_subset_sha256": "10d2c3ba8798c89e41bc0809095b050da51d4f589e0c6356bd6a4f00a7722e8c",
+        "subset": {
+          "name": "@typescript/typescript-sunos-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-dLJDGaLZ1D4HPQn62u1n8mBDkJREwMsAkCdkwd4Ieqw+x3TUyTsqY0YiBCtE6H6OzzgGk3iuZ3vFWRS+E8/d1g==",
+            "shasum": "aba8d3464c3565a7044789baba96916bd4ab2c88",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-sunos-x64/-/typescript-sunos-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-win32-arm64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-win32-arm64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "1b2975572e8eb167ac2f39aaf843f415bedbe0d89de76df602f700d9215c758ade95da4db58145a1f3e39edeb6cbd850cbb553699a7ae480898ee01045a55c21"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-win32-arm64/-/typescript-win32-arm64-7.0.2.tgz",
+        "sha256": "0a73534e6ee50cdbb2a29ac48657ca0ad13cf0f424cf63808e4df7baeb87b8be",
+        "bytes": 8900840
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-win32-arm64/7.0.2",
+        "canonical_subset_sha256": "5375325e3aa6dbb7e563cd16ea7a8e41293ad5173c0681d0b94c50fed8105b11",
+        "subset": {
+          "name": "@typescript/typescript-win32-arm64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ==",
+            "shasum": "b9de50a17196383f62620b5f9d0a2f34ad3b60d7",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-win32-arm64/-/typescript-win32-arm64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript/typescript-win32-x64",
+      "version": "7.0.2",
+      "purl": "pkg:npm/%40typescript/typescript-win32-x64@7.0.2",
+      "license_expression": "Apache-2.0",
+      "lock": {
+        "path": "pnpm-lock.yaml",
+        "algorithm": "sha512",
+        "digest": "d014371e40071e528b4a9d6a46f7f7494846a46b03ba107f8e0170ef982ecaa6f126a11a4b40b0fd514ef22da71e094953340246d30c47f20100a137113302e2"
+      },
+      "archive": {
+        "url": "https://registry.npmjs.org/@typescript/typescript-win32-x64/-/typescript-win32-x64-7.0.2.tgz",
+        "sha256": "61fc4e141d2bc687db580e71bbfa63b9c209f0310645d82ca1b457eb3a24fd19",
+        "bytes": 9776626
+      },
+      "metadata": {
+        "url": "https://registry.npmjs.org/%40typescript%2Ftypescript-win32-x64/7.0.2",
+        "canonical_subset_sha256": "666de1eb8e067df077aecead91146123e39a123d1dca0a5bc4a8c56a33f7e1d6",
+        "subset": {
+          "name": "@typescript/typescript-win32-x64",
+          "version": "7.0.2",
+          "license": "Apache-2.0",
+          "dist": {
+            "integrity": "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g==",
+            "shasum": "cf3b7b0d6ce5635daca4c8e01c189cdcde47ec3c",
+            "tarball": "https://registry.npmjs.org/@typescript/typescript-win32-x64/-/typescript-win32-x64-7.0.2.tgz"
+          }
+        }
+      },
+      "license_file_ids": [
+        "typescript-7.0.2-license",
+        "typescript-7.0.2-notice"
+      ]
+    },
+    {
+      "ecosystem": "pypi",
+      "name": "colorama",
+      "version": "0.4.6",
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "license_expression": "BSD-3-Clause",
+      "lock": {
+        "path": "sdk/python/uv.lock",
+        "algorithm": "sha256",
+        "digest": "08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"
+      },
+      "archive": {
+        "url": "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz",
+        "sha256": "08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44",
+        "bytes": 27697
+      },
+      "metadata": {
+        "url": "https://pypi.org/pypi/colorama/0.4.6/json",
+        "canonical_subset_sha256": "ed7dc3213c4ddffa8a6af2af6f4d9a781736e429ce968fac682e07904fe7f03b",
+        "subset": {
+          "info": {
+            "name": "colorama",
+            "version": "0.4.6",
+            "classifiers": [
+              "Development Status :: 5 - Production/Stable",
+              "Environment :: Console",
+              "Intended Audience :: Developers",
+              "License :: OSI Approved :: BSD License",
+              "Operating System :: OS Independent",
+              "Programming Language :: Python",
+              "Programming Language :: Python :: 2",
+              "Programming Language :: Python :: 2.7",
+              "Programming Language :: Python :: 3",
+              "Programming Language :: Python :: 3.10",
+              "Programming Language :: Python :: 3.7",
+              "Programming Language :: Python :: 3.8",
+              "Programming Language :: Python :: 3.9",
+              "Programming Language :: Python :: Implementation :: CPython",
+              "Programming Language :: Python :: Implementation :: PyPy",
+              "Topic :: Terminals"
+            ]
+          },
+          "sdist": {
+            "filename": "colorama-0.4.6.tar.gz",
+            "url": "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz",
+            "size": 27697,
+            "sha256": "08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"
+          }
+        }
+      },
+      "license_file_ids": [
+        "colorama-0.4.6-license"
+      ]
+    }
+  ]
+}

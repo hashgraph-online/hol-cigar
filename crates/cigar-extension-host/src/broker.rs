@@ -3,7 +3,11 @@
 use crate::clock::HostClock;
 use crate::digest::raw_content_digest;
 use crate::error::{ExtensionHostError, ExtensionHostErrorCode, error};
+use crate::host::InvocationCancellation;
 use crate::manifest::ActivatedExtension;
+use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsExt, OpenOptionsFollowExt};
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, File, OpenOptions};
 use cigar_canon::MAX_CANONICAL_INPUT_BYTES;
 use cigar_protocol::{
     Classification, ExtensionHandle, ExtensionHostCallKind, ExtensionHostCallV1,
@@ -13,10 +17,11 @@ use cigar_protocol::{
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 const EMPTY_TRANSCRIPT_JSON_BYTES: usize = 2;
 const TRANSCRIPT_METADATA_RESERVATION_BYTES: usize = 4_096;
@@ -346,23 +351,103 @@ pub trait ProtectedDataPolicy: Send + Sync {
 /// Operator-owned network boundary; extension code never receives a socket or credential.
 pub trait NetworkBoundary: Send + Sync {
     /// Executes a bounded request against one exact manifest-approved endpoint.
+    ///
+    /// Implementations must call [`BrokerCallContext::check`] before blocking work and poll it
+    /// while external I/O is in flight. Returning after cancellation or the deadline is rejected
+    /// by the broker even when an adapter fails to cooperate.
     fn request(
         &self,
         endpoint: &NetworkEndpoint,
         protected_request: &[u8],
         maximum_response_bytes: usize,
+        context: &BrokerCallContext,
     ) -> Result<Vec<u8>, ExtensionHostError>;
 }
 
 /// Final outbound secret boundary; secret material never crosses back into the extension ABI.
 pub trait FinalSecretBoundary: Send + Sync {
     /// Resolves one host-owned reference only while performing the final outbound operation.
+    ///
+    /// Implementations must honor the supplied cancellation and absolute deadline context. Secret
+    /// material must never be placed in the context or returned through the extension ABI.
     fn dispatch(
         &self,
         secret_reference: &str,
         protected_request: &[u8],
         maximum_response_bytes: usize,
+        context: &BrokerCallContext,
     ) -> Result<Vec<u8>, ExtensionHostError>;
+}
+
+/// Cancellation and absolute monotonic deadline for one brokered external call.
+///
+/// The context contains no protected request bytes, endpoint credentials, or secret references.
+/// Operator adapters may clone it into their own worker/poll loop.
+#[derive(Clone)]
+pub struct BrokerCallContext {
+    deadline: Option<Instant>,
+    broker_cancelled: Arc<AtomicBool>,
+    invocation_cancellation: Option<InvocationCancellation>,
+    clock: Arc<dyn HostClock>,
+}
+
+impl fmt::Debug for BrokerCallContext {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BrokerCallContext")
+            .field("has_deadline", &self.deadline.is_some())
+            .field("cancelled", &self.is_cancelled())
+            .finish_non_exhaustive()
+    }
+}
+
+impl BrokerCallContext {
+    /// Returns the exact absolute monotonic deadline when the broker is attached to a host attempt.
+    #[must_use]
+    pub const fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
+    /// Returns the time remaining before the call must stop.
+    #[must_use]
+    pub fn remaining(&self) -> Option<Duration> {
+        self.deadline
+            .map(|deadline| deadline.saturating_duration_since(self.clock.monotonic_now()))
+    }
+
+    /// Returns whether either broker-local or request-level cancellation has been requested.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.broker_cancelled.load(Ordering::SeqCst)
+            || self
+                .invocation_cancellation
+                .as_ref()
+                .is_some_and(InvocationCancellation::is_cancelled)
+    }
+
+    /// Fails closed when cancellation was requested or the absolute deadline has elapsed.
+    pub fn check(&self) -> Result<(), ExtensionHostError> {
+        if self.is_cancelled() {
+            return Err(error(ExtensionHostErrorCode::Cancelled));
+        }
+        self.check_deadline()
+    }
+
+    fn check_deadline(&self) -> Result<(), ExtensionHostError> {
+        if self
+            .deadline
+            .is_some_and(|deadline| self.clock.monotonic_now() >= deadline)
+        {
+            return Err(error(ExtensionHostErrorCode::DeadlineExceeded));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct BrokerAttemptRuntime {
+    deadline: Instant,
+    cancellation: InvocationCancellation,
 }
 
 enum BrokerResource {
@@ -379,7 +464,7 @@ enum BrokerResource {
     Endpoint(NetworkEndpoint),
     Preopen {
         descriptor: SandboxPreopen,
-        canonical_root: PathBuf,
+        root: Dir,
     },
     SecretReference(String),
 }
@@ -414,8 +499,9 @@ pub struct CapabilityBroker {
     random_counter: AtomicU64,
     resources: Mutex<BTreeMap<ExtensionHandle, BrokerResource>>,
     host_calls: AtomicU32,
-    cancelled: AtomicBool,
+    cancelled: Arc<AtomicBool>,
     attempt_claimed: AtomicBool,
+    attempt_runtime: OnceLock<BrokerAttemptRuntime>,
     protected_policy: Arc<dyn ProtectedDataPolicy>,
     network_boundary: Arc<dyn NetworkBoundary>,
     secret_boundary: Arc<dyn FinalSecretBoundary>,
@@ -501,8 +587,9 @@ impl CapabilityBroker {
             random_counter: AtomicU64::new(0),
             resources: Mutex::new(BTreeMap::new()),
             host_calls: AtomicU32::new(0),
-            cancelled: AtomicBool::new(false),
+            cancelled: Arc::new(AtomicBool::new(false)),
             attempt_claimed: AtomicBool::new(false),
+            attempt_runtime: OnceLock::new(),
             protected_policy,
             network_boundary,
             secret_boundary,
@@ -569,6 +656,23 @@ impl CapabilityBroker {
             .map_err(|_previous| error(ExtensionHostErrorCode::InvalidInput))
     }
 
+    /// Binds the permanently claimed broker to the exact host attempt runtime context.
+    pub(crate) fn bind_attempt_runtime(
+        &self,
+        deadline: Instant,
+        cancellation: InvocationCancellation,
+    ) -> Result<(), ExtensionHostError> {
+        if !self.attempt_claimed.load(Ordering::SeqCst) {
+            return Err(error(ExtensionHostErrorCode::InvalidInput));
+        }
+        self.attempt_runtime
+            .set(BrokerAttemptRuntime {
+                deadline,
+                cancellation,
+            })
+            .map_err(|_runtime| error(ExtensionHostErrorCode::InvalidInput))
+    }
+
     /// Cooperatively cancels the invocation and permanently disables subsequent broker calls.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
@@ -578,6 +682,10 @@ impl CapabilityBroker {
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
+            || self
+                .attempt_runtime
+                .get()
+                .is_some_and(|runtime| runtime.cancellation.is_cancelled())
     }
 
     /// Returns the number of broker calls admitted so far.
@@ -809,7 +917,7 @@ impl CapabilityBroker {
         self.insert(BrokerResource::Endpoint(endpoint))
     }
 
-    /// Grants one exact manifest preopen rooted at an operator-selected canonical directory.
+    /// Grants one exact manifest preopen rooted at an operator-selected directory descriptor.
     pub fn grant_preopen(
         &self,
         descriptor: SandboxPreopen,
@@ -828,16 +936,12 @@ impl CapabilityBroker {
         {
             return Err(error(ExtensionHostErrorCode::CapabilityDenied));
         }
-        let canonical_root = operator_root
-            .canonicalize()
-            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
-        if !canonical_root.is_absolute() || !canonical_root.is_dir() {
+        if !operator_root.is_absolute() {
             return Err(error(ExtensionHostErrorCode::CapabilityDenied));
         }
-        self.insert(BrokerResource::Preopen {
-            descriptor,
-            canonical_root,
-        })
+        let root = Dir::open_ambient_dir(operator_root, ambient_authority())
+            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+        self.insert(BrokerResource::Preopen { descriptor, root })
     }
 
     /// Grants a host-owned secret reference. The reference and secret are never returned by reads.
@@ -930,14 +1034,20 @@ impl CapabilityBroker {
         let Some(BrokerResource::Endpoint(endpoint)) = resources.get(handle) else {
             return Err(error(ExtensionHostErrorCode::InvalidHandle));
         };
-        let response =
-            self.network_boundary
-                .request(endpoint, request, self.maximum_output_bytes()?)?;
+        let context = self.call_context()?;
+        context.check()?;
+        let response = self.network_boundary.request(
+            endpoint,
+            request,
+            self.maximum_output_bytes()?,
+            &context,
+        )?;
+        context.check()?;
         self.check_output(&response)?;
         Ok(response)
     }
 
-    /// Reads one existing file beneath an exact preopen, rejecting traversal and symlink escape.
+    /// Reads one existing regular file through a descriptor-relative no-follow path.
     pub fn file_read(
         &self,
         handle: &ExtensionHandle,
@@ -945,23 +1055,37 @@ impl CapabilityBroker {
     ) -> Result<Vec<u8>, ExtensionHostError> {
         self.begin_call(ExtensionHostCapability::FilesystemRead, 1)?;
         let resources = self.resources()?;
-        let Some(BrokerResource::Preopen { canonical_root, .. }) = resources.get(handle) else {
+        let Some(BrokerResource::Preopen { root, .. }) = resources.get(handle) else {
             return Err(error(ExtensionHostErrorCode::InvalidHandle));
         };
-        let target = canonical_root
-            .join(relative_path.as_str())
-            .canonicalize()
+        let file = open_regular_file_beneath(root, relative_path, false)?;
+        let maximum = self.maximum_output_bytes()?;
+        let metadata = file
+            .metadata()
             .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
-        if !target.starts_with(canonical_root) || !target.is_file() {
-            return Err(error(ExtensionHostErrorCode::CapabilityDenied));
+        if metadata.len() > u64::try_from(maximum).unwrap_or(u64::MAX) {
+            return Err(error(ExtensionHostErrorCode::ResourceExhausted));
         }
-        let bytes =
-            fs::read(target).map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+        let read_limit = u64::try_from(maximum)
+            .ok()
+            .and_then(|maximum| maximum.checked_add(1))
+            .ok_or_else(|| error(ExtensionHostErrorCode::ResourceExhausted))?;
+        let mut bytes = Vec::with_capacity(
+            usize::try_from(metadata.len())
+                .unwrap_or(maximum)
+                .min(maximum),
+        );
+        file.take(read_limit)
+            .read_to_end(&mut bytes)
+            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+        if bytes.len() > maximum {
+            return Err(error(ExtensionHostErrorCode::ResourceExhausted));
+        }
         self.check_output(&bytes)?;
         Ok(bytes)
     }
 
-    /// Writes one existing file beneath a read/write preopen after canonical containment checks.
+    /// Writes one existing regular file through a descriptor-relative no-follow path.
     pub fn file_write(
         &self,
         handle: &ExtensionHandle,
@@ -971,24 +1095,17 @@ impl CapabilityBroker {
         self.begin_call(ExtensionHostCapability::FilesystemWrite, 1)?;
         self.check_input(bytes)?;
         let resources = self.resources()?;
-        let Some(BrokerResource::Preopen {
-            descriptor,
-            canonical_root,
-        }) = resources.get(handle)
-        else {
+        let Some(BrokerResource::Preopen { descriptor, root }) = resources.get(handle) else {
             return Err(error(ExtensionHostErrorCode::InvalidHandle));
         };
         if descriptor.access != SandboxAccess::ReadWrite {
             return Err(error(ExtensionHostErrorCode::CapabilityDenied));
         }
-        let target = canonical_root
-            .join(relative_path.as_str())
-            .canonicalize()
-            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
-        if !target.starts_with(canonical_root) || !target.is_file() {
-            return Err(error(ExtensionHostErrorCode::CapabilityDenied));
-        }
-        fs::write(target, bytes).map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))
+        let mut file = open_regular_file_beneath(root, relative_path, true)?;
+        file.set_len(0)
+            .and_then(|()| file.write_all(bytes))
+            .and_then(|()| file.flush())
+            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))
     }
 
     /// Resolves a secret handle only inside the final outbound boundary and returns its response.
@@ -1003,9 +1120,15 @@ impl CapabilityBroker {
         let Some(BrokerResource::SecretReference(reference)) = resources.get(handle) else {
             return Err(error(ExtensionHostErrorCode::InvalidHandle));
         };
-        let response =
-            self.secret_boundary
-                .dispatch(reference, request, self.maximum_output_bytes()?)?;
+        let context = self.call_context()?;
+        context.check()?;
+        let response = self.secret_boundary.dispatch(
+            reference,
+            request,
+            self.maximum_output_bytes()?,
+            &context,
+        )?;
+        context.check()?;
         self.check_output(&response)?;
         Ok(response)
     }
@@ -1079,9 +1202,7 @@ impl CapabilityBroker {
         capability: ExtensionHostCapability,
         depth: u16,
     ) -> Result<(), ExtensionHostError> {
-        if self.is_cancelled() {
-            return Err(error(ExtensionHostErrorCode::Cancelled));
-        }
+        self.call_context()?.check()?;
         self.require(capability)?;
         self.check_recursion_depth(depth)?;
         let previous = self.host_calls.fetch_add(1, Ordering::SeqCst);
@@ -1097,6 +1218,7 @@ impl CapabilityBroker {
         capability: ExtensionHostCapability,
         depth: u16,
     ) -> Result<(), ExtensionHostError> {
+        self.call_context()?.check_deadline()?;
         self.require(capability)?;
         self.check_recursion_depth(depth)?;
         let previous = self.host_calls.fetch_add(1, Ordering::SeqCst);
@@ -1105,6 +1227,19 @@ impl CapabilityBroker {
             return Err(error(ExtensionHostErrorCode::ResourceExhausted));
         }
         Ok(())
+    }
+
+    fn call_context(&self) -> Result<BrokerCallContext, ExtensionHostError> {
+        let runtime = self.attempt_runtime.get();
+        if self.attempt_claimed.load(Ordering::SeqCst) && runtime.is_none() {
+            return Err(error(ExtensionHostErrorCode::BackendUnavailable));
+        }
+        Ok(BrokerCallContext {
+            deadline: runtime.map(|runtime| runtime.deadline),
+            broker_cancelled: self.cancelled.clone(),
+            invocation_cancellation: runtime.map(|runtime| runtime.cancellation.clone()),
+            clock: self.clock.clone(),
+        })
     }
 
     fn require(&self, capability: ExtensionHostCapability) -> Result<(), ExtensionHostError> {
@@ -1148,6 +1283,44 @@ impl CapabilityBroker {
             .lock()
             .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))
     }
+}
+
+fn open_regular_file_beneath(
+    root: &Dir,
+    relative_path: &SandboxPath,
+    write: bool,
+) -> Result<File, ExtensionHostError> {
+    let segments = relative_path.as_str().split('/').collect::<Vec<_>>();
+    let (file_name, parents) = segments
+        .split_last()
+        .ok_or_else(|| error(ExtensionHostErrorCode::CapabilityDenied))?;
+    let mut directory = root
+        .try_clone()
+        .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+    for parent in parents {
+        directory = directory
+            .open_dir_nofollow(parent)
+            .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+    }
+    let mut options = OpenOptions::new();
+    if write {
+        options.write(true);
+    } else {
+        options.read(true);
+    }
+    options.follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    options.custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32);
+    let file = directory
+        .open_with(file_name, &options)
+        .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+    let metadata = file
+        .metadata()
+        .map_err(|_error| error(ExtensionHostErrorCode::CapabilityDenied))?;
+    if !metadata.is_file() || metadata.nlink() != 1 {
+        return Err(error(ExtensionHostErrorCode::CapabilityDenied));
+    }
+    Ok(file)
 }
 
 fn require_handle(

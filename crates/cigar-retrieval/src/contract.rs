@@ -1,5 +1,9 @@
 //! Bounded authorization-first retrieval and index-generation contracts.
 
+use crate::ProcessorApprovedVector;
+use cigar_policy::{
+    RetrievalAuthorization, RetrievalAuthorizationClaims, RetrievalResourceAuthorizationRequest,
+};
 use cigar_protocol::{
     Classification, ContentDigest, InstructionAuthority, LineageId, RecordId, RelativePath,
     SourceUri, UtcTimestamp, VersionId,
@@ -156,43 +160,60 @@ pub enum IndexGenerationState {
 }
 
 /// Authorization result fixed before any retrieval channel executes.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct AuthorizedPartition {
-    /// Exact owning tenant.
-    pub tenant_id: RecordId,
-    /// Sorted non-empty visible projects.
-    pub project_ids: BTreeSet<RecordId>,
-    /// Exact allowed purpose selector.
-    pub purpose: String,
-    /// Exact approved processor identifier.
-    pub processor: String,
-    /// Greatest information classification visible to the caller.
-    pub maximum_classification: Classification,
-    /// Greatest instruction authority visible to the caller.
-    pub maximum_instruction_authority: InstructionAuthority,
-    /// World-valid instant selected by the caller's immutable snapshot.
-    pub valid_at: UtcTimestamp,
-    /// Transaction-time observation bound selected by the immutable snapshot.
-    pub observed_as_of: UtcTimestamp,
-    /// Whether authorized plaintext may reach the configured vector processor.
-    pub vector_allowed: bool,
-    /// Digest of the policy decision and partition semantics.
-    pub partition_digest: ContentDigest,
+    authorization: RetrievalAuthorization,
+    claims: RetrievalAuthorizationClaims,
 }
 
+impl PartialEq for AuthorizedPartition {
+    fn eq(&self, other: &Self) -> bool {
+        self.claims == other.claims
+    }
+}
+
+impl Eq for AuthorizedPartition {}
+
 impl AuthorizedPartition {
-    /// Validates a non-empty bounded partition before retrieval begins.
+    /// Constructs a partition only from a live opaque proof issued by `cigar-policy`.
+    pub fn from_policy_authorization(
+        authorization: RetrievalAuthorization,
+    ) -> Result<Self, RetrievalError> {
+        let claims = authorization
+            .revalidate()
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::Denied))?;
+        let partition = Self {
+            authorization,
+            claims,
+        };
+        partition.validate_structure()?;
+        Ok(partition)
+    }
+
+    /// Rechecks current policy, revocation, availability, and monotonic decision lifetime.
     pub fn validate(&self) -> Result<(), RetrievalError> {
-        if self.project_ids.is_empty()
-            || self.project_ids.len() > 1_024
-            || self.purpose.is_empty()
-            || self.purpose.len() > 256
-            || self.processor.is_empty()
-            || self.processor.len() > 256
+        let current = self
+            .authorization
+            .revalidate()
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::Denied))?;
+        if current != self.claims {
+            return Err(RetrievalError::new(RetrievalErrorCode::Denied));
+        }
+        self.validate_structure()
+    }
+
+    fn validate_structure(&self) -> Result<(), RetrievalError> {
+        if self.claims.project_ids().is_empty()
+            || self.claims.project_ids().len() > 1_024
+            || self.claims.purpose().is_empty()
+            || self.claims.purpose().len() > 256
+            || self.claims.processor().is_empty()
+            || self.claims.processor().len() > 256
             || self
-                .purpose
+                .claims
+                .purpose()
                 .bytes()
-                .chain(self.processor.bytes())
+                .chain(self.claims.processor().bytes())
                 .any(|byte| byte.is_ascii_control())
         {
             Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata))
@@ -200,24 +221,110 @@ impl AuthorizedPartition {
             Ok(())
         }
     }
+
+    /// Authenticated principal bound into the opaque policy proof.
+    #[must_use]
+    pub const fn principal_id(&self) -> &RecordId {
+        self.claims.principal_id()
+    }
+
+    /// Exact owning tenant.
+    #[must_use]
+    pub const fn tenant_id(&self) -> &RecordId {
+        self.claims.tenant_id()
+    }
+
+    /// Sorted non-empty visible projects.
+    #[must_use]
+    pub const fn project_ids(&self) -> &BTreeSet<RecordId> {
+        self.claims.project_ids()
+    }
+
+    /// Exact allowed purpose selector.
+    #[must_use]
+    pub fn purpose(&self) -> &str {
+        self.claims.purpose()
+    }
+
+    /// Exact approved processor identifier.
+    #[must_use]
+    pub fn processor(&self) -> &str {
+        self.claims.processor()
+    }
+
+    /// Greatest information classification visible to the caller.
+    #[must_use]
+    pub const fn maximum_classification(&self) -> Classification {
+        self.claims.maximum_classification()
+    }
+
+    /// Greatest instruction authority visible to the caller.
+    #[must_use]
+    pub const fn maximum_instruction_authority(&self) -> InstructionAuthority {
+        self.claims.maximum_instruction_authority()
+    }
+
+    /// World-valid instant selected by the immutable policy snapshot.
+    #[must_use]
+    pub const fn valid_at(&self) -> UtcTimestamp {
+        self.claims.valid_at()
+    }
+
+    /// Transaction-time observation bound selected by the immutable policy snapshot.
+    #[must_use]
+    pub const fn observed_as_of(&self) -> UtcTimestamp {
+        self.claims.observed_as_of()
+    }
+
+    /// Whether authorized plaintext may reach the configured vector processor.
+    #[must_use]
+    pub const fn vector_allowed(&self) -> bool {
+        self.claims.vector_allowed()
+    }
+
+    /// Digest of principal, scope, policy snapshot, revocation epoch, and partition semantics.
+    #[must_use]
+    pub const fn partition_digest(&self) -> &ContentDigest {
+        self.claims.partition_digest()
+    }
+
+    /// Immutable policy snapshot digest bound by the opaque proof.
+    #[must_use]
+    pub const fn claimed_policy_digest(&self) -> &ContentDigest {
+        self.claims.policy_digest()
+    }
+
+    /// Rechecks one canonical record through metadata, content, and optional processor policy.
+    ///
+    /// A determinate denial returns `Ok(false)` and must be handled as indistinguishable from
+    /// absence. Snapshot drift, revocation of the proof, expiry, and policy outage return the
+    /// content-free `Denied` error.
+    pub fn authorize_resource(
+        &self,
+        resource: &RetrievalResourceAuthorizationRequest,
+        processor_required: bool,
+    ) -> Result<bool, RetrievalError> {
+        self.authorization
+            .authorize_resource(resource, processor_required)
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::Denied))
+    }
 }
 
 impl fmt::Debug for AuthorizedPartition {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("AuthorizedPartition")
-            .field("project_count", &self.project_ids.len())
-            .field("purpose_bytes", &self.purpose.len())
-            .field("processor_bytes", &self.processor.len())
-            .field("maximum_classification", &self.maximum_classification)
+            .field("project_count", &self.project_ids().len())
+            .field("purpose_bytes", &self.purpose().len())
+            .field("processor_bytes", &self.processor().len())
+            .field("maximum_classification", &self.maximum_classification())
             .field(
                 "maximum_instruction_authority",
-                &self.maximum_instruction_authority,
+                &self.maximum_instruction_authority(),
             )
-            .field("valid_at", &self.valid_at)
-            .field("observed_as_of", &self.observed_as_of)
-            .field("vector_allowed", &self.vector_allowed)
-            .field("partition_digest", &self.partition_digest)
+            .field("valid_at", &self.valid_at())
+            .field("observed_as_of", &self.observed_as_of())
+            .field("vector_allowed", &self.vector_allowed())
             .finish_non_exhaustive()
     }
 }
@@ -278,6 +385,8 @@ pub struct RetrievalRequest {
     pub paths: BTreeSet<RelativePath>,
     /// Sorted normalized lexical/symbol/entity terms.
     pub terms: BTreeSet<String>,
+    /// Optional bounded processor-approved query vector; valid only for the vector stage.
+    pub approved_vector: Option<ProcessorApprovedVector>,
     /// Sorted graph roots.
     pub graph_roots: BTreeSet<VersionId>,
     /// Maximum graph depth.
@@ -292,6 +401,9 @@ impl RetrievalRequest {
     /// Validates every cap before touching a generation or adapter.
     pub fn validate(&self) -> Result<(), RetrievalError> {
         self.partition.validate()?;
+        if self.stage != RetrievalStage::Vector && self.approved_vector.is_some() {
+            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
+        }
         if self.limit == 0
             || self.limit > MAX_CANDIDATES
             || self.exact_versions.len() > MAX_EXACT_SELECTORS
@@ -316,10 +428,61 @@ impl RetrievalRequest {
         {
             return Err(RetrievalError::new(RetrievalErrorCode::LimitExceeded));
         }
-        if self.stage == RetrievalStage::Vector && !self.partition.vector_allowed {
+        if self.stage == RetrievalStage::Vector && !self.partition.vector_allowed() {
             return Err(RetrievalError::new(RetrievalErrorCode::Denied));
         }
-        Ok(())
+        self.validate_stage_shape()
+    }
+
+    fn validate_stage_shape(&self) -> Result<(), RetrievalError> {
+        let has_exact_selector = !self.exact_versions.is_empty()
+            || !self.atom_ids.is_empty()
+            || !self.lineage_ids.is_empty()
+            || !self.content_digests.is_empty()
+            || !self.canonical_uris.is_empty()
+            || !self.source_revisions.is_empty();
+        let has_metadata_selector = !self.paths.is_empty() || !self.terms.is_empty();
+        let has_graph_selector = !self.graph_roots.is_empty() || self.graph_depth != 0;
+        let non_vector_fallback = self.stage != RetrievalStage::Vector && self.allow_fallback;
+
+        let valid = match self.stage {
+            RetrievalStage::Exact => {
+                has_exact_selector && !has_metadata_selector && !has_graph_selector
+            }
+            RetrievalStage::Metadata => {
+                !has_exact_selector && has_metadata_selector && !has_graph_selector
+            }
+            RetrievalStage::Lexical => {
+                !has_exact_selector
+                    && self.paths.is_empty()
+                    && !self.terms.is_empty()
+                    && !has_graph_selector
+            }
+            RetrievalStage::Vector => {
+                !has_exact_selector
+                    && self.paths.is_empty()
+                    && !self.terms.is_empty()
+                    && !has_graph_selector
+                    && (self.approved_vector.is_some() || self.allow_fallback)
+            }
+            RetrievalStage::Graph => {
+                !has_exact_selector
+                    && !has_metadata_selector
+                    && !self.graph_roots.is_empty()
+                    && self.approved_vector.is_none()
+            }
+            RetrievalStage::Augment => {
+                !has_exact_selector
+                    && !has_metadata_selector
+                    && !has_graph_selector
+                    && self.approved_vector.is_none()
+            }
+        };
+        if valid && !non_vector_fallback {
+            Ok(())
+        } else {
+            Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata))
+        }
     }
 }
 
@@ -339,6 +502,7 @@ impl fmt::Debug for RetrievalRequest {
             .field("source_revision_count", &self.source_revisions.len())
             .field("path_count", &self.paths.len())
             .field("term_count", &self.terms.len())
+            .field("has_approved_vector", &self.approved_vector.is_some())
             .field("graph_root_count", &self.graph_roots.len())
             .field("graph_depth", &self.graph_depth)
             .field("limit", &self.limit)

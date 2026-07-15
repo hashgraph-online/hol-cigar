@@ -50,6 +50,8 @@ type fixture struct {
 	Operations             []operation `json:"operations"`
 }
 
+const recordedBearerToken = "cigar-recorded-workflow"
+
 type recorder struct {
 	mu       sync.Mutex
 	fixture  *fixture
@@ -74,6 +76,10 @@ func (r *recorder) call(ctx context.Context, operationID string, request *cigarv
 		return nil, r.err
 	}
 	incoming, _ := metadata.FromIncomingContext(ctx)
+	if values := incoming.Get("authorization"); len(values) != 1 || values[0] != "Bearer "+recordedBearerToken {
+		r.err = errors.New("SDK authorization metadata differs from the recorded operation")
+		return nil, r.err
+	}
 	if values := incoming.Get("x-cigar-operation-id"); len(values) != 1 || values[0] != expected.OperationID {
 		r.err = errors.New("SDK operation metadata differs from the recorded operation")
 		return nil, r.err
@@ -334,7 +340,8 @@ func run() error {
 	}
 	recorder := &recorder{fixture: &fixture}
 	listener := bufconn.Listen(1024 * 1024)
-	server := grpc.NewServer()
+	// The custom bufconn dialer is process-memory-only: no network listener or plaintext channel exists.
+	server := grpc.NewServer() // nosemgrep: go.grpc.security.grpc-server-insecure-connection.grpc-server-insecure-connection
 	cigarv1.RegisterCatalogServiceServer(server, &catalogServer{recorder: recorder})
 	cigarv1.RegisterContextServiceServer(server, &contextServer{recorder: recorder})
 	serveDone := make(chan error, 1)
@@ -356,6 +363,7 @@ func run() error {
 	defer connection.Close()
 	client, err := cigar.NewGRPCClient(cigar.GRPCClientOptions{
 		Connection: connection, TrustCustomConnectionNoRetries: true,
+		BearerToken:    recordedBearerToken,
 		DefaultTimeout: 5 * time.Second, MaxAttempts: 1,
 	})
 	if err != nil {

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-installed-artifact-v1.schema.json",
+  "title": "CIGAR dashboard installed artifact binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_bytes", "artifact_id", "artifact_sha256", "asset_manifest_bytes", "asset_manifest_sha256", "dashboard_bytes", "dashboard_sha256", "package_contract_bytes", "package_contract_sha256", "schema_version", "signature_status", "smoke_status", "source_revision", "source_tree_sha256", "status", "target"],
+  "properties": {
+    "artifact_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+    "artifact_id": {"const": "cigar-dashboard-macos-aarch64"},
+    "artifact_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "asset_manifest_bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+    "asset_manifest_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "dashboard_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+    "dashboard_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "package_contract_bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+    "package_contract_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "schema_version": {"const": "cigar.dashboard-installed-artifact.v1"},
+    "signature_status": {"const": "not-verified"},
+    "smoke_status": {"const": "not-run"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "source_tree_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "status": {"const": "installed-unqualified"},
+    "target": {"const": "aarch64-apple-darwin"}
+  }
+}

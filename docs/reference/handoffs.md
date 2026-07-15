@@ -39,7 +39,9 @@ that complete authority record, preventing a caller-supplied bundle ID or stale 
 treated as compiler output.
 One-time capsules consume their nonce exactly once. Reusable capsules permit multiple distinct
 acceptance receipts, while duplicate receipt identities still fail as replay. Topic subscriptions are
-limited to the signed topic set.
+limited to the signed topic set. The capability authority verifies every signed attenuation ancestor,
+so revoking either the leaf grant or any parent grant prevents construction of the effective authority
+used by acceptance. The production adapter never reconstructs authority from capsule or prompt text.
 
 ## Child result merge
 
@@ -52,3 +54,8 @@ ungranted; a child result never amplifies authority. Merge reloads and verifies 
 acceptance authority, current issuer key and principal status, and typed result versions immediately
 before mutation. Decision, artifact, and source-change IDs must resolve to their exact declared kind,
 and a version cannot be mapped into multiple categories.
+
+Revoking a capsule is also a descendant-use barrier, not merely a flag on future inspection. It
+prevents new acceptance, child-result recording, and verified use of an already-retained result as
+merge material. The authoritative revocation, replay guards, acceptance authority, and result remain
+durable across restart, so reopening SQLite cannot resurrect a descendant operation.

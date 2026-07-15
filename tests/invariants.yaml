@@ -1,10 +1,11 @@
-schema_version: cigar.invariants.v1
+schema_version: cigar.invariants.v2
 requirement_registry: conformance/profiles/requirements-v1.json
+fault_registry: conformance/profiles/faults-v1.json
 invariants:
   - id: INV-CORE-CANONICAL-V1
     title: Core canonicalization, digest, error, and differential behavior is portable and fail-closed
     critical: true
-    process_boundary_required: true
+    source_requirement_kinds: []
     normative_requirements:
       - VER-EVIDENCE-001
       - VER-DETERMINISM-001
@@ -25,8 +26,26 @@ invariants:
       metric: required_case_pass_fraction
       comparator: equal
       value: 1.0
+    evidence_requirements:
+      process_boundary:
+        applicable: true
+        rationale: Core conformance cases execute across a fresh real adapter process for every case.
+      cross_runtime:
+        applicable: true
+        rationale: Canonical bytes and digests are required to agree across Rust, TypeScript, Python, and Go.
+      installed_bytes:
+        applicable: false
+        rationale: This invariant qualifies the portable source and vector contract; installed macOS bytes require the separate package qualification gate.
     evidence:
-      - reports/conformance-result.v1.json
+      - path: reports/conformance-result.v1.json
+        schema_version: cigar.conformance-result.v1
+        freshness: current_run
+        produced_by:
+          - CONF-G001
+          - CONF-N001
+          - CONF-P001
+          - CONF-X001
+          - CONF-D001
     tests:
       - id: CONF-G001
         type: golden
@@ -52,11 +71,18 @@ invariants:
         name: every_case_uses_a_fresh_process_and_namespace
         command: cargo test -p cigar-conformance --test conformance every_case_uses_a_fresh_process_and_namespace
         status: active
+      - id: CONF-D001
+        type: cross_runtime
+        runner: xtask
+        file: crates/xtask/src/lib.rs
+        name: verify_vector_suite
+        command: cargo xtask test vectors
+        status: active
 
   - id: INV-CONFORMANCE-RUNNER-V1
     title: Runner binds artifacts, enforces resource isolation, and detects transport faults
     critical: true
-    process_boundary_required: true
+    source_requirement_kinds: []
     normative_requirements:
       - VER-HERMETIC-001
       - VER-FIXTURE-IMMUTABILITY-001
@@ -75,8 +101,28 @@ invariants:
       metric: undetected_fault_count
       comparator: equal
       value: 0.0
+    evidence_requirements:
+      process_boundary:
+        applicable: true
+        rationale: Transport, crash, timeout, sandbox, and namespace behavior requires real child-process evidence.
+      cross_runtime:
+        applicable: false
+        rationale: This invariant verifies the language-neutral runner transport; SDK identity is covered by the core vector invariant.
+      installed_bytes:
+        applicable: false
+        rationale: This source runner invariant does not qualify the separately packaged macOS runner or installed product bytes.
     evidence:
-      - reports/conformance-result.v1.json
+      - path: reports/conformance-result.v1.json
+        schema_version: cigar.conformance-result.v1
+        freshness: current_run
+        produced_by:
+          - RUN-G001
+          - RUN-N001
+          - RUN-P001
+          - RUN-X001
+          - RUN-X002
+          - RUN-C001
+          - RUN-C002
     tests:
       - id: RUN-G001
         type: golden
@@ -102,6 +148,12 @@ invariants:
         name: timeout_crash_malformed_and_output_flood_are_distinct_failures
         command: cargo test -p cigar-conformance --test conformance timeout_crash_malformed_and_output_flood_are_distinct_failures
         status: active
+      - id: RUN-X002
+        type: process_boundary
+        file: conformance/runner/tests/conformance.rs
+        name: every_case_uses_a_fresh_process_and_namespace
+        command: cargo test -p cigar-conformance --test conformance every_case_uses_a_fresh_process_and_namespace
+        status: active
       - id: RUN-C001
         type: contract
         file: conformance/runner/tests/conformance.rs
@@ -118,7 +170,7 @@ invariants:
   - id: INV-PRODUCTION-PROFILES-V1
     title: Every non-core profile executes production-backed positive and fail-closed negative cases
     critical: true
-    process_boundary_required: true
+    source_requirement_kinds: []
     normative_requirements:
       - CONF-CATALOG-PRODUCTION-001
       - CONF-CATALOG-FAILCLOSED-001
@@ -155,8 +207,25 @@ invariants:
       metric: required_case_pass_fraction
       comparator: equal
       value: 1.0
+    evidence_requirements:
+      process_boundary:
+        applicable: true
+        rationale: Each profile is invoked through a fresh executable adapter process and isolated namespace.
+      cross_runtime:
+        applicable: false
+        rationale: These profiles qualify the Rust reference implementation; portable core identity is mapped separately.
+      installed_bytes:
+        applicable: false
+        rationale: Installed macOS archive behavior remains a distinct candidate-bound package qualification obligation.
     evidence:
-      - reports/conformance-result.v1.json
+      - path: reports/conformance-result.v1.json
+        schema_version: cigar.conformance-result.v1
+        freshness: current_run
+        produced_by:
+          - PROFILES-G001
+          - PROFILES-N001
+          - PROFILES-P001
+          - PROFILES-X001
     tests:
       - id: PROFILES-G001
         type: golden
@@ -186,7 +255,10 @@ invariants:
   - id: INV-NORMATIVE-TRACEABILITY-V1
     title: Every registered normative requirement maps to active executable evidence
     critical: true
-    process_boundary_required: false
+    source_requirement_kinds:
+      - normative
+      - release_gate
+      - security_invariant
     normative_requirements:
       - VER-TRACEABILITY-001
       - VER-TRACEABILITY-002
@@ -198,8 +270,26 @@ invariants:
       metric: mapped_requirement_fraction
       comparator: equal
       value: 1.0
+    evidence_requirements:
+      process_boundary:
+        applicable: false
+        rationale: PRD extraction and manifest validation are deterministic bounded file-validation operations.
+      cross_runtime:
+        applicable: false
+        rationale: The traceability metadata contract has one Rust verifier and defines no cross-language semantic output.
+      installed_bytes:
+        applicable: false
+        rationale: Source traceability validates package obligations but does not claim execution from installed product bytes.
     evidence:
-      - reports/invariant-traceability.v1.json
+      - path: reports/invariant-traceability.v1.json
+        schema_version: cigar.invariant-traceability-result.v1
+        freshness: current_run
+        produced_by:
+          - TRACE-G001
+          - TRACE-G002
+          - TRACE-N001
+          - TRACE-N002
+          - TRACE-P001
     tests:
       - id: TRACE-G001
         type: golden
@@ -212,6 +302,18 @@ invariants:
         file: conformance/runner/tests/traceability.rs
         name: traceability_rejects_unmapped_nonexistent_skipped_and_quarantined_tests
         command: cargo test -p cigar-conformance --test traceability traceability_rejects_unmapped_nonexistent_skipped_and_quarantined_tests
+        status: active
+      - id: TRACE-N002
+        type: negative
+        file: conformance/runner/tests/traceability.rs
+        name: traceability_rejects_missing_duplicate_unknown_and_misdirected_faults
+        command: cargo test -p cigar-conformance --test traceability traceability_rejects_missing_duplicate_unknown_and_misdirected_faults
+        status: active
+      - id: TRACE-G002
+        type: contract
+        file: conformance/runner/tests/traceability.rs
+        name: fault_registry_maps_every_injection_to_exact_behavioral_proof
+        command: cargo test -p cigar-conformance --test traceability fault_registry_maps_every_injection_to_exact_behavioral_proof
         status: active
       - id: TRACE-P001
         type: property

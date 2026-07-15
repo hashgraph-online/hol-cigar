@@ -10,6 +10,7 @@ use cigar_canon::{
 use cigar_catalog::{
     AtomizationOutput, AtomizationRequest, Atomizer, AtomizerDescriptor, AtomizerInvalidation,
     CatalogError, CatalogErrorCode, ConnectorContext, MAX_ATOMIZATION_BYTES,
+    atomizer_configuration_digest,
 };
 use cigar_protocol::limits::MAX_INLINE_TEXT_BYTES;
 use cigar_protocol::{
@@ -85,9 +86,21 @@ impl BuiltinAtomizer {
     ) -> Result<Self, CodeIntelError> {
         let media_types = media_types(kind)?;
         let produced_kinds = [atom_kind(kind)].into_iter().collect();
+        let id = format!("cigar.builtin.{}.v1", atomizer_name(kind));
+        let version = "1.0.0".to_owned();
+        let configuration_digest = atomizer_configuration_digest(
+            &id,
+            &version,
+            &profile.scope,
+            &profile.governance,
+            profile.quality,
+            profile.lexical_enabled,
+            profile.embedding_eligible,
+        )
+        .map_err(|_error| CodeIntelError::new(CodeIntelErrorCode::InvalidMetadata))?;
         let descriptor = AtomizerDescriptor {
-            id: format!("cigar.builtin.{kind:?}.v1"),
-            version: "1.0.0".to_owned(),
+            id,
+            version,
             media_types,
             max_input_bytes: match kind {
                 BuiltinAtomizerKind::StructuredJson
@@ -104,6 +117,12 @@ impl BuiltinAtomizer {
             },
             produced_kinds,
             authority_ceiling: profile.governance.instruction_authority,
+            configuration_digest,
+            scope: profile.scope.clone(),
+            governance: profile.governance.clone(),
+            quality: profile.quality,
+            lexical_enabled: profile.lexical_enabled,
+            embedding_eligible: profile.embedding_eligible,
             invalidation: AtomizerInvalidation {
                 source_bytes: true,
                 source_metadata: true,
@@ -480,9 +499,12 @@ impl BuiltinAtomizer {
         payload: AtomPayload,
         exact_content: &[u8],
     ) -> Result<ContextAtomV1, CatalogError> {
+        let path = request.record.relative_path.as_bytes();
+        let source_uri = request.snapshot.source_uri.as_str().as_bytes();
         let lineage_id = LineageId::new(deterministic_uuid(&[
             b"CIGAR-ATOM-LINEAGE\0v1\0",
-            request.record.record_id.as_bytes(),
+            source_uri,
+            path,
             logical_key.as_bytes(),
         ]))
         .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
@@ -494,7 +516,8 @@ impl BuiltinAtomizer {
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?,
             atom_id: RecordId::new(deterministic_uuid(&[
                 b"CIGAR-ATOM-RECORD\0v1\0",
-                request.record.record_id.as_bytes(),
+                source_uri,
+                path,
                 logical_key.as_bytes(),
                 request.record.revision.as_bytes(),
             ]))
@@ -564,6 +587,29 @@ fn media_types(kind: BuiltinAtomizerKind) -> Result<BTreeSet<MediaType>, CodeInt
                 .map_err(|_error| CodeIntelError::new(CodeIntelErrorCode::InvalidMetadata))
         })
         .collect()
+}
+
+const fn atomizer_name(kind: BuiltinAtomizerKind) -> &'static str {
+    match kind {
+        BuiltinAtomizerKind::Text => "text",
+        BuiltinAtomizerKind::Markdown => "markdown",
+        BuiltinAtomizerKind::StructuredJson => "structured-json",
+        BuiltinAtomizerKind::StructuredYaml => "structured-yaml",
+        BuiltinAtomizerKind::StructuredToml => "structured-toml",
+        BuiltinAtomizerKind::StructuredXml => "structured-xml",
+        BuiltinAtomizerKind::StructuredProtobuf => "structured-protobuf",
+        BuiltinAtomizerKind::Git => "git",
+        BuiltinAtomizerKind::Interaction => "interaction",
+        BuiltinAtomizerKind::CigarNative => "cigar-native",
+        BuiltinAtomizerKind::Code(Language::Rust) => "code-rust",
+        BuiltinAtomizerKind::Code(Language::TypeScript) => "code-typescript",
+        BuiltinAtomizerKind::Code(Language::JavaScript) => "code-javascript",
+        BuiltinAtomizerKind::Code(Language::Python) => "code-python",
+        BuiltinAtomizerKind::Code(Language::Go) => "code-go",
+        BuiltinAtomizerKind::Code(Language::Java) => "code-java",
+        BuiltinAtomizerKind::Code(Language::C) => "code-c",
+        BuiltinAtomizerKind::Code(Language::Cpp) => "code-cpp",
+    }
 }
 
 const fn atom_kind(kind: BuiltinAtomizerKind) -> AtomKind {
@@ -804,6 +850,35 @@ mod tests {
     }
 
     #[test]
+    fn descriptor_binds_scope_governance_quality_and_retrieval_features()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let baseline = profile()?;
+        let baseline_digest =
+            BuiltinAtomizer::new(BuiltinAtomizerKind::Markdown, baseline.clone())?
+                .descriptor()
+                .configuration_digest;
+
+        let mut scope = baseline.clone();
+        scope.scope.project_ids = vec![RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7893")?];
+        let mut governance = baseline.clone();
+        governance.governance.classification = Classification::Confidential;
+        let mut quality = baseline.clone();
+        quality.quality.authority = 2;
+        let mut lexical = baseline.clone();
+        lexical.lexical_enabled = false;
+        let mut embedding = baseline;
+        embedding.embedding_eligible = true;
+
+        for changed in [scope, governance, quality, lexical, embedding] {
+            let digest = BuiltinAtomizer::new(BuiltinAtomizerKind::Markdown, changed)?
+                .descriptor()
+                .configuration_digest;
+            assert_ne!(digest, baseline_digest);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn code_atomizer_emits_valid_file_symbols_and_provenance()
     -> Result<(), Box<dyn std::error::Error>> {
         let bytes = b"fn one() {}\nfn two() {}\n";
@@ -940,6 +1015,96 @@ mod tests {
                 atom.validate()?;
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn atom_identity_binds_source_and_path_while_lineage_survives_record_replacement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let first_bytes = b"first revision";
+        let second_bytes = b"second revision";
+        let first_digest = ContentDigest::new(format!("1220{}", "a".repeat(64)))?;
+        let second_digest = ContentDigest::new(format!("1220{}", "b".repeat(64)))?;
+        let mut record = SourceRecord {
+            record_id: "git:path:first".to_owned(),
+            relative_path: RelativePath::new(b"README.md".to_vec())?,
+            revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:100644".to_owned(),
+            size_bytes: u64::try_from(first_bytes.len())?,
+            executable: false,
+            media_type: MediaType::new("text/plain")?,
+            content_digest: Some(first_digest.clone()),
+        };
+        let mut snapshot = SourceSnapshot {
+            schema_version: "cigar.source-snapshot.v1".parse()?,
+            snapshot_id: RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7892")?,
+            source_uri: SourceUri::new("git+file:///first")?,
+            source_revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            captured_at: UtcTimestamp::parse_rfc3339("2026-07-10T00:00:00Z")?,
+            manifest_digest: first_digest,
+            entry_count: 1,
+            total_bytes: u64::try_from(first_bytes.len())?,
+            complete: true,
+            extensions: Default::default(),
+        };
+        let atomizer = BuiltinAtomizer::new(BuiltinAtomizerKind::Text, profile()?)?;
+        let operation_context = ConnectorContext::new(
+            CancellationToken::default(),
+            Instant::now() + Duration::from_secs(1),
+        );
+        let first = atomizer
+            .atomize(
+                AtomizationRequest {
+                    record: &record,
+                    bytes: first_bytes,
+                    snapshot: &snapshot,
+                },
+                &operation_context,
+            )?
+            .atoms
+            .into_iter()
+            .next()
+            .ok_or("missing first atom")?;
+
+        record.record_id = "git:path:second".to_owned();
+        record.revision = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:100644".to_owned();
+        record.size_bytes = u64::try_from(second_bytes.len())?;
+        record.content_digest = Some(second_digest.clone());
+        snapshot.source_revision = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned();
+        snapshot.manifest_digest = second_digest;
+        snapshot.captured_at = UtcTimestamp::parse_rfc3339("2026-07-10T00:00:01Z")?;
+        snapshot.total_bytes = u64::try_from(second_bytes.len())?;
+        let replacement = atomizer
+            .atomize(
+                AtomizationRequest {
+                    record: &record,
+                    bytes: second_bytes,
+                    snapshot: &snapshot,
+                },
+                &operation_context,
+            )?
+            .atoms
+            .into_iter()
+            .next()
+            .ok_or("missing replacement atom")?;
+        assert_eq!(first.lineage_id, replacement.lineage_id);
+        assert_ne!(first.atom_id, replacement.atom_id);
+
+        snapshot.source_uri = SourceUri::new("git+file:///second")?;
+        let other_source = atomizer
+            .atomize(
+                AtomizationRequest {
+                    record: &record,
+                    bytes: second_bytes,
+                    snapshot: &snapshot,
+                },
+                &operation_context,
+            )?
+            .atoms
+            .into_iter()
+            .next()
+            .ok_or("missing other-source atom")?;
+        assert_ne!(replacement.lineage_id, other_source.lineage_id);
+        assert_ne!(replacement.atom_id, other_source.atom_id);
         Ok(())
     }
 }

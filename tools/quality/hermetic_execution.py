@@ -76,7 +76,7 @@ def direct_cargo_fuzz_environment(
         raise HermeticExecutionError(
             f"inner Cargo wrapper is missing or unsafe: {wrapper}"
         )
-    metadata = wrapper.stat(follow_symlinks=False)
+    metadata = wrapper.lstat()
     if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o777 != 0o700:
         raise HermeticExecutionError(
             f"inner Cargo wrapper is not a private executable: {wrapper}"
@@ -173,7 +173,7 @@ def execution_enforcement(*, system: str | None = None) -> dict[str, object]:
         )
     if SANDBOX_EXEC.is_symlink() or not SANDBOX_EXEC.is_file():
         raise HermeticExecutionError("Darwin sandbox-exec is unavailable or unsafe")
-    metadata = SANDBOX_EXEC.stat(follow_symlinks=False)
+    metadata = SANDBOX_EXEC.lstat()
     if not stat.S_ISREG(metadata.st_mode):
         raise HermeticExecutionError("Darwin sandbox-exec is not a regular file")
     return {

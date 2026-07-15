@@ -13,8 +13,8 @@ mod vector;
 mod wasi;
 
 pub use broker::{
-    CapabilityBroker, FinalSecretBoundary, NetworkBoundary, ProtectedDataAuthorization,
-    ProtectedDataPolicy,
+    BrokerCallContext, CapabilityBroker, FinalSecretBoundary, NetworkBoundary,
+    ProtectedDataAuthorization, ProtectedDataPolicy,
 };
 pub use clock::{HostClock, SystemHostClock};
 pub use error::{ExtensionHostError, ExtensionHostErrorCode};

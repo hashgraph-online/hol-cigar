@@ -1,6 +1,6 @@
 use crate::broker::{
-    CapabilityBroker, FinalSecretBoundary, NetworkBoundary, ProtectedDataAuthorization,
-    ProtectedDataPolicy,
+    BrokerCallContext, CapabilityBroker, FinalSecretBoundary, NetworkBoundary,
+    ProtectedDataAuthorization, ProtectedDataPolicy,
 };
 use crate::clock::SystemHostClock;
 use crate::digest::{manifest_signing_bytes, raw_content_digest};
@@ -490,8 +490,33 @@ impl NetworkBoundary for EchoNetwork {
         _endpoint: &NetworkEndpoint,
         protected_request: &[u8],
         _maximum_response_bytes: usize,
+        context: &BrokerCallContext,
     ) -> Result<Vec<u8>, ExtensionHostError> {
+        context.check()?;
         Ok(protected_request.to_vec())
+    }
+}
+
+struct WaitNetwork {
+    entered: Arc<Barrier>,
+    saw_deadline: Arc<AtomicBool>,
+}
+
+impl NetworkBoundary for WaitNetwork {
+    fn request(
+        &self,
+        _endpoint: &NetworkEndpoint,
+        _protected_request: &[u8],
+        _maximum_response_bytes: usize,
+        context: &BrokerCallContext,
+    ) -> Result<Vec<u8>, ExtensionHostError> {
+        self.saw_deadline
+            .store(context.deadline().is_some(), Ordering::SeqCst);
+        self.entered.wait();
+        loop {
+            context.check()?;
+            thread::sleep(Duration::from_millis(1));
+        }
     }
 }
 
@@ -503,7 +528,9 @@ impl FinalSecretBoundary for EchoSecret {
         secret_reference: &str,
         protected_request: &[u8],
         _maximum_response_bytes: usize,
+        context: &BrokerCallContext,
     ) -> Result<Vec<u8>, ExtensionHostError> {
+        context.check()?;
         if secret_reference != "vault://fixture/key" {
             return Err(ExtensionHostError::new(
                 ExtensionHostErrorCode::CapabilityDenied,
@@ -662,6 +689,77 @@ fn broker_rejects_path_traversal_symlink_escape_and_network_escape()
     assert_eq!(
         broker
             .grant_endpoint(unlisted)
+            .err()
+            .map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::CapabilityDenied)
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn broker_preopen_is_descriptor_bound_and_streams_within_the_signed_limit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let preopen = SandboxPreopen {
+        path: SandboxPath::new("workspace")?,
+        access: SandboxAccess::ReadWrite,
+    };
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::BuiltIn,
+        DEFAULT_IMPLEMENTATION,
+        "bin/fixture",
+        vec![
+            ExtensionHostCapability::FilesystemRead,
+            ExtensionHostCapability::FilesystemWrite,
+        ],
+        None,
+        Some(preopen.clone()),
+        2,
+    )?;
+    let broker = broker(activate(&fixture)?, '1', Arc::new(AllowProtected))?;
+    let parent = tempfile::tempdir()?;
+    let granted_path = parent.path().join("granted");
+    let moved_path = parent.path().join("moved");
+    fs::create_dir(&granted_path)?;
+    fs::write(granted_path.join("inside.txt"), b"descriptor-bound")?;
+    fs::write(granted_path.join("oversized.txt"), vec![7_u8; 32_769])?;
+    let preopen_handle = broker.grant_preopen(preopen, &granted_path)?;
+
+    fs::rename(&granted_path, &moved_path)?;
+    fs::create_dir(&granted_path)?;
+    fs::write(granted_path.join("inside.txt"), b"path-replacement")?;
+    assert_eq!(
+        broker.file_read(&preopen_handle, &SandboxPath::new("inside.txt")?)?,
+        b"descriptor-bound"
+    );
+    broker.file_write(
+        &preopen_handle,
+        &SandboxPath::new("inside.txt")?,
+        b"updated-through-descriptor",
+    )?;
+    assert_eq!(
+        fs::read(moved_path.join("inside.txt"))?,
+        b"updated-through-descriptor"
+    );
+    assert_eq!(
+        fs::read(granted_path.join("inside.txt"))?,
+        b"path-replacement"
+    );
+    assert_eq!(
+        broker
+            .file_read(&preopen_handle, &SandboxPath::new("oversized.txt")?)
+            .err()
+            .map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::ResourceExhausted)
+    );
+
+    fs::hard_link(
+        moved_path.join("inside.txt"),
+        moved_path.join("hard-link.txt"),
+    )?;
+    assert_eq!(
+        broker
+            .file_read(&preopen_handle, &SandboxPath::new("hard-link.txt")?)
             .err()
             .map(ExtensionHostError::code),
         Some(ExtensionHostErrorCode::CapabilityDenied)
@@ -929,6 +1027,13 @@ enum BackendBehavior {
     WaitForCancel {
         entered: Arc<Barrier>,
     },
+    BrokerCallAfterRelease {
+        entered: Arc<Barrier>,
+        release: Arc<AtomicBool>,
+    },
+    BrokerNetwork {
+        handle: cigar_protocol::ExtensionHandle,
+    },
 }
 
 struct TestBackend {
@@ -1014,6 +1119,36 @@ impl ExtensionBackend for TestBackend {
                 while !cancellation.is_cancelled() && Instant::now() < deadline {
                     thread::yield_now();
                 }
+                Ok(RuntimeResponse::completed(
+                    successful_response(&self.activated, invocation).map_err(|_error| {
+                        ExtensionHostError::new(ExtensionHostErrorCode::InvalidResponse)
+                    })?,
+                ))
+            }
+            BackendBehavior::BrokerCallAfterRelease { entered, release } => {
+                let broker = broker.ok_or_else(|| {
+                    ExtensionHostError::new(ExtensionHostErrorCode::BackendUnavailable)
+                })?;
+                entered.wait();
+                while !release.load(Ordering::SeqCst) && Instant::now() < deadline {
+                    thread::yield_now();
+                }
+                broker.dispatch_host_call(
+                    cigar_protocol::ExtensionHostCallKind::Trace,
+                    None,
+                    b"call-after-request-cancellation",
+                )?;
+                Ok(RuntimeResponse::completed(
+                    successful_response(&self.activated, invocation).map_err(|_error| {
+                        ExtensionHostError::new(ExtensionHostErrorCode::InvalidResponse)
+                    })?,
+                ))
+            }
+            BackendBehavior::BrokerNetwork { handle } => {
+                let broker = broker.ok_or_else(|| {
+                    ExtensionHostError::new(ExtensionHostErrorCode::BackendUnavailable)
+                })?;
+                broker.network_request(handle, b"bounded-network-request")?;
                 Ok(RuntimeResponse::completed(
                     successful_response(&self.activated, invocation).map_err(|_error| {
                         ExtensionHostError::new(ExtensionHostErrorCode::InvalidResponse)
@@ -1307,6 +1442,155 @@ fn host_enforces_concurrency_and_cancel_races() -> Result<(), Box<dyn std::error
             .map(ExtensionHostError::code),
         Some(ExtensionHostErrorCode::Cancelled)
     );
+    Ok(())
+}
+
+#[test]
+fn request_cancellation_reaches_the_attached_broker_before_another_host_call()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::BuiltIn,
+        DEFAULT_IMPLEMENTATION,
+        "bin/fixture",
+        vec![ExtensionHostCapability::StructuredTracing],
+        None,
+        None,
+        1,
+    )?;
+    let activated = activate(&fixture)?;
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(AtomicBool::new(false));
+    let (host, _) = host_with_backend(
+        activated.clone(),
+        BackendBehavior::BrokerCallAfterRelease {
+            entered: entered.clone(),
+            release: release.clone(),
+        },
+    )?;
+    let invocation_record = invocation(&activated, '4', Duration::from_secs(1))?;
+    let broker = Arc::new(broker(activated, '4', Arc::new(AllowProtected))?);
+    let request = InvocationRequest::new(invocation_record)?.with_broker(broker.clone())?;
+    let cancellation = request.cancellation();
+    let worker = thread::spawn(move || host.invoke(request));
+    entered.wait();
+    cancellation.cancel();
+    release.store(true, Ordering::SeqCst);
+    let result = worker
+        .join()
+        .map_err(|_panic| "broker cancellation worker panicked")?;
+    assert_eq!(broker.host_call_count(), 0);
+    assert!(broker.transcript()?.is_empty());
+    assert_eq!(
+        result.err().map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::Cancelled)
+    );
+    Ok(())
+}
+
+#[test]
+fn invocation_deadline_reaches_the_attached_broker_before_another_host_call()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::BuiltIn,
+        DEFAULT_IMPLEMENTATION,
+        "bin/fixture",
+        vec![ExtensionHostCapability::StructuredTracing],
+        None,
+        None,
+        1,
+    )?;
+    let activated = activate(&fixture)?;
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(AtomicBool::new(false));
+    let (host, _) = host_with_backend(
+        activated.clone(),
+        BackendBehavior::BrokerCallAfterRelease {
+            entered: entered.clone(),
+            release: release.clone(),
+        },
+    )?;
+    let invocation_record = invocation(&activated, '5', Duration::from_millis(30))?;
+    let broker = Arc::new(broker(activated, '5', Arc::new(AllowProtected))?);
+    let request = InvocationRequest::new(invocation_record)?.with_broker(broker.clone())?;
+    let worker = thread::spawn(move || host.invoke(request));
+    entered.wait();
+    thread::sleep(Duration::from_millis(60));
+    release.store(true, Ordering::SeqCst);
+    assert_eq!(
+        worker
+            .join()
+            .map_err(|_panic| "broker deadline worker panicked")?
+            .err()
+            .map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::DeadlineExceeded)
+    );
+    assert_eq!(broker.host_call_count(), 0);
+    assert!(broker.transcript()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn in_flight_external_boundary_observes_request_cancellation_and_deadline()
+-> Result<(), Box<dyn std::error::Error>> {
+    let endpoint = NetworkEndpoint::new(
+        NetworkTransport::Https,
+        NetworkHost::new("api.example.test")?,
+        443,
+    )?;
+    let capabilities = vec![ExtensionHostCapability::Network];
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::BuiltIn,
+        DEFAULT_IMPLEMENTATION,
+        "bin/fixture",
+        capabilities.clone(),
+        Some(endpoint.clone()),
+        None,
+        1,
+    )?;
+    let activated = activate(&fixture)?;
+    let mut invocation_record = invocation(&activated, '6', Duration::from_secs(1))?;
+    let entered = Arc::new(Barrier::new(2));
+    let saw_deadline = Arc::new(AtomicBool::new(false));
+    let broker = Arc::new(CapabilityBroker::new(
+        activated.clone(),
+        invocation_record.invocation_id.clone(),
+        ExtensionKind::Transform,
+        "transform.fixture",
+        "processor.fixture",
+        capabilities,
+        None,
+        Vec::new(),
+        Arc::new(AllowProtected),
+        Arc::new(WaitNetwork {
+            entered: entered.clone(),
+            saw_deadline: saw_deadline.clone(),
+        }),
+        Arc::new(EchoSecret),
+        Arc::new(SystemHostClock),
+    )?);
+    let endpoint_handle = broker.grant_endpoint(endpoint)?;
+    invocation_record.handles = vec![endpoint_handle.clone()];
+    invocation_record.validate()?;
+    let (host, _) = host_with_backend(
+        activated,
+        BackendBehavior::BrokerNetwork {
+            handle: endpoint_handle,
+        },
+    )?;
+    let request = InvocationRequest::new(invocation_record)?.with_broker(broker)?;
+    let cancellation = request.cancellation();
+    let worker = thread::spawn(move || host.invoke(request));
+    entered.wait();
+    cancellation.cancel();
+    assert_eq!(
+        worker
+            .join()
+            .map_err(|_panic| "boundary cancellation worker panicked")?
+            .err()
+            .map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::Cancelled)
+    );
+    assert!(saw_deadline.load(Ordering::SeqCst));
     Ok(())
 }
 
@@ -1609,6 +1893,272 @@ fn isolated_subprocess_sanitizes_environment_and_requires_clean_exit()
             .err()
             .map(ExtensionHostError::code),
         Some(ExtensionHostErrorCode::ExtensionCrashed)
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn isolated_subprocess_executes_the_verified_snapshot_after_package_substitution()
+-> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let placeholder = signed_fixture(
+        ExtensionRuntimeKind::IsolatedSubprocess,
+        b"placeholder",
+        "fixture.sh",
+        Vec::new(),
+        None,
+        None,
+        1,
+    )?;
+    let placeholder_activated = activate_extension(
+        placeholder.manifest.clone(),
+        PACKAGE_BYTES,
+        b"placeholder",
+        &placeholder.policy,
+    )?;
+    let provisional = invocation(&placeholder_activated, '7', Duration::from_millis(800))?;
+    let response = successful_response(&placeholder_activated, &provisional)?;
+    let frame = FrameCodec::new(65_536)?.encode(&response)?;
+    let original_body = format!("printf '{}'\nexit 0", shell_octal(&frame));
+    let (_path, original_script) = executable_script(directory.path(), &original_body)?;
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::IsolatedSubprocess,
+        &original_script,
+        "fixture.sh",
+        Vec::new(),
+        None,
+        None,
+        1,
+    )?;
+    let activated = activate_extension(
+        fixture.manifest.clone(),
+        PACKAGE_BYTES,
+        &original_script,
+        &fixture.policy,
+    )?;
+    let sandbox = SubprocessSandbox::direct_fixture(&activated, directory.path(), Vec::new())?;
+
+    let (_path, substituted_script) = executable_script(directory.path(), "exit 79")?;
+    assert_ne!(
+        raw_content_digest(&substituted_script)?,
+        activated.manifest().implementation_digest
+    );
+
+    let host = ExtensionHost::new(Arc::new(SystemHostClock));
+    host.register(
+        activated.clone(),
+        Arc::new(IsolatedSubprocessBackend::new(sandbox)?),
+    )?;
+    host.invoke(InvocationRequest::new(invocation(
+        &activated,
+        '7',
+        Duration::from_millis(800),
+    )?)?)?;
+    host.invoke(InvocationRequest::new(invocation(
+        &activated,
+        '7',
+        Duration::from_millis(800),
+    )?)?)?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_native_backend_restarts_from_the_verified_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let placeholder = signed_fixture(
+        ExtensionRuntimeKind::IsolatedSubprocess,
+        b"placeholder",
+        "fixture",
+        Vec::new(),
+        None,
+        None,
+        1,
+    )?;
+    let placeholder_activated = activate_extension(
+        placeholder.manifest.clone(),
+        PACKAGE_BYTES,
+        b"placeholder",
+        &placeholder.policy,
+    )?;
+    let provisional = invocation(&placeholder_activated, '8', Duration::from_millis(900))?;
+    let response = successful_response(&placeholder_activated, &provisional)?;
+    let response_frame = FrameCodec::new(65_536)?.encode(&response)?;
+    let response_array = response_frame
+        .iter()
+        .map(u8::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = directory.path().join("fixture.c");
+    let executable = directory.path().join("fixture");
+    fs::write(
+        &source,
+        format!(
+            r#"
+#include <stdint.h>
+#include <unistd.h>
+
+static const unsigned char RESPONSE[] = {{{response_array}}};
+
+static int read_exact(unsigned char *buffer, size_t length) {{
+  size_t offset = 0;
+  while (offset < length) {{
+    ssize_t amount = read(STDIN_FILENO, buffer + offset, length - offset);
+    if (amount <= 0) return -1;
+    offset += (size_t)amount;
+  }}
+  return 0;
+}}
+
+static int discard_invocation(void) {{
+  unsigned char prefix[4];
+  unsigned char buffer[4096];
+  if (read_exact(prefix, sizeof(prefix)) != 0) return -1;
+  uint32_t remaining = ((uint32_t)prefix[0] << 24) | ((uint32_t)prefix[1] << 16) |
+                       ((uint32_t)prefix[2] << 8) | (uint32_t)prefix[3];
+  if (remaining > 1048576U) return -1;
+  while (remaining > 0) {{
+    size_t chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+    if (read_exact(buffer, chunk) != 0) return -1;
+    remaining -= (uint32_t)chunk;
+  }}
+  return 0;
+}}
+
+static int write_exact(const unsigned char *buffer, size_t length) {{
+  size_t offset = 0;
+  while (offset < length) {{
+    ssize_t amount = write(STDOUT_FILENO, buffer + offset, length - offset);
+    if (amount <= 0) return -1;
+    offset += (size_t)amount;
+  }}
+  return 0;
+}}
+
+int main(void) {{
+  if (discard_invocation() != 0) return 21;
+  if (write_exact(RESPONSE, sizeof(RESPONSE)) != 0) return 22;
+  return 0;
+}}
+"#,
+        ),
+    )?;
+    let compiler = std::process::Command::new("cc")
+        .arg("-O2")
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()?;
+    if !compiler.status.success() {
+        return Err(format!(
+            "failed to compile macOS native response fixture: {}",
+            String::from_utf8_lossy(&compiler.stderr)
+        )
+        .into());
+    }
+    let implementation = fs::read(&executable)?;
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::IsolatedSubprocess,
+        &implementation,
+        "fixture",
+        Vec::new(),
+        None,
+        None,
+        1,
+    )?;
+    let activated = activate_extension(
+        fixture.manifest.clone(),
+        PACKAGE_BYTES,
+        &implementation,
+        &fixture.policy,
+    )?;
+    let sandbox = SubprocessSandbox::for_current_platform(&activated, directory.path())?;
+    fs::write(&executable, b"unsigned package substitution")?;
+
+    let host = ExtensionHost::new(Arc::new(SystemHostClock));
+    host.register(
+        activated.clone(),
+        Arc::new(IsolatedSubprocessBackend::new(sandbox)?),
+    )?;
+    for _restart in 0..2 {
+        host.invoke(InvocationRequest::new(invocation(
+            &activated,
+            '8',
+            Duration::from_millis(900),
+        )?)?)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_native_backend_kills_resident_memory_exhaustion() -> Result<(), Box<dyn std::error::Error>>
+{
+    let directory = tempfile::tempdir()?;
+    let source = directory.path().join("memory-probe.c");
+    let executable = directory.path().join("memory-probe");
+    fs::write(
+        &source,
+        r#"
+#include <stddef.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void) {
+  const size_t length = 96U * 1024U * 1024U;
+  volatile unsigned char *memory = (volatile unsigned char *)malloc(length);
+  if (memory == NULL) return 31;
+  for (size_t offset = 0; offset < length; offset += 4096U) memory[offset] = 0xA5;
+  for (;;) pause();
+}
+"#,
+    )?;
+    let compiler = std::process::Command::new("cc")
+        .arg("-O2")
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()?;
+    if !compiler.status.success() {
+        return Err(format!(
+            "failed to compile macOS memory probe: {}",
+            String::from_utf8_lossy(&compiler.stderr)
+        )
+        .into());
+    }
+    let implementation = fs::read(&executable)?;
+    let fixture = signed_fixture(
+        ExtensionRuntimeKind::IsolatedSubprocess,
+        &implementation,
+        "memory-probe",
+        Vec::new(),
+        None,
+        None,
+        1,
+    )?;
+    let activated = activate_extension(
+        fixture.manifest.clone(),
+        PACKAGE_BYTES,
+        &implementation,
+        &fixture.policy,
+    )?;
+    let sandbox = SubprocessSandbox::for_current_platform(&activated, directory.path())?;
+    let host = ExtensionHost::new(Arc::new(SystemHostClock));
+    host.register(
+        activated.clone(),
+        Arc::new(IsolatedSubprocessBackend::new(sandbox)?),
+    )?;
+    assert_eq!(
+        host.invoke(InvocationRequest::new(invocation(
+            &activated,
+            '9',
+            Duration::from_millis(900),
+        )?)?)
+        .err()
+        .map(ExtensionHostError::code),
+        Some(ExtensionHostErrorCode::ResourceExhausted)
     );
     Ok(())
 }

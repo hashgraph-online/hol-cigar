@@ -1,8 +1,8 @@
 {
   "schema_version": "cigar.docs-site.v1",
-  "product_version": "0.1.0",
+  "product_version": "1.0.0-dev.1",
   "context_abi": "cigar.context.v1",
-  "version_selectors": ["0.1", "latest"],
+  "version_selectors": ["1.0.0-dev.1"],
   "include": [
     "docs/README.md", "docs/site/**", "docs/guides/**", "docs/reference/**", "docs/operations/**",
     "docs/runbooks/**", "docs/troubleshooting/**", "docs/demos/**", "docs/release/**"

@@ -24,7 +24,15 @@ fn digest(bytes: &[u8]) -> Result<ContentDigest, Box<dyn Error>> {
 }
 
 fn configuration(url: String) -> Result<PostgresConfiguration, Box<dyn Error>> {
-    let mut configuration = PostgresConfiguration::new(url)?;
+    let certificate_authority = std::fs::read(std::env::var("CIGAR_WP18_FAILOVER_CA_PATH")?)?;
+    if certificate_authority.is_empty() || certificate_authority.len() > 2 * 1024 * 1024 {
+        return Err("failover qualification CA is empty or too large".into());
+    }
+    let mut configuration = PostgresConfiguration::new_with_certificate_authority(
+        url,
+        std::env::var("CIGAR_WP18_FAILOVER_SERVER_NAME")?,
+        &certificate_authority,
+    )?;
     configuration.minimum_connections = 1;
     configuration.maximum_connections = 16;
     configuration.acquire_timeout = Duration::from_secs(3);
@@ -87,6 +95,8 @@ fn install_runtime_grants(owner_url: &str) -> Result<(), Box<dyn Error>> {
     let mut owner = postgres::Client::connect(owner_url, NoTls)?;
     owner.batch_execute(
         "REVOKE CREATE ON SCHEMA public FROM cigar_runtime;
+         REVOKE ALL ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC;
+         REVOKE ALL ON FUNCTION public.cigar_gc_lock_repository_revision() FROM PUBLIC;
          GRANT USAGE ON SCHEMA public TO cigar_runtime;
          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cigar_runtime;",
     )?;

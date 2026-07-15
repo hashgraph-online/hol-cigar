@@ -19,6 +19,13 @@ use crate::request::{Request, ResponseData};
 
 const MAX_LIST_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
+fn hardened_session() -> attohttpc::Session {
+    let mut session = attohttpc::Session::new();
+    session.proxy_settings(attohttpc::ProxySettings::builder().build());
+    session.follow_redirects(false);
+    session
+}
+
 fn read_bounded_response<R: Read>(reader: R, maximum: usize) -> Result<Bytes, S3Error> {
     let limit = u64::try_from(maximum)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "response limit is invalid"))?;
@@ -67,7 +74,7 @@ impl<'a> Request for AttoRequest<'a> {
         // Build headers
         let headers = self.headers()?;
 
-        let mut session = attohttpc::Session::new();
+        let mut session = hardened_session();
 
         for (name, value) in headers.iter() {
             session.header(HeaderName::from_bytes(name.as_ref())?, value.to_str()?);
@@ -100,7 +107,7 @@ impl<'a> Request for AttoRequest<'a> {
         crate::retry! {
             {
                 let headers = self.headers()?;
-                let mut session = attohttpc::Session::new();
+                let mut session = hardened_session();
 
                 for (name, value) in headers.iter() {
                     session.header(HeaderName::from_bytes(name.as_ref())?, value.to_str()?);
@@ -160,8 +167,8 @@ impl<'a> Request for AttoRequest<'a> {
         // but for the operations that use this (PUTs), the body is typically empty
         // or contains redundant information already available in headers.
         //
-        // TODO: Refactor this to properly return the response body and access ETag
-        // from headers instead of replacing the body. This would be a breaking change.
+        // Compatibility note: returning the response body separately from the ETag
+        // requires an upstream breaking API change; preserve the current contract here.
         let body_vec = if etag {
             if let Some(etag) = response.headers().get("ETag") {
                 Bytes::from(etag.to_str()?.to_string())
@@ -220,19 +227,23 @@ impl<'a> AttoRequest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::read_bounded_response;
+    use super::{hardened_session, read_bounded_response};
     use crate::bucket::Bucket;
     use crate::command::Command;
     use crate::request::Request;
     use crate::request::blocking::AttoRequest;
     use anyhow::Result;
     use awscreds::Credentials;
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::process::Command as ProcessCommand;
+    use std::time::{Duration, Instant};
 
     // Fake keys - otherwise using Credentials::default will use actual user
     // credentials if they exist.
     fn fake_credentials() -> Credentials {
-        let access_key = "AKIAIOSFODNN7EXAMPLE";
-        let secert_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        let access_key = "example-access-key";
+        let secert_key = "example-secret-key";
         Credentials::new(Some(access_key), Some(secert_key), None, None, None).unwrap()
     }
 
@@ -245,6 +256,84 @@ mod tests {
             4
         );
         assert!(read_bounded_response(std::io::Cursor::new(vec![0x5a; 5]), 4).is_err());
+    }
+
+    #[test]
+    fn hardened_session_ignores_hostile_environment_child() -> Result<()> {
+        let Ok(url) = std::env::var("CIGAR_S3_HARDENED_SESSION_TEST_URL") else {
+            return Ok(());
+        };
+        let response = hardened_session().get(url).send()?;
+        assert_eq!(response.status().as_u16(), 200);
+        Ok(())
+    }
+
+    #[test]
+    fn hardened_session_ignores_hostile_proxy_and_netrc_environment() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let address = listener.local_addr()?;
+        let server = std::thread::spawn(move || -> std::io::Result<String> {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "hardened client did not connect directly",
+                            ));
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
+            stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+            let mut request = vec![0_u8; 16 * 1024];
+            let length = stream.read(&mut request)?;
+            let request = String::from_utf8_lossy(&request[..length]).into_owned();
+            stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+            )?;
+            Ok(request)
+        });
+
+        let home = tempfile::tempdir()?;
+        std::fs::write(
+            home.path().join(".netrc"),
+            "machine 127.0.0.1 login ambient-user password ambient-secret\n",
+        )?;
+        let output = ProcessCommand::new(std::env::current_exe()?)
+            .arg("hardened_session_ignores_hostile_environment_child")
+            .arg("--nocapture")
+            .env(
+                "CIGAR_S3_HARDENED_SESSION_TEST_URL",
+                format!("http://{address}/"),
+            )
+            .env("HOME", home.path())
+            .env("HTTP_PROXY", "http://127.0.0.1:1")
+            .env("http_proxy", "http://127.0.0.1:1")
+            .env("HTTPS_PROXY", "http://127.0.0.1:1")
+            .env("https_proxy", "http://127.0.0.1:1")
+            .env("ALL_PROXY", "http://127.0.0.1:1")
+            .env("all_proxy", "http://127.0.0.1:1")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
+            .output()?;
+        assert!(
+            output.status.success(),
+            "child failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let request = server
+            .join()
+            .map_err(|_| std::io::Error::other("origin server panicked"))??;
+        let lowercase = request.to_ascii_lowercase();
+        assert!(!lowercase.contains("proxy-authorization:"));
+        assert!(!lowercase.contains("authorization:"));
+        Ok(())
     }
 
     #[test]
@@ -266,8 +355,7 @@ mod tests {
     #[test]
     fn url_uses_https_by_default_path_style() -> Result<()> {
         let region = "custom-region".parse()?;
-        let bucket = Bucket::new("my-first-bucket", region, fake_credentials())?;
-        bucket.with_path_style();
+        let bucket = Bucket::new("my-first-bucket", region, fake_credentials())?.with_path_style();
         let path = "/my-first/path";
         let request = AttoRequest::new(&bucket, path, Command::GetObject).unwrap();
 
@@ -298,8 +386,7 @@ mod tests {
     #[test]
     fn url_uses_scheme_from_custom_region_if_defined_with_path_style() -> Result<()> {
         let region = "http://custom-region".parse()?;
-        let bucket = Bucket::new("my-second-bucket", region, fake_credentials())?;
-        bucket.with_path_style();
+        let bucket = Bucket::new("my-second-bucket", region, fake_credentials())?.with_path_style();
         let path = "/my-second/path";
         let request = AttoRequest::new(&bucket, path, Command::GetObject).unwrap();
 

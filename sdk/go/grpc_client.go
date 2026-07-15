@@ -61,9 +61,13 @@ func DialGRPCClient(options GRPCDialOptions) (*GRPCClient, error) {
 	if options.Target == "" || options.TransportCredentials == nil {
 		return nil, &ValidationError{Message: "gRPC target and transport credentials are required"}
 	}
+	if err := validateGRPCAuthorization(options.BearerToken, options.TokenProvider); err != nil {
+		return nil, err
+	}
 	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(options.TransportCredentials),
 		grpc.WithDisableRetry(),
+		grpc.WithNoProxy(),
 	}
 	if options.ContextDialer != nil {
 		dialOptions = append(dialOptions, grpc.WithContextDialer(options.ContextDialer))
@@ -98,11 +102,8 @@ func newGRPCClient(options GRPCClientOptions) (*GRPCClient, error) {
 	if !options.TrustCustomConnectionNoRetries {
 		return nil, &ValidationError{Message: "custom gRPC connection requires an explicit no-transport-retry acknowledgement"}
 	}
-	if options.BearerToken != "" && options.TokenProvider != nil {
-		return nil, &ValidationError{Message: "configure one bearer source"}
-	}
-	if options.BearerToken != "" && !boundedVisibleASCII(options.BearerToken, 8192) {
-		return nil, &ValidationError{Message: "bearer token must be 1..8192 visible ASCII bytes"}
+	if err := validateGRPCAuthorization(options.BearerToken, options.TokenProvider); err != nil {
+		return nil, err
 	}
 	timeout := options.DefaultTimeout
 	if timeout == 0 {
@@ -122,6 +123,19 @@ func newGRPCClient(options GRPCClientOptions) (*GRPCClient, error) {
 		connection: options.Connection, bearerToken: options.BearerToken,
 		tokenProvider: options.TokenProvider, defaultTimeout: timeout, maxAttempts: attempts,
 	}, nil
+}
+
+func validateGRPCAuthorization(token string, provider TokenProvider) error {
+	if token == "" && provider == nil {
+		return &ValidationError{Message: "remote gRPC requires an explicit bearer source"}
+	}
+	if token != "" && provider != nil {
+		return &ValidationError{Message: "configure one bearer source"}
+	}
+	if token != "" && !boundedVisibleASCII(token, 8192) {
+		return &ValidationError{Message: "bearer token must be 1..8192 visible ASCII bytes"}
+	}
+	return nil
 }
 
 // Close closes an SDK-owned connection. It is a no-op for caller-owned connections.
@@ -339,12 +353,10 @@ func (client *GRPCClient) metadataContext(
 		}
 		token = resolved
 	}
-	if token != "" {
-		if !boundedVisibleASCII(token, 8192) {
-			return nil, &ValidationError{Message: "bearer token must be 1..8192 visible ASCII bytes"}
-		}
-		owned.Set("authorization", "Bearer "+token)
+	if !boundedVisibleASCII(token, 8192) {
+		return nil, &ValidationError{Message: "bearer token must be 1..8192 visible ASCII bytes"}
 	}
+	owned.Set("authorization", "Bearer "+token)
 	return metadata.NewOutgoingContext(ctx, owned), nil
 }
 

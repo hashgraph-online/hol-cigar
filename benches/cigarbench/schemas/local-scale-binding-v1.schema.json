@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/local-scale-binding-v1.schema.json",
+  "title": "CIGAR native macOS local-scale run binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "repository_root",
+    "source_revision",
+    "source_tree_sha256",
+    "candidate",
+    "installed_tool",
+    "profile"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.local-scale-binding.v1"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "repository_root": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^/"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "source_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate": {"$ref": "#/$defs/file"},
+    "installed_tool": {"$ref": "#/$defs/file"},
+    "profile": {"$ref": "#/$defs/file"}
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824}
+      }
+    }
+  }
+}

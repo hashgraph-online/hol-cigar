@@ -228,8 +228,26 @@ pub struct TraceabilityResult {
     pub manifest_digest: String,
     /// Digest of the independent normative requirement registry.
     pub requirement_registry_digest: String,
-    /// Number of mapped normative requirements.
+    /// Digest of the exact PRD source file inspected by the extractor.
+    pub prd_digest: String,
+    /// Digest of the ordered normative source surface, including locations.
+    pub normative_surface_digest: String,
+    /// Total number of source and derived requirements mapped to evidence.
     pub requirement_count: usize,
+    /// Number of stable source requirements extracted from `prd.md`.
+    pub source_requirement_count: usize,
+    /// Number of independent derived conformance requirements.
+    pub derived_requirement_count: usize,
+    /// Number of uppercase MUST/SHALL occurrences covered by source spans.
+    pub normative_occurrence_count: usize,
+    /// Number of extracted release-gate spans.
+    pub release_gate_count: usize,
+    /// Number of extracted security-invariant spans.
+    pub security_invariant_count: usize,
+    /// Fraction of the complete requirement set mapped to evidence.
+    pub mapped_requirement_fraction: f64,
+    /// Number of skipped, quarantined, or otherwise inactive mappings.
+    pub inactive_mapping_count: usize,
     /// Number of unique active tests.
     pub test_count: usize,
     /// Whether all checks passed.

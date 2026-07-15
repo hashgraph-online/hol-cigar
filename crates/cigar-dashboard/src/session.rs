@@ -6,7 +6,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt as _;
@@ -247,6 +247,30 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Rotates the CSRF proof for an already authenticated same-origin browser session.
+    ///
+    /// Only its keyed digest remains in memory. This supports browser reload without persisting
+    /// the prior proof in local/session storage.
+    pub fn rotate_csrf(&self, session_token: &str) -> Result<Zeroizing<String>, SessionError> {
+        let session_bytes = decode_token(session_token)?;
+        let session_mac = domain_mac(&self.key, b"session", &session_bytes)?;
+        let csrf_bytes = random_bytes()?;
+        let csrf_mac = domain_mac(&self.key, b"csrf", &csrf_bytes)?;
+        let mut state = self.lock_state()?;
+        let now = Instant::now();
+        prune_expired(&mut state, now);
+        let record = state
+            .sessions
+            .get_mut(&session_mac)
+            .ok_or(SessionError::Unauthorized)?;
+        if record.expires_at <= now {
+            state.sessions.remove(&session_mac);
+            return Err(SessionError::Unauthorized);
+        }
+        record.csrf_mac = csrf_mac;
+        Ok(Zeroizing::new(URL_SAFE_NO_PAD.encode(*csrf_bytes)))
+    }
+
     /// Returns the current bounded session count for content-safe diagnostics.
     pub fn active_session_count(&self) -> Result<usize, SessionError> {
         let mut state = self.lock_state()?;
@@ -277,6 +301,14 @@ pub fn write_bootstrap_file(path: &Path, token: &str) -> Result<(), SessionError
     if !path.is_absolute() || token.len() > MAX_TOKEN_TEXT_BYTES || decode_token(token).is_err() {
         return Err(SessionError::BootstrapFileUnavailable);
     }
+    let parent = path
+        .parent()
+        .ok_or(SessionError::BootstrapFileUnavailable)?;
+    let parent_before =
+        fs::symlink_metadata(parent).map_err(|_error| SessionError::BootstrapFileUnavailable)?;
+    if !private_runtime_directory(&parent_before) {
+        return Err(SessionError::BootstrapFileUnavailable);
+    }
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -287,7 +319,40 @@ pub fn write_bootstrap_file(path: &Path, token: &str) -> Result<(), SessionError
     file.write_all(token.as_bytes())
         .and_then(|()| file.write_all(b"\n"))
         .and_then(|()| file.sync_all())
+        .map_err(|_error| SessionError::BootstrapFileUnavailable)?;
+    let parent_after =
+        fs::symlink_metadata(parent).map_err(|_error| SessionError::BootstrapFileUnavailable)?;
+    if !private_runtime_directory(&parent_after) || !same_directory(&parent_before, &parent_after) {
+        return Err(SessionError::BootstrapFileUnavailable);
+    }
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
         .map_err(|_error| SessionError::BootstrapFileUnavailable)
+}
+
+#[cfg(unix)]
+fn private_runtime_directory(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    metadata.is_dir()
+        && !metadata.file_type().is_symlink()
+        && metadata.uid() == rustix::process::geteuid().as_raw()
+        && metadata.mode() & 0o777 == 0o700
+}
+
+#[cfg(not(unix))]
+fn private_runtime_directory(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn same_directory(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_directory(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+    false
 }
 
 fn random_bytes() -> Result<Zeroizing<[u8; TOKEN_BYTES]>, SessionError> {
@@ -391,6 +456,8 @@ mod tests {
     #[test]
     fn bootstrap_file_is_create_new_and_owner_only() -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
+        #[cfg(unix)]
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700))?;
         let path = directory.path().join("bootstrap.token");
         let (_authority, token) = BootstrapAuthority::generate()?;
         write_bootstrap_file(&path, &token)?;

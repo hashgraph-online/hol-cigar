@@ -6,7 +6,7 @@
     {
       "id": "SEC-API-001",
       "title": "Hostile HTTP and gRPC framing, bounds, duplicate fields, cancellation, and slow bodies fail closed.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-api", "--test", "transport_conformance"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-api", "--test", "transport_conformance"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -15,7 +15,7 @@
     {
       "id": "SEC-CATALOG-001",
       "title": "Catalog discovery resists traversal, links, ignore bypass, identity races, and unbounded Git children.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-catalog", "--lib"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-catalog", "--lib"],
       "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -24,7 +24,7 @@
     {
       "id": "SEC-CLI-001",
       "title": "CLI configuration provenance, bearer credentials, diagnostics, and administrative paths remain content-safe.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-cli", "--lib"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-cli", "--lib"],
       "timeout_seconds": 1800,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -33,7 +33,7 @@
     {
       "id": "SEC-DAEMON-001",
       "title": "Production authentication, tenant scope, authority identities, durable seals, and readiness fail closed.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-daemon", "--lib"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-daemon", "--lib"],
       "timeout_seconds": 2400,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -42,7 +42,7 @@
     {
       "id": "SEC-EFFECT-001",
       "title": "Effect authorization, exact identity, durable authenticity, fencing, reconciliation, and compensation are enforced.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-effects", "--test", "wp12_effects"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-effects", "--test", "wp12_effects"],
       "timeout_seconds": 1800,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -51,16 +51,34 @@
     {
       "id": "SEC-EXTENSION-001",
       "title": "Extension activation, framing, brokers, subprocesses, and WASI components cannot escape declared authority.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-extension-host", "--lib"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-extension-host", "--lib"],
       "timeout_seconds": 2400,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos"],
       "requirements": ["EXT-AUTH-001", "EXT-SANDBOX-001", "EXT-RESOURCE-001", "EXT-TRANSCRIPT-001"]
     },
     {
+      "id": "SEC-MCP-001",
+      "title": "MCP framing, request identifiers, notifications, cancellation, and backend values remain bounded and fail closed.",
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-mcp", "--all-targets"],
+      "timeout_seconds": 900,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["SEC-INPUT-001", "SEC-RESOURCE-001", "VER-CANCEL-001"]
+    },
+    {
+      "id": "SEC-MCP-002",
+      "title": "Every source-bound historical MCP crash fixture passes its exact deterministic regression selector.",
+      "command": ["python3", "tools/quality/historical_crashes.py", "run"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["SEC-INPUT-001", "VER-HERMETIC-001"]
+    },
+    {
       "id": "SEC-POLICY-001",
       "title": "Policy lattices, attenuation, revocation, outage, redaction, and bounded caches fail closed.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-policy", "--test", "policy"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-policy", "--test", "policy"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -69,7 +87,7 @@
     {
       "id": "SEC-REPLAY-001",
       "title": "Replay rejects tampering, exact-source substitution, stale live authority, and unsafe effect dispatch.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-replay", "--test", "wp13_replay_modes"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-replay", "--test", "wp13_replay_modes"],
       "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -78,7 +96,7 @@
     {
       "id": "SEC-REPLAY-002",
       "title": "Non-live replay succeeds while an operating-system boundary denies all network egress.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-replay", "--test", "wp13_no_egress"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-replay", "--test", "wp13_no_egress"],
       "timeout_seconds": 900,
       "profiles": ["local", "release"],
       "platforms": ["macos"],
@@ -87,7 +105,7 @@
     {
       "id": "SEC-STORE-001",
       "title": "Encrypted blobs, backups, migrations, projections, permissions, and integrity checks reject corruption.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-store", "--lib"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-store", "--lib"],
       "timeout_seconds": 2400,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],

@@ -145,8 +145,8 @@ impl<'a> Request for SurfRequest<'a> {
         // but for the operations that use this (PUTs), the body is typically empty
         // or contains redundant information already available in headers.
         //
-        // TODO: Refactor this to properly return the response body and access ETag
-        // from headers instead of replacing the body. This would be a breaking change.
+        // Compatibility note: returning the response body separately from the ETag
+        // requires an upstream breaking API change; preserve the current contract here.
         let body_vec = if etag {
             if let Some(etag) = response.header("ETag") {
                 Bytes::from(etag.as_str().to_string())
@@ -253,8 +253,8 @@ mod tests {
     // Fake keys - otherwise using Credentials::default will use actual user
     // credentials if they exist.
     fn fake_credentials() -> Credentials {
-        let access_key = "AKIAIOSFODNN7EXAMPLE";
-        let secert_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        let access_key = "example-access-key";
+        let secert_key = "example-secret-key";
         Credentials::new(Some(access_key), Some(secert_key), None, None, None).unwrap()
     }
 

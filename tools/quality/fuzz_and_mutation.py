@@ -60,6 +60,9 @@ MUTATION_FILTER = (
     "(encode_head|from_deterministic_cbor|semantic_envelope_v1|"
     "semantic_multihash_v1|digest_v1)"
 )
+# The representative diagnostic and the full release-candidate policy use the same reviewed score
+# floor. The representative slice remains insufficient because it cannot satisfy the full-package,
+# four-hour, zero-critical-survivor gates in packaging/release-requirements.v1.json.
 MUTATION_THRESHOLD_PERCENT = 90.0
 MAXIMUM_SUBPROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
 MAXIMUM_EVIDENCE_DOCUMENT_BYTES = 16 * 1024 * 1024
@@ -768,7 +771,8 @@ def private_mkdir(path: Path, *, exist_ok: bool = True) -> None:
         raise GateFailure(f"unsafe directory ancestor: {current}")
     for directory in reversed(missing):
         directory.mkdir(mode=0o700)
-        os.chmod(directory, 0o700)
+        # Quality-worker state can contain adversarial inputs and must remain owner-private.
+        os.chmod(directory, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     if not missing and not exist_ok:
         raise GateFailure(f"refusing existing directory: {absolute}")
     if absolute.is_symlink() or not absolute.is_dir():
@@ -780,7 +784,8 @@ def private_mkdir(path: Path, *, exist_ok: bool = True) -> None:
 def external_private_tempdir(parent: Path, prefix: str) -> Path:
     reject_symlink_components(parent)
     path = Path(tempfile.mkdtemp(prefix=prefix, dir=parent))
-    os.chmod(path, 0o700)
+    # The helper's contract is an exact owner-private external working directory.
+    os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     return path
 
 
@@ -917,7 +922,8 @@ def validate_named_fixtures(
         if path.is_symlink() or not path.is_file():
             raise GateFailure(f"{target}: named fixture is missing or unsafe: {name}")
         body = path.read_bytes()
-        if hashlib.sha1(body).hexdigest() != fixture.get("sha1") or sha256_bytes(
+        # SHA-1 preserves a historical libFuzzer filename only; SHA-256 is also mandatory.
+        if hashlib.sha1(body).hexdigest() != fixture.get("sha1") or sha256_bytes(  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
             body
         ) != fixture.get("sha256"):
             raise GateFailure(f"{target}: named fixture digest mismatch: {name}")
@@ -1479,7 +1485,8 @@ def smoke(args: argparse.Namespace) -> None:
             source_corpus_before = corpus_state(source_corpus)
             corpus = worker_root / target
             shutil.copytree(source_corpus, corpus, copy_function=shutil.copyfile)
-            os.chmod(corpus, 0o700)
+            # Each worker corpus is private and never shared between fuzzing processes.
+            os.chmod(corpus, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             before_corpus = corpus_state(corpus)
             if before_corpus != source_corpus_before:
                 raise GateFailure(f"private worker corpus copy mismatch: {target}")

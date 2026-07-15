@@ -30,7 +30,10 @@ pub(crate) struct ClientOptions {
 
 #[cfg(feature = "with-tokio")]
 pub(crate) fn client(options: &ClientOptions) -> Result<reqwest::Client, S3Error> {
-    let client = reqwest::Client::builder();
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .referer(false);
 
     let client = if let Some(timeout) = options.request_timeout {
         client.timeout(timeout)
@@ -193,8 +196,8 @@ impl<'a> Request for ReqwestRequest<'a> {
         // but for the operations that use this (PUTs), the body is typically empty
         // or contains redundant information already available in headers.
         //
-        // TODO: Refactor this to properly return the response body and access ETag
-        // from headers instead of replacing the body. This would be a breaking change.
+        // Compatibility note: returning the response body separately from the ETag
+        // requires an upstream breaking API change; preserve the current contract here.
         let body_vec = if etag {
             if let Some(etag) = headers.remove("ETag") {
                 Bytes::from(etag.to_str()?.to_string())
@@ -278,19 +281,105 @@ impl<'a> ReqwestRequest<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::{ClientOptions, client};
     use crate::bucket::Bucket;
     use crate::command::Command;
     use crate::request::Request;
     use crate::request::tokio_backend::ReqwestRequest;
     use awscreds::Credentials;
     use http::header::{HOST, RANGE};
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::process::Command as ProcessCommand;
+    use std::time::{Duration, Instant};
 
     // Fake keys - otherwise using Credentials::default will use actual user
     // credentials if they exist.
     fn fake_credentials() -> Credentials {
-        let access_key = "AKIAIOSFODNN7EXAMPLE";
-        let secert_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+        let access_key = "example-access-key";
+        let secert_key = "example-secret-key";
         Credentials::new(Some(access_key), Some(secert_key), None, None, None).unwrap()
+    }
+
+    #[tokio::test]
+    async fn hardened_client_ignores_hostile_environment_child() {
+        let Ok(url) = std::env::var("CIGAR_S3_HARDENED_REQWEST_TEST_URL") else {
+            return;
+        };
+        let response = client(&ClientOptions::default())
+            .unwrap()
+            .get(url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+    }
+
+    #[test]
+    fn hardened_client_ignores_hostile_proxy_and_netrc_environment() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || -> std::io::Result<String> {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "hardened reqwest client did not connect directly",
+                            ));
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
+            stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+            let mut request = vec![0_u8; 16 * 1024];
+            let length = stream.read(&mut request)?;
+            let request = String::from_utf8_lossy(&request[..length]).into_owned();
+            stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+            )?;
+            Ok(request)
+        });
+
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join(".netrc"),
+            "machine 127.0.0.1 login ambient-user password ambient-secret\n",
+        )
+        .unwrap();
+        let output = ProcessCommand::new(std::env::current_exe().unwrap())
+            .arg("hardened_client_ignores_hostile_environment_child")
+            .arg("--nocapture")
+            .env(
+                "CIGAR_S3_HARDENED_REQWEST_TEST_URL",
+                format!("http://{address}/"),
+            )
+            .env("HOME", home.path())
+            .env("HTTP_PROXY", "http://127.0.0.1:1")
+            .env("http_proxy", "http://127.0.0.1:1")
+            .env("HTTPS_PROXY", "http://127.0.0.1:1")
+            .env("https_proxy", "http://127.0.0.1:1")
+            .env("ALL_PROXY", "http://127.0.0.1:1")
+            .env("all_proxy", "http://127.0.0.1:1")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "child failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let request = server.join().unwrap().unwrap();
+        let lowercase = request.to_ascii_lowercase();
+        assert!(!lowercase.contains("proxy-authorization:"));
+        assert!(!lowercase.contains("authorization:"));
     }
 
     #[tokio::test]

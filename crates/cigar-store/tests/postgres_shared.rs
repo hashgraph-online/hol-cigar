@@ -34,14 +34,32 @@ use std::time::Duration;
 
 static NEXT_DATABASE: AtomicU64 = AtomicU64::new(1);
 
+fn live_postgres_configuration(
+    database_url: String,
+) -> Result<PostgresConfiguration, Box<dyn Error>> {
+    let certificate_authority = std::fs::read(std::env::var("CIGAR_TEST_POSTGRES_CA_PATH")?)?;
+    if certificate_authority.is_empty() || certificate_authority.len() > 2 * 1024 * 1024 {
+        return Err("PostgreSQL qualification CA is empty or too large".into());
+    }
+    let server_name = std::env::var("CIGAR_TEST_POSTGRES_SERVER_NAME")?;
+    Ok(PostgresConfiguration::new_with_certificate_authority(
+        database_url,
+        server_name,
+        &certificate_authority,
+    )?)
+}
+
 struct TestDatabase {
     admin_url: String,
     database: String,
     role: String,
     backup_role: String,
+    garbage_collection_role: String,
+    membership_role: String,
     owner_url: String,
     runtime_url: String,
     backup_url: String,
+    garbage_collection_url: String,
 }
 
 impl TestDatabase {
@@ -50,8 +68,11 @@ impl TestDatabase {
         let database = format!("cigar_wp18_{}_{suffix}", std::process::id());
         let role = format!("cigar_wp18_runtime_{}_{suffix}", std::process::id());
         let backup_role = format!("cigar_wp18_backup_{}_{suffix}", std::process::id());
+        let garbage_collection_role = format!("cigar_wp18_gc_{}_{suffix}", std::process::id());
+        let membership_role = format!("cigar_wp18_bridge_{}_{suffix}", std::process::id());
         let password = format!("wp18-runtime-{suffix}-only");
         let backup_password = format!("wp18-backup-{suffix}-only");
+        let garbage_collection_password = format!("wp18-gc-{suffix}-only");
         let (prefix, _database_and_query) = admin_url
             .rsplit_once('/')
             .ok_or("PostgreSQL test URL must end in a database name")?;
@@ -63,19 +84,29 @@ impl TestDatabase {
             "CREATE ROLE {role} LOGIN PASSWORD '{password}'
                NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
              CREATE ROLE {backup_role} LOGIN PASSWORD '{backup_password}'
-               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;"
+               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;
+             CREATE ROLE {garbage_collection_role} LOGIN PASSWORD '{garbage_collection_password}'
+               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;
+             CREATE ROLE {membership_role} NOLOGIN
+               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;"
         ))?;
         let runtime_url = format!("postgresql://{role}:{password}@127.0.0.1:55432/{database}");
         let backup_url =
             format!("postgresql://{backup_role}:{backup_password}@127.0.0.1:55432/{database}");
+        let garbage_collection_url = format!(
+            "postgresql://{garbage_collection_role}:{garbage_collection_password}@127.0.0.1:55432/{database}"
+        );
         Ok(Self {
             admin_url,
             database,
             role,
             backup_role,
+            garbage_collection_role,
+            membership_role,
             owner_url,
             runtime_url,
             backup_url,
+            garbage_collection_url,
         })
     }
 
@@ -85,6 +116,10 @@ impl TestDatabase {
 
     fn grant_backup(&self) -> Result<(), Box<dyn Error>> {
         self.grant_backup_at(&self.owner_url)
+    }
+
+    fn grant_garbage_collection(&self) -> Result<(), Box<dyn Error>> {
+        self.grant_garbage_collection_at(&self.owner_url)
     }
 
     fn grant_runtime_at(&self, owner_url: &str) -> Result<(), Box<dyn Error>> {
@@ -111,9 +146,24 @@ impl TestDatabase {
                  cigar_repository_revisions, cigar_tenant_states, cigar_shared_wakeups,
                  cigar_object_commits, cigar_worker_claims, cigar_atom_projection TO {role};
              REVOKE ALL ON FUNCTION public.cigar_gc_lock_repository_revision() FROM PUBLIC;
-             GRANT EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() TO {role};
+             REVOKE ALL ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC;
              GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_system() TO {role};",
             role = self.backup_role,
+        ))?;
+        Ok(())
+    }
+
+    fn grant_garbage_collection_at(&self, owner_url: &str) -> Result<(), Box<dyn Error>> {
+        let mut owner = postgres::Client::connect(owner_url, NoTls)?;
+        owner.batch_execute(&format!(
+            "GRANT USAGE ON SCHEMA public TO {role};
+             GRANT SELECT ON schema_migrations, cigar_repository_revision,
+                 cigar_repository_revisions, cigar_tenant_states, cigar_shared_wakeups,
+                 cigar_object_commits, cigar_worker_claims, cigar_atom_projection TO {role};
+             REVOKE ALL ON FUNCTION public.cigar_gc_lock_repository_revision() FROM PUBLIC;
+             REVOKE ALL ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC;
+             GRANT EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() TO {role};",
+            role = self.garbage_collection_role,
         ))?;
         Ok(())
     }
@@ -141,6 +191,11 @@ impl Drop for ExtraDatabase {
 impl Drop for TestDatabase {
     fn drop(&mut self) {
         if let Ok(mut admin) = postgres::Client::connect(&self.admin_url, NoTls) {
+            let _memberships = admin.batch_execute(&format!(
+                "REVOKE {} FROM {};
+                 REVOKE {} FROM {};",
+                self.membership_role, self.role, self.backup_role, self.membership_role
+            ));
             let _terminated = admin.execute(
                 "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
                  WHERE datname = $1 AND pid <> pg_backend_pid()",
@@ -149,8 +204,14 @@ impl Drop for TestDatabase {
             let _dropped = admin.batch_execute(&format!(
                 "DROP DATABASE IF EXISTS {};
                  DROP ROLE IF EXISTS {};
+                 DROP ROLE IF EXISTS {};
+                 DROP ROLE IF EXISTS {};
                  DROP ROLE IF EXISTS {};",
-                self.database, self.role, self.backup_role
+                self.database,
+                self.role,
+                self.backup_role,
+                self.garbage_collection_role,
+                self.membership_role
             ));
         }
     }
@@ -354,10 +415,61 @@ fn native_dump_restore_drill(
         true,
     )?);
     let capture_repository: Arc<dyn RepositoryBlobStore> = source_objects.repository.clone();
-    let capture_store = Arc::new(PostgresStore::connect_with_blob_repository(
-        PostgresConfiguration::new(database.backup_url.clone())?,
-        capture_repository,
+    let capture_store = Arc::new(PostgresStore::connect_backup_with_blob_repository(
+        live_postgres_configuration(database.backup_url.clone())?,
+        Arc::clone(&capture_repository),
     )?);
+    let garbage_collection_store = Arc::new(
+        PostgresStore::connect_garbage_collection_with_blob_repository(
+            live_postgres_configuration(database.garbage_collection_url.clone())?,
+            Arc::clone(&capture_repository),
+        )?,
+    );
+    assert!(
+        PostgresStore::connect_with_blob_repository(
+            live_postgres_configuration(database.backup_url.clone())?,
+            Arc::clone(&capture_repository),
+        )
+        .is_err()
+    );
+    assert!(
+        PostgresStore::connect_backup_with_blob_repository(
+            live_postgres_configuration(database.garbage_collection_url.clone())?,
+            Arc::clone(&capture_repository),
+        )
+        .is_err()
+    );
+    assert!(
+        PostgresStore::connect_garbage_collection_with_blob_repository(
+            live_postgres_configuration(database.backup_url.clone())?,
+            capture_repository,
+        )
+        .is_err()
+    );
+    let mut owner = postgres::Client::connect(&database.owner_url, NoTls)?;
+    owner.batch_execute(&format!(
+        "REVOKE EXECUTE ON FUNCTION pg_catalog.pg_control_system() FROM {};",
+        database.backup_role
+    ))?;
+    let revoked_backup_callback = AtomicBool::new(false);
+    let revoked_backup = capture_store.capture_backup_inventory(
+        tenants,
+        2,
+        backup_storage.as_ref(),
+        |_| -> Result<PostgresDatabaseBackupArtifact, ()> {
+            revoked_backup_callback.store(true, Ordering::Release);
+            Err(())
+        },
+    );
+    assert_eq!(
+        revoked_backup.err().map(|error| error.code()),
+        Some(StoreErrorCode::Unavailable)
+    );
+    assert!(!revoked_backup_callback.load(Ordering::Acquire));
+    owner.batch_execute(&format!(
+        "GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_system() TO {};",
+        database.backup_role
+    ))?;
     let omitted_callback = AtomicBool::new(false);
     if tenants.len() > 1 {
         let omitted_tenants = tenants
@@ -407,6 +519,30 @@ fn native_dump_restore_drill(
         tenant_id: context.tenant_id().clone(),
         digest: orphan_blob.reference.digest.clone(),
     };
+    owner.batch_execute(&format!(
+        "REVOKE EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() FROM {};",
+        database.garbage_collection_role
+    ))?;
+    assert_eq!(
+        garbage_collection_store
+            .garbage_collect_blob_candidates(
+                std::slice::from_ref(&gc_candidate),
+                GarbageCollectionPolicy {
+                    retention_satisfied: true,
+                    legal_hold: false,
+                    backup_complete: true,
+                },
+                true,
+                1,
+            )
+            .err()
+            .map(|error| error.code()),
+        Some(StoreErrorCode::Unavailable)
+    );
+    owner.batch_execute(&format!(
+        "GRANT EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() TO {};",
+        database.garbage_collection_role
+    ))?;
     let gc_handle = Mutex::new(None);
 
     let inventory = capture_store.capture_backup_inventory(
@@ -414,7 +550,7 @@ fn native_dump_restore_drill(
         2,
         backup_storage.as_ref(),
         |snapshot| -> Result<PostgresDatabaseBackupArtifact, Box<dyn Error>> {
-            let gc_store = Arc::clone(&capture_store);
+            let gc_store = Arc::clone(&garbage_collection_store);
             let candidate = gc_candidate.clone();
             let handle = std::thread::spawn(move || {
                 gc_store
@@ -598,6 +734,7 @@ fn native_dump_restore_drill(
     let target_owner_url = format!("{owner_prefix}/{target_name}");
     database.grant_runtime_at(&target_owner_url)?;
     database.grant_backup_at(&target_owner_url)?;
+    database.grant_garbage_collection_at(&target_owner_url)?;
     let (backup_prefix, _source) = database
         .backup_url
         .rsplit_once('/')
@@ -646,8 +783,8 @@ fn native_dump_restore_drill(
             1,
             [0x31; 32],
         ));
-    let restored = PostgresStore::connect_with_blob_repository(
-        PostgresConfiguration::new(target_backup_url.clone())?,
+    let restored = PostgresStore::connect_backup_with_blob_repository(
+        live_postgres_configuration(target_backup_url.clone())?,
         Arc::clone(&destination_repository),
     )?;
     let restore_receipt = restored.verify_restored_backup_trusted(
@@ -675,8 +812,8 @@ fn native_dump_restore_drill(
             1,
             [0x31; 32],
         ));
-    let unavailable_keys = PostgresStore::connect_with_blob_repository(
-        PostgresConfiguration::new(target_backup_url.clone())?,
+    let unavailable_keys = PostgresStore::connect_backup_with_blob_repository(
+        live_postgres_configuration(target_backup_url.clone())?,
         unavailable_repository,
     )?;
     assert!(
@@ -827,17 +964,18 @@ fn postgres_shared_conformance_rls_wakeups_and_64_client_idempotency() -> Result
     };
     let database = TestDatabase::create(admin_url)?;
     eprintln!("wp18: database created");
-    let owner_configuration = PostgresConfiguration::new(database.owner_url.clone())?;
+    let owner_configuration = live_postgres_configuration(database.owner_url.clone())?;
     let migration = PostgresStore::migrate(&owner_configuration)?;
     eprintln!("wp18: migrations verified");
     assert_eq!(migration.latest_sequence, 4);
     assert_eq!(migration.checksums_verified, 4);
     database.grant_runtime()?;
     database.grant_backup()?;
+    database.grant_garbage_collection()?;
     eprintln!("wp18: runtime grants installed");
 
     let fixture = repository_fixture()?;
-    let mut runtime_configuration = PostgresConfiguration::new(database.runtime_url.clone())?;
+    let mut runtime_configuration = live_postgres_configuration(database.runtime_url.clone())?;
     runtime_configuration.minimum_connections = 2;
     runtime_configuration.maximum_connections = 64;
     let object_fixture = object_repository(fixture.context.tenant_id())?;
@@ -847,6 +985,33 @@ fn postgres_shared_conformance_rls_wakeups_and_64_client_idempotency() -> Result
         Arc::clone(&blob_repository),
     )?);
     eprintln!("wp18: runtime store connected");
+    let mut authority_owner = postgres::Client::connect(&database.owner_url, NoTls)?;
+    authority_owner.batch_execute(&format!(
+        "GRANT EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() TO {};",
+        database.role
+    ))?;
+    assert_eq!(
+        postgres.revision().err().map(|error| error.code()),
+        Some(StoreErrorCode::Unavailable)
+    );
+    authority_owner.batch_execute(&format!(
+        "REVOKE EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() FROM {};",
+        database.role
+    ))?;
+    authority_owner.batch_execute(&format!(
+        "GRANT {} TO {};
+         GRANT {} TO {};",
+        database.backup_role, database.membership_role, database.membership_role, database.role
+    ))?;
+    assert_eq!(
+        postgres.revision().err().map(|error| error.code()),
+        Some(StoreErrorCode::Unavailable)
+    );
+    authority_owner.batch_execute(&format!(
+        "REVOKE {} FROM {};
+         REVOKE {} FROM {};",
+        database.membership_role, database.role, database.backup_role, database.membership_role
+    ))?;
     let postgres_report = run_repository_conformance(postgres.as_ref(), &fixture)?;
     eprintln!("wp18: postgres conformance passed");
 
@@ -1153,15 +1318,8 @@ fn postgres_shared_conformance_rls_wakeups_and_64_client_idempotency() -> Result
     );
 
     let mut owner = postgres::Client::connect(&database.owner_url, NoTls)?;
-    owner.execute(
-        "INSERT INTO schema_migrations
-           (sequence, name, checksum, minimum_application_major,
-            maximum_application_major, online)
-         VALUES (5, 'adjacent_online_expansion', $1, 1, 2, true)",
-        &[&content_digest(b"adjacent-online-expansion")?.as_str()],
-    )?;
     let adjacent = PostgresStore::connect_with_blob_repository(
-        PostgresConfiguration::new(database.runtime_url.clone())?,
+        live_postgres_configuration(database.runtime_url.clone())?,
         object_repository(fixture.context.tenant_id())?.repository,
     )?;
     assert!(adjacent.verify_migration_level().is_ok());
@@ -1226,11 +1384,11 @@ fn postgres_shared_conformance_rls_wakeups_and_64_client_idempotency() -> Result
         "INSERT INTO schema_migrations
            (sequence, name, checksum, minimum_application_major,
             maximum_application_major, online)
-         VALUES (6, 'future_incompatible', $1, 2, 2, true)",
-        &[&content_digest(b"future-incompatible")?.as_str()],
+         VALUES (5, 'unknown_self_declared_online', $1, 1, 2, true)",
+        &[&content_digest(b"unknown-self-declared-online")?.as_str()],
     )?;
     assert_eq!(
-        PostgresStore::connect(PostgresConfiguration::new(database.runtime_url.clone())?)
+        PostgresStore::connect(live_postgres_configuration(database.runtime_url.clone())?)
             .err()
             .map(|error| error.code()),
         Some(StoreErrorCode::Unavailable)

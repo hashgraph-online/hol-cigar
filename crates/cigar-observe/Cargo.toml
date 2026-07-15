@@ -6,8 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+homepage.workspace = true
+authors.workspace = true
+publish = ["crates-io"]
+include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
 
 [lints]
 workspace = true
-

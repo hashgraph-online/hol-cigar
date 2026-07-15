@@ -46,5 +46,7 @@ idempotency_wait_ms = 30000
 [telemetry]
 # Set to an HTTPS or loopback OTLP/gRPC collector to enable outbound export.
 # otlp_endpoint = "https://otel.example.internal:4317"
+# HTTPS also requires an explicit owner-controlled CA bundle; loopback HTTP must omit it.
+# otlp_ca_certificate_file = "/run/secrets/cigar/telemetry-ca.pem"
 export_timeout_ms = 5000
 metric_interval_ms = 30000

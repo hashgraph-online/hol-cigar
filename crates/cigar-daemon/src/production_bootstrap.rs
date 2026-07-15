@@ -5,17 +5,17 @@ use crate::{
     DaemonErrorCode, DaemonFacadeErrorFactory, DaemonServer, DaemonTelemetry, DeploymentMode,
     DurableIdempotencyRepository, DurableLiveReplayAuthorizationRepository,
     EffectServiceDependencies, EffectServiceHandlers, EffectWorkerProcessor,
-    EffectWorkerProcessorDependencies, LifecycleError, MonotonicApplicationIds,
-    OperationalHandlers, PinnedContextTokenizerRegistry, ProductionDependencyChecks,
-    ProductionDomainAuthority, ProductionEffectRecordAuthenticator, ProductionEffectRegistry,
-    ProductionFacade, ProductionHandlerFamilies, ProductionKeyRequirement, ProductionRuntimeError,
-    ProductionSourceRegistry, ProductionStore, ReplayLiveServices, ReplayLiveServicesError,
-    ReplayLiveServicesFactory, ReplayServiceDependencies, ReplayServiceHandlers,
-    RepositoryCatalogIndex, RepositoryProductionChecksDependencies,
-    RepositoryProductionDependencyChecks, RepositorySpaceHandoffStateProvider,
-    SpaceHandoffApplication, SystemAuthorityClock, SystemProductionUnixClock, SystemRuntimeClock,
-    SystemSpaceHandoffValueSource, compose_complete_production_application,
-    compose_repository_runtime_with_facade,
+    EffectWorkerProcessorDependencies, LifecycleError, LiveReplayAuthorizationRepository,
+    MonotonicApplicationIds, OperationalHandlers, PinnedContextTokenizerRegistry,
+    ProductionDependencyChecks, ProductionDomainAuthority, ProductionEffectRecordAuthenticator,
+    ProductionEffectRegistry, ProductionFacade, ProductionHandlerFamilies,
+    ProductionKeyRequirement, ProductionRuntimeError, ProductionSourceRegistry, ProductionStore,
+    ReplayLiveServices, ReplayLiveServicesError, ReplayLiveServicesFactory,
+    ReplayServiceDependencies, ReplayServiceHandlers, RepositoryCatalogIndex,
+    RepositoryProductionChecksDependencies, RepositoryProductionDependencyChecks,
+    RepositorySpaceHandoffStateProvider, SpaceHandoffApplication, SystemAuthorityClock,
+    SystemProductionUnixClock, SystemRuntimeClock, SystemSpaceHandoffValueSource,
+    compose_complete_production_application, compose_repository_runtime_with_facade,
 };
 use cigar_api::{CursorCodec, CursorSigningKey, FacadeErrorFactory, QuotaLimits};
 use cigar_canon::parse_strict_json;
@@ -46,11 +46,102 @@ const MAX_TRUSTED_FILE_BYTES: u64 = 1_048_576;
 const MAX_PASSPHRASE_BYTES: u64 = 16_384;
 const MAX_STORAGE_SECRET_BYTES: u64 = 16_384;
 const MAX_POSTGRES_CA_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_OTLP_CA_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_KEYSTORE_BYTES: u64 = 16 * 1024 * 1024;
 const CURSOR_KEY_BYTES: usize = 32;
 const MAX_PRODUCTION_TENANTS: usize = 1_024;
 const MAX_PRODUCTION_EFFECT_RECORDS: usize = 1_000_000;
 const CURSOR_TTL: Duration = Duration::from_secs(15 * 60);
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Exact reviewed profile selected by the macOS production live-replay composition API.
+pub const PRODUCTION_LIVE_REPLAY_PROFILE_V1: &str = "cigar.production-live-replay.tenant-bound.v1";
+
+/// Explicit tenant-bound dependencies required to enable production live comparison.
+///
+/// The standalone `cigard` composition never constructs this profile and remains recorded-only.
+/// An embedding application must inject a separately governed authorization repository plus a
+/// tenant-scoped verifier/provider/effect-gate factory through
+/// [`compose_production_server_with_live_replay`]. Keeping the fields private prevents a partial
+/// profile from silently enabling only one live boundary.
+pub struct ProductionLiveReplayProfile {
+    authorizations: Arc<dyn LiveReplayAuthorizationRepository>,
+    services: Arc<dyn ReplayLiveServicesFactory>,
+}
+
+impl ProductionLiveReplayProfile {
+    /// Creates the reviewed v1 profile from explicit, application-owned security boundaries.
+    #[must_use]
+    pub fn tenant_bound_v1(
+        authorizations: Arc<dyn LiveReplayAuthorizationRepository>,
+        services: Arc<dyn ReplayLiveServicesFactory>,
+    ) -> Self {
+        Self {
+            authorizations,
+            services,
+        }
+    }
+
+    /// Returns the exact security-profile identifier for audit and configuration receipts.
+    #[must_use]
+    pub const fn security_profile(&self) -> &'static str {
+        PRODUCTION_LIVE_REPLAY_PROFILE_V1
+    }
+}
+
+impl std::fmt::Debug for ProductionLiveReplayProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProductionLiveReplayProfile")
+            .field("security_profile", &PRODUCTION_LIVE_REPLAY_PROFILE_V1)
+            .field("authorizations", &"[INJECTED]")
+            .field("services", &"[TENANT-BOUND]")
+            .finish()
+    }
+}
+
+struct ActiveTenantReplayLiveServices {
+    active_tenants: Vec<RecordId>,
+    inner: Arc<dyn ReplayLiveServicesFactory>,
+}
+
+impl ReplayLiveServicesFactory for ActiveTenantReplayLiveServices {
+    fn for_tenant(
+        &self,
+        tenant_id: &RecordId,
+    ) -> Result<ReplayLiveServices, ReplayLiveServicesError> {
+        if self.active_tenants.binary_search(tenant_id).is_err() {
+            return Err(ReplayLiveServicesError);
+        }
+        self.inner.for_tenant(tenant_id)
+    }
+}
+
+fn production_http_transport_factory(
+    mode: DeploymentMode,
+    registry: &ProductionEffectRegistry,
+    dispatch_gate: Arc<dyn crate::EffectDispatchGate>,
+) -> Result<Option<Arc<dyn crate::ProductionHttpTransportFactory>>, ProductionRuntimeError> {
+    if !registry.requires_live_http() {
+        return Ok(None);
+    }
+    if mode != DeploymentMode::Local {
+        return Err(ProductionRuntimeError::InvalidConfiguration);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let runtime = tokio::runtime::Handle::try_current()
+            .map_err(|_error| ProductionRuntimeError::RuntimeUnavailable)?;
+        Ok(Some(Arc::new(
+            crate::StockHttpsEffectTransportFactory::new(runtime, dispatch_gate),
+        )))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _dispatch_gate = dispatch_gate;
+        Err(ProductionRuntimeError::InvalidConfiguration)
+    }
+}
 
 /// Composes the exact standalone daemon from one validated production configuration.
 ///
@@ -59,6 +150,29 @@ const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// installs a complete governed 45-operation facade. No in-memory healthy substitute is used for
 /// a missing production dependency.
 pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, DaemonError> {
+    compose_production_server_internal(config, None)
+}
+
+/// Composes a local macOS production server with an explicitly injected live-replay profile.
+///
+/// This is the only stock production composition that can reach a live replay provider. The
+/// caller owns provider qualification and authorization issuance. The replay engine still
+/// requires one-use, current-policy authorization and accepts only new effect identities through
+/// the independently injected effect gate. Shared and non-macOS profiles fail closed.
+pub fn compose_production_server_with_live_replay(
+    config: DaemonConfig,
+    profile: ProductionLiveReplayProfile,
+) -> Result<DaemonServer, DaemonError> {
+    if config.mode != DeploymentMode::Local || !cfg!(target_os = "macos") {
+        return Err(bootstrap_failure());
+    }
+    compose_production_server_internal(config, Some(profile))
+}
+
+fn compose_production_server_internal(
+    config: DaemonConfig,
+    live_replay_profile: Option<ProductionLiveReplayProfile>,
+) -> Result<DaemonServer, DaemonError> {
     config.validate().map_err(|_error| bootstrap_failure())?;
     // Install the workspace-selected provider only when an embedding process has not already
     // selected one. This covers local OTLP/TLS clients as well as shared listener/JWKS paths.
@@ -67,21 +181,26 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
 
     let clock: Arc<dyn crate::AuthorityClock> = Arc::new(SystemAuthorityClock);
     let now = clock.now().map_err(|_error| bootstrap_failure())?;
-    if config.mode == DeploymentMode::Shared {
-        require_immutable_secret_file(&config.production.keystore_file, None)?;
-        require_immutable_secret_file(
-            &config.production.cursor_signing_key_file,
-            Some(CURSOR_KEY_BYTES as u64),
-        )?;
-    }
     let passphrase = SecretBytes::new(read_restricted_file(
         &config.production.keystore_passphrase_file,
         MAX_PASSPHRASE_BYTES,
     )?);
-    let keys = Arc::new(
-        EncryptedDevelopmentKeystore::open(&config.production.keystore_file, passphrase)
-            .map_err(|_error| bootstrap_failure())?,
-    );
+    let keys = Arc::new(match config.mode {
+        DeploymentMode::Local => {
+            EncryptedDevelopmentKeystore::open(&config.production.keystore_file, passphrase)
+                .map_err(|_error| bootstrap_failure())?
+        }
+        DeploymentMode::Shared => {
+            let encoded =
+                read_immutable_file(&config.production.keystore_file, MAX_KEYSTORE_BYTES, None)?;
+            EncryptedDevelopmentKeystore::open_existing_bytes(
+                &config.production.keystore_file,
+                passphrase,
+                &encoded,
+            )
+            .map_err(|_error| bootstrap_failure())?
+        }
+    });
     let immutable_keys = Arc::new(ImmutableKeyProvider::new(Arc::clone(&keys)));
     let key_provider: Arc<dyn KeyProvider> = match config.mode {
         DeploymentMode::Local => keys.clone(),
@@ -130,9 +249,10 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
             );
             let blob_repository: Arc<dyn RepositoryBlobStore> = blob_store;
             let store = ProductionStore::local(
-                SqliteStore::open_with_blob_repository(
+                SqliteStore::open_with_blob_repository_and_capacity_profile(
                     &config.production.metadata_database,
                     Arc::clone(&blob_repository),
+                    config.local_sqlite_capacity_profile,
                 )
                 .map_err(|_error| bootstrap_failure())?,
             );
@@ -166,9 +286,6 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
         MAX_TRUSTED_FILE_BYTES,
     )?;
     let effect_registry = ProductionEffectRegistry::from_json(&effects_bytes)
-        .map_err(|_error| bootstrap_failure())?;
-    let effect_components = effect_registry
-        .compose(Arc::clone(&blob_repository), None)
         .map_err(|_error| bootstrap_failure())?;
 
     let service_repository: Arc<dyn ServiceRepository> = store.clone();
@@ -207,10 +324,16 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
         )
         .map_err(|_error| bootstrap_failure())?,
     );
+    let otlp_ca = config
+        .telemetry
+        .otlp_ca_certificate_file
+        .as_ref()
+        .map(|path| read_trusted_file(path, MAX_OTLP_CA_BYTES))
+        .transpose()?;
     let telemetry = Arc::new(
         match config
             .telemetry
-            .otlp_config()
+            .otlp_config(otlp_ca)
             .map_err(|_error| bootstrap_failure())?
         {
             Some(otlp) => DaemonTelemetry::with_otlp(otlp).map_err(|_error| bootstrap_failure())?,
@@ -218,19 +341,34 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
         },
     );
 
+    #[cfg(target_os = "macos")]
+    let local_vector = if config.local_vector.enabled {
+        Some(Arc::new(
+            crate::ProductionLocalVectorRuntime::new(&config.local_vector)
+                .map_err(|_error| bootstrap_failure())?,
+        ))
+    } else {
+        None
+    };
     let manager = Arc::new(InMemoryIndexManager::default());
     let index_worker = Arc::new(IndexWorker::default());
     let tenant_provider: Arc<dyn crate::ProductionTenantProvider> = authority.clone();
-    let catalog_index = Arc::new(
-        RepositoryCatalogIndex::new(
-            Arc::clone(&store),
-            Arc::clone(&tenant_provider),
-            Arc::clone(&manager),
-            Arc::clone(&index_worker),
-            Arc::clone(&clock),
-        )
-        .map_err(|_error| bootstrap_failure())?,
-    );
+    let catalog_index = RepositoryCatalogIndex::new(
+        Arc::clone(&store),
+        Arc::clone(&tenant_provider),
+        Arc::clone(&manager),
+        Arc::clone(&index_worker),
+        Arc::clone(&clock),
+    )
+    .map_err(|_error| bootstrap_failure())?
+    .with_telemetry(Arc::clone(&telemetry));
+    #[cfg(target_os = "macos")]
+    let catalog_index = if let Some(runtime) = &local_vector {
+        catalog_index.with_local_vector_runtime(Arc::clone(runtime))
+    } else {
+        catalog_index
+    };
+    let catalog_index = Arc::new(catalog_index);
     catalog_index
         .rebuild()
         .map_err(|_error| bootstrap_failure())?;
@@ -238,16 +376,25 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
     let identities: Arc<dyn crate::DomainIdentityResolver> = authority.clone();
     let catalog_authorizer: Arc<dyn crate::CatalogContextAuthorizer> = authority.clone();
     let retriever: Arc<dyn Retriever> = manager.clone();
-    let catalog = Arc::new(CatalogContextApplication::new(
+    let tokenizer_registry = production_tokenizer_registry()?;
+    let catalog = CatalogContextApplication::new(
         Arc::clone(&store),
         Arc::clone(&identities),
         catalog_authorizer,
         retriever,
-        Arc::new(PinnedContextTokenizerRegistry::default()),
+        tokenizer_registry,
         Arc::clone(&blocking_pool),
         Arc::clone(&clock),
         Arc::clone(&errors),
-    ));
+    );
+    #[cfg(target_os = "macos")]
+    let catalog = if let Some(runtime) = &local_vector {
+        catalog.with_query_vector_processor(runtime.query_processor())
+    } else {
+        catalog
+    };
+    let catalog = catalog.with_telemetry(Arc::clone(&telemetry));
+    let catalog = Arc::new(catalog);
     source_registry
         .provision(catalog.as_ref())
         .map_err(|_error| bootstrap_failure())?;
@@ -279,15 +426,32 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
             CURSOR_TTL,
             EVENT_POLL_INTERVAL,
         )
-        .map_err(|_error| bootstrap_failure())?,
+        .map_err(|_error| bootstrap_failure())?
+        .with_telemetry(Arc::clone(&telemetry)),
     );
+    let (live_authorizations, live_services): (
+        Arc<dyn LiveReplayAuthorizationRepository>,
+        Arc<dyn ReplayLiveServicesFactory>,
+    ) = match live_replay_profile {
+        Some(profile) => (
+            profile.authorizations,
+            Arc::new(ActiveTenantReplayLiveServices {
+                active_tenants: active_tenants.clone(),
+                inner: profile.services,
+            }),
+        ),
+        None => (
+            Arc::new(DurableLiveReplayAuthorizationRepository::new(Arc::clone(
+                &service_repository,
+            ))),
+            Arc::new(RecordedOnlyReplayServices),
+        ),
+    };
     let replay = Arc::new(ReplayServiceHandlers::new(ReplayServiceDependencies {
         repository: Arc::clone(&service_repository),
         identities: Arc::clone(&identities),
-        live_authorizations: Arc::new(DurableLiveReplayAuthorizationRepository::new(Arc::clone(
-            &service_repository,
-        ))),
-        live_services: Arc::new(RecordedOnlyReplayServices),
+        live_authorizations,
+        live_services,
         clock: Arc::clone(&clock),
         ids: Arc::clone(&ids),
         blocking_pool: blocking_pool.as_ref().clone(),
@@ -309,6 +473,16 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
         Arc::new(SystemProductionUnixClock),
         Arc::clone(&telemetry),
         move |inputs| {
+            let effects_enabled = effect_registry.effects_enabled;
+            let dispatch_gate: Arc<dyn crate::EffectDispatchGate> = inputs.workers.clone();
+            let http_transports = production_http_transport_factory(
+                facade_config.mode,
+                &effect_registry,
+                dispatch_gate,
+            )?;
+            let effect_components = effect_registry
+                .compose(Arc::clone(&blob_repository), http_transports)
+                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?;
             let connectors = effect_components.connectors();
             let argument_vault = effect_components.argument_vault();
             let effect_policy: Arc<dyn crate::EffectPolicyEvaluator> = authority.clone();
@@ -329,7 +503,8 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
                     },
                     Arc::clone(&effect_record_authenticator),
                 )
-                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?,
+                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?
+                .with_telemetry(Arc::clone(&inputs.telemetry)),
             );
             let worker_authority: Arc<dyn crate::EffectWorkerAuthority> = authority.clone();
             let effect_workers = Arc::new(
@@ -345,7 +520,8 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
                     },
                     Arc::clone(&effect_record_authenticator),
                 )
-                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?,
+                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?
+                .with_telemetry(Arc::clone(&inputs.telemetry)),
             );
             let policy_boundary: Arc<dyn PolicyEngine> = policy.clone();
             let index_target: Arc<dyn crate::ProductionIndexTarget> = catalog_index.clone();
@@ -375,21 +551,26 @@ pub fn compose_production_server(config: DaemonConfig) -> Result<DaemonServer, D
                     },
                     Arc::clone(&effect_record_authenticator),
                 )
-                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?,
+                .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?
+                .with_telemetry(Arc::clone(&inputs.telemetry)),
             );
             let checks: Arc<dyn ProductionDependencyChecks> = checks;
             deferred_checks
                 .install(checks)
                 .map_err(|()| ProductionRuntimeError::InvalidConfiguration)?;
 
-            let operational = Arc::new(OperationalHandlers::new(
-                &facade_config,
-                inputs.readiness,
-                inputs.readiness_gate,
-                inputs.workers,
-                inputs.telemetry,
-                Arc::clone(&errors),
-            ));
+            let operational = Arc::new(
+                OperationalHandlers::new_with_blocking_pool(
+                    &facade_config,
+                    inputs.readiness,
+                    inputs.readiness_gate,
+                    inputs.workers,
+                    Arc::clone(&inputs.blocking_pool),
+                    inputs.telemetry,
+                    Arc::clone(&errors),
+                )
+                .with_effects_enabled(effects_enabled),
+            );
             let complete = compose_complete_production_application(
                 Arc::clone(&errors),
                 ProductionHandlerFamilies {
@@ -676,6 +857,16 @@ fn prepare_directories(config: &DaemonConfig) -> Result<(), DaemonError> {
             .ok_or_else(bootstrap_failure)?;
         checked_restricted_directory(parent)?;
         checked_optional_restricted_file(&config.production.metadata_database)?;
+        #[cfg(target_os = "macos")]
+        if config.local_vector.enabled {
+            checked_restricted_directory(
+                config
+                    .local_vector
+                    .root_directory
+                    .as_deref()
+                    .ok_or_else(bootstrap_failure)?,
+            )?;
+        }
     }
     for file in [
         &config.production.keystore_file,
@@ -806,71 +997,220 @@ fn checked_optional_restricted_file(path: &Path) -> Result<(), DaemonError> {
 }
 
 fn read_trusted_file(path: &Path, maximum: u64) -> Result<Vec<u8>, DaemonError> {
-    read_regular_file(path, maximum, false)
+    read_regular_file(path, maximum, ProductionFilePolicy::Trusted, None)
 }
 
 fn read_restricted_file(path: &Path, maximum: u64) -> Result<Vec<u8>, DaemonError> {
-    read_regular_file(path, maximum, true)
+    read_regular_file(path, maximum, ProductionFilePolicy::Restricted, None)
 }
 
-fn read_regular_file(path: &Path, maximum: u64, restricted: bool) -> Result<Vec<u8>, DaemonError> {
-    let metadata = std::fs::symlink_metadata(path).map_err(|_error| bootstrap_failure())?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || metadata.len() == 0
-        || metadata.len() > maximum
+fn read_immutable_file(
+    path: &Path,
+    maximum: u64,
+    exact_size: Option<u64>,
+) -> Result<Vec<u8>, DaemonError> {
+    read_regular_file(path, maximum, ProductionFilePolicy::Immutable, exact_size)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProductionFilePolicy {
+    Trusted,
+    Restricted,
+    Immutable,
+}
+
+fn read_regular_file(
+    path: &Path,
+    maximum: u64,
+    policy: ProductionFilePolicy,
+    exact_size: Option<u64>,
+) -> Result<Vec<u8>, DaemonError> {
+    let link = std::fs::symlink_metadata(path).map_err(|_error| bootstrap_failure())?;
+    if link.file_type().is_symlink()
+        || !link.is_file()
+        || link.len() == 0
+        || link.len() > maximum
+        || exact_size.is_some_and(|size| link.len() != size)
         || std::fs::canonicalize(path).map_err(|_error| bootstrap_failure())? != path
     {
         return Err(bootstrap_failure());
     }
-    #[cfg(unix)]
-    if restricted {
-        use std::os::unix::fs::PermissionsExt as _;
-        if metadata.permissions().mode() & 0o077 != 0 {
-            return Err(bootstrap_failure());
-        }
+    let mut file = open_bounded_read(path).map_err(|_error| bootstrap_failure())?;
+    let opened = file.metadata().map_err(|_error| bootstrap_failure())?;
+    if !opened.is_file()
+        || opened.len() == 0
+        || opened.len() > maximum
+        || exact_size.is_some_and(|size| opened.len() != size)
+        || !same_regular_file(&link, &opened)
+        || !safe_production_metadata(&opened, policy)
+    {
+        return Err(bootstrap_failure());
     }
-    #[cfg(not(unix))]
-    let _ = restricted;
-    let file = File::open(path).map_err(|_error| bootstrap_failure())?;
-    let capacity = usize::try_from(metadata.len()).map_err(|_error| bootstrap_failure())?;
+    let capacity = usize::try_from(opened.len()).map_err(|_error| bootstrap_failure())?;
     let mut bytes = Vec::with_capacity(capacity);
-    file.take(maximum.saturating_add(1))
+    Read::by_ref(&mut file)
+        .take(maximum.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_error| bootstrap_failure())?;
-    if bytes.is_empty() || u64::try_from(bytes.len()).map_or(true, |length| length > maximum) {
+    let after_read = file.metadata().map_err(|_error| bootstrap_failure())?;
+    let final_link = std::fs::symlink_metadata(path).map_err(|_error| bootstrap_failure())?;
+    if final_link.file_type().is_symlink()
+        || !same_regular_file(&opened, &after_read)
+        || !same_regular_file(&after_read, &final_link)
+        || !stable_regular_file(&opened, &after_read)
+        || std::fs::canonicalize(path).map_err(|_error| bootstrap_failure())? != path
+        || bytes.is_empty()
+        || u64::try_from(bytes.len()).map_or(true, |length| {
+            length > maximum
+                || length != after_read.len()
+                || exact_size.is_some_and(|size| length != size)
+        })
+    {
         return Err(bootstrap_failure());
     }
     Ok(bytes)
 }
 
-fn require_immutable_secret_file(path: &Path, exact_size: Option<u64>) -> Result<(), DaemonError> {
-    let metadata = std::fs::symlink_metadata(path).map_err(|_error| bootstrap_failure())?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || metadata.len() == 0
-        || exact_size.is_some_and(|size| metadata.len() != size)
-        || std::fs::canonicalize(path).map_err(|_error| bootstrap_failure())? != path
-    {
-        return Err(bootstrap_failure());
-    }
+#[cfg(unix)]
+fn same_regular_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_regular_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.is_file() == right.is_file()
+}
+
+#[cfg(unix)]
+fn stable_regular_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+        && left.mode() == right.mode()
+        && left.uid() == right.uid()
+        && left.nlink() == right.nlink()
+}
+
+#[cfg(not(unix))]
+fn stable_regular_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.modified().ok() == right.modified().ok()
+}
+
+fn safe_production_metadata(metadata: &std::fs::Metadata, policy: ProductionFilePolicy) -> bool {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt as _;
-        if metadata.permissions().mode() & 0o777 != 0o400 {
-            return Err(bootstrap_failure());
+        use std::os::unix::fs::MetadataExt as _;
+        let owner = metadata.uid();
+        let effective_uid = rustix::process::geteuid().as_raw();
+        if metadata.nlink() != 1 {
+            return false;
+        }
+        match policy {
+            ProductionFilePolicy::Trusted => {
+                (owner == 0 || owner == effective_uid) && metadata.mode() & 0o022 == 0
+            }
+            ProductionFilePolicy::Restricted => {
+                owner == effective_uid && metadata.mode() & 0o077 == 0
+            }
+            ProductionFilePolicy::Immutable => {
+                owner == effective_uid && metadata.mode() & 0o777 == 0o400
+            }
         }
     }
     #[cfg(not(unix))]
-    if !metadata.permissions().readonly() {
-        return Err(bootstrap_failure());
+    {
+        match policy {
+            ProductionFilePolicy::Immutable => metadata.permissions().readonly(),
+            ProductionFilePolicy::Trusted | ProductionFilePolicy::Restricted => metadata.is_file(),
+        }
     }
-    Ok(())
+}
+
+#[cfg(unix)]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::path::Component;
+
+    let mut absolute = false;
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir if names.is_empty() && !absolute => absolute = true,
+            Component::Normal(name) => names.push(name),
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::ParentDir => return Err(invalid_read_path()),
+        }
+    }
+    if !absolute {
+        return Err(invalid_read_path());
+    }
+    let (file_name, ancestors) = names.split_last().ok_or_else(invalid_read_path)?;
+    let mut directory = open(
+        "/",
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)?;
+    validate_read_ancestor(&directory.metadata()?)?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            *ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(std::io::Error::from)?;
+        validate_read_ancestor(&directory.metadata()?)?;
+    }
+    openat(
+        &directory,
+        *file_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)
+}
+
+#[cfg(unix)]
+fn validate_read_ancestor(metadata: &std::fs::Metadata) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let owner = metadata.uid();
+    let mode = metadata.mode();
+    let writable_by_others = mode & 0o022 != 0;
+    let protected_sticky_root = owner == 0 && mode & 0o1000 != 0;
+    if metadata.is_dir()
+        && (owner == 0 || owner == rustix::process::geteuid().as_raw())
+        && (!writable_by_others || protected_sticky_root)
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "unsafe file ancestor",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn invalid_read_path() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid file path")
+}
+
+#[cfg(not(unix))]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    File::open(path)
 }
 
 fn load_existing_cursor_key(path: &Path) -> Result<CursorSigningKey, DaemonError> {
-    require_immutable_secret_file(path, Some(CURSOR_KEY_BYTES as u64))?;
-    let bytes = read_restricted_file(path, CURSOR_KEY_BYTES as u64)?;
+    let bytes = read_immutable_file(path, CURSOR_KEY_BYTES as u64, Some(CURSOR_KEY_BYTES as u64))?;
     CursorSigningKey::new(bytes).map_err(|_error| bootstrap_failure())
 }
 
@@ -1006,18 +1346,30 @@ const fn bootstrap_failure() -> DaemonError {
     DaemonError::new(DaemonErrorCode::ProductionBootstrapFailed)
 }
 
+fn production_tokenizer_registry() -> Result<Arc<PinnedContextTokenizerRegistry>, DaemonError> {
+    Ok(Arc::new(
+        PinnedContextTokenizerRegistry::with_reference_profiles()
+            .map_err(|_error| bootstrap_failure())?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CURSOR_KEY_BYTES, compose_production_server, load_existing_cursor_key,
-        require_immutable_secret_file,
+        ActiveTenantReplayLiveServices, CURSOR_KEY_BYTES, MAX_KEYSTORE_BYTES,
+        PRODUCTION_LIVE_REPLAY_PROFILE_V1, ProductionLiveReplayProfile, compose_production_server,
+        load_existing_cursor_key, production_http_transport_factory, production_tokenizer_registry,
+        read_immutable_file,
     };
     use crate::{
-        ApplicationResourceLimits, DaemonConfig, DeploymentMode, LocalIdentity,
-        ProductionAuthorityConfiguration, ProductionPaths, ProductionPrincipalAuthority,
-        ProductionTenantAuthority, TelemetrySettings, WorkerCapacities,
+        ApplicationResourceLimits, DaemonConfig, DeploymentMode, LiveAuthorizationRepositoryError,
+        LiveReplayAuthorizationRepository, LocalIdentity, ProductionAuthorityConfiguration,
+        ProductionEffectRegistry, ProductionPaths, ProductionPrincipalAuthority,
+        ProductionTenantAuthority, ReplayLiveServices, ReplayLiveServicesError,
+        ReplayLiveServicesFactory, TelemetrySettings, WorkerCapacities,
         execute_process_command_until,
     };
+    use cigar_compiler::ReferenceTokenizerProfile;
     use cigar_crypto::{
         CreateKeyRequest, EncryptedDevelopmentKeystore, KeyAlgorithm, KeyProvider, KeyPurpose,
         SecretBytes,
@@ -1026,6 +1378,7 @@ mod tests {
     use cigar_protocol::{
         Capability, Classification, ContentDigest, InstructionAuthority, RecordId, UtcTimestamp,
     };
+    use cigar_replay::LiveReplayAuthorization;
     use cigar_store::{
         AccessContext, CancellationToken, EffectRecordEnvelope, Repository, SqliteStore,
         StoreRevision, WriteTransaction,
@@ -1034,11 +1387,49 @@ mod tests {
     use std::error::Error;
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::TempDir;
 
     struct Fixture {
         _directory: TempDir,
         config: DaemonConfig,
+    }
+
+    struct OpenDispatchGate;
+
+    impl crate::EffectDispatchGate for OpenDispatchGate {
+        fn dispatch_claims_allowed(&self) -> bool {
+            true
+        }
+    }
+
+    struct MissingLiveAuthorizations;
+
+    impl LiveReplayAuthorizationRepository for MissingLiveAuthorizations {
+        fn get(
+            &self,
+            _tenant_id: &RecordId,
+            _authorization_id: &RecordId,
+            _cancellation: &CancellationToken,
+        ) -> Result<LiveReplayAuthorization, LiveAuthorizationRepositoryError> {
+            Err(LiveAuthorizationRepositoryError::NotFound)
+        }
+    }
+
+    #[derive(Default)]
+    struct CountingLiveServices {
+        calls: AtomicUsize,
+    }
+
+    impl ReplayLiveServicesFactory for CountingLiveServices {
+        fn for_tenant(
+            &self,
+            _tenant_id: &RecordId,
+        ) -> Result<ReplayLiveServices, ReplayLiveServicesError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(ReplayLiveServicesError)
+        }
     }
 
     fn record(value: u64) -> Result<RecordId, Box<dyn Error>> {
@@ -1053,6 +1444,37 @@ mod tests {
         Ok(ContentDigest::new(format!("1220{suffix}"))?)
     }
 
+    #[test]
+    fn live_replay_profile_is_explicit_complete_and_active_tenant_scoped()
+    -> Result<(), Box<dyn Error>> {
+        let tenant = record(80)?;
+        let other_tenant = record(81)?;
+        let concrete_services = Arc::new(CountingLiveServices::default());
+        let services: Arc<dyn ReplayLiveServicesFactory> = concrete_services.clone();
+        let authorizations: Arc<dyn LiveReplayAuthorizationRepository> =
+            Arc::new(MissingLiveAuthorizations);
+        let profile =
+            ProductionLiveReplayProfile::tenant_bound_v1(authorizations, services.clone());
+        assert_eq!(
+            profile.security_profile(),
+            PRODUCTION_LIVE_REPLAY_PROFILE_V1
+        );
+        let debug = format!("{profile:?}");
+        assert!(debug.contains(PRODUCTION_LIVE_REPLAY_PROFILE_V1));
+        assert!(!debug.contains("MissingLiveAuthorizations"));
+        assert!(!debug.contains("CountingLiveServices"));
+
+        let scoped = ActiveTenantReplayLiveServices {
+            active_tenants: vec![tenant.clone()],
+            inner: services,
+        };
+        assert!(scoped.for_tenant(&other_tenant).is_err());
+        assert_eq!(concrete_services.calls.load(Ordering::SeqCst), 0);
+        assert!(scoped.for_tenant(&tenant).is_err());
+        assert_eq!(concrete_services.calls.load(Ordering::SeqCst), 1);
+        Ok(())
+    }
+
     fn restricted_write(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
         std::fs::write(path, bytes)?;
         #[cfg(unix)]
@@ -1060,6 +1482,69 @@ mod tests {
             use std::os::unix::fs::PermissionsExt as _;
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn disabled_effects_do_not_construct_a_runtime_or_transport() -> Result<(), Box<dyn Error>> {
+        let registry = ProductionEffectRegistry::from_json(
+            br#"{"schema_version":"cigar.production-effect-registry.v1","effects_enabled":false,"connectors":[]}"#,
+        )?;
+        let gate: Arc<dyn crate::EffectDispatchGate> = Arc::new(OpenDispatchGate);
+        assert!(
+            production_http_transport_factory(DeploymentMode::Local, &registry, gate)?.is_none()
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn live_http_factory_is_local_macos_only_and_shared_fails_closed()
+    -> Result<(), Box<dyn Error>> {
+        let registry = ProductionEffectRegistry::from_json(
+            br#"{"schema_version":"cigar.production-effect-registry.v1","effects_enabled":true,"connectors":[{"name":"http","kind":"idempotent_http","endpoint":"https://effects.example.invalid/v1/effects","https_transport":{"provider_protocol":"cigar.idempotent-effect-http.v1","credential_handle":"credential-a","credential_file":"/private/tmp/cigar-effect-credential.json","pinned_addresses":["93.184.216.34"],"connect_timeout_ms":1000,"request_timeout_ms":2000,"maximum_response_bytes":16384},"argument_vault_provider":"repository_blob_json.v1"}]}"#,
+        )?;
+        let local_gate: Arc<dyn crate::EffectDispatchGate> = Arc::new(OpenDispatchGate);
+        assert!(
+            production_http_transport_factory(DeploymentMode::Local, &registry, local_gate)?
+                .is_some()
+        );
+        let shared_gate: Arc<dyn crate::EffectDispatchGate> = Arc::new(OpenDispatchGate);
+        assert!(
+            production_http_transport_factory(DeploymentMode::Shared, &registry, shared_gate)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn production_registry_contains_only_stable_reference_tokenizers_across_restarts()
+    -> Result<(), Box<dyn Error>> {
+        let first = production_tokenizer_registry()?;
+        let restarted = production_tokenizer_registry()?;
+        let materializer = ContentDigest::new(format!("1220{}", "aa".repeat(32)))?;
+        for profile in ReferenceTokenizerProfile::ALL {
+            let target = profile.target_profile(materializer.clone(), 4_096)?;
+            let first_tokenizer =
+                crate::ContextTokenizerRegistry::tokenizer(first.as_ref(), &target)
+                    .ok_or("production reference tokenizer unavailable")?;
+            let restarted_tokenizer =
+                crate::ContextTokenizerRegistry::tokenizer(restarted.as_ref(), &target)
+                    .ok_or("restarted reference tokenizer unavailable")?;
+            assert_eq!(first_tokenizer.fingerprint(), &target.tokenizer_fingerprint);
+            assert_eq!(
+                restarted_tokenizer.fingerprint(),
+                &target.tokenizer_fingerprint
+            );
+            assert_eq!(
+                first_tokenizer.count_exact("CIGAR Δ".as_bytes())?,
+                restarted_tokenizer.count_exact("CIGAR Δ".as_bytes())?
+            );
+        }
+        let mut external =
+            ReferenceTokenizerProfile::Utf8BytesV1.target_profile(materializer, 4_096)?;
+        external.provider = "anthropic".to_owned();
+        assert!(crate::ContextTokenizerRegistry::tokenizer(first.as_ref(), &external).is_none());
         Ok(())
     }
 
@@ -1161,6 +1646,7 @@ mod tests {
 
         let config = DaemonConfig {
             mode: DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime.clone(),
             unix_socket: Some(runtime.join("cigard.sock")),
@@ -1184,6 +1670,7 @@ mod tests {
                 source_registry_file: sources_file,
                 effect_registry_file: effects_file,
             },
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 5_000,
             shutdown_deadline_ms: 5_000,
@@ -1209,6 +1696,7 @@ mod tests {
             },
             telemetry: TelemetrySettings {
                 otlp_endpoint: None,
+                otlp_ca_certificate_file: None,
                 export_timeout_ms: 1_000,
                 metric_interval_ms: 1_000,
             },
@@ -1279,13 +1767,22 @@ mod tests {
 
         let fixture = fixture()?;
         assert!(
-            require_immutable_secret_file(&fixture.config.production.keystore_file, None).is_err()
+            read_immutable_file(
+                &fixture.config.production.keystore_file,
+                MAX_KEYSTORE_BYTES,
+                None
+            )
+            .is_err()
         );
         std::fs::set_permissions(
             &fixture.config.production.keystore_file,
             std::fs::Permissions::from_mode(0o400),
         )?;
-        require_immutable_secret_file(&fixture.config.production.keystore_file, None)?;
+        let _keystore = read_immutable_file(
+            &fixture.config.production.keystore_file,
+            MAX_KEYSTORE_BYTES,
+            None,
+        )?;
 
         let cursor = &fixture.config.production.cursor_signing_key_file;
         restricted_write(cursor, &[0x5a; CURSOR_KEY_BYTES])?;
@@ -1299,7 +1796,14 @@ mod tests {
     async fn async_process_serve_path_runs_real_composition_and_graceful_shutdown()
     -> Result<(), Box<dyn Error>> {
         let fixture = fixture()?;
-        let config_file = fixture._directory.path().join("cigard.toml");
+        // Strict configuration readers reject every symlinked ancestor. macOS exposes the
+        // temporary root through `/var`, which is an alias of `/private/var`, so exercise the
+        // documented physical-path contract here.
+        let config_file = fixture
+            ._directory
+            .path()
+            .canonicalize()?
+            .join("cigard.toml");
         std::fs::write(&config_file, toml::to_string(&fixture.config)?)?;
         let outcome = execute_process_command_until(
             &[

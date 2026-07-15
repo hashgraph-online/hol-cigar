@@ -12,6 +12,11 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     expand_files,
@@ -51,7 +56,107 @@ def parse_arguments() -> argparse.Namespace:
         "--variables", type=Path, help="strict JSON mapping used to expand ${NAME}"
     )
     parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external report workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     return parser.parse_args()
+
+
+def _selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one evidence root without resolving untrusted path components."""
+
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment:
+        if os.fspath(argument) != os.fspath(Path(environment)):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; "
+                "provide one evidence directory"
+            )
+    if argument is not None:
+        return argument
+    if environment:
+        return Path(environment)
+    return None
+
+
+def _report_inputs(arguments: argparse.Namespace, root: Path) -> list[Path]:
+    inputs = [root / "docs/site-manifest.v1.json", root / "docs/commands.v1.json"]
+    if arguments.variables is not None:
+        inputs.append(arguments.variables.resolve())
+    return inputs
+
+
+class _ReportOutput:
+    """Selected secure workspace or legacy direct development report output."""
+
+    def __init__(
+        self,
+        *,
+        workspace: EvidenceWorkspace | None = None,
+        relative: str | None = None,
+        direct: Path | None = None,
+    ) -> None:
+        self.workspace = workspace
+        self.relative = relative
+        self.direct = direct
+
+    @classmethod
+    def open(
+        cls,
+        arguments: argparse.Namespace,
+        *,
+        repository_root: Path,
+    ) -> _ReportOutput | None:
+        selected = _selected_evidence_directory(arguments)
+        if arguments.report is None:
+            if selected is not None:
+                raise ReleaseError(
+                    "--evidence-dir requires a safe relative --report path"
+                )
+            return None
+
+        inputs = _report_inputs(arguments, repository_root)
+        if selected is None:
+            direct = arguments.report.resolve()
+            require_distinct_output(direct, inputs, "documentation report")
+            return cls(direct=direct)
+
+        if arguments.report.is_absolute():
+            raise ReleaseError(
+                "--report must be relative when an evidence directory is selected"
+            )
+        parts = safe_evidence_path(os.fspath(arguments.report))
+        tentative = selected.joinpath(*parts)
+        require_distinct_output(tentative, inputs, "documentation report")
+        workspace = EvidenceWorkspace.create(
+            selected,
+            repository_root=repository_root,
+        )
+        try:
+            require_distinct_output(
+                workspace.root.joinpath(*parts),
+                inputs,
+                "documentation report",
+            )
+            return cls(workspace=workspace, relative="/".join(parts))
+        except BaseException:
+            workspace.close()
+            raise
+
+    def publish(self, report: dict[str, Any]) -> None:
+        if self.workspace is not None:
+            assert self.relative is not None
+            self.workspace.write_json(self.relative, report)
+            return
+        assert self.direct is not None
+        write_json(self.direct, report)
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
 
 
 def _slug(text: str) -> str:
@@ -351,6 +456,13 @@ def _expand(value: str, variables: dict[str, str]) -> str:
     return expanded
 
 
+def _documentation_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("CIGAR_EVIDENCE_DIR", None)
+    environment.update({"TZ": "UTC", "LC_ALL": "C", "LANG": "C", "NO_COLOR": "1"})
+    return environment
+
+
 def _execute(
     root: Path,
     commands: list[dict[str, Any]],
@@ -391,10 +503,7 @@ def _execute(
                     f"documentation command {command.get('id')} argv is invalid"
                 )
             expanded = [_expand(item, variables) for item in argv]
-            environment = os.environ.copy()
-            environment.update(
-                {"TZ": "UTC", "LC_ALL": "C", "LANG": "C", "NO_COLOR": "1"}
-            )
+            environment = _documentation_environment()
             result = run_bounded(expanded, cwd=cwd, env=environment, timeout=300)
             executed += 1
             if result.returncode != step.get("expected_exit", 0):
@@ -407,9 +516,12 @@ def _execute(
     return executed, failed
 
 
-def main() -> int:
-    arguments = parse_arguments()
-    root = arguments.root.resolve()
+def _check_documentation(
+    arguments: argparse.Namespace,
+    *,
+    root: Path,
+    report_output: _ReportOutput | None,
+) -> int:
     manifest = load_json(root / "docs/site-manifest.v1.json")
     command_manifest = load_json(root / "docs/commands.v1.json")
     expected_manifest_keys = {
@@ -431,7 +543,7 @@ def main() -> int:
     ):
         raise ReleaseError("unsupported documentation manifest")
     commands = _validate_commands(command_manifest.get("commands"))
-    if manifest.get("version_selectors") != ["0.1", "latest"]:
+    if manifest.get("version_selectors") != [manifest.get("product_version")]:
         raise ReleaseError("documentation version selectors are missing or stale")
     files = _published_files(root, manifest)
     published = {path.resolve() for path in files}
@@ -495,21 +607,36 @@ def main() -> int:
         "failed_commands": failed,
         "executed_modes": sorted(modes),
     }
-    if arguments.report is not None:
-        report_path = arguments.report.resolve()
-        inputs = [root / "docs/site-manifest.v1.json", root / "docs/commands.v1.json"]
-        if arguments.variables is not None:
-            inputs.append(arguments.variables)
-        require_distinct_output(report_path, inputs, "documentation report")
-        write_json(report_path, report)
+    if report_output is not None:
+        report_output.publish(report)
     print(
         f"documentation passed: {len(files)} pages, {links} links, {blocks} code blocks, {executed} executed command steps"
     )
     return 0
 
 
+def main() -> int:
+    arguments = parse_arguments()
+    root = arguments.root.resolve(strict=True)
+    report_output = _ReportOutput.open(arguments, repository_root=root)
+    try:
+        return _check_documentation(
+            arguments,
+            root=root,
+            report_output=report_output,
+        )
+    finally:
+        if report_output is not None:
+            report_output.close()
+
+
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, subprocess.TimeoutExpired, ReleaseError) as error:
+    except (
+        EvidenceWorkspaceError,
+        OSError,
+        subprocess.TimeoutExpired,
+        ReleaseError,
+    ) as error:
         raise SystemExit(f"documentation check failed: {error}") from error

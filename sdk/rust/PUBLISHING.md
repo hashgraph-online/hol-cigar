@@ -1,7 +1,7 @@
 # Rust SDK publication runbook
 
 The complete Rust SDK dependency chain is locally package-qualified, but it is not yet cleared for
-an external crates.io release. The local qualification packages all 19 crates in dependency order,
+an external crates.io release. The local qualification packages all 20 crates in dependency order,
 inspects their normalized manifests and archives, inserts each exact archive into an offline local
 registry, and compiles a clean default-feature SDK consumer from that registry. It does not reserve
 names, establish registry ownership, or produce crates.io publication receipts.
@@ -15,23 +15,24 @@ Publish one crate at a time and wait until crates.io resolves the exact version 
 
 1. `cigar-aws-creds = 0.39.1-cigar.1`
 2. `cigar-rust-s3 = 0.37.2-cigar.1`
-3. `cigar-canon = 0.1.0`
-4. `cigar-protocol = 0.1.0`
-5. `cigar-testkit = 0.1.0`
-6. `cigar-windows-ipc = 0.1.0`
-7. `cigar-crypto = 0.1.0`
-8. `cigar-replay = 0.1.0`
-9. `cigar-policy = 0.1.0`
-10. `cigar-store = 0.1.0`
-11. `cigar-effects = 0.1.0`
-12. `cigar-retrieval = 0.1.0`
-13. `cigar-space = 0.1.0`
-14. `cigar-catalog = 0.1.0`
-15. `cigar-code-intel = 0.1.0`
-16. `cigar-compiler = 0.1.0`
-17. `cigar-api = 0.1.0`
-18. `cigar-daemon = 0.1.0`
-19. `cigar-sdk = 0.1.0`
+3. `cigar-canon = 1.0.0-dev.1`
+4. `cigar-protocol = 1.0.0-dev.1`
+5. `cigar-testkit = 1.0.0-dev.1`
+6. `cigar-windows-ipc = 1.0.0-dev.1`
+7. `cigar-crypto = 1.0.0-dev.1`
+8. `cigar-replay = 1.0.0-dev.1`
+9. `cigar-policy = 1.0.0-dev.1`
+10. `cigar-store = 1.0.0-dev.1`
+11. `cigar-effects = 1.0.0-dev.1`
+12. `cigar-retrieval = 1.0.0-dev.1`
+13. `cigar-space = 1.0.0-dev.1`
+14. `cigar-catalog = 1.0.0-dev.1`
+15. `cigar-code-intel = 1.0.0-dev.1`
+16. `cigar-compiler = 1.0.0-dev.1`
+17. `cigar-api = 1.0.0-dev.1`
+18. `cigar-observe = 1.0.0-dev.1`
+19. `cigar-daemon = 1.0.0-dev.1`
+20. `cigar-sdk = 1.0.0-dev.1`
 
 `cigar-testkit` is a versioned development dependency used during package verification.
 `cigar-windows-ipc` is a normal Windows-only daemon dependency, so a macOS-only check is not a
@@ -93,7 +94,7 @@ The qualifier runs `cargo package --locked --allow-dirty --offline` for every cr
 above. For every archive, it rejects unsafe paths and links, missing release assets, path
 dependencies in the normalized manifest, unexpected tests, a changed security-fork identity, a
 lost Ring selection, restored Surf/async-std exposure, or missing proto/migrations. It then compiles
-a clean project depending only on `cigar-sdk = 0.1.0` from the local registry.
+a clean project depending only on `cigar-sdk = 1.0.0-dev.1` from the local registry.
 
 The evidence document uses the closed schema
 `cigar.rust-publication-chain-qualification.v1`. Its writer validates that it contains only package
@@ -113,13 +114,13 @@ Before calling this chain release-ready:
 1. Commit the exact candidate, rerun all local qualification and package-contract checks, and
    verify `.cargo_vcs_info.json` binds every final archive to that revision.
 2. Confirm the approved crates.io owner controls every name. A crates.io API lookup on 2026-07-13
-   returned not-found for all 19 names, but that is only a point-in-time availability signal and
-   does not reserve them.
+   returned not-found for the previously checked 19 names. `cigar-observe` must also be checked by
+   the approved registry owner; point-in-time availability signals do not reserve names.
 3. Publish sequentially from the committed candidate. Capture the registry version and checksum
    receipt for each crate, compare it with the approved package, and stop immediately on any
    identity, version, checksum, feature, or ownership mismatch.
 4. From a clean environment with no workspace patch or local registry replacement, compile and
-   test `cigar-sdk = 0.1.0` from crates.io on the supported platform matrix.
+   test `cigar-sdk = 1.0.0-dev.1` from crates.io on the supported platform matrix.
 5. Reconcile the published archives with release signing, SBOM, license, provenance, artifact
    inventory, and final release-policy evidence.
 

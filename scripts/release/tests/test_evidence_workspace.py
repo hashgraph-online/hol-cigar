@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -143,7 +144,12 @@ class EvidenceWorkspaceTests(unittest.TestCase):
         source.write_bytes(b"reviewed bytes")
         os.chmod(source, 0o600)
         with self.workspace() as workspace:
-            copied = workspace.attach_file(source, "attachments/source.bin")
+            copied = workspace.attach_file(
+                source,
+                "attachments/source.bin",
+                expected_sha256=hashlib.sha256(b"reviewed bytes").hexdigest(),
+                expected_bytes=len(b"reviewed bytes"),
+            )
             self.assertEqual(
                 (workspace.root / copied.path).read_bytes(), b"reviewed bytes"
             )
@@ -171,6 +177,37 @@ class EvidenceWorkspaceTests(unittest.TestCase):
         with self.workspace("fifo-evidence") as workspace:
             with self.assertRaisesRegex(EvidenceWorkspaceError, "not regular"):
                 workspace.attach_file(fifo, "attachment.bin")
+
+    def test_attachment_content_binding_rejects_substitution_before_publish(
+        self,
+    ) -> None:
+        source = self.base / "bound-source.bin"
+        reviewed = b"reviewed-content"
+        source.write_bytes(reviewed)
+        os.chmod(source, 0o600)
+        expected_sha256 = hashlib.sha256(reviewed).hexdigest()
+        expected_bytes = len(reviewed)
+
+        source.write_bytes(b"substitute-bytes")
+        with self.workspace("substitution-evidence") as workspace:
+            with self.assertRaisesRegex(EvidenceWorkspaceError, "validated content"):
+                workspace.attach_file(
+                    source,
+                    "attachment.bin",
+                    expected_sha256=expected_sha256,
+                    expected_bytes=expected_bytes,
+                )
+            self.assertFalse((workspace.root / "attachment.bin").exists())
+
+            with self.assertRaisesRegex(
+                EvidenceWorkspaceError, "lowercase hexadecimal"
+            ):
+                workspace.attach_file(
+                    source,
+                    "invalid-digest.bin",
+                    expected_sha256="A" * 64,
+                )
+            self.assertFalse((workspace.root / "invalid-digest.bin").exists())
 
     def test_existing_hardlinks_and_quota_overflow_are_rejected(self) -> None:
         root = self.base / "hardlinked-workspace"

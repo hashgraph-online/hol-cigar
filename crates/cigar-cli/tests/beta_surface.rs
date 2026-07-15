@@ -43,6 +43,9 @@ fn public_parser_reaches_every_beta_command_and_no_excluded_command() {
         &["serve"][..],
         &["mcp", "serve"][..],
         &["plugin", "install"][..],
+        &["state", "inspect-beta"][..],
+        &["state", "import-beta"][..],
+        &["state", "restore-beta"][..],
     ] {
         assert!(
             progress_start(&args(values), terminal).is_none(),
@@ -76,6 +79,7 @@ async fn beta_help_does_not_advertise_excluded_capabilities_or_flags() {
         "cigar serve",
         "cigar mcp",
         "cigar plugin",
+        "cigar state",
         "--remote",
         "--local",
         "--endpoint",

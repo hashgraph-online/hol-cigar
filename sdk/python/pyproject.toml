@@ -1,6 +1,6 @@
 [project]
 name = "cigar-sdk"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 description = "CIGAR v1 Python SDK"
 readme = "README.md"
 license = "Apache-2.0"

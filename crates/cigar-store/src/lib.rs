@@ -2,6 +2,7 @@
 
 mod backup;
 mod blob;
+mod gc;
 mod memory;
 mod migration;
 mod model;
@@ -11,8 +12,9 @@ mod service_repository;
 mod sqlite;
 
 pub use backup::{
-    BackupError, BackupErrorCode, BackupFailpoint, BackupFailpoints, BackupFile, BackupIdentity,
-    BackupManifest, BackupSignatureIdentity, VerifiedBackup, create_backup,
+    BACKUP_DATABASE_FILE, BACKUP_EFFECT_CHECKPOINT_FILE, BackupError, BackupErrorCode,
+    BackupFailpoint, BackupFailpoints, BackupFile, BackupIdentity, BackupManifest,
+    BackupSignatureIdentity, VerifiedBackup, create_backup, create_backup_with_effect_checkpoint,
     create_backup_with_failpoints, restore_backup, restore_backup_trusted,
     restore_backup_with_failpoints, verify_backup, verify_backup_trusted,
 };
@@ -22,8 +24,17 @@ pub use blob::{
     ReconciliationReport, RepositoryBlobStore, RepositoryGarbageCollectionCandidate,
     RepositoryGarbageCollectionReport, SharedGarbageCollectionAuthorization,
 };
+pub use gc::{
+    GarbageCollectionPlan, GarbageCollectionPlanError, GarbageCollectionPlanErrorCode,
+    GarbageCollectionPlanIdentity, GarbageCollectionPlanSignatureIdentity,
+    SignedGarbageCollectionPlan, VerifiedGarbageCollectionPlan, sign_garbage_collection_plan,
+    verify_garbage_collection_plan_trusted,
+};
 pub use memory::{InMemoryReadTransaction, InMemoryStore, InMemoryWriteTransaction};
-pub use migration::{MigrationDefinition, MigrationMode, MigrationPlan};
+pub use migration::{
+    MAX_MIGRATION_ENTRIES, MigrationCompatibility, MigrationCompatibilityError,
+    MigrationDefinition, MigrationLedgerEntry, MigrationMode, MigrationPlan,
+};
 pub use model::{
     AccessContext, AtomCursor, AtomPage, AtomSelector, BlobRecord, CancellationToken,
     CommitReceipt, EffectRecordEnvelope, IdempotencyIdentity, MAX_ATOM_BATCH_ITEMS, OutboxMessage,
@@ -36,6 +47,8 @@ pub use object::{
     ObjectStorageError, ObjectStorageErrorCode, ObjectStorageIdentity, ObjectWriteOutcome,
     S3CompatibleObjectStorage, restore_object_backup_inventory,
 };
+#[cfg(any(test, feature = "migration-fault-injection"))]
+pub use postgres::PostgresMigrationFailpoint;
 pub use postgres::{
     MAX_RETAINED_POSTGRES_TENANT_SNAPSHOTS, MAX_RETAINED_POSTGRES_WAKEUPS_PER_TENANT,
     PostgresBackupInventory, PostgresBackupRestoreReceipt, PostgresBackupSignatureIdentity,
@@ -61,8 +74,15 @@ pub use service_repository::{
     ServiceRecordWrite, ServiceRepository, ServiceResponse, WorkerLocator, WorkerState,
     WorkerUpdate,
 };
+#[cfg(any(test, feature = "migration-fault-injection"))]
+pub use sqlite::SqliteMigrationFailpoint;
 pub use sqlite::{
-    MAX_RETAINED_SQLITE_SNAPSHOTS, MAX_SQLITE_DATABASE_BYTES, SqliteConfiguration, SqliteFailpoint,
+    MAX_LARGE_LOCAL_ATOMS, MAX_LARGE_LOCAL_EDGES, MAX_LARGE_LOCAL_REFERENCED_BLOB_BYTES,
+    MAX_LARGE_LOCAL_SQLITE_DATABASE_BYTES, MAX_RETAINED_SQLITE_PROJECTION_GENERATIONS,
+    MAX_RETAINED_SQLITE_SNAPSHOTS, MAX_SQLITE_DATABASE_BYTES, MAX_SQLITE_PROJECTION_ATOMS,
+    MIN_LARGE_LOCAL_AVAILABLE_BYTES, MIN_LARGE_LOCAL_RUNTIME_RESERVE_BYTES, SqliteCapacityProfile,
+    SqliteCatalogStatistics, SqliteConfiguration, SqliteDeepIntegrityReport, SqliteFailpoint,
+    SqliteProjectionFailpoint, SqliteProjectionStatus, SqliteReadTransaction,
     SqliteStorageStatistics, SqliteStore, SqliteWriteTransaction,
 };
 

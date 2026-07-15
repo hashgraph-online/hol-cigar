@@ -12,8 +12,16 @@ catalog. Hand-editing any generated artifact is unsupported, and
 
 Every operation has one stable Protobuf RPC name and one stable lower-camel
 operation identifier. The identifier is shared by HTTP bindings, embedded
-facades, SDK methods, CLI JSON envelopes, audit records, and error telemetry.
+facades, SDK methods, CLI JSON envelopes, audit records, and request telemetry.
 An OpenAPI `operationId` is exactly the lower-camel form of its RPC name.
+
+CLI and MCP are explicit closed projections, so an operation absent from those
+catalogs has no alias on that surface. Request logs retain the generated
+identifier through `RequestContext`. Public problem bodies retain the frozen
+error code and correlation identifier without a second caller-authored
+operation field. Metrics deliberately aggregate API outcomes and structurally
+forbid operation identifiers as labels; this is the compatible bounded-metric
+projection, not an alternate operation identity.
 
 The Protobuf package is `cigar.v1`. The frozen surface has exactly seven
 services and 45 operations. Adding an alias, alternate spelling, extra method
@@ -61,57 +69,9 @@ not an operation-specific service contract.
 
 ## Exact operation surface
 
-The catalog records mutation, idempotency, revision, stream, and authentication
-metadata for every row. `rev` means an expected revision is mandatory; `-`
-means no revision is required.
-
-| Service | RPC / operation ID | HTTP binding | Revision | Stream | Auth |
-| --- | --- | --- | --- | --- | --- |
-| CatalogService | `DiscoverSources` / `discoverSources` | `POST /v1/sources:discover` | - | unary | tenant |
-| CatalogService | `IngestCatalog` / `ingestCatalog` | `POST /v1/catalog:ingest` | - | unary | tenant |
-| CatalogService | `GetSourceStatus` / `getSourceStatus` | `GET /v1/catalog/sources/{source_id}` | - | unary | tenant |
-| CatalogService | `QueryCatalog` / `queryCatalog` | `POST /v1/catalog:query` | - | unary | tenant |
-| CatalogService | `BatchAtoms` / `batchAtoms` | `POST /v1/catalog/atoms:batch` | - | unary | tenant |
-| CatalogService | `TombstoneAtom` / `tombstoneAtom` | `POST /v1/catalog/atoms/{atom_id}:tombstone` | rev | unary | tenant |
-| ContextService | `CreateContextPlan` / `createContextPlan` | `POST /v1/context/plans` | - | unary | tenant |
-| ContextService | `CompileContextBundle` / `compileContextBundle` | `POST /v1/context/bundles:compile` | - | unary | tenant |
-| ContextService | `CompileContextDelta` / `compileContextDelta` | `POST /v1/context/deltas:compile` | - | unary | tenant |
-| ContextService | `GetContextBundle` / `getContextBundle` | `GET /v1/context/bundles/{bundle_id}` | - | unary | tenant |
-| ContextService | `GetContextBundleManifest` / `getContextBundleManifest` | `GET /v1/context/bundles/{bundle_id}/manifest` | - | unary | tenant |
-| ContextService | `ExplainContextBundle` / `explainContextBundle` | `POST /v1/context/bundles/{bundle_id}:explain` | - | unary | tenant |
-| ContextService | `MaterializeContextBundle` / `materializeContextBundle` | `POST /v1/context/bundles/{bundle_id}:materialize` | - | unary | tenant |
-| ContextService | `RevalidateContextBundle` / `revalidateContextBundle` | `POST /v1/context/bundles/{bundle_id}:revalidate` | - | unary | tenant |
-| SpaceService | `CreateSpace` / `createSpace` | `POST /v1/spaces` | - | unary | tenant |
-| SpaceService | `ForkSpace` / `forkSpace` | `POST /v1/spaces/{space_id}:fork` | rev | unary | tenant |
-| SpaceService | `PublishSpace` / `publishSpace` | `POST /v1/spaces/{space_id}:publish` | rev | unary | tenant |
-| SpaceService | `GetSpaceLog` / `getSpaceLog` | `GET /v1/spaces/{space_id}/log` | - | unary | tenant |
-| SpaceService | `SubscribeSpaceEvents` / `subscribeSpaceEvents` | `GET /v1/spaces/{space_id}/events` | - | server stream / SSE | tenant |
-| SpaceService | `CreateSpaceCheckpoint` / `createSpaceCheckpoint` | `POST /v1/spaces/{space_id}/checkpoints` | rev | unary | tenant |
-| SpaceService | `ListSpaceConflicts` / `listSpaceConflicts` | `GET /v1/spaces/{space_id}/conflicts` | - | unary | tenant |
-| SpaceService | `ResolveSpaceConflict` / `resolveSpaceConflict` | `POST /v1/spaces/{space_id}/conflicts/{conflict_id}:resolve` | rev | unary | tenant |
-| HandoffService | `CreateHandoff` / `createHandoff` | `POST /v1/handoffs` | - | unary | tenant |
-| HandoffService | `PreviewHandoff` / `previewHandoff` | `POST /v1/handoffs/{handoff_id}:preview` | - | unary | tenant |
-| HandoffService | `AcceptHandoff` / `acceptHandoff` | `POST /v1/handoffs/{handoff_id}:accept` | rev | unary | tenant |
-| HandoffService | `RevokeHandoff` / `revokeHandoff` | `POST /v1/handoffs/{handoff_id}:revoke` | rev | unary | tenant |
-| HandoffService | `RecordHandoffResult` / `recordHandoffResult` | `POST /v1/handoffs/{handoff_id}/results` | rev | unary | tenant |
-| HandoffService | `MergeHandoff` / `mergeHandoff` | `POST /v1/handoffs/{handoff_id}:merge` | rev | unary | tenant |
-| EffectService | `PrepareEffect` / `prepareEffect` | `POST /v1/effects` | - | unary | tenant |
-| EffectService | `AuthorizeEffect` / `authorizeEffect` | `POST /v1/effects/{effect_id}:authorize` | rev | unary | tenant |
-| EffectService | `DispatchEffect` / `dispatchEffect` | `POST /v1/effects/{effect_id}:dispatch` | rev | unary | tenant |
-| EffectService | `GetEffectStatus` / `getEffectStatus` | `GET /v1/effects/{effect_id}` | - | unary | tenant |
-| EffectService | `ReconcileEffect` / `reconcileEffect` | `POST /v1/effects/{effect_id}:reconcile` | rev | unary | tenant |
-| EffectService | `CompensateEffect` / `compensateEffect` | `POST /v1/effects/{effect_id}:compensate` | rev | unary | tenant |
-| ReplayService | `CreateReplay` / `createReplay` | `POST /v1/replays` | - | unary | tenant |
-| ReplayService | `RunObservationalReplay` / `runObservationalReplay` | `POST /v1/replays/{replay_id}:run` | - | unary | tenant |
-| ReplayService | `CompareLiveReplay` / `compareLiveReplay` | `POST /v1/replays/{replay_id}:compare` | - | unary | tenant |
-| ReplayService | `GetReplayCompleteness` / `getReplayCompleteness` | `GET /v1/replays/{replay_id}/completeness` | - | unary | tenant |
-| OperationsService | `GetLiveness` / `getLiveness` | `GET /livez` | - | unary | health |
-| OperationsService | `GetReadiness` / `getReadiness` | `GET /readyz` | - | unary | health |
-| OperationsService | `GetVersion` / `getVersion` | `GET /v1/version` | - | unary | anonymous |
-| OperationsService | `GetCapabilities` / `getCapabilities` | `GET /v1/capabilities` | - | unary | anonymous |
-| OperationsService | `GetConfiguration` / `getConfiguration` | `GET /v1/configuration` | - | unary | operator |
-| OperationsService | `GetDiagnostics` / `getDiagnostics` | `GET /v1/diagnostics` | - | unary | operator |
-| OperationsService | `GetMetrics` / `getMetrics` | `GET /metrics` | - | unary | operator |
+The exact development operation, payload, CLI, MCP, and error-retry tables are generated directly
+from their machine authorities in [`../api/operations-v1.md`](../api/operations-v1.md). This prose
+specification defines transport semantics; it does not maintain a second operation inventory.
 
 The `health` class is limited to content-free process/readiness probes.
 `anonymous` returns compatibility metadata only. `tenant` and `operator`

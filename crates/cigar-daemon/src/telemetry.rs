@@ -1,40 +1,138 @@
 //! Content-safe daemon telemetry and OpenMetrics exposition.
 
-use crate::worker::QueueMetricsSnapshot;
+use crate::worker::{BlockingPoolMetrics, QueueMetricsSnapshot, WorkerKind};
+use cigar_api::{TransportMetricEvent, TransportMetricsObserver};
+use cigar_observe::{DAEMON_METRICS, MetricKind, metric_definition};
+use cigar_protocol::{EffectState, LaneKind};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, MeterProvider as _};
+use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _};
 use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
-use opentelemetry_otlp::WithExportConfig as _;
+use opentelemetry_otlp::tonic_types::transport::{Certificate, ClientTlsConfig};
+use opentelemetry_otlp::{WithExportConfig as _, WithTonicConfig as _};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
+use rustls::pki_types::{CertificateDer, pem::PemObject as _};
+use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
-/// Validated OTLP export settings; credential headers remain collector-side configuration.
-#[derive(Clone, Debug, Eq, PartialEq)]
+const MAX_OTLP_CA_BYTES: usize = 2 * 1024 * 1024;
+const MAX_OTLP_CA_CERTIFICATES: usize = 128;
+const EFFECT_STATE_COUNT: usize = 16;
+const LANE_COUNT: usize = 5;
+const COMPILE_PHASE_COUNT: usize = 7;
+
+#[derive(Clone, Eq, PartialEq)]
+struct OtlpTlsConfig {
+    server_name: String,
+    ca_certificate_pem: Vec<u8>,
+}
+
+/// Validated OTLP export settings with no ambient credential or trust-root inputs.
+#[derive(Clone, Eq, PartialEq)]
 pub struct OtlpConfig {
     endpoint: String,
     export_timeout: Duration,
     metric_interval: Duration,
+    tls: Option<OtlpTlsConfig>,
 }
 
 impl OtlpConfig {
-    /// Creates bounded OTLP/gRPC export settings.
+    /// Creates bounded local-loopback OTLP/gRPC export settings without TLS.
+    ///
+    /// Remote HTTPS endpoints must use [`Self::new_with_ca_certificate`].
     pub fn new(
         endpoint: impl Into<String>,
         export_timeout: Duration,
         metric_interval: Duration,
     ) -> Result<Self, TelemetryError> {
-        let endpoint = endpoint.into();
-        let scheme_is_safe = endpoint.starts_with("https://")
-            || endpoint.starts_with("http://127.0.0.1:")
-            || endpoint.starts_with("http://[::1]:");
-        if !scheme_is_safe
+        Self::new_internal(endpoint.into(), export_timeout, metric_interval, None)
+    }
+
+    /// Creates bounded HTTPS OTLP/gRPC export settings with an explicit CA bundle.
+    pub fn new_with_ca_certificate(
+        endpoint: impl Into<String>,
+        export_timeout: Duration,
+        metric_interval: Duration,
+        ca_certificate_pem: Vec<u8>,
+    ) -> Result<Self, TelemetryError> {
+        Self::new_internal(
+            endpoint.into(),
+            export_timeout,
+            metric_interval,
+            Some(ca_certificate_pem),
+        )
+    }
+
+    fn new_internal(
+        endpoint: String,
+        export_timeout: Duration,
+        metric_interval: Duration,
+        ca_certificate_pem: Option<Vec<u8>>,
+    ) -> Result<Self, TelemetryError> {
+        Self::validate_configuration_shape(
+            &endpoint,
+            export_timeout,
+            metric_interval,
+            ca_certificate_pem.is_some(),
+        )?;
+        let parsed = reqwest::Url::parse(&endpoint)
+            .map_err(|_error| TelemetryError::InvalidConfiguration)?;
+        let tls = match (parsed.scheme(), ca_certificate_pem) {
+            ("https", Some(ca_certificate_pem)) => {
+                validate_ca_certificate_bundle(&ca_certificate_pem)?;
+                Some(OtlpTlsConfig {
+                    server_name: parsed
+                        .host_str()
+                        .ok_or(TelemetryError::InvalidConfiguration)?
+                        .to_owned(),
+                    ca_certificate_pem,
+                })
+            }
+            ("http", None) => None,
+            _ => return Err(TelemetryError::InvalidConfiguration),
+        };
+        Ok(Self {
+            endpoint,
+            export_timeout,
+            metric_interval,
+            tls,
+        })
+    }
+
+    pub(crate) fn validate_configuration_shape(
+        endpoint: &str,
+        export_timeout: Duration,
+        metric_interval: Duration,
+        has_explicit_ca: bool,
+    ) -> Result<(), TelemetryError> {
+        let parsed =
+            reqwest::Url::parse(endpoint).map_err(|_error| TelemetryError::InvalidConfiguration)?;
+        let endpoint_is_safe = {
+            let url = &parsed;
+            let root_path = url.path().is_empty() || url.path() == "/";
+            let no_ambient_authority = url.username().is_empty()
+                && url.password().is_none()
+                && url.query().is_none()
+                && url.fragment().is_none();
+            let secure = url.scheme() == "https" && url.host_str().is_some();
+            let loopback_http = url.scheme() == "http"
+                && url.port().is_some()
+                && url.host_str().is_some_and(|host| {
+                    matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
+                });
+            root_path
+                && no_ambient_authority
+                && !url.cannot_be_a_base()
+                && (secure || loopback_http)
+        };
+        if !endpoint_is_safe
             || endpoint.len() > 2_048
             || endpoint.bytes().any(|byte| byte.is_ascii_control())
-            || endpoint.contains('@')
             || export_timeout.is_zero()
             || export_timeout > Duration::from_secs(30)
             || metric_interval < Duration::from_secs(1)
@@ -42,12 +140,62 @@ impl OtlpConfig {
         {
             return Err(TelemetryError::InvalidConfiguration);
         }
-        Ok(Self {
-            endpoint,
-            export_timeout,
-            metric_interval,
+        match (parsed.scheme(), has_explicit_ca) {
+            ("https", true) | ("http", false) => Ok(()),
+            _ => Err(TelemetryError::InvalidConfiguration),
+        }
+    }
+
+    fn tonic_tls_config(&self) -> Option<ClientTlsConfig> {
+        self.tls.as_ref().map(|tls| {
+            ClientTlsConfig::new()
+                .domain_name(tls.server_name.clone())
+                .ca_certificate(Certificate::from_pem(tls.ca_certificate_pem.clone()))
         })
     }
+}
+
+impl fmt::Debug for OtlpConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OtlpConfig")
+            .field("endpoint", &self.endpoint)
+            .field("export_timeout", &self.export_timeout)
+            .field("metric_interval", &self.metric_interval)
+            .field(
+                "tls",
+                &self
+                    .tls
+                    .as_ref()
+                    .map(|tls| (&tls.server_name, "[EXPLICIT-CA]")),
+            )
+            .finish()
+    }
+}
+
+fn validate_ca_certificate_bundle(bytes: &[u8]) -> Result<(), TelemetryError> {
+    if bytes.is_empty()
+        || bytes.len() > MAX_OTLP_CA_BYTES
+        || bytes.contains(&0)
+        || bytes
+            .windows(b"PRIVATE KEY".len())
+            .any(|window| window == b"PRIVATE KEY")
+    {
+        return Err(TelemetryError::InvalidConfiguration);
+    }
+    let certificates = CertificateDer::pem_slice_iter(bytes)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_error| TelemetryError::InvalidConfiguration)?;
+    if certificates.is_empty() || certificates.len() > MAX_OTLP_CA_CERTIFICATES {
+        return Err(TelemetryError::InvalidConfiguration);
+    }
+    let mut roots = rustls::RootCertStore::empty();
+    for certificate in certificates {
+        roots
+            .add(certificate)
+            .map_err(|_error| TelemetryError::InvalidConfiguration)?;
+    }
+    Ok(())
 }
 
 /// Stable OTLP construction or shutdown failure.
@@ -77,24 +225,43 @@ struct OtelPipeline {
     tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
     tracer: SdkTracer,
-    authorized: Counter<u64>,
-    rejected: Counter<u64>,
-    listener_failures: Counter<u64>,
-    graceful_shutdowns: Counter<u64>,
+    counters: BTreeMap<&'static str, Counter<u64>>,
+    gauges: BTreeMap<&'static str, Gauge<u64>>,
+}
+
+/// Removes every process-environment-derived OTLP metadata header before the request leaves the
+/// daemon. The upstream tonic exporter merges `OTEL_EXPORTER_*_HEADERS` even when endpoint and
+/// timeout settings are supplied programmatically; accepting those variables would create an
+/// ambient credential and attacker-controlled telemetry-content path.
+fn strip_ambient_otlp_metadata(
+    mut request: tonic::Request<()>,
+) -> Result<tonic::Request<()>, tonic::Status> {
+    request.metadata_mut().clear();
+    Ok(request)
 }
 
 impl OtelPipeline {
     fn new(config: &OtlpConfig) -> Result<Self, TelemetryError> {
-        let span_exporter = opentelemetry_otlp::SpanExporter::builder()
+        let mut span_exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_endpoint(config.endpoint.clone())
             .with_timeout(config.export_timeout)
+            .with_interceptor(strip_ambient_otlp_metadata);
+        if let Some(tls) = config.tonic_tls_config() {
+            span_exporter = span_exporter.with_tls_config(tls);
+        }
+        let span_exporter = span_exporter
             .build()
             .map_err(|_error| TelemetryError::ExporterUnavailable)?;
-        let metric_exporter = opentelemetry_otlp::MetricExporter::builder()
+        let mut metric_exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
             .with_endpoint(config.endpoint.clone())
             .with_timeout(config.export_timeout)
+            .with_interceptor(strip_ambient_otlp_metadata);
+        if let Some(tls) = config.tonic_tls_config() {
+            metric_exporter = metric_exporter.with_tls_config(tls);
+        }
+        let metric_exporter = metric_exporter
             .build()
             .map_err(|_error| TelemetryError::ExporterUnavailable)?;
         let resource = Resource::builder()
@@ -113,39 +280,47 @@ impl OtelPipeline {
             .build();
         let tracer = tracer_provider.tracer("cigar-daemon");
         let meter = meter_provider.meter("cigar-daemon");
-        let authorized = meter
-            .u64_counter("cigar.daemon.authorized_requests")
-            .with_description("Authenticated requests accepted by daemon transports.")
-            .build();
-        let rejected = meter
-            .u64_counter("cigar.daemon.rejected_requests")
-            .with_description("Requests rejected before protected service dispatch.")
-            .build();
-        let listener_failures = meter
-            .u64_counter("cigar.daemon.listener_failures")
-            .with_description("Listener bind or unexpected-exit failures.")
-            .build();
-        let graceful_shutdowns = meter
-            .u64_counter("cigar.daemon.graceful_shutdowns")
-            .with_description("Completed bounded graceful shutdowns.")
-            .build();
+        let mut counters = BTreeMap::new();
+        let mut gauges = BTreeMap::new();
+        for definition in DAEMON_METRICS {
+            match definition.kind {
+                MetricKind::Counter => {
+                    counters.insert(
+                        definition.name,
+                        meter
+                            .u64_counter(definition.name)
+                            .with_description(definition.help)
+                            .build(),
+                    );
+                }
+                MetricKind::Gauge => {
+                    gauges.insert(
+                        definition.name,
+                        meter
+                            .u64_gauge(definition.name)
+                            .with_description(definition.help)
+                            .build(),
+                    );
+                }
+            }
+        }
         Ok(Self {
             tracer_provider,
             meter_provider,
             tracer,
-            authorized,
-            rejected,
-            listener_failures,
-            graceful_shutdowns,
+            counters,
+            gauges,
         })
     }
 
     fn request(&self, authorized: bool) {
         let outcome = if authorized { "authorized" } else { "rejected" };
         if authorized {
-            self.authorized.add(1, &[]);
+            self.counter("cigar_daemon_authorized_requests_total", 1, None);
+            self.counter("cigar_api_requests_total", 1, Some(("outcome", "accepted")));
         } else {
-            self.rejected.add(1, &[]);
+            self.counter("cigar_daemon_rejected_requests_total", 1, None);
+            self.counter("cigar_api_requests_total", 1, Some(("outcome", "rejected")));
         }
         let mut span = self.tracer.start("cigar.request.authority");
         span.set_attribute(KeyValue::new("cigar.auth.outcome", outcome));
@@ -153,14 +328,73 @@ impl OtelPipeline {
     }
 
     fn listener_failure(&self) {
-        self.listener_failures.add(1, &[]);
+        self.counter("cigar_daemon_listener_failures_total", 1, None);
         let mut span = self.tracer.start("cigar.listener.failure");
         span.set_attribute(KeyValue::new("error.type", "listener_failure"));
         span.end();
     }
 
     fn graceful_shutdown(&self) {
-        self.graceful_shutdowns.add(1, &[]);
+        self.counter("cigar_daemon_graceful_shutdowns_total", 1, None);
+    }
+
+    fn counter(&self, name: &'static str, value: u64, label: Option<(&'static str, &'static str)>) {
+        debug_assert!(
+            metric_definition(name).is_some_and(|definition| {
+                definition.kind == MetricKind::Counter
+                    && match (definition.label, label) {
+                        (None, None) => true,
+                        (Some(_), Some((key, value))) => definition.accepts_label(key, value),
+                        _ => false,
+                    }
+            }),
+            "OTLP counter must come from the closed metric schema"
+        );
+        let attributes =
+            label.map_or_else(Vec::new, |(key, value)| vec![KeyValue::new(key, value)]);
+        if let Some(counter) = self.counters.get(name) {
+            counter.add(value, &attributes);
+        }
+    }
+
+    fn gauge(&self, name: &'static str, value: u64, label: Option<(&'static str, &'static str)>) {
+        debug_assert!(
+            metric_definition(name).is_some_and(|definition| {
+                definition.kind == MetricKind::Gauge
+                    && match (definition.label, label) {
+                        (None, None) => true,
+                        (Some(_), Some((key, value))) => definition.accepts_label(key, value),
+                        _ => false,
+                    }
+            }),
+            "OTLP gauge must come from the closed metric schema"
+        );
+        let attributes =
+            label.map_or_else(Vec::new, |(key, value)| vec![KeyValue::new(key, value)]);
+        if let Some(gauge) = self.gauges.get(name) {
+            gauge.record(value, &attributes);
+        }
+    }
+
+    fn initialize_closed_series(&self) {
+        for definition in DAEMON_METRICS {
+            let labels: Vec<_> = definition.label.map_or_else(
+                || vec![None],
+                |domain| {
+                    domain
+                        .values
+                        .iter()
+                        .map(|value| Some((domain.key, *value)))
+                        .collect()
+                },
+            );
+            for label in labels {
+                match definition.kind {
+                    MetricKind::Counter => self.counter(definition.name, 0, label),
+                    MetricKind::Gauge => self.gauge(definition.name, 0, label),
+                }
+            }
+        }
     }
 
     fn shutdown(&self, timeout: Duration) -> Result<(), TelemetryError> {
@@ -173,12 +407,321 @@ impl OtelPipeline {
     }
 }
 
+/// Closed parser ownership stages accepted by ingestion telemetry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParserStage {
+    /// Connector/source framing and metadata parsing.
+    Source,
+    /// Registered atomizer parsing.
+    Atomizer,
+    /// Tree-sitter or other registered code-intelligence parsing.
+    CodeIntelligence,
+}
+
+impl ParserStage {
+    const fn index(self) -> usize {
+        match self {
+            Self::Source => 0,
+            Self::Atomizer => 1,
+            Self::CodeIntelligence => 2,
+        }
+    }
+
+    /// Stable bounded metric label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Atomizer => "atomizer",
+            Self::CodeIntelligence => "code_intelligence",
+        }
+    }
+}
+
+/// Closed compiler phases matching the PRD trace tree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CompilePhase {
+    /// Scope resolution.
+    Scope,
+    /// Candidate retrieval.
+    Retrieve,
+    /// Per-candidate authorization.
+    Authorize,
+    /// Dependency/conflict reconciliation.
+    Reconcile,
+    /// Representation transformation.
+    Transform,
+    /// Deterministic packing and sealing.
+    Pack,
+    /// Provider-ready materialization.
+    Materialize,
+}
+
+impl CompilePhase {
+    const fn index(self) -> usize {
+        match self {
+            Self::Scope => 0,
+            Self::Retrieve => 1,
+            Self::Authorize => 2,
+            Self::Reconcile => 3,
+            Self::Transform => 4,
+            Self::Pack => 5,
+            Self::Materialize => 6,
+        }
+    }
+
+    /// Stable bounded metric label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Scope => "scope",
+            Self::Retrieve => "retrieve",
+            Self::Authorize => "authorize",
+            Self::Reconcile => "reconcile",
+            Self::Transform => "transform",
+            Self::Pack => "pack",
+            Self::Materialize => "materialize",
+        }
+    }
+}
+
+/// Closed materialization-cache outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CacheOutcome {
+    /// An authenticated cache entry was reused.
+    Hit,
+    /// No valid cache entry existed.
+    Miss,
+}
+
+impl CacheOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Hit => 0,
+            Self::Miss => 1,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Hit => "hit",
+            Self::Miss => "miss",
+        }
+    }
+}
+
+/// Closed handoff acceptance outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HandoffAcceptanceOutcome {
+    /// A recipient durably accepted the handoff.
+    Accepted,
+    /// Current authority rejected the attempted acceptance.
+    Rejected,
+    /// The handoff expired before acceptance.
+    Expired,
+}
+
+impl HandoffAcceptanceOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Accepted => 0,
+            Self::Rejected => 1,
+            Self::Expired => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Accepted => "accepted",
+            Self::Rejected => "rejected",
+            Self::Expired => "expired",
+        }
+    }
+}
+
+/// Closed reconciliation outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReconciliationOutcome {
+    /// Reconciliation established a terminal or retry-safe result.
+    Resolved,
+    /// The effect remains explicitly unknown.
+    Unresolved,
+    /// The bounded reconciliation operation failed.
+    Failed,
+}
+
+impl ReconciliationOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Resolved => 0,
+            Self::Unresolved => 1,
+            Self::Failed => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Resolved => "resolved",
+            Self::Unresolved => "unresolved",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// Closed blob-integrity outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlobIntegrityOutcome {
+    /// The encrypted blob round-trip or integrity check passed.
+    Verified,
+    /// The expected blob was absent.
+    Missing,
+    /// Integrity or authenticated decryption failed.
+    Corrupt,
+}
+
+impl BlobIntegrityOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Verified => 0,
+            Self::Missing => 1,
+            Self::Corrupt => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Missing => "missing",
+            Self::Corrupt => "corrupt",
+        }
+    }
+}
+
+/// Closed bounded-stream event.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StreamBackpressureEvent {
+    /// A bounded stream channel was opened.
+    Opened,
+    /// Producer progress awaited bounded consumer capacity.
+    Blocked,
+    /// Cancellation closed a bounded stream.
+    Cancelled,
+}
+
+impl StreamBackpressureEvent {
+    const fn index(self) -> usize {
+        match self {
+            Self::Opened => 0,
+            Self::Blocked => 1,
+            Self::Cancelled => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Opened => "opened",
+            Self::Blocked => "blocked",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+struct ProcessSampler {
+    started: Instant,
+    system: Mutex<System>,
+    pid: Pid,
+}
+
+#[derive(Clone, Copy)]
+struct ProcessSnapshot {
+    uptime_seconds: u64,
+    cpu_time_seconds: u64,
+    resident_memory_bytes: u64,
+    virtual_memory_bytes: u64,
+    open_file_descriptors: u64,
+}
+
+impl ProcessSampler {
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            system: Mutex::new(System::new()),
+            pid: Pid::from_u32(std::process::id()),
+        }
+    }
+
+    fn snapshot(&self) -> ProcessSnapshot {
+        let fallback = ProcessSnapshot {
+            uptime_seconds: self.started.elapsed().as_secs(),
+            cpu_time_seconds: 0,
+            resident_memory_bytes: 0,
+            virtual_memory_bytes: 0,
+            open_file_descriptors: 0,
+        };
+        let Ok(mut system) = self.system.lock() else {
+            return fallback;
+        };
+        let pids = [self.pid];
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&pids),
+            true,
+            ProcessRefreshKind::everything(),
+        );
+        let Some(process) = system.process(self.pid) else {
+            return fallback;
+        };
+        ProcessSnapshot {
+            uptime_seconds: self.started.elapsed().as_secs(),
+            cpu_time_seconds: process.accumulated_cpu_time() / 1_000,
+            resident_memory_bytes: process.memory(),
+            virtual_memory_bytes: process.virtual_memory(),
+            open_file_descriptors: process
+                .open_files()
+                .and_then(|value| u64::try_from(value).ok())
+                .unwrap_or(0),
+        }
+    }
+}
+
 /// Process-level counters that never contain tenant, principal, payload, or record data.
 pub struct DaemonTelemetry {
     authorized_requests: AtomicU64,
     rejected_requests: AtomicU64,
     listener_failures: AtomicU64,
     graceful_shutdowns: AtomicU64,
+    ingestion_atoms: [AtomicU64; 2],
+    ingestion_bytes: AtomicU64,
+    parser_failures: [AtomicU64; 3],
+    quarantines: AtomicU64,
+    index_lag_revisions: AtomicU64,
+    invalidation_fanout: AtomicU64,
+    invalidation_oldest_age_seconds: AtomicU64,
+    candidates: AtomicU64,
+    selected_blocks: AtomicU64,
+    lane_tokens: [AtomicU64; LANE_COUNT],
+    compile_phase_duration_nanos: [AtomicU64; COMPILE_PHASE_COUNT],
+    compile_phase_runs: [AtomicU64; COMPILE_PHASE_COUNT],
+    compile_conflicts: AtomicU64,
+    compile_stale: AtomicU64,
+    cache_events: [AtomicU64; 2],
+    physical_tokens: AtomicU64,
+    cache_tokens: [AtomicU64; 2],
+    handoff_acceptance: [AtomicU64; 3],
+    handoff_merge_conflicts: AtomicU64,
+    effect_states: [AtomicU64; EFFECT_STATE_COUNT],
+    effect_unknown_oldest_age_seconds: AtomicU64,
+    effect_reconciliations: [AtomicU64; 3],
+    worker_lease_remaining_seconds: [AtomicU64; 9],
+    database_connections: [AtomicU64; 3],
+    database_pool_waits: AtomicU64,
+    blob_integrity: [AtomicU64; 3],
+    api_requests: [AtomicU64; 3],
+    stream_backpressure: [AtomicU64; 3],
+    blocking_jobs: [AtomicU64; 4],
+    blocking_outcomes: [AtomicU64; 4],
+    exported_queue_rejections: [AtomicU64; 9],
+    exported_blocking_outcomes: [AtomicU64; 4],
+    process: ProcessSampler,
     otel: Option<OtelPipeline>,
 }
 
@@ -191,21 +734,59 @@ impl DaemonTelemetry {
             rejected_requests: AtomicU64::new(0),
             listener_failures: AtomicU64::new(0),
             graceful_shutdowns: AtomicU64::new(0),
+            ingestion_atoms: std::array::from_fn(|_index| AtomicU64::new(0)),
+            ingestion_bytes: AtomicU64::new(0),
+            parser_failures: std::array::from_fn(|_index| AtomicU64::new(0)),
+            quarantines: AtomicU64::new(0),
+            index_lag_revisions: AtomicU64::new(0),
+            invalidation_fanout: AtomicU64::new(0),
+            invalidation_oldest_age_seconds: AtomicU64::new(0),
+            candidates: AtomicU64::new(0),
+            selected_blocks: AtomicU64::new(0),
+            lane_tokens: std::array::from_fn(|_index| AtomicU64::new(0)),
+            compile_phase_duration_nanos: std::array::from_fn(|_index| AtomicU64::new(0)),
+            compile_phase_runs: std::array::from_fn(|_index| AtomicU64::new(0)),
+            compile_conflicts: AtomicU64::new(0),
+            compile_stale: AtomicU64::new(0),
+            cache_events: std::array::from_fn(|_index| AtomicU64::new(0)),
+            physical_tokens: AtomicU64::new(0),
+            cache_tokens: std::array::from_fn(|_index| AtomicU64::new(0)),
+            handoff_acceptance: std::array::from_fn(|_index| AtomicU64::new(0)),
+            handoff_merge_conflicts: AtomicU64::new(0),
+            effect_states: std::array::from_fn(|_index| AtomicU64::new(0)),
+            effect_unknown_oldest_age_seconds: AtomicU64::new(0),
+            effect_reconciliations: std::array::from_fn(|_index| AtomicU64::new(0)),
+            worker_lease_remaining_seconds: std::array::from_fn(|_index| AtomicU64::new(0)),
+            database_connections: std::array::from_fn(|_index| AtomicU64::new(0)),
+            database_pool_waits: AtomicU64::new(0),
+            blob_integrity: std::array::from_fn(|_index| AtomicU64::new(0)),
+            api_requests: std::array::from_fn(|_index| AtomicU64::new(0)),
+            stream_backpressure: std::array::from_fn(|_index| AtomicU64::new(0)),
+            blocking_jobs: std::array::from_fn(|_index| AtomicU64::new(0)),
+            blocking_outcomes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            exported_queue_rejections: std::array::from_fn(|_index| AtomicU64::new(0)),
+            exported_blocking_outcomes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            process: ProcessSampler::new(),
             otel: None,
         }
     }
 
     /// Creates a real OTLP/gRPC trace and metric pipeline with bounded exporter timeouts.
     pub fn with_otlp(config: OtlpConfig) -> Result<Self, TelemetryError> {
-        Ok(Self {
+        let telemetry = Self {
             otel: Some(OtelPipeline::new(&config)?),
             ..Self::local()
-        })
+        };
+        if let Some(otel) = &telemetry.otel {
+            otel.initialize_closed_series();
+        }
+        Ok(telemetry)
     }
 
     /// Records one request that passed transport authentication.
     pub fn record_authorized_request(&self) {
-        self.authorized_requests.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.authorized_requests, 1);
+        atomic_saturating_add(&self.api_requests[0], 1);
         if let Some(otel) = &self.otel {
             otel.request(true);
         }
@@ -213,7 +794,8 @@ impl DaemonTelemetry {
 
     /// Records one request rejected before protected service dispatch.
     pub fn record_rejected_request(&self) {
-        self.rejected_requests.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.rejected_requests, 1);
+        atomic_saturating_add(&self.api_requests[1], 1);
         if let Some(otel) = &self.otel {
             otel.request(false);
         }
@@ -221,7 +803,7 @@ impl DaemonTelemetry {
 
     /// Records one listener that exited unexpectedly or failed to bind.
     pub fn record_listener_failure(&self) {
-        self.listener_failures.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.listener_failures, 1);
         if let Some(otel) = &self.otel {
             otel.listener_failure();
         }
@@ -229,9 +811,464 @@ impl DaemonTelemetry {
 
     /// Records completion of one bounded graceful-shutdown sequence.
     pub fn record_graceful_shutdown(&self) {
-        self.graceful_shutdowns.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.graceful_shutdowns, 1);
         if let Some(otel) = &self.otel {
             otel.graceful_shutdown();
+        }
+    }
+
+    /// Records one successful atomic ingestion publication without source identity or content.
+    pub fn record_ingestion(&self, published_atoms: u64, tombstoned_atoms: u64, bytes: u64) {
+        self.record_counter(
+            &self.ingestion_atoms[0],
+            "cigar_ingestion_atoms_total",
+            published_atoms,
+            Some(("outcome", "published")),
+        );
+        self.record_counter(
+            &self.ingestion_atoms[1],
+            "cigar_ingestion_atoms_total",
+            tombstoned_atoms,
+            Some(("outcome", "tombstoned")),
+        );
+        self.record_counter(
+            &self.ingestion_bytes,
+            "cigar_ingestion_bytes_total",
+            bytes,
+            None,
+        );
+    }
+
+    /// Records one content-free parser failure at a compiled-in ownership stage.
+    pub fn record_parser_failure(&self, stage: ParserStage) {
+        self.record_closed_counter(
+            &self.parser_failures,
+            stage.index(),
+            "cigar_ingestion_parser_failures_total",
+            1,
+            Some(("stage", stage.as_str())),
+        );
+    }
+
+    /// Records source records quarantined before content can reach an index.
+    pub fn record_quarantines(&self, count: u64) {
+        self.record_counter(
+            &self.quarantines,
+            "cigar_ingestion_quarantines_total",
+            count,
+            None,
+        );
+    }
+
+    /// Replaces the current mandatory-index revision lag observation.
+    pub fn observe_index_lag(&self, revisions: u64) {
+        self.observe_gauge(
+            &self.index_lag_revisions,
+            "cigar_index_lag_revisions",
+            revisions,
+            None,
+        );
+    }
+
+    /// Records one bounded invalidation fan-out and current oldest pending age.
+    pub fn record_invalidation(&self, fanout: u64, oldest_age_seconds: u64) {
+        self.record_invalidation_fanout(fanout);
+        self.observe_invalidation_age(oldest_age_seconds);
+    }
+
+    /// Records exact newly claimed catalog messages reached by invalidation processing.
+    pub fn record_invalidation_fanout(&self, fanout: u64) {
+        self.record_counter(
+            &self.invalidation_fanout,
+            "cigar_invalidation_fanout_total",
+            fanout,
+            None,
+        );
+    }
+
+    /// Replaces the current oldest bounded invalidation-queue age.
+    pub fn observe_invalidation_age(&self, oldest_age_seconds: u64) {
+        self.observe_gauge(
+            &self.invalidation_oldest_age_seconds,
+            "cigar_invalidation_oldest_age_seconds",
+            oldest_age_seconds,
+            None,
+        );
+    }
+
+    /// Records candidate and selected-block counts from one successful governed compilation.
+    pub fn record_compile_selection(&self, candidates: u64, selected_blocks: u64) {
+        self.record_counter(
+            &self.candidates,
+            "cigar_context_candidates_total",
+            candidates,
+            None,
+        );
+        self.record_counter(
+            &self.selected_blocks,
+            "cigar_context_selected_blocks_total",
+            selected_blocks,
+            None,
+        );
+    }
+
+    /// Records exact selected logical tokens for one standard context lane.
+    pub fn record_lane_tokens(&self, lane: LaneKind, tokens: u64) {
+        let (index, label) = lane_index_label(lane);
+        self.record_closed_counter(
+            &self.lane_tokens,
+            index,
+            "cigar_context_lane_tokens_total",
+            tokens,
+            Some(("lane", label)),
+        );
+    }
+
+    /// Records monotonic elapsed time for one completed closed compiler phase.
+    pub fn record_compile_phase(&self, phase: CompilePhase, elapsed: Duration) {
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        self.record_closed_counter(
+            &self.compile_phase_duration_nanos,
+            phase.index(),
+            "cigar_compile_phase_duration_nanoseconds_total",
+            nanos,
+            Some(("phase", phase.as_str())),
+        );
+        self.record_closed_counter(
+            &self.compile_phase_runs,
+            phase.index(),
+            "cigar_compile_phase_runs_total",
+            1,
+            Some(("phase", phase.as_str())),
+        );
+    }
+
+    /// Records typed compile conflicts.
+    pub fn record_compile_conflicts(&self, count: u64) {
+        self.record_counter(
+            &self.compile_conflicts,
+            "cigar_compile_conflicts_total",
+            count,
+            None,
+        );
+    }
+
+    /// Records stale bundle or frozen-dependency observations.
+    pub fn record_compile_stale(&self, count: u64) {
+        self.record_counter(
+            &self.compile_stale,
+            "cigar_compile_stale_total",
+            count,
+            None,
+        );
+    }
+
+    /// Records one governed materialization-cache outcome.
+    pub fn record_cache_outcome(&self, outcome: CacheOutcome) {
+        self.record_closed_counter(
+            &self.cache_events,
+            outcome.index(),
+            "cigar_cache_events_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
+    }
+
+    /// Records exact physical, provider cache-read, and provider cache-write tokens.
+    pub fn record_materialization_tokens(&self, physical: u64, cache_read: u64, cache_write: u64) {
+        self.record_counter(
+            &self.physical_tokens,
+            "cigar_context_physical_tokens_total",
+            physical,
+            None,
+        );
+        for ((local, value), label) in self
+            .cache_tokens
+            .iter()
+            .zip([cache_read, cache_write])
+            .zip(["read", "write"])
+        {
+            self.record_counter(
+                local,
+                "cigar_context_cache_tokens_total",
+                value,
+                Some(("kind", label)),
+            );
+        }
+    }
+
+    /// Records one closed handoff acceptance outcome.
+    pub fn record_handoff_acceptance(&self, outcome: HandoffAcceptanceOutcome) {
+        self.record_closed_counter(
+            &self.handoff_acceptance,
+            outcome.index(),
+            "cigar_handoff_acceptance_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
+    }
+
+    /// Records typed conflicts retained by a handoff merge.
+    pub fn record_handoff_merge_conflicts(&self, count: u64) {
+        self.record_counter(
+            &self.handoff_merge_conflicts,
+            "cigar_handoff_merge_conflicts_total",
+            count,
+            None,
+        );
+    }
+
+    /// Records a durable effect projection observation by its closed protocol state.
+    pub fn record_effect_state(&self, state: EffectState) {
+        let (index, label) = effect_state_index_label(state);
+        self.record_closed_counter(
+            &self.effect_states,
+            index,
+            "cigar_effect_state_observations_total",
+            1,
+            Some(("state", label)),
+        );
+    }
+
+    /// Updates the greatest currently observed unresolved-effect age.
+    pub fn observe_unknown_effect_age(&self, age_seconds: u64) {
+        self.effect_unknown_oldest_age_seconds
+            .fetch_max(age_seconds, Ordering::Relaxed);
+        if let Some(otel) = &self.otel {
+            otel.gauge(
+                "cigar_effect_unknown_oldest_age_seconds",
+                self.effect_unknown_oldest_age_seconds
+                    .load(Ordering::Relaxed),
+                None,
+            );
+        }
+    }
+
+    /// Records one closed reconciliation result.
+    pub fn record_reconciliation(&self, outcome: ReconciliationOutcome) {
+        self.record_closed_counter(
+            &self.effect_reconciliations,
+            outcome.index(),
+            "cigar_effect_reconciliations_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
+    }
+
+    /// Records one content-free blob-integrity probe result.
+    pub fn record_blob_integrity(&self, outcome: BlobIntegrityOutcome) {
+        self.record_closed_counter(
+            &self.blob_integrity,
+            outcome.index(),
+            "cigar_blob_integrity_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
+    }
+
+    /// Records a governed API failure after authentication and admission.
+    pub fn record_api_failure(&self) {
+        self.record_counter(
+            &self.api_requests[2],
+            "cigar_api_requests_total",
+            1,
+            Some(("outcome", "failed")),
+        );
+    }
+
+    /// Records one bounded stream event without operation or caller identity.
+    pub fn record_stream_backpressure(&self, event: StreamBackpressureEvent) {
+        self.record_closed_counter(
+            &self.stream_backpressure,
+            event.index(),
+            "cigar_api_stream_backpressure_total",
+            1,
+            Some(("event", event.as_str())),
+        );
+    }
+
+    /// Observes all process-owned queue and blocking-pool resource state.
+    pub fn observe_runtime(&self, queues: &[QueueMetricsSnapshot], blocking: BlockingPoolMetrics) {
+        for queue in queues {
+            let index = worker_index(queue.kind);
+            let label = queue.kind.as_str();
+            let oldest_age_seconds = queue.oldest_age_nanos.unwrap_or(0) / 1_000_000_000;
+            if queue.kind == WorkerKind::Invalidation {
+                self.observe_invalidation_age(oldest_age_seconds);
+            }
+            let values = [
+                ("cigar_worker_queue_depth", u64_from_usize(queue.depth)),
+                (
+                    "cigar_worker_queue_capacity",
+                    u64_from_usize(queue.capacity),
+                ),
+                ("cigar_worker_queue_oldest_age_seconds", oldest_age_seconds),
+            ];
+            if let Some(otel) = &self.otel {
+                for (name, value) in values {
+                    otel.gauge(name, value, Some(("worker", label)));
+                }
+                if let Some(exported) = self.exported_queue_rejections.get(index) {
+                    let previous = exported.swap(queue.rejection_count, Ordering::Relaxed);
+                    otel.counter(
+                        "cigar_worker_queue_rejections_total",
+                        queue.rejection_count.saturating_sub(previous),
+                        Some(("worker", label)),
+                    );
+                }
+            }
+        }
+        let jobs = [
+            u64_from_usize(blocking.in_use),
+            u64_from_usize(blocking.queued),
+            u64_from_usize(blocking.active_capacity),
+            u64_from_usize(blocking.queue_capacity),
+        ];
+        let job_labels = ["active", "queued", "active_capacity", "queue_capacity"];
+        for ((local, value), label) in self.blocking_jobs.iter().zip(jobs).zip(job_labels) {
+            local.store(value, Ordering::Relaxed);
+            if let Some(otel) = &self.otel {
+                otel.gauge("cigar_blocking_pool_jobs", value, Some(("state", label)));
+            }
+        }
+        let outcomes = [
+            blocking.completion_count,
+            blocking.rejection_count,
+            blocking.cancellation_count,
+            blocking.deadline_count,
+        ];
+        let outcome_labels = ["completed", "rejected", "cancelled", "deadline"];
+        for (((local, exported), value), label) in self
+            .blocking_outcomes
+            .iter()
+            .zip(&self.exported_blocking_outcomes)
+            .zip(outcomes)
+            .zip(outcome_labels)
+        {
+            local.store(value, Ordering::Relaxed);
+            if let Some(otel) = &self.otel {
+                let previous = exported.swap(value, Ordering::Relaxed);
+                otel.counter(
+                    "cigar_blocking_pool_outcomes_total",
+                    value.saturating_sub(previous),
+                    Some(("outcome", label)),
+                );
+            }
+        }
+        self.observe_process();
+    }
+
+    /// Replaces one worker's current remaining durable lease duration.
+    pub fn observe_worker_lease(&self, kind: WorkerKind, remaining_seconds: u64) {
+        self.observe_closed_gauge(
+            &self.worker_lease_remaining_seconds,
+            worker_index(kind),
+            "cigar_worker_lease_remaining_seconds",
+            remaining_seconds,
+            Some(("worker", kind.as_str())),
+        );
+    }
+
+    /// Replaces the closed database-pool connection observations.
+    pub fn observe_database_pool(&self, active: u64, idle: u64, maximum: u64) {
+        for ((local, value), label) in self
+            .database_connections
+            .iter()
+            .zip([active, idle, maximum])
+            .zip(["active", "idle", "maximum"])
+        {
+            self.observe_gauge(
+                local,
+                "cigar_database_pool_connections",
+                value,
+                Some(("state", label)),
+            );
+        }
+    }
+
+    /// Records database connection-pool waits.
+    pub fn record_database_pool_waits(&self, count: u64) {
+        self.record_counter(
+            &self.database_pool_waits,
+            "cigar_database_pool_waits_total",
+            count,
+            None,
+        );
+    }
+
+    fn record_counter(
+        &self,
+        local: &AtomicU64,
+        name: &'static str,
+        value: u64,
+        label: Option<(&'static str, &'static str)>,
+    ) {
+        atomic_saturating_add(local, value);
+        if let Some(otel) = &self.otel {
+            otel.counter(name, value, label);
+        }
+    }
+
+    fn record_closed_counter(
+        &self,
+        locals: &[AtomicU64],
+        index: usize,
+        name: &'static str,
+        value: u64,
+        label: Option<(&'static str, &'static str)>,
+    ) {
+        if let Some(local) = locals.get(index) {
+            self.record_counter(local, name, value, label);
+        }
+    }
+
+    fn observe_gauge(
+        &self,
+        local: &AtomicU64,
+        name: &'static str,
+        value: u64,
+        label: Option<(&'static str, &'static str)>,
+    ) {
+        local.store(value, Ordering::Relaxed);
+        if let Some(otel) = &self.otel {
+            otel.gauge(name, value, label);
+        }
+    }
+
+    fn observe_closed_gauge(
+        &self,
+        locals: &[AtomicU64],
+        index: usize,
+        name: &'static str,
+        value: u64,
+        label: Option<(&'static str, &'static str)>,
+    ) {
+        if let Some(local) = locals.get(index) {
+            self.observe_gauge(local, name, value, label);
+        }
+    }
+
+    fn observe_process(&self) {
+        let process = self.process.snapshot();
+        if let Some(otel) = &self.otel {
+            for (name, value) in [
+                ("cigar_daemon_uptime_seconds", process.uptime_seconds),
+                ("cigar_daemon_cpu_time_seconds", process.cpu_time_seconds),
+                (
+                    "cigar_daemon_resident_memory_bytes",
+                    process.resident_memory_bytes,
+                ),
+                (
+                    "cigar_daemon_virtual_memory_bytes",
+                    process.virtual_memory_bytes,
+                ),
+                (
+                    "cigar_daemon_open_file_descriptors",
+                    process.open_file_descriptors,
+                ),
+            ] {
+                otel.gauge(name, value, None);
+            }
         }
     }
 
@@ -256,71 +1293,223 @@ impl DaemonTelemetry {
     /// Renders standards-compatible OpenMetrics text with only closed, content-safe labels.
     #[must_use]
     pub fn render_openmetrics(&self, queues: &[QueueMetricsSnapshot]) -> String {
-        let snapshot = self.snapshot();
-        let mut output = String::new();
-        metric(
-            &mut output,
-            "cigar_daemon_authorized_requests_total",
-            "Authenticated requests accepted by daemon transports.",
-            "counter",
-            snapshot.authorized_requests,
-        );
-        metric(
-            &mut output,
-            "cigar_daemon_rejected_requests_total",
-            "Requests rejected before protected service dispatch.",
-            "counter",
-            snapshot.rejected_requests,
-        );
-        metric(
-            &mut output,
-            "cigar_daemon_listener_failures_total",
-            "Listener bind or unexpected-exit failures.",
-            "counter",
-            snapshot.listener_failures,
-        );
-        metric(
-            &mut output,
-            "cigar_daemon_graceful_shutdowns_total",
-            "Completed bounded graceful shutdowns.",
-            "counter",
-            snapshot.graceful_shutdowns,
-        );
-        output.push_str("# HELP cigar_worker_queue_depth Durable wakeups currently queued.\n");
-        output.push_str("# TYPE cigar_worker_queue_depth gauge\n");
-        output.push_str("# HELP cigar_worker_queue_capacity Configured hard queue capacity.\n");
-        output.push_str("# TYPE cigar_worker_queue_capacity gauge\n");
-        output.push_str("# HELP cigar_worker_queue_rejections_total Rejected bounded wakeups.\n");
-        output.push_str("# TYPE cigar_worker_queue_rejections_total counter\n");
-        output.push_str("# HELP cigar_worker_queue_oldest_age_seconds Age of the oldest wakeup.\n");
-        output.push_str("# TYPE cigar_worker_queue_oldest_age_seconds gauge\n");
-        for queue in queues {
-            let kind = queue.kind.as_str();
-            output.push_str(&format!(
-                "cigar_worker_queue_depth{{worker=\"{kind}\"}} {}\n",
-                queue.depth
-            ));
-            output.push_str(&format!(
-                "cigar_worker_queue_capacity{{worker=\"{kind}\"}} {}\n",
-                queue.capacity
-            ));
-            output.push_str(&format!(
-                "cigar_worker_queue_rejections_total{{worker=\"{kind}\"}} {}\n",
-                queue.rejection_count
-            ));
-            let oldest_seconds = queue.oldest_age_nanos.unwrap_or(0) / 1_000_000_000;
-            output.push_str(&format!(
-                "cigar_worker_queue_oldest_age_seconds{{worker=\"{kind}\"}} {oldest_seconds}\n"
-            ));
+        let process = self.process.snapshot();
+        if let Some(otel) = &self.otel {
+            for (name, value) in process_values(process) {
+                otel.gauge(name, value, None);
+            }
+        }
+        let mut output = String::with_capacity(32 * 1024);
+        for definition in DAEMON_METRICS {
+            output.push_str("# HELP ");
+            output.push_str(definition.name);
+            output.push(' ');
+            output.push_str(definition.help);
+            output.push('\n');
+            output.push_str("# TYPE ");
+            output.push_str(definition.name);
+            output.push(' ');
+            output.push_str(definition.kind.as_str());
+            output.push('\n');
+            match definition.label {
+                None => render_sample(
+                    &mut output,
+                    definition.name,
+                    None,
+                    self.metric_value(definition.name, None, queues, process),
+                ),
+                Some(domain) => {
+                    for value in domain.values {
+                        render_sample(
+                            &mut output,
+                            definition.name,
+                            Some((domain.key, value)),
+                            self.metric_value(definition.name, Some(value), queues, process),
+                        );
+                    }
+                }
+            }
         }
         output.push_str("# EOF\n");
         output
+    }
+
+    fn metric_value(
+        &self,
+        name: &str,
+        label: Option<&str>,
+        queues: &[QueueMetricsSnapshot],
+        process: ProcessSnapshot,
+    ) -> u64 {
+        match name {
+            "cigar_daemon_authorized_requests_total" => {
+                self.authorized_requests.load(Ordering::Relaxed)
+            }
+            "cigar_daemon_rejected_requests_total" => {
+                self.rejected_requests.load(Ordering::Relaxed)
+            }
+            "cigar_daemon_listener_failures_total" => {
+                self.listener_failures.load(Ordering::Relaxed)
+            }
+            "cigar_daemon_graceful_shutdowns_total" => {
+                self.graceful_shutdowns.load(Ordering::Relaxed)
+            }
+            "cigar_ingestion_atoms_total" => {
+                indexed_value(&self.ingestion_atoms, label, &["published", "tombstoned"])
+            }
+            "cigar_ingestion_bytes_total" => self.ingestion_bytes.load(Ordering::Relaxed),
+            "cigar_ingestion_parser_failures_total" => indexed_value(
+                &self.parser_failures,
+                label,
+                &["source", "atomizer", "code_intelligence"],
+            ),
+            "cigar_ingestion_quarantines_total" => self.quarantines.load(Ordering::Relaxed),
+            "cigar_index_lag_revisions" => self.index_lag_revisions.load(Ordering::Relaxed),
+            "cigar_invalidation_fanout_total" => self.invalidation_fanout.load(Ordering::Relaxed),
+            "cigar_invalidation_oldest_age_seconds" => {
+                self.invalidation_oldest_age_seconds.load(Ordering::Relaxed)
+            }
+            "cigar_context_candidates_total" => self.candidates.load(Ordering::Relaxed),
+            "cigar_context_selected_blocks_total" => self.selected_blocks.load(Ordering::Relaxed),
+            "cigar_context_lane_tokens_total" => indexed_value(
+                &self.lane_tokens,
+                label,
+                &["rules", "task", "evidence", "history", "tools"],
+            ),
+            "cigar_compile_phase_duration_nanoseconds_total" => indexed_value(
+                &self.compile_phase_duration_nanos,
+                label,
+                &[
+                    "scope",
+                    "retrieve",
+                    "authorize",
+                    "reconcile",
+                    "transform",
+                    "pack",
+                    "materialize",
+                ],
+            ),
+            "cigar_compile_phase_runs_total" => indexed_value(
+                &self.compile_phase_runs,
+                label,
+                &[
+                    "scope",
+                    "retrieve",
+                    "authorize",
+                    "reconcile",
+                    "transform",
+                    "pack",
+                    "materialize",
+                ],
+            ),
+            "cigar_compile_conflicts_total" => self.compile_conflicts.load(Ordering::Relaxed),
+            "cigar_compile_stale_total" => self.compile_stale.load(Ordering::Relaxed),
+            "cigar_cache_events_total" => {
+                indexed_value(&self.cache_events, label, &["hit", "miss"])
+            }
+            "cigar_context_physical_tokens_total" => self.physical_tokens.load(Ordering::Relaxed),
+            "cigar_context_cache_tokens_total" => {
+                indexed_value(&self.cache_tokens, label, &["read", "write"])
+            }
+            "cigar_handoff_acceptance_total" => indexed_value(
+                &self.handoff_acceptance,
+                label,
+                &["accepted", "rejected", "expired"],
+            ),
+            "cigar_handoff_merge_conflicts_total" => {
+                self.handoff_merge_conflicts.load(Ordering::Relaxed)
+            }
+            "cigar_effect_state_observations_total" => indexed_value(
+                &self.effect_states,
+                label,
+                cigar_observe::EFFECT_STATE_VALUES,
+            ),
+            "cigar_effect_unknown_oldest_age_seconds" => self
+                .effect_unknown_oldest_age_seconds
+                .load(Ordering::Relaxed),
+            "cigar_effect_reconciliations_total" => indexed_value(
+                &self.effect_reconciliations,
+                label,
+                &["resolved", "unresolved", "failed"],
+            ),
+            "cigar_worker_queue_depth" => {
+                queue_value(queues, label, |queue| u64_from_usize(queue.depth))
+            }
+            "cigar_worker_queue_capacity" => {
+                queue_value(queues, label, |queue| u64_from_usize(queue.capacity))
+            }
+            "cigar_worker_queue_rejections_total" => {
+                queue_value(queues, label, |queue| queue.rejection_count)
+            }
+            "cigar_worker_queue_oldest_age_seconds" => queue_value(queues, label, |queue| {
+                queue.oldest_age_nanos.unwrap_or(0) / 1_000_000_000
+            }),
+            "cigar_worker_lease_remaining_seconds" => indexed_value(
+                &self.worker_lease_remaining_seconds,
+                label,
+                cigar_observe::WORKER_VALUES,
+            ),
+            "cigar_database_pool_connections" => indexed_value(
+                &self.database_connections,
+                label,
+                &["active", "idle", "maximum"],
+            ),
+            "cigar_database_pool_waits_total" => self.database_pool_waits.load(Ordering::Relaxed),
+            "cigar_blob_integrity_total" => indexed_value(
+                &self.blob_integrity,
+                label,
+                &["verified", "missing", "corrupt"],
+            ),
+            "cigar_api_requests_total" => indexed_value(
+                &self.api_requests,
+                label,
+                &["accepted", "rejected", "failed"],
+            ),
+            "cigar_api_stream_backpressure_total" => indexed_value(
+                &self.stream_backpressure,
+                label,
+                &["opened", "blocked", "cancelled"],
+            ),
+            "cigar_daemon_uptime_seconds" => process.uptime_seconds,
+            "cigar_daemon_cpu_time_seconds" => process.cpu_time_seconds,
+            "cigar_daemon_resident_memory_bytes" => process.resident_memory_bytes,
+            "cigar_daemon_virtual_memory_bytes" => process.virtual_memory_bytes,
+            "cigar_daemon_open_file_descriptors" => process.open_file_descriptors,
+            "cigar_blocking_pool_jobs" => indexed_value(
+                &self.blocking_jobs,
+                label,
+                &["active", "queued", "active_capacity", "queue_capacity"],
+            ),
+            "cigar_blocking_pool_outcomes_total" => indexed_value(
+                &self.blocking_outcomes,
+                label,
+                &["completed", "rejected", "cancelled", "deadline"],
+            ),
+            _ => 0,
+        }
     }
 }
 
 impl Default for DaemonTelemetry {
     fn default() -> Self {
         Self::local()
+    }
+}
+
+impl TransportMetricsObserver for DaemonTelemetry {
+    fn record_transport_metric(&self, event: TransportMetricEvent) {
+        match event {
+            TransportMetricEvent::ApiFailure => self.record_api_failure(),
+            TransportMetricEvent::StreamOpened => {
+                self.record_stream_backpressure(StreamBackpressureEvent::Opened);
+            }
+            TransportMetricEvent::StreamBlocked => {
+                self.record_stream_backpressure(StreamBackpressureEvent::Blocked);
+            }
+            TransportMetricEvent::StreamCancelled => {
+                self.record_stream_backpressure(StreamBackpressureEvent::Cancelled);
+            }
+        }
     }
 }
 
@@ -347,16 +1536,162 @@ pub struct TelemetrySnapshot {
     pub graceful_shutdowns: u64,
 }
 
-fn metric(output: &mut String, name: &str, help: &str, kind: &str, value: u64) {
-    output.push_str(&format!("# HELP {name} {help}\n"));
-    output.push_str(&format!("# TYPE {name} {kind}\n"));
-    output.push_str(&format!("{name} {value}\n"));
+fn render_sample(output: &mut String, name: &str, label: Option<(&str, &str)>, value: u64) {
+    output.push_str(name);
+    if let Some((key, value)) = label {
+        output.push('{');
+        output.push_str(key);
+        output.push_str("=\"");
+        output.push_str(value);
+        output.push_str("\"}");
+    }
+    output.push(' ');
+    output.push_str(&value.to_string());
+    output.push('\n');
+}
+
+fn indexed_value<const N: usize>(
+    values: &[AtomicU64; N],
+    label: Option<&str>,
+    labels: &[&str],
+) -> u64 {
+    label
+        .and_then(|value| labels.iter().position(|candidate| *candidate == value))
+        .and_then(|index| values.get(index))
+        .map_or(0, |value| value.load(Ordering::Relaxed))
+}
+
+fn queue_value(
+    queues: &[QueueMetricsSnapshot],
+    label: Option<&str>,
+    value: impl Fn(&QueueMetricsSnapshot) -> u64,
+) -> u64 {
+    label
+        .and_then(|label| queues.iter().find(|queue| queue.kind.as_str() == label))
+        .map_or(0, value)
+}
+
+fn atomic_saturating_add(target: &AtomicU64, value: u64) {
+    let mut current = target.load(Ordering::Relaxed);
+    loop {
+        let next = current.saturating_add(value);
+        match target.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return,
+            Err(observed) => current = observed,
+        }
+    }
+}
+
+fn u64_from_usize(value: usize) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+const fn worker_index(kind: WorkerKind) -> usize {
+    match kind {
+        WorkerKind::Ingestion => 0,
+        WorkerKind::Indexing => 1,
+        WorkerKind::Invalidation => 2,
+        WorkerKind::Compilation => 3,
+        WorkerKind::Outbox => 4,
+        WorkerKind::Reconciliation => 5,
+        WorkerKind::LeaseCleanup => 6,
+        WorkerKind::Backup => 7,
+        WorkerKind::GarbageCollection => 8,
+    }
+}
+
+const fn lane_index_label(lane: LaneKind) -> (usize, &'static str) {
+    match lane {
+        LaneKind::Rules => (0, "rules"),
+        LaneKind::Task => (1, "task"),
+        LaneKind::Evidence => (2, "evidence"),
+        LaneKind::History => (3, "history"),
+        LaneKind::Tools => (4, "tools"),
+    }
+}
+
+const fn effect_state_index_label(state: EffectState) -> (usize, &'static str) {
+    match state {
+        EffectState::Prepared => (0, "prepared"),
+        EffectState::PendingApproval => (1, "pending_approval"),
+        EffectState::Authorized => (2, "authorized"),
+        EffectState::Dispatching => (3, "dispatching"),
+        EffectState::Succeeded => (4, "succeeded"),
+        EffectState::Failed => (5, "failed"),
+        EffectState::Unknown => (6, "unknown"),
+        EffectState::AuthorizedForRetry => (7, "authorized_for_retry"),
+        EffectState::ManualResolution => (8, "manual_resolution"),
+        EffectState::Rejected => (9, "rejected"),
+        EffectState::Expired => (10, "expired"),
+        EffectState::Cancelled => (11, "cancelled"),
+        EffectState::CompensationPending => (12, "compensation_pending"),
+        EffectState::Compensating => (13, "compensating"),
+        EffectState::Compensated => (14, "compensated"),
+        EffectState::CompensationFailed => (15, "compensation_failed"),
+    }
+}
+
+fn process_values(process: ProcessSnapshot) -> [(&'static str, u64); 5] {
+    [
+        ("cigar_daemon_uptime_seconds", process.uptime_seconds),
+        ("cigar_daemon_cpu_time_seconds", process.cpu_time_seconds),
+        (
+            "cigar_daemon_resident_memory_bytes",
+            process.resident_memory_bytes,
+        ),
+        (
+            "cigar_daemon_virtual_memory_bytes",
+            process.virtual_memory_bytes,
+        ),
+        (
+            "cigar_daemon_open_file_descriptors",
+            process.open_file_descriptors,
+        ),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DaemonTelemetry, OtlpConfig, TelemetryError};
-    use crate::{OverflowPolicy, QueueMetricsSnapshot, WorkerKind};
+    use super::{
+        BlobIntegrityOutcome, CacheOutcome, CompilePhase, DaemonTelemetry,
+        HandoffAcceptanceOutcome, OtlpConfig, ParserStage, ReconciliationOutcome, TelemetryError,
+        atomic_saturating_add, strip_ambient_otlp_metadata,
+    };
+    use crate::{BlockingPoolMetrics, OverflowPolicy, QueueMetricsSnapshot, WorkerKind};
+    use cigar_api::{TransportMetricEvent, TransportMetricsObserver};
+    use cigar_observe::{DAEMON_METRICS, maximum_daemon_series};
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn atomic_accumulator_is_contention_safe_and_saturating() {
+        const THREADS: u64 = 8;
+        const INCREMENTS: u64 = 10_000;
+
+        let value = Arc::new(AtomicU64::new(0));
+        let mut workers = Vec::new();
+        for _ in 0..THREADS {
+            let value = Arc::clone(&value);
+            workers.push(thread::spawn(move || {
+                for _ in 0..INCREMENTS {
+                    atomic_saturating_add(&value, 1);
+                }
+            }));
+        }
+        for worker in workers {
+            assert!(worker.join().is_ok(), "telemetry accumulator worker joins");
+        }
+        assert_eq!(value.load(Ordering::Relaxed), THREADS * INCREMENTS);
+
+        value.store(u64::MAX - 1, Ordering::Relaxed);
+        atomic_saturating_add(&value, 8);
+        assert_eq!(value.load(Ordering::Relaxed), u64::MAX);
+        atomic_saturating_add(&value, 1);
+        assert_eq!(value.load(Ordering::Relaxed), u64::MAX);
+    }
 
     #[test]
     fn openmetrics_contains_only_closed_worker_labels_and_has_eof() {
@@ -380,7 +1715,106 @@ mod tests {
     }
 
     #[test]
-    fn otlp_configuration_rejects_unencrypted_remote_collectors() {
+    fn openmetrics_emits_the_exact_complete_closed_catalog() {
+        let telemetry = DaemonTelemetry::default();
+        telemetry.record_ingestion(2, 3, 5);
+        telemetry.record_parser_failure(ParserStage::Source);
+        telemetry.record_quarantines(7);
+        telemetry.observe_index_lag(11);
+        telemetry.record_invalidation(13, 17);
+        telemetry.record_compile_selection(19, 23);
+        telemetry.record_compile_phase(CompilePhase::Pack, Duration::from_nanos(29));
+        telemetry.record_compile_conflicts(31);
+        telemetry.record_compile_stale(37);
+        telemetry.record_cache_outcome(CacheOutcome::Hit);
+        telemetry.record_materialization_tokens(41, 43, 47);
+        telemetry.record_handoff_acceptance(HandoffAcceptanceOutcome::Expired);
+        telemetry.record_handoff_merge_conflicts(53);
+        telemetry.observe_unknown_effect_age(59);
+        telemetry.record_reconciliation(ReconciliationOutcome::Resolved);
+        telemetry.record_blob_integrity(BlobIntegrityOutcome::Verified);
+        telemetry.observe_database_pool(2, 3, 5);
+        telemetry.record_database_pool_waits(61);
+        telemetry.record_transport_metric(TransportMetricEvent::ApiFailure);
+        telemetry.record_transport_metric(TransportMetricEvent::StreamOpened);
+        let queues = WorkerKind::ALL.map(|kind| QueueMetricsSnapshot {
+            kind,
+            capacity: 8,
+            depth: usize::from(kind == WorkerKind::Invalidation),
+            oldest_age_nanos: (kind == WorkerKind::Invalidation).then_some(67_000_000_000),
+            rejection_count: 1,
+            overflow_policy: OverflowPolicy::RejectNewest,
+            accepting: true,
+        });
+        telemetry.observe_runtime(
+            &queues,
+            BlockingPoolMetrics {
+                active_capacity: 4,
+                queue_capacity: 8,
+                in_use: 1,
+                queued: 2,
+                rejection_count: 3,
+                completion_count: 5,
+                cancellation_count: 7,
+                deadline_count: 11,
+                accepting: true,
+            },
+        );
+
+        let output = telemetry.render_openmetrics(&queues);
+        assert!(output.len() < 64 * 1024);
+        let help_names = output
+            .lines()
+            .filter_map(|line| line.strip_prefix("# HELP "))
+            .filter_map(|line| line.split_once(' ').map(|(name, _help)| name))
+            .collect::<BTreeSet<_>>();
+        let type_names = output
+            .lines()
+            .filter_map(|line| line.strip_prefix("# TYPE "))
+            .filter_map(|line| line.split_once(' ').map(|(name, _kind)| name))
+            .collect::<BTreeSet<_>>();
+        let expected_names = DAEMON_METRICS
+            .iter()
+            .map(|definition| definition.name)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(help_names, expected_names);
+        assert_eq!(type_names, expected_names);
+        assert_eq!(
+            output.lines().filter(|line| !line.starts_with('#')).count(),
+            maximum_daemon_series()
+        );
+        for definition in DAEMON_METRICS {
+            assert!(output.contains(&format!(
+                "# HELP {} {}\n# TYPE {} {}\n",
+                definition.name,
+                definition.help,
+                definition.name,
+                definition.kind.as_str()
+            )));
+        }
+        for expected in [
+            "cigar_ingestion_atoms_total{outcome=\"published\"} 2",
+            "cigar_compile_phase_runs_total{phase=\"pack\"} 1",
+            "cigar_handoff_acceptance_total{outcome=\"expired\"} 1",
+            "cigar_api_requests_total{outcome=\"failed\"} 1",
+            "cigar_api_stream_backpressure_total{event=\"opened\"} 1",
+            "cigar_invalidation_oldest_age_seconds 67",
+            "cigar_blocking_pool_outcomes_total{outcome=\"deadline\"} 11",
+        ] {
+            assert!(
+                output.lines().any(|line| line == expected),
+                "missing {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn otlp_configuration_requires_an_explicit_valid_ca_for_https()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut parameters = rcgen::CertificateParams::new(Vec::<String>::new())?;
+        parameters.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let key = rcgen::KeyPair::generate()?;
+        let ca_pem = parameters.self_signed(&key)?.pem().into_bytes();
         assert_eq!(
             OtlpConfig::new(
                 "http://collector.example:4317",
@@ -390,12 +1824,143 @@ mod tests {
             Err(TelemetryError::InvalidConfiguration)
         );
         assert!(
+            OtlpConfig::new_with_ca_certificate(
+                "https://collector.example:4317",
+                std::time::Duration::from_secs(1),
+                std::time::Duration::from_secs(10),
+                ca_pem.clone(),
+            )
+            .is_ok()
+        );
+        assert_eq!(
             OtlpConfig::new(
                 "https://collector.example:4317",
                 std::time::Duration::from_secs(1),
                 std::time::Duration::from_secs(10),
-            )
-            .is_ok()
+            ),
+            Err(TelemetryError::InvalidConfiguration)
         );
+        for invalid_ca in [
+            Vec::new(),
+            b"not a certificate".to_vec(),
+            b"-----BEGIN PRIVATE KEY-----\nAA==\n-----END PRIVATE KEY-----\n".to_vec(),
+        ] {
+            assert_eq!(
+                OtlpConfig::new_with_ca_certificate(
+                    "https://collector.example:4317",
+                    std::time::Duration::from_secs(1),
+                    std::time::Duration::from_secs(10),
+                    invalid_ca,
+                ),
+                Err(TelemetryError::InvalidConfiguration)
+            );
+        }
+        let configured = OtlpConfig::new_with_ca_certificate(
+            "https://collector.example:4317",
+            std::time::Duration::from_secs(1),
+            std::time::Duration::from_secs(10),
+            ca_pem.clone(),
+        )?;
+        let debug = format!("{configured:?}");
+        assert!(debug.contains("[EXPLICIT-CA]"));
+        assert!(!debug.contains(std::str::from_utf8(&ca_pem)?));
+        for invalid in [
+            "https://user@collector.example:4317",
+            "https://user:password@collector.example:4317",
+            "https://collector.example:4317/path",
+            "https://collector.example:4317?tenant=other",
+            "https://collector.example:4317#fragment",
+            "http://localhost",
+        ] {
+            assert_eq!(
+                OtlpConfig::new(
+                    invalid,
+                    std::time::Duration::from_secs(1),
+                    std::time::Duration::from_secs(10),
+                ),
+                Err(TelemetryError::InvalidConfiguration),
+                "endpoint {invalid:?} must fail closed"
+            );
+        }
+        for allowed in [
+            "http://localhost:4317",
+            "http://127.0.0.1:4317",
+            "http://[::1]:4317",
+        ] {
+            assert!(
+                OtlpConfig::new(
+                    allowed,
+                    std::time::Duration::from_secs(1),
+                    std::time::Duration::from_secs(10),
+                )
+                .is_ok(),
+                "endpoint {allowed:?} should pass"
+            );
+        }
+        assert_eq!(
+            OtlpConfig::new_with_ca_certificate(
+                "http://127.0.0.1:4317",
+                std::time::Duration::from_secs(1),
+                std::time::Duration::from_secs(10),
+                ca_pem,
+            ),
+            Err(TelemetryError::InvalidConfiguration)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn telemetry_surfaces_drop_ambient_metadata_and_never_accept_content_canaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const CANARIES: [&str; 7] = [
+            "SOURCE-CONTENT-CANARY",
+            "PROMPT-CANARY",
+            "SECRET-CANARY",
+            "/private/path/canary",
+            "user-identity-canary@example.invalid",
+            "effect-argument-canary",
+            "attacker-high-cardinality-7f9d4c21",
+        ];
+
+        let mut request = tonic::Request::new(());
+        for (index, canary) in CANARIES.iter().enumerate() {
+            let key: tonic::metadata::MetadataKey<tonic::metadata::Ascii> =
+                format!("x-canary-{index}").parse()?;
+            let value: tonic::metadata::MetadataValue<tonic::metadata::Ascii> = canary.parse()?;
+            request.metadata_mut().insert(key, value);
+        }
+        let request = strip_ambient_otlp_metadata(request)?;
+        assert!(request.metadata().is_empty());
+
+        let telemetry = DaemonTelemetry::default();
+        telemetry.record_authorized_request();
+        telemetry.record_rejected_request();
+        telemetry.record_listener_failure();
+        telemetry.record_graceful_shutdown();
+        let queues = WorkerKind::ALL.map(|kind| QueueMetricsSnapshot {
+            kind,
+            capacity: 8,
+            depth: 2,
+            oldest_age_nanos: Some(2_000_000_000),
+            rejection_count: 1,
+            overflow_policy: OverflowPolicy::RejectNewest,
+            accepting: true,
+        });
+        let surfaces = [
+            telemetry.render_openmetrics(&queues),
+            serde_json::to_string(&telemetry.snapshot())?,
+            format!("{telemetry:?}"),
+        ]
+        .join("\n");
+        for canary in CANARIES {
+            assert!(!surfaces.contains(canary));
+        }
+        for worker in WorkerKind::ALL {
+            assert!(surfaces.contains(worker.as_str()));
+        }
+        assert!(!surfaces.contains("tenant"));
+        assert!(!surfaces.contains("principal"));
+        assert!(!surfaces.contains("record_id"));
+        Ok(())
     }
 }

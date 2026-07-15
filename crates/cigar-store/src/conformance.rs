@@ -576,7 +576,8 @@ mod tests {
         drop(SqliteStore::open(&state_path)?);
         let connection = rusqlite::Connection::open(&state_path)?;
         connection.execute(
-            "UPDATE state_snapshots SET checksum = 'tampered' WHERE revision = 0",
+            "UPDATE cigar_repository_revisions_v4
+             SET residual_state = x'00' WHERE revision = 0",
             [],
         )?;
         drop(connection);
@@ -801,14 +802,14 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_opens_and_exact_queries_one_million_atom_projection()
+    fn sqlite_ignores_one_million_unbound_legacy_projection_rows()
     -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("million.sqlite3");
         {
             let store = SqliteStore::open(&path)?;
             store.seed_million_atom_projection("scale-tenant")?;
-            assert_eq!(store.atom_projection_count("scale-tenant")?, 1_000_000);
+            assert_eq!(store.atom_projection_count("scale-tenant")?, 0);
         }
         let target = format!("1220{:064x}", 1_000_000_u64);
         let mut open_samples = Vec::new();
@@ -818,7 +819,7 @@ mod tests {
             let reopened = SqliteStore::open(&path)?;
             open_samples.push(started.elapsed());
             let started = std::time::Instant::now();
-            assert!(reopened.atom_projection_contains("scale-tenant", &target)?);
+            assert!(!reopened.atom_projection_contains("scale-tenant", &target)?);
             query_samples.push(started.elapsed());
         }
         open_samples.sort();
@@ -828,13 +829,13 @@ mod tests {
         assert!(open_p95 <= std::time::Duration::from_secs(2));
         assert!(query_p95 <= std::time::Duration::from_millis(15));
         let reopened = SqliteStore::open(&path)?;
-        assert_eq!(reopened.atom_projection_count("scale-tenant")?, 1_000_000);
+        assert_eq!(reopened.atom_projection_count("scale-tenant")?, 0);
         assert!(
             !reopened
                 .atom_projection_contains("scale-tenant", &format!("1220{:064x}", 1_000_001_u64))?
         );
         eprintln!(
-            "WP04_SCALE atom_count=1000000 open_p95_us={} exact_query_p95_us={} database_bytes={}",
+            "PROJECTION_ISOLATION unbound_rows=1000000 active_atom_count=0 open_p95_us={} exact_query_p95_us={} database_bytes={}",
             open_p95.as_micros(),
             query_p95.as_micros(),
             std::fs::metadata(path)?.len()

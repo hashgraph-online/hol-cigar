@@ -4,19 +4,31 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import os
 import re
+import stat
 import tempfile
+import unicodedata
 import urllib.parse
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceLimits,
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
+    canonical_json_bytes,
     expand_files,
     load_json,
     repo_root,
+    require_distinct_output,
     resolve_beneath,
     safe_relative_path,
     write_bytes,
@@ -33,8 +45,439 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=repo_root())
     parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external documentation workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     parser.add_argument("--check", action="store_true")
     return parser.parse_args()
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one protected output root without resolving untrusted components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+def _documentation_inputs(root: Path) -> list[Path]:
+    """Return every repository file consumed by the site builder."""
+
+    manifest_path = root / "docs/site-manifest.v1.json"
+    manifest = load_json(manifest_path)
+    includes = manifest.get("include") if isinstance(manifest, dict) else None
+    assets = manifest.get("assets") if isinstance(manifest, dict) else None
+    if not isinstance(includes, list) or not all(
+        isinstance(value, str) for value in includes
+    ):
+        raise ReleaseError("documentation include manifest is invalid")
+    if not isinstance(assets, list) or not all(
+        isinstance(value, str) for value in assets
+    ):
+        raise ReleaseError("documentation asset allowlist is invalid")
+    inputs = {manifest_path}
+    inputs.update(path for _, path in expand_files(root, includes, []))
+    inputs.update(resolve_beneath(root, safe_relative_path(value)) for value in assets)
+    return sorted(inputs, key=lambda path: path.as_posix())
+
+
+def _portable_key(value: str) -> str:
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+@dataclass(frozen=True)
+class _StagedFile:
+    relative: str
+    source: Path
+    sha256: str
+    bytes: int
+    payload: bytes
+
+
+_STAGED_READ_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+)
+_STABLE_FILE_FIELDS = (
+    "st_dev",
+    "st_ino",
+    "st_mode",
+    "st_uid",
+    "st_nlink",
+    "st_size",
+    "st_mtime_ns",
+    "st_ctime_ns",
+)
+
+
+def _read_stable_staged_file(
+    source: Path,
+    initial: os.stat_result,
+    maximum: int,
+    label: str,
+) -> bytes:
+    """Read one owner-controlled file and prove its identity stayed stable."""
+
+    try:
+        file_fd = os.open(source, _STAGED_READ_FLAGS)
+    except OSError as error:
+        raise ReleaseError(
+            f"cannot securely open staged documentation file {label}: {error}"
+        ) from error
+    try:
+        before = os.fstat(file_fd)
+        if any(
+            getattr(initial, field) != getattr(before, field)
+            for field in _STABLE_FILE_FIELDS
+        ):
+            raise ReleaseError(
+                f"staged documentation file changed before validation: {label}"
+            )
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.geteuid()
+            or stat.S_IMODE(before.st_mode) & 0o022
+            or before.st_nlink != 1
+            or before.st_size < 0
+            or before.st_size > maximum
+        ):
+            raise ReleaseError(
+                f"staged documentation file is not owner-controlled: {label}"
+            )
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(file_fd, min(1024 * 1024, maximum + 1 - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > maximum:
+                raise ReleaseError(
+                    f"staged documentation file exceeds the per-file limit: {label}"
+                )
+            chunks.append(chunk)
+        after = os.fstat(file_fd)
+        if any(
+            getattr(before, field) != getattr(after, field)
+            for field in _STABLE_FILE_FIELDS
+        ):
+            raise ReleaseError(
+                f"staged documentation file changed during validation: {label}"
+            )
+        payload = b"".join(chunks)
+        if len(payload) != before.st_size:
+            raise ReleaseError(
+                f"staged documentation file size changed during validation: {label}"
+            )
+        return payload
+    except OSError as error:
+        raise ReleaseError(
+            f"cannot read staged documentation file {label}: {error}"
+        ) from error
+    finally:
+        os.close(file_fd)
+
+
+def _verified_staged_payload(staged: _StagedFile, maximum: int) -> bytes:
+    """Reread and compare one file immediately before destination publication."""
+
+    try:
+        current = os.lstat(staged.source)
+    except OSError as error:
+        raise ReleaseError(
+            f"cannot inspect validated staged file {staged.relative}: {error}"
+        ) from error
+    payload = _read_stable_staged_file(
+        staged.source,
+        current,
+        maximum,
+        staged.relative,
+    )
+    if (
+        len(payload) != staged.bytes
+        or hashlib.sha256(payload).hexdigest() != staged.sha256
+    ):
+        raise ReleaseError(
+            f"staged documentation file changed after validation: {staged.relative}"
+        )
+    return payload
+
+
+def _validated_stage_files(
+    stage: Path,
+    site: dict[str, Any],
+) -> list[_StagedFile]:
+    """Validate the complete staged site before any destination is published."""
+
+    stage = stage.resolve(strict=True)
+    limits = EvidenceLimits()
+    limits.validate()
+    files: list[_StagedFile] = []
+    aliases: set[str] = set()
+    directory_count = 1
+    total_bytes = 0
+
+    def scan(directory: Path, relative: str, depth: int) -> None:
+        nonlocal directory_count, total_bytes
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as error:
+            raise ReleaseError(
+                f"cannot enumerate staged documentation site: {error}"
+            ) from error
+        for entry in entries:
+            child_relative = f"{relative}/{entry.name}" if relative else entry.name
+            parts = safe_evidence_path(
+                child_relative,
+                max_depth=limits.max_path_depth,
+            )
+            child_relative = "/".join(parts)
+            portable = _portable_key(child_relative)
+            if portable in aliases:
+                raise ReleaseError(
+                    f"staged documentation site has a portable path collision: {child_relative}"
+                )
+            aliases.add(portable)
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as error:
+                raise ReleaseError(
+                    f"cannot inspect staged documentation entry {child_relative}: {error}"
+                ) from error
+            if stat.S_ISDIR(metadata.st_mode):
+                if depth >= limits.max_path_depth:
+                    raise ReleaseError(
+                        "staged documentation directory depth limit exceeded"
+                    )
+                if (
+                    metadata.st_uid != os.geteuid()
+                    or stat.S_IMODE(metadata.st_mode) & 0o022
+                ):
+                    raise ReleaseError(
+                        f"staged documentation directory is not owner-controlled: {child_relative}"
+                    )
+                directory_count += 1
+                if directory_count > limits.max_directories:
+                    raise ReleaseError("staged documentation directory limit exceeded")
+                scan(Path(entry.path), child_relative, depth + 1)
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ReleaseError(
+                    f"staged documentation entry is not a regular file: {child_relative}"
+                )
+            if (
+                metadata.st_uid != os.geteuid()
+                or stat.S_IMODE(metadata.st_mode) & 0o022
+                or metadata.st_nlink != 1
+            ):
+                raise ReleaseError(
+                    f"staged documentation file is not owner-controlled: {child_relative}"
+                )
+            if metadata.st_size < 0 or metadata.st_size > limits.max_file_bytes:
+                raise ReleaseError(
+                    f"staged documentation file exceeds the per-file limit: {child_relative}"
+                )
+            source = Path(entry.path)
+            payload = _read_stable_staged_file(
+                source,
+                metadata,
+                limits.max_file_bytes,
+                child_relative,
+            )
+            total_bytes += len(payload)
+            if len(files) >= limits.max_files:
+                raise ReleaseError("staged documentation file-count limit exceeded")
+            if total_bytes > limits.max_total_bytes:
+                raise ReleaseError("staged documentation total-byte limit exceeded")
+            files.append(
+                _StagedFile(
+                    relative=child_relative,
+                    source=source,
+                    sha256=hashlib.sha256(payload).hexdigest(),
+                    bytes=len(payload),
+                    payload=payload,
+                )
+            )
+
+    scan(stage, "", 0)
+    by_relative = {entry.relative: entry for entry in files}
+    expected_site_keys = {
+        "schema_version",
+        "product_version",
+        "context_abi",
+        "version_selectors",
+        "pages",
+        "asset_count",
+    }
+    if (
+        not isinstance(site, dict)
+        or set(site) != expected_site_keys
+        or site.get("schema_version") != "cigar.generated-docs-site.v1"
+        or not isinstance(site.get("pages"), list)
+        or not isinstance(site.get("asset_count"), int)
+        or isinstance(site.get("asset_count"), bool)
+        or site["asset_count"] < 1
+    ):
+        raise ReleaseError("generated documentation site inventory is invalid")
+    page_outputs: set[str] = set()
+    for page in site["pages"]:
+        if not isinstance(page, dict) or set(page) != {"source", "output", "title"}:
+            raise ReleaseError("generated documentation page inventory is invalid")
+        output = page.get("output")
+        if not isinstance(output, str) or not output:
+            raise ReleaseError("generated documentation page output is invalid")
+        output = "/".join(safe_evidence_path(output))
+        if output in page_outputs:
+            raise ReleaseError("generated documentation page outputs are duplicated")
+        page_outputs.add(output)
+        staged = by_relative.get(output)
+        if staged is None or not staged.payload.startswith(b"<!doctype html>\n"):
+            raise ReleaseError(f"generated documentation page is invalid: {output}")
+    required = {
+        "index.html",
+        "assets/style.css",
+        "site-manifest.json",
+        *page_outputs,
+    }
+    if not required.issubset(by_relative):
+        raise ReleaseError(
+            f"generated documentation site is incomplete: {sorted(required - set(by_relative))}"
+        )
+    if len(files) != len(page_outputs) + site["asset_count"] + 2:
+        raise ReleaseError(
+            "generated documentation site file inventory is inconsistent"
+        )
+    if by_relative["index.html"].payload != by_relative["docs/site/index.html"].payload:
+        raise ReleaseError("generated documentation landing page is inconsistent")
+    if by_relative["site-manifest.json"].payload != canonical_json_bytes(site):
+        raise ReleaseError("generated documentation site manifest is not canonical")
+    return sorted(files, key=lambda item: item.relative.encode("utf-8"))
+
+
+class DocsSiteOutput:
+    """One protected external or legacy development site destination."""
+
+    def __init__(
+        self,
+        *,
+        direct: Path | None,
+        workspace: EvidenceWorkspace | None,
+        prefix: str | None,
+        inputs: list[Path],
+    ) -> None:
+        self.direct = direct
+        self.workspace = workspace
+        self.prefix = prefix
+        self.inputs = inputs
+
+    @classmethod
+    def open(
+        cls,
+        arguments: argparse.Namespace,
+        root: Path,
+        inputs: list[Path],
+    ) -> DocsSiteOutput:
+        if arguments.out is None:
+            raise ReleaseError("--out is required unless --check is used")
+        selected = selected_evidence_directory(arguments)
+        if selected is None:
+            direct = arguments.out.resolve()
+            require_distinct_output(direct, inputs, "documentation site")
+            return cls(
+                direct=direct,
+                workspace=None,
+                prefix=None,
+                inputs=inputs,
+            )
+
+        if arguments.out.is_absolute():
+            raise ReleaseError(
+                "--out must be relative when an evidence directory is selected"
+            )
+        parts = safe_evidence_path(os.fspath(arguments.out))
+        tentative = selected.joinpath(*parts)
+        require_distinct_output(tentative, inputs, "documentation site")
+        workspace = EvidenceWorkspace.create(selected, repository_root=root)
+        try:
+            require_distinct_output(
+                workspace.root.joinpath(*parts),
+                inputs,
+                "documentation site",
+            )
+            return cls(
+                direct=None,
+                workspace=workspace,
+                prefix="/".join(parts),
+                inputs=inputs,
+            )
+        except BaseException:
+            workspace.close()
+            raise
+
+    def publish(self, stage: Path, site: dict[str, Any]) -> None:
+        files = _validated_stage_files(stage, site)
+        maximum = (
+            self.workspace.limits.max_file_bytes
+            if self.workspace
+            else EvidenceLimits().max_file_bytes
+        )
+        verified = [
+            (staged, _verified_staged_payload(staged, maximum)) for staged in files
+        ]
+        if self.workspace is None:
+            assert self.direct is not None
+            try:
+                self.direct.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                raise ReleaseError(
+                    f"cannot create documentation output directory: {error}"
+                ) from error
+            if not self.direct.is_dir() or any(self.direct.iterdir()):
+                raise ReleaseError("documentation output directory must be empty")
+            destinations = [
+                self.direct.joinpath(*staged.relative.split("/"))
+                for staged, _ in verified
+            ]
+            for destination in destinations:
+                require_distinct_output(destination, self.inputs, "documentation site")
+            for (_, payload), destination in zip(verified, destinations, strict=True):
+                write_bytes(destination, payload)
+            return
+
+        assert self.prefix is not None
+        destinations = [f"{self.prefix}/{staged.relative}" for staged, _ in verified]
+        for destination in destinations:
+            require_distinct_output(
+                self.workspace.root.joinpath(*destination.split("/")),
+                self.inputs,
+                "documentation site",
+            )
+        for (staged, _), destination in zip(verified, destinations, strict=True):
+            self.workspace.attach_file(
+                staged.source,
+                destination,
+                expected_sha256=staged.sha256,
+                expected_bytes=staged.bytes,
+            )
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
 
 
 def _slug(text: str) -> str:
@@ -327,12 +770,26 @@ def main() -> int:
     arguments = parse_arguments()
     root = arguments.root.resolve()
     if arguments.check:
+        if selected_evidence_directory(arguments) is not None:
+            raise ReleaseError("--evidence-dir cannot be used with --check")
         with tempfile.TemporaryDirectory(prefix="cigar-docs-site-") as directory:
-            site = build(root, Path(directory))
-    else:
-        if arguments.out is None:
-            raise ReleaseError("--out is required unless --check is used")
-        site = build(root, arguments.out.resolve())
+            stage = Path(directory).resolve()
+            site = build(root, stage)
+            _validated_stage_files(stage, site)
+        print(
+            f"generated deterministic documentation site with {len(site['pages'])} pages"
+        )
+        return 0
+
+    inputs = _documentation_inputs(root)
+    output = DocsSiteOutput.open(arguments, root, inputs)
+    try:
+        with tempfile.TemporaryDirectory(prefix="cigar-docs-site-") as directory:
+            stage = Path(directory).resolve()
+            site = build(root, stage)
+            output.publish(stage, site)
+    finally:
+        output.close()
     print(f"generated deterministic documentation site with {len(site['pages'])} pages")
     return 0
 
@@ -340,5 +797,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except ReleaseError as error:
+    except (EvidenceWorkspaceError, OSError, ReleaseError) as error:
         raise SystemExit(f"documentation site build failed: {error}") from error

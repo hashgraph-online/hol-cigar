@@ -11,7 +11,9 @@ Executor: Codex `/root`
 - Rust toolchain: rustc/cargo 1.92.0, stable-aarch64-apple-darwin
 - Node/pnpm: Node 24.10.0; pnpm 10.34.5
 - Python/build tool: CPython 3.14.6; uv 0.11.8
-- Go: 1.26.3 darwin/arm64
+- Go: minimum supported and CI-pinned version 1.26.5 on darwin/arm64. The local
+  1.26.3 installation is intentionally rejected by the Go SDK producer because
+  it predates standard-library security fixes included in 1.26.5.
 - Native tools: protoc 33.2; protoc-gen-prost 0.5.0; protoc-gen-go 1.36.11; protoc-gen-go-grpc 1.6.2; protoc-gen-es 2.12.1; SQLite 3.43.2; Git 2.51.1
 - Container runtime: Docker client/server 29.3.1; Podman unavailable
 - Quality tools: cargo-nextest 0.9.140; cargo-deny 0.20.2; cargo-llvm-cov 0.8.7; just 1.56.0 (installed during WP00 after initial inventory)
@@ -60,7 +62,7 @@ The source proof groups were rerun from a clean detached commit with external ou
 ## Current packet
 
 - Objective: finish WP19 quality hardening and integrated matrices, then carry the exact stabilized source through the locally testable WP20/WP21 gates without misrepresenting external evidence.
-- Completed transition: WP17 and WP18 are complete. All eight conformance profiles pass 24/24 cases; traceability is valid; 47 sealed security findings are reconciled; the 19-package Rust publication chain passes an offline local registry; seven demos, four SDK workflows, and the local CIGARBench protocol harness pass their honest local scopes.
+- Completed transition: WP17 and WP18 are complete. All eight conformance profiles pass 24/24 cases; traceability is valid; 47 sealed security findings are reconciled; the corrected 20-package Rust publication chain passes an offline local registry; seven demos, four SDK workflows, and the local CIGARBench protocol harness pass their honest local scopes.
 - Active hardening: receipts preserved under the external `launch-000-*-4081a835` directories describe source `4081a8355b8e6bd5959dcc44c48b63b9d8dc55ca` (tree `844643f2d0daf36b4813c66fd62c3c65a2fdc952`). They record useful smoke observations, but their qualification/combined verification is failed or incomplete, they are not candidate-bound, and they do not satisfy the seven-day-per-target fuzz or four-hour release-candidate mutation gates. They are historical diagnostics only and cannot be copied, edited, or rebound as evidence for a later candidate or the beta.
 - Active release blockers: the beta source candidate is frozen and its local source gates pass, while unrelated user work remains preserved outside that candidate. Preserved WP20 and WP21 receipts describe earlier development states and remain historical, unbound evidence. A closed mutation-evidence format and verifier are still required before any representative GA mutation result can qualify. The full GA security-matrix receipt is not yet green, seven-day fuzz and full four-hour mutation are incomplete, CIGARBench lacks independent adjudicated tasks/evaluator evidence, no qualified final `dist/` or installed-byte matrix exists, and final platform/signing/SBOM/provenance/soak evidence is unavailable.
 - Exact next action: build and qualify the exact six-artifact beta set from the verified source freeze on native Ubuntu 24.04 x86_64/glibc 2.39 with Rust 1.92.0 and Python 3.14.6. In parallel, continue the independent WP19-WP21 GA work without treating beta evidence as GA evidence.

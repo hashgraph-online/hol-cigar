@@ -10,11 +10,30 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+type sdkCapabilityAuthority struct {
+	OperationCount int `json:"operation_count"`
+	Operations     []struct {
+		OperationID  string  `json:"operation_id"`
+		RequestType  string  `json:"request_type"`
+		ResponseType string  `json:"response_type"`
+		EventType    *string `json:"event_type"`
+		Stream       string  `json:"stream"`
+	} `json:"operations"`
+	SDKs struct {
+		Go struct {
+			OperationCount int      `json:"operation_count"`
+			Operations     []string `json:"operations"`
+			Transport      []string `json:"transport"`
+		} `json:"go"`
+	} `json:"sdks"`
+}
 
 func responseJSON(operationID, cursor string) string {
 	response := map[string]string{"operation_id": operationID, "payload_cbor": "AQ"}
@@ -62,7 +81,7 @@ func localClient(t *testing.T, server *httptest.Server, attempts int) *Client {
 }
 
 func TestGeneratedSurfaceAndIdempotentRetry(t *testing.T) {
-	if len(operations) != 45 || len(PayloadTypeNames()) != 70 {
+	if OperationCount != 45 || len(operations) != OperationCount || len(PayloadTypeNames()) != 70 {
 		t.Fatalf("unexpected generated parity: %d operations, %d types", len(operations), len(PayloadTypeNames()))
 	}
 	var mu sync.Mutex
@@ -76,7 +95,7 @@ func TestGeneratedSurfaceAndIdempotentRetry(t *testing.T) {
 		attempt := len(bodies)
 		mu.Unlock()
 		if attempt == 1 {
-			fixture, _ := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+			fixture, _ := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 			writer.Header().Set("content-type", "application/problem+json")
 			writer.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = writer.Write(fixture)
@@ -99,11 +118,106 @@ func TestGeneratedSurfaceAndIdempotentRetry(t *testing.T) {
 	}
 }
 
+func TestSafeReadRetryPreservesRequestIdentityAndDeadline(t *testing.T) {
+	var methods []string
+	var requestURIs []string
+	var operationIDs []string
+	var bodies [][]byte
+	var remainingTimeouts []int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		remaining, _ := strconv.Atoi(request.Header.Get("x-cigar-timeout-ms"))
+		methods = append(methods, request.Method)
+		requestURIs = append(requestURIs, request.URL.RequestURI())
+		operationIDs = append(operationIDs, request.Header.Get("x-cigar-operation-id"))
+		bodies = append(bodies, body)
+		remainingTimeouts = append(remainingTimeouts, remaining)
+		if len(methods) == 1 {
+			fixture, _ := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
+			writer.Header().Set("content-type", "application/problem+json")
+			writer.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = writer.Write(fixture)
+			return
+		}
+		writeResponse(writer, "getVersion", "")
+	}))
+	defer server.Close()
+	client := localClient(t, server, 2)
+	request, err := NewEmptyRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.call(context.Background(), "getVersion", request, WithCallTimeout(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.OperationID() != "getVersion" || len(methods) != 2 {
+		t.Fatalf("safe read did not retry exactly once: response=%+v calls=%d", response, len(methods))
+	}
+	if methods[0] != http.MethodGet || methods[0] != methods[1] ||
+		requestURIs[0] != "/v1/version" || requestURIs[0] != requestURIs[1] ||
+		operationIDs[0] != "getVersion" || operationIDs[0] != operationIDs[1] ||
+		len(bodies[0]) != 0 || len(bodies[1]) != 0 {
+		t.Fatalf("safe read request identity changed: methods=%v uris=%v operations=%v bodies=%q", methods, requestURIs, operationIDs, bodies)
+	}
+	if remainingTimeouts[0] <= remainingTimeouts[1] || remainingTimeouts[1] <= 0 {
+		t.Fatalf("safe read deadline was reset: remaining=%v", remainingTimeouts)
+	}
+}
+
+func TestAllGeneratedOperationsMatchCapabilityAuthority(t *testing.T) {
+	raw, err := os.ReadFile("capabilities-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var authority sdkCapabilityAuthority
+	if err := json.Unmarshal(raw, &authority); err != nil {
+		t.Fatal(err)
+	}
+	if authority.OperationCount != OperationCount || len(authority.Operations) != OperationCount {
+		t.Fatalf("capability authority count differs: count=%d rows=%d", authority.OperationCount, len(authority.Operations))
+	}
+	if authority.SDKs.Go.OperationCount != OperationCount || len(authority.SDKs.Go.Operations) != OperationCount {
+		t.Fatalf("Go capability count differs: count=%d rows=%d", authority.SDKs.Go.OperationCount, len(authority.SDKs.Go.Operations))
+	}
+	if len(authority.SDKs.Go.Transport) != 2 || authority.SDKs.Go.Transport[0] != "http" || authority.SDKs.Go.Transport[1] != "grpc" {
+		t.Fatalf("Go transport capability differs: %v", authority.SDKs.Go.Transport)
+	}
+	seen := make(map[string]struct{}, OperationCount)
+	for index, expected := range authority.Operations {
+		if authority.SDKs.Go.Operations[index] != expected.OperationID {
+			t.Fatalf("Go capability operation order differs at %d", index)
+		}
+		definition, ok := operations[expected.OperationID]
+		if !ok {
+			t.Fatalf("generated operation missing: %s", expected.OperationID)
+		}
+		if _, duplicate := seen[expected.OperationID]; duplicate {
+			t.Fatalf("duplicate authority operation: %s", expected.OperationID)
+		}
+		seen[expected.OperationID] = struct{}{}
+		eventType := ""
+		if expected.EventType != nil {
+			eventType = *expected.EventType
+		}
+		if definition.OperationID != expected.OperationID ||
+			definition.RequestType != expected.RequestType ||
+			definition.ResponseType != expected.ResponseType ||
+			definition.EventType != eventType ||
+			definition.Stream != (expected.Stream == "server_stream") {
+			t.Fatalf("generated descriptor differs for %s", expected.OperationID)
+		}
+	}
+	if len(seen) != len(operations) {
+		t.Fatalf("generated operation inventory has unbound rows: authority=%d generated=%d", len(seen), len(operations))
+	}
+}
+
 func TestDispatchNeverRetries(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		calls++
-		fixture, _ := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+		fixture, _ := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 		writer.Header().Set("content-type", "application/problem+json")
 		writer.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = writer.Write(fixture)
@@ -184,6 +298,7 @@ func TestPaginationAndResumableStream(t *testing.T) {
 func TestSecurityProblemCompatibilityAndCancellation(t *testing.T) {
 	for _, options := range []ClientOptions{
 		{BaseURL: "http://example.com"},
+		{BaseURL: "https://example.com"},
 		{BaseURL: "https://example.com/prefix"},
 		{BaseURL: "http://127.0.0.1", AllowInsecureLoopback: false},
 		{BaseURL: "https://example.com", BearerToken: strings.Repeat("x", 8193)},
@@ -220,7 +335,7 @@ func TestSecurityProblemCompatibilityAndCancellation(t *testing.T) {
 
 	t.Run("problem catalog", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-			fixture, _ := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+			fixture, _ := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 			fixture = []byte(strings.Replace(string(fixture), `"retry": "after_backoff"`, `"retry": "never"`, 1))
 			writer.Header().Set("content-type", "application/problem+json")
 			writer.WriteHeader(http.StatusServiceUnavailable)
@@ -294,7 +409,7 @@ func TestEndToEndDeadlineAndCustomClientTrust(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 			calls++
 			time.Sleep(35 * time.Millisecond)
-			fixture, _ := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+			fixture, _ := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 			writer.Header().Set("content-type", "application/problem+json")
 			writer.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = writer.Write(fixture)

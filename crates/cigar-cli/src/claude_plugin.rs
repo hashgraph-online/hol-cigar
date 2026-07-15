@@ -2,10 +2,15 @@
 
 use crate::arguments::ParsedInvocation;
 use crate::error::CliError;
+#[cfg(not(unix))]
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, OpenOptions as CapOpenOptions};
+#[cfg(unix)]
+use cap_std::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs::{File, OpenOptions};
 use std::io::{Read as _, Write as _};
@@ -26,6 +31,7 @@ const MAX_OUTPUT: usize = 1024 * 1024;
 // authorize its own modified hook or MCP bytes at installation time.
 const TRUSTED_PACKAGE_MANIFEST: &[u8] =
     include_bytes!("../../../adapters/claude-code/package-manifest.json");
+include!(concat!(env!("OUT_DIR"), "/embedded_claude_plugin.rs"));
 const QUALIFIED_HOOKS: [&str; 18] = [
     "SessionStart",
     "SessionEnd",
@@ -47,11 +53,13 @@ const QUALIFIED_HOOKS: [&str; 18] = [
     "StopFailure",
 ];
 static SEQUENCE: AtomicU64 = AtomicU64::new(1);
+type PackageSource = (Vec<u8>, BTreeMap<String, Vec<u8>>);
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Compatibility {
     schema_version: String,
+    context_abi: String,
     claude_code: VersionRange,
     platforms: Vec<String>,
     public_surfaces_only: bool,
@@ -84,6 +92,11 @@ struct Package {
     compatibility: Compatibility,
     files: Vec<FrozenFile>,
     digest: String,
+}
+
+struct ManagedHome {
+    path: PathBuf,
+    directory: Dir,
 }
 
 #[derive(Clone, Debug)]
@@ -168,19 +181,16 @@ pub(crate) async fn install(invocation: &ParsedInvocation) -> Result<Value, CliE
         }));
     }
 
-    let home = cigar_home()?;
-    let receipt_file = receipt_path(&home);
-    if receipt_file.exists() {
+    let home = ManagedHome::open()?;
+    if entry_exists(&home.directory, receipt_relative())? {
         return Err(CliError::state_conflict());
     }
-    let marketplace_root = home
-        .join("claude-code")
-        .join(format!("marketplace-{}", env!("CARGO_PKG_VERSION")));
-    guard_managed(&home, &marketplace_root)?;
-    if marketplace_root.exists() {
-        remove_managed(&home, &marketplace_root)?;
+    let marketplace_relative = marketplace_relative();
+    let marketplace_root = home.path.join(&marketplace_relative);
+    if entry_exists(&home.directory, &marketplace_relative)? {
+        remove_managed(&home, &marketplace_relative)?;
     }
-    stage_marketplace(&package, &marketplace_root)?;
+    stage_marketplace_at(&package, &home.directory, &marketplace_relative)?;
 
     let claude = binary("CIGAR_CLAUDE_BINARY", "claude");
     if run(
@@ -196,7 +206,7 @@ pub(crate) async fn install(invocation: &ParsedInvocation) -> Result<Value, CliE
     .await
     .is_err()
     {
-        let _ignored = remove_managed(&home, &marketplace_root);
+        let _ignored = remove_managed(&home, &marketplace_relative);
         return Err(CliError::plugin_handshake_failed());
     }
     if run(
@@ -224,7 +234,7 @@ pub(crate) async fn install(invocation: &ParsedInvocation) -> Result<Value, CliE
             invocation.options.deadline,
         )
         .await;
-        let _ignored = remove_managed(&home, &marketplace_root);
+        let _ignored = remove_managed(&home, &marketplace_relative);
         return Err(CliError::plugin_handshake_failed());
     }
 
@@ -236,9 +246,9 @@ pub(crate) async fn install(invocation: &ParsedInvocation) -> Result<Value, CliE
         package_digest: package.digest.clone(),
         claude_version: version.to_string(),
     };
-    if write_json(&receipt_file, &receipt).is_err() {
+    if write_json_at(&home.directory, receipt_relative(), &receipt).is_err() {
         rollback_public_install(&claude, invocation.options.deadline).await;
-        let _ignored = remove_managed(&home, &marketplace_root);
+        let _ignored = remove_managed(&home, &marketplace_relative);
         return Err(CliError::state_unavailable());
     }
     Ok(json!({
@@ -254,10 +264,9 @@ pub(crate) async fn install(invocation: &ParsedInvocation) -> Result<Value, CliE
 
 pub(crate) async fn uninstall(invocation: &ParsedInvocation) -> Result<Value, CliError> {
     require_adapter(invocation)?;
-    let home = cigar_home()?;
-    let path = receipt_path(&home);
-    let receipt: Receipt = read_json(&path, 1024 * 1024)?;
-    validate_receipt(&receipt, &home)?;
+    let home = ManagedHome::open()?;
+    let receipt: Receipt = read_json_at(&home.directory, receipt_relative(), 1024 * 1024)?;
+    validate_receipt(&receipt, &home.path)?;
     if invocation.options.dry_run {
         return Ok(json!({
             "adapter": ADAPTER,
@@ -292,8 +301,10 @@ pub(crate) async fn uninstall(invocation: &ParsedInvocation) -> Result<Value, Cl
     )
     .await
     .map_err(|_error| CliError::plugin_handshake_failed())?;
-    remove_managed(&home, &receipt.marketplace_root)?;
-    std::fs::remove_file(path).map_err(|_error| CliError::state_unavailable())?;
+    remove_managed(&home, &marketplace_relative())?;
+    home.directory
+        .remove_file(receipt_relative())
+        .map_err(|_error| CliError::state_unavailable())?;
     Ok(json!({
         "adapter": ADAPTER,
         "uninstalled": true,
@@ -330,8 +341,8 @@ pub(crate) async fn doctor(invocation: &ParsedInvocation) -> Result<Value, CliEr
     } else {
         Handshake::default()
     };
-    let installed = cigar_home()
-        .map(|home| receipt_path(&home).is_file())
+    let installed = ManagedHome::open()
+        .and_then(|home| entry_exists(&home.directory, receipt_relative()))
         .unwrap_or(false);
     Ok(json!({
         "adapter": ADAPTER,
@@ -384,8 +395,8 @@ async fn handshake_report(root: &Path, deadline: Duration) -> Handshake {
     let daemon = std::env::var_os("CIGAR_CLAUDE_DAEMON_CHECK_BINARY")
         .or_else(|| std::env::current_exe().ok().map(PathBuf::into_os_string))
         .unwrap_or_else(|| OsString::from("cigar"));
-    let mcp = binary("CIGAR_MCP_BINARY", "cigar-mcp");
-    let hook = binary("CIGAR_CLAUDE_HOOK_BINARY", "cigar-claude-hook");
+    let mcp = root.join("bin/cigar-mcp").into_os_string();
+    let hook = root.join("bin/cigar-claude-hook").into_os_string();
     Handshake {
         daemon: run(
             &daemon,
@@ -426,8 +437,7 @@ fn require_adapter(invocation: &ParsedInvocation) -> Result<(), CliError> {
 }
 
 fn validate_package() -> Result<Package, CliError> {
-    let root = source_root()?;
-    let manifest_bytes = read_regular(&root.join("package-manifest.json"), 4 * 1024 * 1024)?;
+    let (manifest_bytes, mut source_files) = package_source()?;
     if manifest_bytes.as_slice() != TRUSTED_PACKAGE_MANIFEST {
         return Err(CliError::plugin_invalid());
     }
@@ -461,7 +471,9 @@ fn validate_package() -> Result<Package, CliError> {
             .checked_add(file.bytes)
             .filter(|value| *value <= MAX_BYTES)
             .ok_or_else(CliError::plugin_invalid)?;
-        let bytes = read_regular(&root.join(&file.path), MAX_BYTES)?;
+        let bytes = source_files
+            .remove(&file.path)
+            .ok_or_else(CliError::plugin_invalid)?;
         if u64::try_from(bytes.len()).ok() != Some(file.bytes)
             || sha256(&bytes) != file.sha256.to_ascii_lowercase()
         {
@@ -477,11 +489,17 @@ fn validate_package() -> Result<Package, CliError> {
             contents: bytes,
         });
     }
-    if collect_files(&root)? != expected {
+    if files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect::<BTreeSet<_>>()
+        != expected
+    {
         return Err(CliError::plugin_invalid());
     }
     let compatibility: Compatibility = frozen_json(&files, "compatibility.json")?;
     if compatibility.schema_version != "cigar.claude-code-compatibility.v1"
+        || compatibility.context_abi != "cigar.context.v1"
         || !compatibility.public_surfaces_only
         || !compatibility.platforms.iter().any(|supported| {
             supported == "all"
@@ -492,11 +510,172 @@ fn validate_package() -> Result<Package, CliError> {
         return Err(CliError::plugin_invalid());
     }
     validate_public_surface(&files)?;
+    for (relative, variable, executable) in [
+        ("bin/cigar-mcp", "CIGAR_MCP_BINARY", "cigar-mcp"),
+        (
+            "bin/cigar-claude-hook",
+            "CIGAR_CLAUDE_HOOK_BINARY",
+            "cigar-claude-hook",
+        ),
+    ] {
+        let payload = freeze_runtime_executable(variable, executable)?;
+        if let Some(packaged) = source_files.remove(relative) {
+            if packaged != payload {
+                return Err(CliError::plugin_invalid());
+            }
+        }
+        let digest = sha256(&payload);
+        aggregate.update(relative.as_bytes());
+        aggregate.update([0]);
+        aggregate.update(digest.as_bytes());
+        aggregate.update([0]);
+        files.push(FrozenFile {
+            path: relative.to_owned(),
+            sha256: digest,
+            contents: payload,
+        });
+    }
+    if !source_files.is_empty() {
+        return Err(CliError::plugin_invalid());
+    }
+    files.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
     Ok(Package {
         compatibility,
         files,
         digest: format!("1220{}", hex(&aggregate.finalize())),
     })
+}
+
+fn freeze_runtime_executable(variable: &str, executable: &str) -> Result<Vec<u8>, CliError> {
+    let path = if let Some(path) = std::env::var_os(variable) {
+        PathBuf::from(path)
+    } else {
+        std::env::current_exe()
+            .ok()
+            .and_then(|path| path.parent().map(|parent| parent.join(executable)))
+            .ok_or_else(CliError::plugin_invalid)?
+    };
+    read_stable_executable(&path, MAX_BYTES)
+}
+
+#[cfg(unix)]
+fn read_stable_executable(path: &Path, maximum: u64) -> Result<Vec<u8>, CliError> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::os::unix::fs::MetadataExt as _;
+
+    if !path.is_absolute() {
+        return Err(CliError::plugin_invalid());
+    }
+    let canonical = std::fs::canonicalize(path).map_err(|_error| CliError::plugin_invalid())?;
+    let names = canonical
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(name.to_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let (name, ancestors) = names.split_last().ok_or_else(CliError::plugin_invalid)?;
+    let mut directory = open(
+        "/",
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| CliError::plugin_invalid())?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(|_error| CliError::plugin_invalid())?;
+    }
+    let mut file = openat(
+        &directory,
+        name,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| CliError::plugin_invalid())?;
+    let before = file
+        .metadata()
+        .map_err(|_error| CliError::plugin_invalid())?;
+    let owner = before.uid();
+    if !before.is_file()
+        || before.nlink() != 1
+        || (owner != 0 && owner != rustix::process::geteuid().as_raw())
+        || before.mode() & 0o022 != 0
+        || before.mode() & 0o111 == 0
+        || before.len() == 0
+        || before.len() > maximum
+    {
+        return Err(CliError::plugin_invalid());
+    }
+    let mut bytes = Vec::with_capacity(
+        usize::try_from(before.len()).map_err(|_error| CliError::plugin_invalid())?,
+    );
+    std::io::Read::by_ref(&mut file)
+        .take(maximum.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_error| CliError::plugin_invalid())?;
+    let after = file
+        .metadata()
+        .map_err(|_error| CliError::plugin_invalid())?;
+    if u64::try_from(bytes.len()).ok() != Some(before.len())
+        || before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.len() != after.len()
+        || before.mtime() != after.mtime()
+        || before.mtime_nsec() != after.mtime_nsec()
+        || before.ctime() != after.ctime()
+        || before.ctime_nsec() != after.ctime_nsec()
+    {
+        return Err(CliError::plugin_invalid());
+    }
+    Ok(bytes)
+}
+
+#[cfg(not(unix))]
+fn read_stable_executable(_path: &Path, _maximum: u64) -> Result<Vec<u8>, CliError> {
+    Err(CliError::plugin_incompatible())
+}
+
+fn package_source() -> Result<PackageSource, CliError> {
+    if let Some(source) = std::env::var_os("CIGAR_CLAUDE_PLUGIN_SOURCE") {
+        return external_package_source(PathBuf::from(source));
+    }
+    let mut files = BTreeMap::new();
+    for (path, contents) in EMBEDDED_PACKAGE_FILES {
+        validate_relative(path)?;
+        if files
+            .insert((*path).to_owned(), contents.to_vec())
+            .is_some()
+        {
+            return Err(CliError::plugin_invalid());
+        }
+    }
+    Ok((TRUSTED_PACKAGE_MANIFEST.to_vec(), files))
+}
+
+fn external_package_source(path: PathBuf) -> Result<PackageSource, CliError> {
+    let metadata = std::fs::symlink_metadata(&path).map_err(|_error| CliError::plugin_invalid())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(CliError::plugin_invalid());
+    }
+    let root = std::fs::canonicalize(path).map_err(|_error| CliError::plugin_invalid())?;
+    let manifest = read_regular(&root.join("package-manifest.json"), 4 * 1024 * 1024)?;
+    let mut files = BTreeMap::new();
+    for relative in collect_files(&root)? {
+        validate_relative(&relative)?;
+        let contents = read_regular(&root.join(&relative), MAX_BYTES)?;
+        if files.insert(relative, contents).is_some() {
+            return Err(CliError::plugin_invalid());
+        }
+    }
+    Ok((manifest, files))
 }
 
 fn frozen_json<T>(files: &[FrozenFile], path: &str) -> Result<T, CliError>
@@ -558,7 +737,7 @@ fn expected_mcp() -> Value {
     json!({
         "mcpServers": {
             "cigar": {
-                "command": "cigar-mcp",
+                "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp",
                 "args": ["serve"],
                 "env": {
                     "CIGAR_CLAUDE_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
@@ -572,7 +751,7 @@ fn expected_mcp() -> Value {
 fn expected_hooks() -> Value {
     let handler = json!({
         "type": "command",
-        "command": "cigar-claude-hook",
+        "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook",
         "args": [
             "run",
             "--plugin-root",
@@ -629,20 +808,6 @@ fn collect_files(root: &Path) -> Result<BTreeSet<String>, CliError> {
         }
     }
     Ok(files)
-}
-
-fn source_root() -> Result<PathBuf, CliError> {
-    let source = std::env::var_os("CIGAR_CLAUDE_PLUGIN_SOURCE").unwrap_or_else(|| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../adapters/claude-code")
-            .into_os_string()
-    });
-    let path = PathBuf::from(source);
-    let metadata = std::fs::symlink_metadata(&path).map_err(|_error| CliError::plugin_invalid())?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(CliError::plugin_invalid());
-    }
-    std::fs::canonicalize(path).map_err(|_error| CliError::plugin_invalid())
 }
 
 async fn claude_version(deadline: Duration) -> Result<Semver, CliError> {
@@ -729,16 +894,73 @@ fn stage_marketplace(package: &Package, destination: &Path) -> Result<(), CliErr
         let target = plugin.join(&file.path);
         let parent = target.parent().ok_or_else(CliError::plugin_invalid)?;
         private_directory(parent)?;
-        write_new(&target, &file.contents)?;
+        write_new_mode(
+            &target,
+            &file.contents,
+            if file.path.starts_with("bin/") {
+                0o700
+            } else {
+                0o600
+            },
+        )?;
     }
     write_new(
         &plugin.join("package-manifest.json"),
-        TRUSTED_PACKAGE_MANIFEST,
+        &installed_manifest_bytes(package)?,
     )?;
     verify_staged_package(package, &plugin)?;
     let metadata = destination.join(".claude-plugin");
     private_directory(&metadata)?;
     write_json(
+        &metadata.join("marketplace.json"),
+        &json!({
+            "name": MARKETPLACE,
+            "owner": {"name": "CIGAR contributors"},
+            "plugins": [{
+                "name": "cigar",
+                "source": "./plugins/cigar",
+                "description": "Deterministic governed CIGAR context for Claude Code",
+                "version": env!("CARGO_PKG_VERSION")
+            }]
+        }),
+    )
+}
+
+fn stage_marketplace_at(package: &Package, home: &Dir, destination: &Path) -> Result<(), CliError> {
+    validate_capability_relative(destination)?;
+    private_directory_at(home, destination)?;
+    let plugin_relative = destination.join("plugins/cigar");
+    private_directory_at(home, &plugin_relative)?;
+    for file in &package.files {
+        validate_relative(&file.path)?;
+        let target = plugin_relative.join(&file.path);
+        let parent = target.parent().ok_or_else(CliError::plugin_invalid)?;
+        private_directory_at(home, parent)?;
+        write_new_at(
+            home,
+            &target,
+            &file.contents,
+            if file.path.starts_with("bin/") {
+                0o700
+            } else {
+                0o600
+            },
+        )?;
+    }
+    write_new_at(
+        home,
+        &plugin_relative.join("package-manifest.json"),
+        &installed_manifest_bytes(package)?,
+        0o600,
+    )?;
+    let plugin = home
+        .open_dir(&plugin_relative)
+        .map_err(|_error| CliError::state_unavailable())?;
+    verify_staged_package_at(package, &plugin)?;
+    let metadata = destination.join(".claude-plugin");
+    private_directory_at(home, &metadata)?;
+    write_json_at(
+        home,
         &metadata.join("marketplace.json"),
         &json!({
             "name": MARKETPLACE,
@@ -761,7 +983,7 @@ fn verify_staged_package(package: &Package, root: &Path) -> Result<(), CliError>
         .collect::<BTreeSet<_>>();
     if collect_files(root)? != expected
         || read_regular(&root.join("package-manifest.json"), 4 * 1024 * 1024)?
-            != TRUSTED_PACKAGE_MANIFEST
+            != installed_manifest_bytes(package)?
     {
         return Err(CliError::plugin_invalid());
     }
@@ -773,6 +995,82 @@ fn verify_staged_package(package: &Package, root: &Path) -> Result<(), CliError>
     }
     validate_public_surface(&package.files)?;
     Ok(())
+}
+
+fn verify_staged_package_at(package: &Package, root: &Dir) -> Result<(), CliError> {
+    let expected = package
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect::<BTreeSet<_>>();
+    if collect_files_at(root)? != expected
+        || read_regular_at(root, Path::new("package-manifest.json"), 4 * 1024 * 1024)?
+            != installed_manifest_bytes(package)?
+    {
+        return Err(CliError::plugin_invalid());
+    }
+    for file in &package.files {
+        let bytes = read_regular_at(root, Path::new(&file.path), MAX_BYTES)?;
+        if bytes != file.contents || sha256(&bytes) != file.sha256 {
+            return Err(CliError::plugin_invalid());
+        }
+    }
+    validate_public_surface(&package.files)
+}
+
+fn collect_files_at(root: &Dir) -> Result<BTreeSet<String>, CliError> {
+    fn visit(directory: &Dir, prefix: &Path, files: &mut BTreeSet<String>) -> Result<(), CliError> {
+        let mut entries = directory
+            .entries()
+            .map_err(|_error| CliError::plugin_invalid())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_error| CliError::plugin_invalid())?;
+        entries.sort_by_key(cap_std::fs::DirEntry::file_name);
+        for entry in entries {
+            let file_type = entry
+                .file_type()
+                .map_err(|_error| CliError::plugin_invalid())?;
+            if file_type.is_symlink() {
+                return Err(CliError::plugin_invalid());
+            }
+            let relative = prefix.join(entry.file_name());
+            if file_type.is_dir() {
+                let child = entry
+                    .open_dir()
+                    .map_err(|_error| CliError::plugin_invalid())?;
+                visit(&child, &relative, files)?;
+            } else if file_type.is_file() {
+                let relative = relative
+                    .to_str()
+                    .ok_or_else(CliError::plugin_invalid)?
+                    .replace('\\', "/");
+                if relative != "package-manifest.json" {
+                    if files.len() >= MAX_FILES || !files.insert(relative) {
+                        return Err(CliError::plugin_invalid());
+                    }
+                }
+            } else {
+                return Err(CliError::plugin_invalid());
+            }
+        }
+        Ok(())
+    }
+
+    let mut files = BTreeSet::new();
+    visit(root, Path::new(""), &mut files)?;
+    Ok(files)
+}
+
+fn installed_manifest_bytes(package: &Package) -> Result<Vec<u8>, CliError> {
+    serde_json::to_vec(&json!({
+        "schema_version": "cigar.claude-code-package.v1",
+        "files": package.files.iter().map(|file| json!({
+            "path": file.path,
+            "sha256": file.sha256,
+            "bytes": file.contents.len(),
+        })).collect::<Vec<_>>()
+    }))
+    .map_err(|_error| CliError::plugin_invalid())
 }
 
 impl TemporaryMarketplace {
@@ -833,6 +1131,7 @@ impl Drop for TemporaryMarketplace {
     }
 }
 
+#[cfg(not(unix))]
 fn cigar_home() -> Result<PathBuf, CliError> {
     let value = std::env::var_os("CIGAR_HOME").or_else(|| {
         std::env::var_os("HOME")
@@ -843,12 +1142,139 @@ fn cigar_home() -> Result<PathBuf, CliError> {
     if !path.is_absolute() {
         return Err(CliError::state_unavailable());
     }
+    if let Ok(metadata) = std::fs::symlink_metadata(&path) {
+        if metadata.file_type().is_symlink() {
+            return Err(CliError::state_unavailable());
+        }
+    }
     private_directory(&path)?;
+    let metadata =
+        std::fs::symlink_metadata(&path).map_err(|_error| CliError::state_unavailable())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(CliError::state_unavailable());
+    }
     std::fs::canonicalize(path).map_err(|_error| CliError::state_unavailable())
 }
 
-fn receipt_path(home: &Path) -> PathBuf {
-    home.join("claude-code/install.json")
+impl ManagedHome {
+    fn open() -> Result<Self, CliError> {
+        let requested = requested_cigar_home()?;
+        #[cfg(unix)]
+        let (path, directory) = open_or_create_managed_home(&requested)?;
+        #[cfg(not(unix))]
+        let (path, directory) = {
+            let path = cigar_home()?;
+            let directory = Dir::open_ambient_dir(&path, ambient_authority())
+                .map_err(|_error| CliError::state_unavailable())?;
+            (path, directory)
+        };
+        private_directory_at(&directory, Path::new("claude-code"))?;
+        Ok(Self { path, directory })
+    }
+}
+
+fn requested_cigar_home() -> Result<PathBuf, CliError> {
+    let value = std::env::var_os("CIGAR_HOME").or_else(|| {
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(|home| Path::new(&home).join(".cigar").into_os_string())
+    });
+    let path = PathBuf::from(value.ok_or_else(CliError::state_unavailable)?);
+    if !path.is_absolute()
+        || !path
+            .components()
+            .any(|component| matches!(component, Component::Normal(_)))
+    {
+        return Err(CliError::state_unavailable());
+    }
+    Ok(path)
+}
+
+#[cfg(unix)]
+fn open_or_create_managed_home(requested: &Path) -> Result<(PathBuf, Dir), CliError> {
+    use cap_std::fs::MetadataExt as _;
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::os::unix::fs::MetadataExt as _;
+
+    let mut existing = PathBuf::from("/");
+    let mut missing = PathBuf::new();
+    let mut saw_missing = false;
+    for component in requested.components() {
+        let Component::Normal(name) = component else {
+            continue;
+        };
+        if saw_missing {
+            missing.push(name);
+            continue;
+        }
+        let candidate = existing.join(name);
+        match std::fs::symlink_metadata(&candidate) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() && metadata.uid() != 0 {
+                    return Err(CliError::state_unavailable());
+                }
+                if !metadata.is_dir() && !metadata.file_type().is_symlink() {
+                    return Err(CliError::state_unavailable());
+                }
+                existing = candidate;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                saw_missing = true;
+                missing.push(name);
+            }
+            Err(_error) => return Err(CliError::state_unavailable()),
+        }
+    }
+    let canonical =
+        std::fs::canonicalize(&existing).map_err(|_error| CliError::state_unavailable())?;
+    let mut opened = open(
+        "/",
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| CliError::state_unavailable())?;
+    for component in canonical.components() {
+        let Component::Normal(name) = component else {
+            continue;
+        };
+        opened = openat(
+            &opened,
+            name,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(|_error| CliError::state_unavailable())?;
+    }
+    let ancestor = Dir::from_std_file(opened);
+    let path = canonical.join(&missing);
+    let directory = if missing.as_os_str().is_empty() {
+        ancestor
+    } else {
+        private_directory_at(&ancestor, &missing)?;
+        ancestor
+            .open_dir(&missing)
+            .map_err(|_error| CliError::state_unavailable())?
+    };
+    let metadata = directory
+        .metadata(".")
+        .map_err(|_error| CliError::state_unavailable())?;
+    if !metadata.is_dir()
+        || metadata.uid() != rustix::process::geteuid().as_raw()
+        || metadata.mode() & 0o077 != 0
+    {
+        return Err(CliError::state_unavailable());
+    }
+    Ok((path, directory))
+}
+
+fn receipt_relative() -> &'static Path {
+    Path::new("claude-code/install.json")
+}
+
+fn marketplace_relative() -> PathBuf {
+    Path::new("claude-code").join(format!("marketplace-{}", env!("CARGO_PKG_VERSION")))
 }
 
 fn validate_receipt(receipt: &Receipt, home: &Path) -> Result<(), CliError> {
@@ -857,20 +1283,19 @@ fn validate_receipt(receipt: &Receipt, home: &Path) -> Result<(), CliError> {
         || receipt.marketplace_name != MARKETPLACE
         || receipt.package_digest.len() != 68
         || !receipt.package_digest.starts_with("1220")
+        || receipt.marketplace_root != home.join(marketplace_relative())
     {
         return Err(CliError::state_corrupt());
     }
-    guard_managed(home, &receipt.marketplace_root)
+    Ok(())
 }
 
-fn guard_managed(home: &Path, path: &Path) -> Result<(), CliError> {
-    if !home.is_absolute()
-        || !path.is_absolute()
-        || path == home
-        || !path.starts_with(home.join("claude-code"))
+fn validate_capability_relative(path: &Path) -> Result<(), CliError> {
+    if path.as_os_str().is_empty()
+        || path.is_absolute()
         || path
             .components()
-            .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+            .any(|component| !matches!(component, Component::Normal(_)))
     {
         Err(CliError::state_corrupt())
     } else {
@@ -878,18 +1303,145 @@ fn guard_managed(home: &Path, path: &Path) -> Result<(), CliError> {
     }
 }
 
-fn remove_managed(home: &Path, path: &Path) -> Result<(), CliError> {
-    guard_managed(home, path)?;
-    if !path.exists() {
-        return Ok(());
+fn entry_exists(directory: &Dir, path: &Path) -> Result<bool, CliError> {
+    match directory.symlink_metadata(path) {
+        Ok(_metadata) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_error) => Err(CliError::state_unavailable()),
     }
-    let metadata =
-        std::fs::symlink_metadata(path).map_err(|_error| CliError::state_unavailable())?;
+}
+
+fn remove_managed(home: &ManagedHome, relative: &Path) -> Result<(), CliError> {
+    if relative != marketplace_relative() {
+        return Err(CliError::state_corrupt());
+    }
+    validate_capability_relative(relative)?;
+    let metadata = match home.directory.symlink_metadata(relative) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_error) => return Err(CliError::state_unavailable()),
+    };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         return Err(CliError::state_corrupt());
     }
-    std::fs::remove_dir_all(path).map_err(|_error| CliError::state_unavailable())
+    home.directory
+        .remove_dir_all(relative)
+        .map_err(|_error| CliError::state_unavailable())
 }
+
+fn private_directory_at(directory: &Dir, relative: &Path) -> Result<(), CliError> {
+    validate_capability_relative(relative)?;
+    let mut current = PathBuf::new();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err(CliError::state_corrupt());
+        };
+        current.push(name);
+        match directory.symlink_metadata(&current) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                    return Err(CliError::state_corrupt());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                directory
+                    .create_dir(&current)
+                    .map_err(|_error| CliError::state_unavailable())?;
+            }
+            Err(_error) => return Err(CliError::state_unavailable()),
+        }
+        #[cfg(unix)]
+        directory
+            .set_permissions(&current, cap_std::fs::Permissions::from_mode(0o700))
+            .map_err(|_error| CliError::state_unavailable())?;
+    }
+    Ok(())
+}
+
+fn write_new_at(directory: &Dir, path: &Path, bytes: &[u8], mode: u32) -> Result<(), CliError> {
+    validate_capability_relative(path)?;
+    let parent = path.parent().ok_or_else(CliError::state_unavailable)?;
+    if !parent.as_os_str().is_empty() {
+        private_directory_at(directory, parent)?;
+    }
+    let mut options = CapOpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(mode);
+    let mut file = directory
+        .open_with(path, &options)
+        .map_err(|_error| CliError::state_unavailable())?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|_error| CliError::state_unavailable())
+}
+
+fn write_json_at<T: Serialize>(directory: &Dir, path: &Path, value: &T) -> Result<(), CliError> {
+    validate_capability_relative(path)?;
+    let bytes = serde_json::to_vec(value).map_err(|_error| CliError::state_unavailable())?;
+    let parent = path.parent().ok_or_else(CliError::state_unavailable)?;
+    private_directory_at(directory, parent)?;
+    let temporary = parent.join(format!(
+        ".cigar-plugin-{}-{}.tmp",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    write_new_at(directory, &temporary, &bytes, 0o600)?;
+    let publication = directory
+        .hard_link(&temporary, directory, path)
+        .map_err(|_error| CliError::state_unavailable());
+    if publication.is_err() {
+        let _ignored = directory.remove_file(&temporary);
+        return publication;
+    }
+    if directory.remove_file(&temporary).is_err() {
+        let _ignored = directory.remove_file(path);
+        return Err(CliError::state_unavailable());
+    }
+    Ok(())
+}
+
+fn read_json_at<T>(directory: &Dir, path: &Path, maximum: u64) -> Result<T, CliError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let bytes = read_regular_at(directory, path, maximum)?;
+    cigar_canon::parse_strict_json(&bytes).map_err(|_error| CliError::plugin_invalid())?;
+    serde_json::from_slice(&bytes).map_err(|_error| CliError::plugin_invalid())
+}
+
+fn read_regular_at(directory: &Dir, path: &Path, maximum: u64) -> Result<Vec<u8>, CliError> {
+    validate_capability_relative(path)?;
+    let metadata = directory
+        .symlink_metadata(path)
+        .map_err(|_error| CliError::plugin_invalid())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > maximum {
+        return Err(CliError::plugin_invalid());
+    }
+    let mut file = directory
+        .open(path)
+        .map_err(|_error| CliError::plugin_invalid())?;
+    let opened = file
+        .metadata()
+        .map_err(|_error| CliError::plugin_invalid())?;
+    if !opened.is_file() || opened.len() > maximum {
+        return Err(CliError::plugin_invalid());
+    }
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(maximum.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_error| CliError::plugin_invalid())?;
+    if u64::try_from(bytes.len()).map_or(true, |length| length > maximum) {
+        Err(CliError::plugin_invalid())
+    } else {
+        Ok(bytes)
+    }
+}
+
+// Every destructive managed-path operation is relative to an already-open
+// CIGAR_HOME directory capability. cap-std recursively opens children without
+// following symlinks, so ancestor substitution cannot redirect deletion outside it.
 
 fn validate_relative(value: &str) -> Result<(), CliError> {
     let path = Path::new(value);
@@ -988,15 +1540,6 @@ where
     }
 }
 
-fn read_json<T>(path: &Path, maximum: u64) -> Result<T, CliError>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let bytes = read_regular(path, maximum)?;
-    cigar_canon::parse_strict_json(&bytes).map_err(|_error| CliError::plugin_invalid())?;
-    serde_json::from_slice(&bytes).map_err(|_error| CliError::plugin_invalid())
-}
-
 fn read_regular(path: &Path, maximum: u64) -> Result<Vec<u8>, CliError> {
     let metadata = std::fs::symlink_metadata(path).map_err(|_error| CliError::plugin_invalid())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > maximum {
@@ -1053,12 +1596,16 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), CliError> {
 }
 
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), CliError> {
+    write_new_mode(path, bytes, 0o600)
+}
+
+fn write_new_mode(path: &Path, bytes: &[u8], mode: u32) -> Result<(), CliError> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt as _;
-        options.mode(0o600);
+        options.mode(mode);
     }
     let mut file = options
         .open(path)
@@ -1085,6 +1632,7 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let compatibility = Compatibility {
             schema_version: "cigar.claude-code-compatibility.v1".to_owned(),
+            context_abi: "cigar.context.v1".to_owned(),
             claude_code: VersionRange {
                 minimum_inclusive: "2.1.207".to_owned(),
                 maximum_exclusive: "2.1.208".to_owned(),

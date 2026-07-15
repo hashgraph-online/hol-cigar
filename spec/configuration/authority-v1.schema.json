@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/spec/configuration/authority-v1.schema.json",
+  "title": "CIGAR macOS development configuration authority v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "platform_scope",
+    "precedence_order",
+    "profiles",
+    "ambient_authority",
+    "file_policies",
+    "source_inventories",
+    "settings",
+    "secret_provider_qualification"
+  ],
+  "properties": {
+    "$schema": { "const": "./authority-v1.schema.json" },
+    "schema_version": { "const": "cigar.configuration-authority.v1" },
+    "platform_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operating_system", "architectures", "status"],
+      "properties": {
+        "operating_system": { "const": "macos" },
+        "architectures": {
+          "type": "array",
+          "prefixItems": [{ "const": "aarch64" }],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "status": { "const": "development_only" }
+      }
+    },
+    "precedence_order": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "compiled_default" },
+        { "const": "system_config" },
+        { "const": "user_config" },
+        { "const": "project_config" },
+        { "const": "explicit_config" },
+        { "const": "environment" },
+        { "const": "cli_flag" },
+        { "const": "programmatic_api" }
+      ],
+      "minItems": 8,
+      "maxItems": 8
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/profile" }
+    },
+    "ambient_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "proxy_environment",
+        "credential_environment",
+        "filesystem_conventions",
+        "transport_requirements"
+      ],
+      "properties": {
+        "disposition": { "const": "ignored_or_rejected_never_inherited" },
+        "proxy_environment": { "$ref": "#/$defs/nonEmptyStrings" },
+        "credential_environment": { "$ref": "#/$defs/nonEmptyStrings" },
+        "filesystem_conventions": { "$ref": "#/$defs/nonEmptyStrings" },
+        "transport_requirements": { "$ref": "#/$defs/nonEmptyStrings" }
+      }
+    },
+    "file_policies": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/filePolicy" }
+    },
+    "source_inventories": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/sourceInventory" }
+    },
+    "settings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/setting" }
+    },
+    "secret_provider_qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frozen", "open"],
+      "properties": {
+        "frozen": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/providerQualification" }
+        },
+        "open": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/providerQualification" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "profileId": {
+      "enum": ["embedded", "local_sidecar", "remote_client", "shared_service"]
+    },
+    "sourceId": {
+      "enum": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag",
+        "programmatic_api"
+      ]
+    },
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "configuration_boundary",
+        "project_configuration",
+        "network_authority",
+        "secret_authority",
+        "mode_invariants"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/profileId" },
+        "owner": { "type": "string", "minLength": 1 },
+        "configuration_boundary": { "type": "string", "minLength": 1 },
+        "project_configuration": { "type": "string", "minLength": 1 },
+        "network_authority": { "type": "string", "minLength": 1 },
+        "secret_authority": { "type": "string", "minLength": 1 },
+        "mode_invariants": { "$ref": "#/$defs/nonEmptyStrings" }
+      }
+    },
+    "filePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "mode", "links", "size", "read_binding"],
+      "properties": {
+        "id": {
+          "enum": [
+            "configuration",
+            "trusted_handle",
+            "secret_handle",
+            "immutable_secret_handle"
+          ]
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "mode": { "type": "string", "minLength": 1 },
+        "links": { "type": "string", "minLength": 1 },
+        "size": { "type": "string", "minLength": 1 },
+        "read_binding": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "struct", "setting_prefix"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\\.rs$"
+        },
+        "struct": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]+$" },
+        "setting_prefix": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+        }
+      }
+    },
+    "setting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "profiles",
+        "precedence",
+        "allowed_sources",
+        "default_semantics",
+        "required_semantics",
+        "secret_classification",
+        "value_form",
+        "provenance_label",
+        "project_configuration_forbidden",
+        "macos_disposition"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/profileId" }
+        },
+        "precedence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sourceId" }
+        },
+        "allowed_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sourceId" }
+        },
+        "default_semantics": { "type": "string", "minLength": 1 },
+        "required_semantics": { "type": "string", "minLength": 1 },
+        "secret_classification": {
+          "enum": [
+            "non_secret",
+            "sensitive_reference",
+            "secret_handle",
+            "encrypted_secret_handle",
+            "trusted_handle",
+            "integrity_handle",
+            "provider_handle",
+            "aggregate"
+          ]
+        },
+        "value_form": { "enum": ["typed_value", "path_or_provider_handle"] },
+        "provenance_label": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "project_configuration_forbidden": { "type": "boolean" },
+        "macos_disposition": { "enum": ["active", "rejected_on_macos"] }
+      }
+    },
+    "providerQualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "profiles", "status"],
+      "properties": {
+        "provider": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/profileId" }
+        },
+        "status": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

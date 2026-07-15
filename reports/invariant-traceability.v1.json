@@ -1,8 +1,17 @@
 {
   "schema_version": "cigar.invariant-traceability-result.v1",
-  "manifest_digest": "sha256:d717ad3153237f7ddc4951c6fd6c08f9e00e7d6ec3a264a7b403f62b15dddd55",
-  "requirement_registry_digest": "sha256:e79265e01533f58b03550055d0edee7cc576e7a91000aaf2c31e3e12c62c3357",
-  "requirement_count": 35,
-  "test_count": 17,
+  "manifest_digest": "sha256:962663dbda4eb67ef4bbe14c19587b54fcca125b718d41be7b01e2aef7797c7d",
+  "requirement_registry_digest": "sha256:7ef365d55ec33768b398977091e70f6900d35a8553de87d07df08ce3d3a0dd32",
+  "prd_digest": "sha256:81dd91239175a50d1c53dedb2ef7ea0a28b6b143b6cdc2ff0970e763038e7e18",
+  "normative_surface_digest": "sha256:8d3a8f7a8b47e833db2808708da0749bdebf0298aa12a19c367228b001cc5701",
+  "requirement_count": 177,
+  "source_requirement_count": 142,
+  "derived_requirement_count": 35,
+  "normative_occurrence_count": 30,
+  "release_gate_count": 62,
+  "security_invariant_count": 76,
+  "mapped_requirement_fraction": 1.0,
+  "inactive_mapping_count": 0,
+  "test_count": 18,
   "valid": true
 }

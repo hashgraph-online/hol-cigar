@@ -2,14 +2,25 @@
 
 use cigar_protocol::{ContentDigest, VersionId};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Exact scope for provider-present state.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ProviderPresentScope {
     /// Provider session identity.
     pub provider_session: String,
     /// Target configuration fingerprint.
     pub target_fingerprint: ContentDigest,
+}
+
+impl fmt::Debug for ProviderPresentScope {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderPresentScope")
+            .field("provider_session", &"[OPAQUE]")
+            .field("target_fingerprint", &"[OPAQUE]")
+            .finish()
+    }
 }
 
 impl ProviderPresentScope {
@@ -27,7 +38,7 @@ impl ProviderPresentScope {
 }
 
 /// Audited provider-present observation for one exact bundle.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProviderPresentObservation {
     /// Exact bundle confirmed present.
     pub bundle_id: VersionId,
@@ -41,11 +52,37 @@ pub struct ProviderPresentObservation {
     pub confidence_parts_per_million: u32,
 }
 
+impl fmt::Debug for ProviderPresentObservation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderPresentObservation")
+            .field("bundle_id", &"[OPAQUE]")
+            .field("policy_digest", &"[OPAQUE]")
+            .field("revocation_epoch", &self.revocation_epoch)
+            .field("observed_sequence", &self.observed_sequence)
+            .field(
+                "confidence_parts_per_million",
+                &self.confidence_parts_per_million,
+            )
+            .finish()
+    }
+}
+
 /// Bounded present-state registry; protected content is never stored here.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProviderPresentRegistry {
     maximum_scopes: usize,
     observations: BTreeMap<ProviderPresentScope, ProviderPresentObservation>,
+}
+
+impl fmt::Debug for ProviderPresentRegistry {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderPresentRegistry")
+            .field("maximum_scopes", &self.maximum_scopes)
+            .field("observations", &self.observations.len())
+            .finish()
+    }
 }
 
 impl ProviderPresentRegistry {
@@ -64,8 +101,18 @@ impl ProviderPresentRegistry {
         scope: ProviderPresentScope,
         observation: ProviderPresentObservation,
     ) -> bool {
-        if observation.confidence_parts_per_million > 1_000_000 {
+        if observation.observed_sequence == 0
+            || observation.confidence_parts_per_million > 1_000_000
+        {
             return false;
+        }
+        if let Some(current) = self.observations.get(&scope) {
+            if current == &observation {
+                return true;
+            }
+            if observation.observed_sequence <= current.observed_sequence {
+                return false;
+            }
         }
         self.observations.insert(scope, observation);
         while self.observations.len() > self.maximum_scopes {

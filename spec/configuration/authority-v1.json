@@ -1,0 +1,2741 @@
+{
+  "$schema": "./authority-v1.schema.json",
+  "schema_version": "cigar.configuration-authority.v1",
+  "platform_scope": {
+    "operating_system": "macos",
+    "architectures": [
+      "aarch64"
+    ],
+    "status": "development_only"
+  },
+  "precedence_order": [
+    "compiled_default",
+    "system_config",
+    "user_config",
+    "project_config",
+    "explicit_config",
+    "environment",
+    "cli_flag",
+    "programmatic_api"
+  ],
+  "profiles": [
+    {
+      "id": "embedded",
+      "owner": "embedding application + cigar-sdk-rust + cigar-daemon",
+      "configuration_boundary": "programmatic builder plus one explicit daemon configuration",
+      "project_configuration": "forbidden_for_sdk_and_daemon; CLI project layer is setting-scoped",
+      "network_authority": "forbidden",
+      "secret_authority": "descriptor-bound file or explicit provider handle",
+      "mode_invariants": [
+        "no HTTP endpoint",
+        "no remote authorization",
+        "daemon mode must be local",
+        "storage, policy, and identity are explicit"
+      ]
+    },
+    {
+      "id": "local_sidecar",
+      "owner": "cigar-cli + cigard",
+      "configuration_boundary": "layered CLI resolution plus one explicit daemon configuration",
+      "project_configuration": "allowed only where setting.project_configuration_forbidden is false",
+      "network_authority": "Unix socket preferred; authenticated loopback TCP ingress; optional disabled-by-default stock HTTPS effect egress uses explicit public IP pins",
+      "secret_authority": "descriptor-bound owner-only file",
+      "mode_invariants": [
+        "exactly one local transport",
+        "public bind forbidden",
+        "TLS/OIDC/shared storage forbidden",
+        "live HTTPS effects disabled unless one strict registry connector and scoped credential boundary are explicit"
+      ]
+    },
+    {
+      "id": "remote_client",
+      "owner": "application + CIGAR SDK or cigar-cli",
+      "configuration_boundary": "programmatic SDK builder or layered CLI resolution",
+      "project_configuration": "allowed only for non-secret CLI settings",
+      "network_authority": "one HTTPS origin without userinfo, path, query, fragment, redirect, or ambient proxy",
+      "secret_authority": "explicit provider handle or descriptor-bound owner-only file",
+      "mode_invariants": [
+        "HTTPS required except explicit loopback development opt-in",
+        "local IPC fields forbidden",
+        "ambient credentials forbidden"
+      ]
+    },
+    {
+      "id": "shared_service",
+      "owner": "cigard operator",
+      "configuration_boundary": "one explicit strict daemon configuration",
+      "project_configuration": "forbidden",
+      "network_authority": "explicit TLS/OIDC/PostgreSQL/S3 origins; ambient proxy inheritance forbidden",
+      "secret_authority": "descriptor-bound owner-only or immutable files",
+      "mode_invariants": [
+        "TLS, OIDC, PostgreSQL, and object storage required",
+        "local IPC and local bearer token forbidden",
+        "runtime and migrator identities distinct"
+      ]
+    }
+  ],
+  "ambient_authority": {
+    "disposition": "ignored_or_rejected_never_inherited",
+    "proxy_environment": [
+      "HTTP_PROXY",
+      "http_proxy",
+      "HTTPS_PROXY",
+      "https_proxy",
+      "ALL_PROXY",
+      "all_proxy",
+      "NO_PROXY",
+      "no_proxy"
+    ],
+    "credential_environment": [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_SESSION_TOKEN",
+      "AWS_PROFILE",
+      "AWS_WEB_IDENTITY_TOKEN_FILE",
+      "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+      "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+      "GOOGLE_APPLICATION_CREDENTIALS",
+      "AZURE_CLIENT_SECRET",
+      "CIGAR_AUTHORIZATION",
+      "CIGAR_TOKEN"
+    ],
+    "filesystem_conventions": [
+      "$HOME/.netrc",
+      "ambient cloud-provider profiles"
+    ],
+    "transport_requirements": [
+      "redirects disabled",
+      "referer disabled where supported",
+      "default proxy discovery disabled",
+      "credentials supplied only by explicit provider or file handle",
+      "stock effect egress uses explicit public address pins and no ambient DNS"
+    ]
+  },
+  "file_policies": [
+    {
+      "id": "configuration",
+      "owner": "effective uid or root",
+      "mode": "not group/world writable",
+      "links": "regular non-symlink with link count one",
+      "size": "bounded",
+      "read_binding": "descriptor-relative no-follow walk for every ancestor and final component; lstat/open/fstat/read/fstat/final-lstat identity and stability checked"
+    },
+    {
+      "id": "trusted_handle",
+      "owner": "effective uid or root",
+      "mode": "not group/world writable",
+      "links": "regular non-symlink with link count one",
+      "size": "bounded nonempty",
+      "read_binding": "descriptor-relative no-follow walk for every ancestor and final component; descriptor-bound through parse/use"
+    },
+    {
+      "id": "secret_handle",
+      "owner": "effective uid",
+      "mode": "no group/world permissions",
+      "links": "regular non-symlink with link count one",
+      "size": "bounded nonempty",
+      "read_binding": "descriptor-relative no-follow walk for every ancestor and final component; descriptor-bound through use; provenance redacted"
+    },
+    {
+      "id": "immutable_secret_handle",
+      "owner": "effective uid",
+      "mode": "0400 exactly",
+      "links": "regular non-symlink with link count one",
+      "size": "bounded nonempty",
+      "read_binding": "descriptor-relative no-follow walk for every ancestor and final component; descriptor-bound through use; shared keystore decoded from validated bytes"
+    }
+  ],
+  "source_inventories": [
+    {
+      "path": "crates/cigar-cli/src/configuration.rs",
+      "struct": "ConfigurationLayer",
+      "setting_prefix": "cli"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "DaemonConfig",
+      "setting_prefix": "daemon"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "WorkerCapacities",
+      "setting_prefix": "daemon.workers"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "ApplicationResourceLimits",
+      "setting_prefix": "daemon.resources"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "TelemetrySettings",
+      "setting_prefix": "daemon.telemetry"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "TlsFiles",
+      "setting_prefix": "daemon.tls"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "OidcSettings",
+      "setting_prefix": "daemon.oidc"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "ProductionPaths",
+      "setting_prefix": "daemon.production"
+    },
+    {
+      "path": "crates/cigar-daemon/src/production_effects.rs",
+      "struct": "ProductionHttpsEffectTransportConfiguration",
+      "setting_prefix": "daemon.production.effect_connector.https_transport"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "LocalVectorSettings",
+      "setting_prefix": "daemon.local_vector"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "SharedStorageSettings",
+      "setting_prefix": "daemon.shared_storage"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "SharedPostgresSettings",
+      "setting_prefix": "daemon.shared_storage.postgres"
+    },
+    {
+      "path": "crates/cigar-daemon/src/config.rs",
+      "struct": "SharedObjectSettings",
+      "setting_prefix": "daemon.shared_storage.object"
+    },
+    {
+      "path": "sdk/rust/src/embedded.rs",
+      "struct": "EmbeddedClientBuilder",
+      "setting_prefix": "sdk.embedded"
+    },
+    {
+      "path": "sdk/rust/src/remote.rs",
+      "struct": "RemoteClientBuilder",
+      "setting_prefix": "sdk.remote"
+    }
+  ],
+  "settings": [
+    {
+      "id": "cli.schema_version",
+      "owner": "cigar-cli",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "remote_client"
+      ],
+      "precedence": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "allowed_sources": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "default_semantics": "compiled_v1",
+      "required_semantics": "required_for_file_layers",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "schema_version",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.target",
+      "owner": "cigar-cli",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "remote_client"
+      ],
+      "precedence": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "allowed_sources": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "default_semantics": "compiled_local",
+      "required_semantics": "required_after_resolution",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "target",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.local_socket",
+      "owner": "cigar-cli",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "allowed_sources": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "default_semantics": "compiled_project_socket",
+      "required_semantics": "exactly_one_local_transport",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "local_socket",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.windows_named_pipe",
+      "owner": "cigar-cli",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "allowed_sources": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "default_semantics": "absent_on_macos",
+      "required_semantics": "forbidden_on_macos",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "windows_named_pipe",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "rejected_on_macos"
+    },
+    {
+      "id": "cli.local_endpoint",
+      "owner": "cigar-cli",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "allowed_sources": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "exactly_one_local_transport",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_endpoint",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.remote_endpoint",
+      "owner": "cigar-cli",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "allowed_sources": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_remote",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "remote_endpoint",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.authorization_file",
+      "owner": "cigar-cli",
+      "profiles": [
+        "local_sidecar",
+        "remote_client"
+      ],
+      "precedence": [
+        "system_config",
+        "user_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "allowed_sources": [
+        "system_config",
+        "user_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_local_tcp_optional_for_remote",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "authorization_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.project_state_directory",
+      "owner": "cigar-cli",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "remote_client"
+      ],
+      "precedence": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "allowed_sources": [
+        "compiled_default",
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment",
+        "cli_flag"
+      ],
+      "default_semantics": "compiled_current_project_state",
+      "required_semantics": "required_after_resolution",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "project_state_directory",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "cli.daemon_config",
+      "owner": "cigar-cli",
+      "profiles": [
+        "embedded",
+        "local_sidecar"
+      ],
+      "precedence": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "allowed_sources": [
+        "system_config",
+        "user_config",
+        "project_config",
+        "explicit_config",
+        "environment"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_embedded_process_composition",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "daemon_config",
+      "project_configuration_forbidden": false,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.mode",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "mode",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_sqlite_capacity_profile",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "standard_when_absent",
+      "required_semantics": "optional_local_only_forbidden_in_shared_mode_and_immutable_after_database_activation",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_sqlite_capacity_profile",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.state_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "state_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.runtime_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "runtime_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.unix_socket",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "profile_conditional",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "unix_socket",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.windows_named_pipe",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent_on_macos",
+      "required_semantics": "forbidden_on_macos",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "windows_named_pipe",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "rejected_on_macos"
+    },
+    {
+      "id": "daemon.http_listen",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "profile_conditional",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "http_listen",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.grpc_listen",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "profile_conditional",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "grpc_listen",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_token_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_local_tcp",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "local_token_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.tls",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_shared",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "tls",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_shared",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "oidc",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "production",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "disabled_and_absent",
+      "required_semantics": "optional_local_only_forbidden_in_shared_mode",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_for_shared_forbidden_elsewhere",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.request_deadline_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "request_deadline_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shutdown_deadline_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shutdown_deadline_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.max_request_bytes",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "max_request_bytes",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.max_expansion_ratio",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "max_expansion_ratio",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "workers",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "resources",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.telemetry",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "telemetry",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector.enabled",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "false",
+      "required_semantics": "required_when_section_present",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector_enabled",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector.root_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_when_enabled_owner_private_under_state_directory",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector_root_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector.dimension",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "64_when_section_absent",
+      "required_semantics": "required_when_section_present_range_8_through_4096",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector_dimension",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector.maximum_entries",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "100000_when_section_absent",
+      "required_semantics": "required_when_section_present_range_1_through_100000",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector_maximum_entries",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.local_vector.maximum_neighbors",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "128_when_section_absent",
+      "required_semantics": "required_when_section_present_nonzero_not_above_maximum_entries",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "local_vector_maximum_neighbors",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.ingestion",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_ingestion",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.indexing",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_indexing",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.invalidation",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_invalidation",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.compilation",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_compilation",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.outbox",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_outbox",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.reconciliation",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_reconciliation",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.lease_cleanup",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_lease_cleanup",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.backup",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_backup",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.workers.garbage_collection",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "workers_garbage_collection",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources.global_request_concurrency",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "resources_global_request_concurrency",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources.per_tenant_request_concurrency",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "resources_per_tenant_request_concurrency",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources.blocking_active",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "resources_blocking_active",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources.blocking_queued",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "resources_blocking_queued",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.resources.idempotency_wait_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "resources_idempotency_wait_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.telemetry.otlp_endpoint",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "optional",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "telemetry_otlp_endpoint",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.telemetry.otlp_ca_certificate_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "required_when_otlp_endpoint_is_https",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "telemetry_otlp_ca_certificate_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.telemetry.export_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "telemetry_export_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.telemetry.metric_interval_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "telemetry_metric_interval_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.tls.certificate_chain",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "tls_certificate_chain",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.tls.private_key",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "tls_private_key",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.tls.client_ca",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "optional",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "tls_client_ca",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.issuer",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_issuer",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.audience",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_audience",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.tenant_claim",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_tenant_claim",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.jwks_max_age_seconds",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_jwks_max_age_seconds",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.jwks_refresh_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_jwks_refresh_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.clock_skew_seconds",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_clock_skew_seconds",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.oidc.max_token_bytes",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "oidc_max_token_bytes",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.project_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "production_project_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.metadata_database",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "production_metadata_database",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.blob_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "production_blob_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.blob_key_reference_directory",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "production_blob_key_reference_directory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.keystore_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "encrypted_secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_keystore_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.keystore_passphrase_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_keystore_passphrase_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.cursor_signing_key_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_cursor_signing_key_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_checkpoint_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "integrity_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_effect_checkpoint_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.policy_profile_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_policy_profile_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.authority_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_authority_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.source_registry_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_source_registry_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_registry_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "production_effect_registry_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.provider_protocol",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "exact_cigar_idempotent_effect_http_v1_when_local_connector_enabled",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "effect_provider_protocol",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.credential_handle",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_when_local_idempotent_http_connector_enabled",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "effect_credential_handle",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.credential_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_owner_private_absolute_file_when_local_idempotent_http_connector_enabled",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "effect_credential_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.pinned_addresses",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_sorted_unique_public_ip_set_when_local_idempotent_http_connector_enabled",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "effect_pinned_addresses",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.connect_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_bounded_1_to_10000_ms_when_local_idempotent_http_connector_enabled",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "effect_connect_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.request_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_bounded_1_to_30000_ms_and_not_less_than_connect_timeout",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "effect_request_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.production.effect_connector.https_transport.maximum_response_bytes",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "local_sidecar"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none_effects_disabled_by_default",
+      "required_semantics": "required_bounded_1_to_1048576_bytes_when_local_idempotent_http_connector_enabled",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "effect_maximum_response_bytes",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "aggregate",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.runtime_url_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_postgres_runtime_url_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.migrator_url_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_postgres_migrator_url_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.server_name",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_server_name",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.ca_certificate_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_postgres_ca_certificate_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.minimum_connections",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_minimum_connections",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.maximum_connections",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_maximum_connections",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.acquire_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_acquire_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.statement_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_statement_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.lock_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_lock_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.postgres.idle_transaction_timeout_ms",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_postgres_idle_transaction_timeout_ms",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.endpoint",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object_endpoint",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.region",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object_region",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.bucket",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object_bucket",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.prefix",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object_prefix",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.path_style",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "shared_storage_object_path_style",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.access_key_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_object_access_key_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.secret_key_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_object_secret_key_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.security_token_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "optional",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_object_security_token_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.wrapping_keys_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_object_wrapping_keys_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "daemon.shared_storage.object.blinding_key_file",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "secret_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "shared_storage_object_blinding_key_file",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.embedded.factory",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "embedded"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "provider_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "runtime_factory",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.embedded.storage",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "embedded"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "storage_profile",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.embedded.policy",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "embedded"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "trusted_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "policy_profile",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.embedded.tenant",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "embedded"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "authoritative_factory_or_none",
+      "required_semantics": "identity_pair_or_factory",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "tenant",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.embedded.principal",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "embedded"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "authoritative_factory_or_none",
+      "required_semantics": "identity_pair_or_factory",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "principal",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.remote.endpoint",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "required",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "endpoint",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.remote.authorization",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "absent",
+      "required_semantics": "optional_provider_only",
+      "secret_classification": "provider_handle",
+      "value_form": "path_or_provider_handle",
+      "provenance_label": "authorization",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.remote.compatibility",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "compiled_protocol_range",
+      "required_semantics": "required_after_default",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "compatibility",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.remote.allow_insecure_loopback",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "false",
+      "required_semantics": "optional_development_only",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "allow_insecure_loopback",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
+      "id": "sdk.remote.connect_timeout",
+      "owner": "cigar-sdk-rust",
+      "profiles": [
+        "remote_client"
+      ],
+      "precedence": [
+        "programmatic_api"
+      ],
+      "allowed_sources": [
+        "programmatic_api"
+      ],
+      "default_semantics": "10_seconds",
+      "required_semantics": "required_after_default",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "connect_timeout",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    }
+  ],
+  "secret_provider_qualification": {
+    "frozen": [
+      {
+        "provider": "descriptor_bound_file",
+        "profiles": [
+          "embedded",
+          "local_sidecar",
+          "remote_client",
+          "shared_service"
+        ],
+        "status": "implemented_and_source_tested_installed_runtime_qualification_open"
+      },
+      {
+        "provider": "programmatic_authorization_provider",
+        "profiles": [
+          "remote_client"
+        ],
+        "status": "interface_defined_application_runtime_qualification_owned"
+      }
+    ],
+    "open": [
+      {
+        "provider": "macos_keychain_secret_handle",
+        "profiles": [
+          "embedded",
+          "local_sidecar",
+          "shared_service"
+        ],
+        "status": "implementation_exists_but_end_to_end_service_qualification_open"
+      },
+      {
+        "provider": "external_secret_manager",
+        "profiles": [
+          "shared_service"
+        ],
+        "status": "not_selected_not_release_qualified"
+      },
+      {
+        "provider": "cloud_workload_identity",
+        "profiles": [
+          "shared_service"
+        ],
+        "status": "ambient_discovery_forbidden_explicit_adapter_not_selected"
+      }
+    ]
+  }
+}

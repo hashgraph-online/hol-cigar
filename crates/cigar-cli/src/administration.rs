@@ -8,9 +8,13 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use cigar_crypto::{EncryptedDevelopmentKeystore, KeyProvider, KeyPurpose, KeyRef, SecretBytes};
 use cigar_store::{
-    BackupError, BackupErrorCode, BackupIdentity, GarbageCollectionPolicy,
-    MultiTenantLocalRepositoryBlobStore, RepositoryBlobStore, SqliteStore, StoreError,
-    StoreErrorCode, create_backup, restore_backup_trusted, verify_backup_trusted,
+    BACKUP_DATABASE_FILE, BACKUP_EFFECT_CHECKPOINT_FILE, BackupError, BackupErrorCode,
+    BackupIdentity, GarbageCollectionPlanError, GarbageCollectionPlanErrorCode,
+    GarbageCollectionPlanIdentity, GarbageCollectionPlanSignatureIdentity, GarbageCollectionPolicy,
+    MultiTenantLocalRepositoryBlobStore, RepositoryBlobStore, SignedGarbageCollectionPlan,
+    SqliteStore, StoreError, StoreErrorCode, create_backup_with_effect_checkpoint,
+    restore_backup_trusted, sign_garbage_collection_plan, verify_backup_trusted,
+    verify_garbage_collection_plan_trusted,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -33,6 +37,7 @@ const MAX_ADMIN_INPUT_BYTES: u64 = 1024 * 1024;
 const MAX_SECRET_BYTES: u64 = 16 * 1024;
 const MAX_GC_FILES: usize = 1_000_000;
 const DEFAULT_GC_FILES: usize = 1_000;
+const MAX_SIGNED_GC_PLAN_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -168,7 +173,7 @@ struct ProjectLink {
 }
 
 #[derive(Clone, Debug)]
-struct BlockingCancellation(Arc<AtomicBool>);
+pub(crate) struct BlockingCancellation(Arc<AtomicBool>);
 
 impl BlockingCancellation {
     fn new() -> Self {
@@ -179,7 +184,7 @@ impl BlockingCancellation {
         self.0.store(true, Ordering::Release);
     }
 
-    fn checkpoint(&self) -> Result<(), CliError> {
+    pub(crate) fn checkpoint(&self) -> Result<(), CliError> {
         if self.0.load(Ordering::Acquire) {
             Err(CliError::interrupted())
         } else {
@@ -276,9 +281,14 @@ fn execute_blocking(
         "backup.create" => backup_create(invocation, configuration, cancellation)?,
         "backup.verify" => backup_verify(invocation, configuration)?,
         "backup.restore" => backup_restore(invocation, configuration, cancellation)?,
-        "gc.plan" => gc_plan(invocation, configuration)?,
+        "gc.plan" => gc_plan(invocation, configuration, cancellation)?,
         "gc.run" => gc_run(invocation, configuration, cancellation)?,
         "diagnostics.bundle" => diagnostics_bundle(invocation, configuration, cancellation)?,
+        "state.inspect-beta" => inspect_beta_state(invocation)?,
+        #[cfg(unix)]
+        "state.import-beta" => import_beta_state(invocation, configuration, cancellation)?,
+        #[cfg(unix)]
+        "state.restore-beta" => restore_beta_state(invocation, configuration, cancellation)?,
         "effect.list" => {
             let (result, cursor) = effect_list(invocation, configuration)?;
             next_page_cursor = cursor;
@@ -293,6 +303,312 @@ fn execute_blocking(
     };
     cancellation.checkpoint()?;
     Ok(operation_response(path, result, next_page_cursor))
+}
+
+fn inspect_beta_state(invocation: &ParsedInvocation) -> Result<Value, CliError> {
+    if invocation.options.yes
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    let path = Path::new(exact_one(&invocation.positionals)?);
+    let bytes = read_frozen_beta_state_file(path)?;
+    let state = crate::beta_state_compat::decode_frozen_beta_state(&bytes)
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    let summary = state.summary();
+    let byte_count = u64::try_from(bytes.len()).map_err(|_error| CliError::beta_state_invalid())?;
+    let digest = sha256_digest(&bytes);
+
+    Ok(json!({
+        "schema_version": "cigar.beta-state-transition-plan.v1",
+        "source": {
+            "release": crate::beta_state_compat::FROZEN_BETA_RELEASE,
+            "state_schema": crate::beta_state_compat::FROZEN_BETA_STATE_SCHEMA,
+            "sha256": digest,
+            "byte_count": byte_count,
+            "generation": summary.generation,
+            "project_count": summary.project_count,
+            "source_count": summary.source_count,
+            "link_count": summary.link_count,
+            "active_project_present": summary.has_active_project,
+            "active_focus_present": summary.has_active_focus
+        },
+        "inspection": {
+            "status": "validated",
+            "mode": "read-only",
+            "content_free": true,
+            "identifiers_emitted": false,
+            "paths_emitted": false,
+            "input_bytes_preserved": true,
+            "identifiers_preserved": true,
+            "paths_preserved": true,
+            "generation_preserved": true
+        },
+        "transition": {
+            "application": {
+                "status": "explicit-command-required",
+                "command": "state.import-beta",
+                "precondition": "verified-exact-byte-backup"
+            },
+            "downgrade": {
+                "status": "blocked",
+                "reason_code": "BETA_DOWNGRADE_NOT_SUPPORTED"
+            },
+            "mutation_performed": false
+        }
+    }))
+}
+
+#[cfg(unix)]
+fn import_beta_state(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    require_beta_transition_options(invocation)?;
+    let [source, backup] = exact_two(&invocation.positionals)?;
+    crate::beta_state_transition::import_beta_state(
+        Path::new(source),
+        Path::new(backup),
+        configuration.project_state_directory(),
+        invocation.options.dry_run,
+        cancellation,
+    )
+}
+
+#[cfg(unix)]
+fn restore_beta_state(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    require_beta_transition_options(invocation)?;
+    let [backup, recovery_target] = exact_two(&invocation.positionals)?;
+    crate::beta_state_transition::restore_beta_backup(
+        Path::new(backup),
+        Path::new(recovery_target),
+        configuration.project_state_directory(),
+        invocation.options.dry_run,
+        cancellation,
+    )
+}
+
+#[cfg(unix)]
+fn require_beta_transition_options(invocation: &ParsedInvocation) -> Result<(), CliError> {
+    if invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        Err(CliError::invalid_command())
+    } else {
+        Ok(())
+    }
+}
+
+fn sha256_digest(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut value = String::with_capacity(64);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ignored = write!(&mut value, "{byte:02x}");
+    }
+    value
+}
+
+pub(crate) fn read_frozen_beta_state_file(path: &Path) -> Result<Vec<u8>, CliError> {
+    let mut file = open_frozen_beta_state_nofollow(path)?;
+    let before = file
+        .metadata()
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    validate_frozen_beta_state_metadata(&before)?;
+    let capacity =
+        usize::try_from(before.len()).map_err(|_error| CliError::beta_state_invalid())?;
+    let mut bytes = Vec::with_capacity(capacity);
+    std::io::Read::by_ref(&mut file)
+        .take(crate::beta_state_compat::MAX_FROZEN_BETA_STATE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    let after = file
+        .metadata()
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    validate_frozen_beta_state_metadata(&after)?;
+    ensure_same_frozen_beta_file(&before, &after)?;
+    if u64::try_from(bytes.len()).ok() != Some(before.len()) {
+        return Err(CliError::beta_state_invalid());
+    }
+    Ok(bytes)
+}
+
+fn validate_frozen_beta_state_metadata(metadata: &std::fs::Metadata) -> Result<(), CliError> {
+    if !metadata.is_file()
+        || metadata.len() == 0
+        || metadata.len() > crate::beta_state_compat::MAX_FROZEN_BETA_STATE_BYTES
+    {
+        return Err(CliError::beta_state_invalid());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        if metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.mode() & 0o077 != 0
+            || metadata.nlink() != 1
+        {
+            return Err(CliError::beta_state_invalid());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn open_frozen_beta_state_nofollow(path: &Path) -> Result<File, CliError> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::path::Component;
+
+    let mut absolute = false;
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir if names.is_empty() && !absolute => absolute = true,
+            Component::Normal(name) => names.push(name),
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::ParentDir => {
+                return Err(CliError::beta_state_invalid());
+            }
+        }
+    }
+    let (file_name, ancestors) = names
+        .split_last()
+        .ok_or_else(CliError::beta_state_invalid)?;
+    let base = if absolute {
+        Path::new("/")
+    } else {
+        Path::new(".")
+    };
+    let mut directory = open(
+        base,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| CliError::beta_state_invalid())?;
+    validate_frozen_beta_ancestor_metadata(
+        &directory
+            .metadata()
+            .map_err(|_error| CliError::beta_state_invalid())?,
+    )?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            *ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(|_error| CliError::beta_state_invalid())?;
+        validate_frozen_beta_ancestor_metadata(
+            &directory
+                .metadata()
+                .map_err(|_error| CliError::beta_state_invalid())?,
+        )?;
+    }
+    #[cfg(test)]
+    swap_beta_state_ancestor_after_open_for_test(path)?;
+    openat(
+        &directory,
+        *file_name,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| CliError::beta_state_invalid())
+}
+
+#[cfg(unix)]
+fn validate_frozen_beta_ancestor_metadata(metadata: &std::fs::Metadata) -> Result<(), CliError> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let owner = metadata.uid();
+    let mode = metadata.mode();
+    let writable_by_others = mode & 0o022 != 0;
+    let protected_sticky_root = owner == 0 && mode & 0o1000 != 0;
+    if !metadata.is_dir()
+        || (owner != 0 && owner != rustix::process::geteuid().as_raw())
+        || (writable_by_others && !protected_sticky_root)
+    {
+        Err(CliError::beta_state_invalid())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(all(test, unix))]
+struct BetaStateAncestorSwapProbe {
+    parent: PathBuf,
+    displaced: PathBuf,
+    replacement: PathBuf,
+}
+
+#[cfg(all(test, unix))]
+static BETA_STATE_ANCESTOR_SWAP_PROBE: std::sync::Mutex<Option<BetaStateAncestorSwapProbe>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(all(test, unix))]
+fn swap_beta_state_ancestor_after_open_for_test(path: &Path) -> Result<(), CliError> {
+    let Some(parent) = path.parent() else {
+        return Err(CliError::beta_state_invalid());
+    };
+    let mut slot = BETA_STATE_ANCESTOR_SWAP_PROBE
+        .lock()
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    let probe = if slot.as_ref().is_some_and(|probe| probe.parent == parent) {
+        slot.take()
+    } else {
+        None
+    };
+    drop(slot);
+    let Some(probe) = probe else {
+        return Ok(());
+    };
+    std::fs::rename(&probe.parent, &probe.displaced)
+        .map_err(|_error| CliError::beta_state_invalid())?;
+    std::fs::rename(&probe.replacement, &probe.parent)
+        .map_err(|_error| CliError::beta_state_invalid())
+}
+
+#[cfg(not(unix))]
+fn open_frozen_beta_state_nofollow(path: &Path) -> Result<File, CliError> {
+    File::open(path).map_err(|_error| CliError::beta_state_invalid())
+}
+
+fn ensure_same_frozen_beta_file(
+    expected: &std::fs::Metadata,
+    observed: &std::fs::Metadata,
+) -> Result<(), CliError> {
+    if expected.len() != observed.len() {
+        return Err(CliError::beta_state_invalid());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        if expected.dev() != observed.dev()
+            || expected.ino() != observed.ino()
+            || expected.mtime() != observed.mtime()
+            || expected.mtime_nsec() != observed.mtime_nsec()
+            || expected.ctime() != observed.ctime()
+            || expected.ctime_nsec() != observed.ctime_nsec()
+        {
+            return Err(CliError::beta_state_invalid());
+        }
+    }
+    Ok(())
 }
 
 fn operation_response(
@@ -586,8 +902,11 @@ fn effect_list(
             .map_err(|_error| CliError::state_unavailable())?;
     let authority = cigar_daemon::ProductionAuthorityConfiguration::from_json(&authority_bytes)
         .map_err(|_error| CliError::state_corrupt())?;
-    let repository = cigar_store::SqliteStore::open(&config.production.metadata_database)
-        .map_err(|_error| CliError::state_unavailable())?;
+    let repository = cigar_store::SqliteStore::open_with_capacity_profile(
+        &config.production.metadata_database,
+        config.local_sqlite_capacity_profile,
+    )
+    .map_err(|_error| CliError::state_unavailable())?;
     let cancellation = cigar_store::CancellationToken::default();
     let limit = usize::try_from(invocation.options.page_size.unwrap_or(100))
         .map_err(|_error| CliError::invalid_input())?;
@@ -829,8 +1148,11 @@ fn collect_security_diagnostics(
     let _backup_signer = backup_creation_identity(&context)?;
     validate_backup_source(&context.configuration)?;
     let repository = production_gc_repository(&context)?;
-    let store = SqliteStore::open(&context.configuration.production.metadata_database)
-        .map_err(map_store_error)?;
+    let store = SqliteStore::open_with_capacity_profile(
+        &context.configuration.production.metadata_database,
+        context.configuration.local_sqlite_capacity_profile,
+    )
+    .map_err(map_store_error)?;
     store.integrity_check().map_err(map_store_error)?;
     store.verify_migration_level().map_err(map_store_error)?;
     let sqlite = store.configuration().map_err(map_store_error)?;
@@ -1403,7 +1725,30 @@ fn backup_identity_trusted(
             && tenant.tenant_id.as_str() == identity.tenant
             && !tenant.revoked_key_refs.contains(&identity.signing_key)
             && tenant.principals.iter().any(|principal| {
-                principal.principal_id.as_str() == identity.signer
+                principal.active
+                    && principal.operator
+                    && principal.principal_id.as_str() == identity.signer
+                    && !tenant
+                        .revoked_principal_ids
+                        .contains(&principal.principal_id)
+                    && principal.not_before.unix_nanos() <= identity.signed_at_unix_nanos
+                    && identity.signed_at_unix_nanos < principal.expires_at.unix_nanos()
+            })
+    })
+}
+
+fn gc_plan_identity_trusted(
+    authority: &cigar_daemon::ProductionAuthorityConfiguration,
+    identity: &GarbageCollectionPlanSignatureIdentity,
+) -> bool {
+    authority.tenants.iter().any(|tenant| {
+        tenant.active
+            && tenant.tenant_id.as_str() == identity.tenant
+            && !tenant.revoked_key_refs.contains(&identity.signing_key)
+            && tenant.principals.iter().any(|principal| {
+                principal.active
+                    && principal.operator
+                    && principal.principal_id.as_str() == identity.signer
                     && !tenant
                         .revoked_principal_ids
                         .contains(&principal.principal_id)
@@ -1430,6 +1775,24 @@ fn validate_existing_regular(path: &Path) -> Result<(), CliError> {
     } else {
         Ok(())
     }
+}
+
+fn validate_private_regular(path: &Path) -> Result<(), CliError> {
+    validate_existing_regular(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+        let metadata =
+            std::fs::symlink_metadata(path).map_err(|_error| CliError::state_unavailable())?;
+        if metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.nlink() != 1
+            || metadata.permissions().mode() & 0o077 != 0
+        {
+            return Err(CliError::state_corrupt());
+        }
+    }
+    Ok(())
 }
 
 fn read_backup_secret(path: &Path) -> Result<Vec<u8>, CliError> {
@@ -1472,6 +1835,42 @@ fn map_backup_error(error: BackupError) -> CliError {
     }
 }
 
+fn backup_checkpoint_error_code(error: cigar_effects::EffectError) -> BackupErrorCode {
+    match error.code() {
+        cigar_effects::EffectErrorCode::CorruptJournal
+        | cigar_effects::EffectErrorCode::InvalidInput => BackupErrorCode::Corrupt,
+        cigar_effects::EffectErrorCode::LimitExceeded => BackupErrorCode::LimitExceeded,
+        _ => BackupErrorCode::Unavailable,
+    }
+}
+
+fn map_backup_checkpoint_error(error: cigar_effects::EffectError) -> CliError {
+    match backup_checkpoint_error_code(error) {
+        BackupErrorCode::Corrupt | BackupErrorCode::InvalidMetadata => CliError::state_corrupt(),
+        BackupErrorCode::LimitExceeded | BackupErrorCode::Unavailable => {
+            CliError::state_unavailable()
+        }
+        BackupErrorCode::DestinationNotEmpty
+        | BackupErrorCode::KeyUnavailable
+        | BackupErrorCode::UntrustedSigner
+        | BackupErrorCode::InjectedAbort => CliError::state_unavailable(),
+    }
+}
+
+fn require_complete_effect_backup(
+    backup: &Path,
+    manifest: &cigar_store::BackupManifest,
+) -> Result<(), CliError> {
+    if manifest.format_version != 2 {
+        return Err(CliError::state_corrupt());
+    }
+    cigar_daemon::EffectCheckpointFile::verify_backup_snapshot(
+        backup.join(BACKUP_DATABASE_FILE),
+        backup.join(BACKUP_EFFECT_CHECKPOINT_FILE),
+    )
+    .map_err(map_backup_checkpoint_error)
+}
+
 fn backup_manifest_result(
     path: &Path,
     manifest: &cigar_store::BackupManifest,
@@ -1482,6 +1881,7 @@ fn backup_manifest_result(
         "backup": path,
         "canonical_root": manifest.canonical_root,
         "files": manifest.files.len(),
+        "format_version": manifest.format_version,
         "repository_revision": manifest.repository_revision,
         "schema_version": manifest.schema_version,
         "signed": true,
@@ -1501,9 +1901,21 @@ fn backup_create(
     let context = production_backup_context(configuration)?;
     validate_backup_source(&context.configuration)?;
     let signer = backup_creation_identity(&context)?;
-    let store = SqliteStore::open(&context.configuration.production.metadata_database)
-        .map_err(|_error| CliError::state_unavailable())?;
+    let store = SqliteStore::open_with_capacity_profile(
+        &context.configuration.production.metadata_database,
+        context.configuration.local_sqlite_capacity_profile,
+    )
+    .map_err(|_error| CliError::state_unavailable())?;
     if invocation.options.dry_run {
+        cigar_daemon::EffectCheckpointFile::verify_backup_snapshot(
+            &context.configuration.production.metadata_database,
+            context
+                .configuration
+                .production
+                .effect_checkpoint_file
+                .clone(),
+        )
+        .map_err(map_backup_checkpoint_error)?;
         context
             .keys
             .resolve(
@@ -1525,13 +1937,27 @@ fn backup_create(
         signer: &signer.signer,
         created_at_unix_nanos: context.now,
     };
+    let checkpoints = cigar_daemon::EffectCheckpointFile::open(
+        context
+            .configuration
+            .production
+            .effect_checkpoint_file
+            .clone(),
+        false,
+    )
+    .map_err(map_backup_checkpoint_error)?;
     cancellation.checkpoint()?;
-    let manifest = create_backup(
+    let manifest = create_backup_with_effect_checkpoint(
         &store,
         &context.configuration.production.blob_directory,
         &destination,
         context.keys.as_ref(),
         identity,
+        |database, checkpoint| {
+            checkpoints
+                .capture_backup_snapshot(database, checkpoint)
+                .map_err(backup_checkpoint_error_code)
+        },
     )
     .map_err(map_backup_error)?;
     let verified = verify_backup_trusted(
@@ -1544,6 +1970,7 @@ fn backup_create(
     if verified.manifest != manifest {
         return Err(CliError::state_corrupt());
     }
+    require_complete_effect_backup(&destination, &manifest)?;
     Ok(backup_manifest_result(&destination, &manifest, "created"))
 }
 
@@ -1557,6 +1984,7 @@ fn backup_verify(
         backup_identity_trusted(&context.authority, identity)
     })
     .map_err(map_backup_error)?;
+    require_complete_effect_backup(&backup, &verified.manifest)?;
     Ok(backup_manifest_result(
         &backup,
         &verified.manifest,
@@ -1578,6 +2006,12 @@ fn backup_restore(
     })
     .map_err(map_backup_error)?;
     let manifest = verified.manifest;
+    require_complete_effect_backup(&backup, &manifest)?;
+    let current_checkpoint = context
+        .configuration
+        .production
+        .effect_checkpoint_file
+        .clone();
     if invocation.options.dry_run {
         if destination.exists()
             && (!destination.is_dir()
@@ -1588,6 +2022,11 @@ fn backup_restore(
         {
             return Err(CliError::state_conflict());
         }
+        cigar_daemon::EffectCheckpointFile::verify_exact_backup_snapshot_read_only(
+            current_checkpoint,
+            backup.join(BACKUP_EFFECT_CHECKPOINT_FILE),
+        )
+        .map_err(map_backup_checkpoint_error)?;
         return Ok(json!({
             "backup": backup,
             "destination": destination,
@@ -1596,7 +2035,12 @@ fn backup_restore(
             "verified": true
         }));
     }
+    let checkpoints = cigar_daemon::EffectCheckpointFile::open(current_checkpoint, false)
+        .map_err(map_backup_checkpoint_error)?;
     cancellation.checkpoint()?;
+    let checkpoint_guard = checkpoints
+        .lock_exact_backup_snapshot(backup.join(BACKUP_EFFECT_CHECKPOINT_FILE))
+        .map_err(map_backup_checkpoint_error)?;
     let restored = restore_backup_trusted(
         &backup,
         &destination,
@@ -1608,6 +2052,8 @@ fn backup_restore(
     if restored.manifest != manifest {
         return Err(CliError::state_corrupt());
     }
+    require_complete_effect_backup(&destination, &restored.manifest)?;
+    drop(checkpoint_guard);
     Ok(json!({
         "backup": backup,
         "canonical_root": manifest.canonical_root,
@@ -1623,20 +2069,53 @@ fn backup_restore(
 fn gc_plan(
     invocation: &ParsedInvocation,
     configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
 ) -> Result<Value, CliError> {
-    require_no_positionals(invocation)?;
+    let destination = absolute_new_path(Path::new(exact_one(&invocation.positionals)?))?;
+    if destination.exists() {
+        return Err(CliError::state_conflict());
+    }
     let policy = gc_policy(invocation, false)?;
     let context = production_backup_context(configuration)?;
+    let signer = backup_creation_identity(&context)?;
     let repository = production_gc_repository(&context)?;
-    let report = SqliteStore::garbage_collect_at(
+    cancellation.checkpoint()?;
+    let plan = SqliteStore::plan_garbage_collection_at_with_capacity_profile(
         &context.configuration.production.metadata_database,
         repository,
-        eligible_preview_policy(),
-        true,
+        policy.into(),
         policy.max_files,
+        context.now,
+        context.configuration.local_sqlite_capacity_profile,
     )
     .map_err(map_store_error)?;
-    Ok(gc_report_result(&report, policy, true))
+    let signed = sign_garbage_collection_plan(
+        plan,
+        context.keys.as_ref(),
+        GarbageCollectionPlanIdentity {
+            signing_key: &signer.signing_key,
+            tenant: &signer.tenant,
+            signer: &signer.signer,
+        },
+    )
+    .map_err(map_gc_plan_error)?;
+    let bytes = serde_json::to_vec(&signed).map_err(|_error| CliError::state_unavailable())?;
+    if u64::try_from(bytes.len())
+        .ok()
+        .is_none_or(|size| size > MAX_SIGNED_GC_PLAN_BYTES)
+    {
+        return Err(CliError::state_unavailable());
+    }
+    if !invocation.options.dry_run {
+        cancellation.checkpoint()?;
+        write_new_private_file(&destination, &bytes)?;
+    }
+    Ok(gc_plan_result(
+        signed.unverified_plan(),
+        policy,
+        &destination,
+        invocation.options.dry_run,
+    ))
 }
 
 fn gc_run(
@@ -1644,26 +2123,36 @@ fn gc_run(
     configuration: &EffectiveConfiguration,
     cancellation: &BlockingCancellation,
 ) -> Result<Value, CliError> {
-    require_no_positionals(invocation)?;
-    let policy = gc_policy(invocation, !invocation.options.dry_run)?;
+    let plan_path = absolute_new_path(Path::new(exact_one(&invocation.positionals)?))?;
+    if invocation.options.input.is_some() {
+        return Err(CliError::invalid_input());
+    }
+    validate_private_regular(&plan_path)?;
+    let bytes = read_bounded_regular(&plan_path, MAX_SIGNED_GC_PLAN_BYTES)?;
+    cigar_canon::parse_strict_json(&bytes).map_err(|_error| CliError::state_corrupt())?;
+    let signed: SignedGarbageCollectionPlan =
+        serde_json::from_slice(&bytes).map_err(|_error| CliError::state_corrupt())?;
+    let context = production_backup_context(configuration)?;
+    let verified = verify_garbage_collection_plan_trusted(
+        signed,
+        context.keys.as_ref(),
+        context.now,
+        |identity| gc_plan_identity_trusted(&context.authority, identity),
+    )
+    .map_err(map_gc_plan_error)?;
+    let policy = gc_policy_from_plan(verified.plan());
     let blockers = gc_blockers(policy);
     if !invocation.options.dry_run && !blockers.is_empty() {
         return Err(CliError::state_conflict());
     }
-    let context = production_backup_context(configuration)?;
     let repository = production_gc_repository(&context)?;
-    let store_policy = if invocation.options.dry_run {
-        eligible_preview_policy()
-    } else {
-        policy.into()
-    };
     cancellation.checkpoint()?;
-    let report = SqliteStore::garbage_collect_at(
+    let report = SqliteStore::run_garbage_collection_plan_at_with_capacity_profile(
         &context.configuration.production.metadata_database,
         repository,
-        store_policy,
+        &verified,
         invocation.options.dry_run,
-        policy.max_files,
+        context.configuration.local_sqlite_capacity_profile,
     )
     .map_err(map_store_error)?;
     Ok(gc_report_result(
@@ -1707,11 +2196,13 @@ impl From<GcPolicyDocument> for GarbageCollectionPolicy {
     }
 }
 
-fn eligible_preview_policy() -> GarbageCollectionPolicy {
-    GarbageCollectionPolicy {
-        retention_satisfied: true,
-        legal_hold: false,
-        backup_complete: true,
+fn gc_policy_from_plan(plan: &cigar_store::GarbageCollectionPlan) -> GcPolicyDocument {
+    GcPolicyDocument {
+        schema_version: GcPolicySchema::V1,
+        retention_satisfied: plan.policy().retention_satisfied,
+        legal_hold: plan.policy().legal_hold,
+        backup_complete: plan.policy().backup_complete,
+        max_files: plan.maximum_candidates(),
     }
 }
 
@@ -1750,6 +2241,15 @@ fn map_store_error(error: StoreError) -> CliError {
         | StoreErrorCode::Cancelled
         | StoreErrorCode::InjectedAbort
         | StoreErrorCode::Unavailable => CliError::state_unavailable(),
+    }
+}
+
+fn map_gc_plan_error(error: GarbageCollectionPlanError) -> CliError {
+    match error.code() {
+        GarbageCollectionPlanErrorCode::InvalidMetadata
+        | GarbageCollectionPlanErrorCode::Corrupt => CliError::state_corrupt(),
+        GarbageCollectionPlanErrorCode::KeyUnavailable
+        | GarbageCollectionPlanErrorCode::UntrustedSigner => CliError::credential_unavailable(),
     }
 }
 
@@ -1792,6 +2292,27 @@ fn gc_report_result(
         "max_files": policy.max_files,
         "planned": planned,
         "tombstone_visibility": "repository-owned live-root evaluation"
+    })
+}
+
+fn gc_plan_result(
+    plan: &cigar_store::GarbageCollectionPlan,
+    policy: GcPolicyDocument,
+    path: &Path,
+    dry_run: bool,
+) -> Value {
+    let blockers = gc_blockers(policy);
+    json!({
+        "blockers": blockers,
+        "candidate_count": plan.candidates().len(),
+        "candidate_root": plan.candidate_root(),
+        "deletion_allowed": blockers.is_empty(),
+        "maximum_candidates": plan.maximum_candidates(),
+        "plan": path,
+        "planned": true,
+        "repository_revision": plan.repository_revision().0,
+        "signed": true,
+        "written": !dry_run
     })
 }
 
@@ -1907,7 +2428,7 @@ fn read_state(directory: &Path) -> Result<LocalState, CliError> {
 }
 
 fn validate_state(state: &LocalState) -> Result<(), CliError> {
-    if state.schema_version != STATE_SCHEMA || state.generation == 0 {
+    if !supported_local_state_schema(&state.schema_version) || state.generation == 0 {
         return Err(CliError::state_corrupt());
     }
     for (name, project) in &state.projects {
@@ -1942,6 +2463,20 @@ fn validate_state(state: &LocalState) -> Result<(), CliError> {
         return Err(CliError::state_corrupt());
     }
     Ok(())
+}
+
+fn supported_local_state_schema(schema: &str) -> bool {
+    if schema == STATE_SCHEMA {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        schema == crate::beta_state_transition::IMPORTED_FULL_STATE_SCHEMA
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
 }
 
 fn write_state(directory: &Path, state: &LocalState) -> Result<(), CliError> {
@@ -2121,10 +2656,49 @@ fn sync_directory(_path: &Path) -> Result<(), CliError> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::{BETA_STATE_ANCESTOR_SWAP_PROBE, BetaStateAncestorSwapProbe};
     use super::{
         LocalState, SupportArchiveEntry, decode_effect_list_cursor, encode_effect_list_cursor,
-        read_state, render_support_tar, write_state,
+        inspect_beta_state, read_frozen_beta_state_file, read_state, render_support_tar,
+        require_complete_effect_backup, validate_private_regular, write_new_private_file,
+        write_state,
     };
+    use crate::arguments::{GlobalOptions, ParsedInvocation};
+    use std::path::Path;
+
+    #[test]
+    fn production_backup_rejects_legacy_manifest_without_effect_checkpoint() {
+        let manifest = cigar_store::BackupManifest {
+            format_version: 1,
+            schema_version: 3,
+            repository_revision: 0,
+            created_at_unix_nanos: 1,
+            files: Vec::new(),
+            key_references: vec!["legacy-key".to_owned()],
+            canonical_root: format!("1220{}", "0".repeat(64)),
+        };
+        assert!(require_complete_effect_backup(Path::new("."), &manifest).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signed_gc_plan_file_publication_is_private_and_no_clobber()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let path = root.join("gc-plan.json");
+        write_new_private_file(&path, b"first signed plan")?;
+        let metadata = std::fs::symlink_metadata(&path)?;
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+        assert_eq!(metadata.nlink(), 1);
+        validate_private_regular(&path)?;
+        assert!(write_new_private_file(&path, b"replacement plan").is_err());
+        assert_eq!(std::fs::read(path)?, b"first signed plan");
+        Ok(())
+    }
 
     #[test]
     fn local_state_round_trips_unicode_paths_and_rejects_corruption()
@@ -2191,6 +2765,146 @@ mod tests {
             bytes: canary.to_vec(),
         };
         assert!(render_support_tar(&[unsafe_entry]).is_err());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn beta_state_plan_is_content_free_read_only_and_blocks_both_directions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let fixture = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/beta-state-v0.1.0-beta.1/valid.json"
+        ))?;
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let state_path = root.join("state.json");
+        std::fs::write(&state_path, &fixture)?;
+        std::fs::set_permissions(&state_path, std::fs::Permissions::from_mode(0o600))?;
+        let invocation = ParsedInvocation {
+            command: crate::command::lookup("state.inspect-beta").ok_or("missing command")?,
+            positionals: vec![state_path.to_string_lossy().into_owned()],
+            options: GlobalOptions::default(),
+        };
+
+        let plan = inspect_beta_state(&invocation)?;
+        assert_eq!(std::fs::read(&state_path)?, fixture);
+        assert_eq!(
+            plan.pointer("/source/generation"),
+            Some(&serde_json::json!(41))
+        );
+        assert_eq!(
+            plan.pointer("/source/project_count"),
+            Some(&serde_json::json!(2))
+        );
+        assert_eq!(
+            plan.pointer("/transition/application/status"),
+            Some(&serde_json::json!("explicit-command-required"))
+        );
+        assert_eq!(
+            plan.pointer("/transition/downgrade/status"),
+            Some(&serde_json::json!("blocked"))
+        );
+        let rendered = serde_json::to_string(&plan)?;
+        for private_value in [
+            "project.alpha",
+            "project-beta",
+            "source_docs",
+            "/Users/example",
+            state_path.to_str().ok_or("state path")?,
+        ] {
+            assert!(
+                !rendered.contains(private_value),
+                "content-free plan leaked {private_value}"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn beta_state_reader_rejects_unsafe_permissions_hard_links_and_symlinks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let fixture = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/beta-state-v0.1.0-beta.1/valid-min.json"
+        ))?;
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let state_path = root.join("state.json");
+        std::fs::write(&state_path, &fixture)?;
+        std::fs::set_permissions(&state_path, std::fs::Permissions::from_mode(0o600))?;
+        assert_eq!(read_frozen_beta_state_file(&state_path)?, fixture);
+
+        std::fs::set_permissions(&state_path, std::fs::Permissions::from_mode(0o640))?;
+        assert!(read_frozen_beta_state_file(&state_path).is_err());
+        std::fs::set_permissions(&state_path, std::fs::Permissions::from_mode(0o600))?;
+
+        let hard_link = root.join("hard-link.json");
+        std::fs::hard_link(&state_path, &hard_link)?;
+        assert!(read_frozen_beta_state_file(&state_path).is_err());
+        std::fs::remove_file(hard_link)?;
+        assert_eq!(read_frozen_beta_state_file(&state_path)?, fixture);
+
+        let symlink = root.join("symlink.json");
+        std::os::unix::fs::symlink(&state_path, &symlink)?;
+        assert!(read_frozen_beta_state_file(&symlink).is_err());
+        assert_eq!(std::fs::read(&state_path)?, fixture);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn beta_state_reader_rejects_symlinked_ancestors_and_stays_bound_during_ancestor_swap()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let original_bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/beta-state-v0.1.0-beta.1/valid-min.json"
+        ))?;
+        let replacement_bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/beta-state-v0.1.0-beta.1/valid.json"
+        ))?;
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let pinned = root.join("pinned");
+        let replacement = root.join("replacement");
+        std::fs::create_dir(&pinned)?;
+        std::fs::create_dir(&replacement)?;
+        std::fs::set_permissions(&pinned, std::fs::Permissions::from_mode(0o700))?;
+        std::fs::set_permissions(&replacement, std::fs::Permissions::from_mode(0o700))?;
+        for (parent, bytes) in [
+            (&pinned, &original_bytes),
+            (&replacement, &replacement_bytes),
+        ] {
+            let state = parent.join("state.json");
+            std::fs::write(&state, bytes)?;
+            std::fs::set_permissions(state, std::fs::Permissions::from_mode(0o600))?;
+        }
+
+        let symlinked_parent = root.join("symlinked-parent");
+        std::os::unix::fs::symlink(&pinned, &symlinked_parent)?;
+        assert!(read_frozen_beta_state_file(&symlinked_parent.join("state.json")).is_err());
+
+        let displaced = root.join("displaced");
+        *BETA_STATE_ANCESTOR_SWAP_PROBE
+            .lock()
+            .map_err(|_error| std::io::Error::other("swap probe poisoned"))? =
+            Some(BetaStateAncestorSwapProbe {
+                parent: pinned.clone(),
+                displaced: displaced.clone(),
+                replacement: replacement.clone(),
+            });
+        let observed = read_frozen_beta_state_file(&pinned.join("state.json"))?;
+        assert_eq!(observed, original_bytes);
+        assert_eq!(std::fs::read(pinned.join("state.json"))?, replacement_bytes);
+        assert_eq!(std::fs::read(displaced.join("state.json"))?, original_bytes);
         Ok(())
     }
 }

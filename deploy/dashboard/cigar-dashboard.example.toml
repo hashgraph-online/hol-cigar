@@ -1,0 +1,36 @@
+# Optional local observer sidecar. This file is never loaded by cigard or the CIGAR CLI.
+# Create every parent directory owner-only and replace these absolute paths for your machine.
+schema_version = "cigar.dashboard-config.v1"
+
+[server]
+listen = "127.0.0.1:7460"
+runtime_directory = "/var/lib/cigar-dashboard/runtime"
+asset_directory = "/opt/cigar-dashboard/assets"
+request_timeout_ms = 30000
+shutdown_deadline_ms = 30000
+max_request_bytes = 1048576
+max_event_bytes = 262144
+max_sse_subscribers = 16
+
+[target]
+base_url = "http://127.0.0.1:7443/"
+bearer_token_file = "/var/lib/cigar/local.token"
+connect_timeout_ms = 2000
+request_timeout_ms = 10000
+status_interval_ms = 2000
+diagnostics_interval_ms = 5000
+identity_interval_ms = 60000
+
+[control]
+enabled = false
+max_concurrent_runs = 1
+
+[history]
+database_file = "/var/lib/cigar-dashboard/history.sqlite3"
+max_runs = 1000
+max_events_per_run = 10000
+max_age_days = 30
+max_bytes = 1073741824
+
+[display]
+target_alias = "Local CIGAR"

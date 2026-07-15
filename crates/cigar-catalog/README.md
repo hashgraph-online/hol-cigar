@@ -10,19 +10,28 @@ Built-in connectors:
 
 - `LocalFilesystemConnector` canonicalizes one root, never follows external symlinks, excludes
   ambiguous hard links, applies hard/policy/`.cigarignore`/Git-ignore/media/size stages in order,
-  scans eligible bytes for secrets before publication, preserves inode identity across rename,
-  and exposes overflow as a typed rescan requirement.
+  prunes positively ignored directory subtrees, hard-excludes repository controls and known
+  credential names without trusting host casing, scans eligible bytes for secrets, seals admitted
+  bytes against later path substitution, preserves inode identity across rename, rejects portable
+  path aliases, and exposes overflow as a typed rescan requirement. Negated Git-ignore rules are
+  deliberately not treated as re-inclusions in this bounded fail-closed subset.
 - `GitConnector` reads only immutable `HEAD` tree objects through bounded `git cat-file` calls.
-  Dirty worktree bytes cannot enter a snapshot; symlink and submodule tree entries are excluded.
+  Dirty worktree bytes, mutable replacement refs, and lazy network fetches cannot enter a
+  snapshot; symlink and submodule tree entries are excluded.
 
 `ProjectIdentity` derives a tenant-scoped stable ID from a credential-free normalized Git remote,
 an explicitly persisted root-lineage UUID, and a fork/worktree disambiguator. Current directory
 paths are deliberately excluded, so a move does not silently change project identity.
 
-`IngestionService` rescans immediately before atomization, stages the complete snapshot and atom/
-edge batch in one repository transaction, binds retries to a canonical publication digest, retains
-unchanged source versions, adds `Supersedes` edges for changed lineages, and emits immutable
-tombstone versions for deleted files or symbols.
+`IngestionService` consumes the daemon-revalidated discovery plan and connector snapshot, stages the
+complete snapshot and atom/edge batch in one repository transaction, binds retries to a canonical
+publication digest, retains unchanged source versions, adds `Supersedes` edges for changed
+lineages, and emits immutable tombstone versions for deleted files or symbols.
+
+Production callers must bind `SourceConnectorDescriptor` to the durable implementation/root and
+bind the strictly ordered atomizer registry with `atomizer_registry_digest`. Atomizer descriptors
+declare the exact scope, governance, quality, and retrieval flags accepted by ingestion; output
+that diverges from those declarations is rejected before the repository transaction begins.
 
 `CatalogAtomService` resolves bounded unique public atom IDs against one caller-supplied trusted
 `AccessContext` and immutable `SnapshotSelection`, preserving request order while representing

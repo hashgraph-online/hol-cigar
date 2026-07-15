@@ -30,7 +30,7 @@ fn serve_mode() -> ExitCode {
     };
     let stdin = io::stdin();
     let stdout = io::stdout();
-    match serve(stdin.lock(), stdout.lock(), backend) {
+    match serve(stdin, stdout.lock(), backend) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => {
             write_stderr("cigar-mcp: stdio transport failed\n");

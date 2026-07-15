@@ -1,0 +1,16 @@
+{
+  "schema_version": "cigar.cli-administration.v1",
+  "generation": 41,
+  "active_project": "project.alpha",
+  "active_focus": "focus:launch",
+  "projects": {
+    "project.alpha": {"path": "/Users/example/CIGAR Alpha", "attached": true},
+    "project-beta": {"path": "/Users/example/CIGAR Beta", "attached": true}
+  },
+  "sources": {
+    "source_docs": {"path": "/Users/example/CIGAR Alpha/docs"}
+  },
+  "links": [
+    {"from": "project.alpha", "to": "project-beta"}
+  ]
+}

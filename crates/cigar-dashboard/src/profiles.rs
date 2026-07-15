@@ -83,6 +83,18 @@ pub enum WorkingDirectory {
 pub enum AvailabilityState {
     /// The sidecar supervisor implements this command contract.
     Available,
+    /// Dashboard control mode is disabled by configuration.
+    ControlDisabled,
+    /// The reviewed executable could not be captured safely at startup.
+    ToolMissing,
+    /// The profile does not claim the current native platform.
+    PlatformUnsupported,
+    /// The profile requires an exact source checkout.
+    SourceCheckoutRequired,
+    /// A required offline dependency cache is unavailable.
+    DependencyCacheMissing,
+    /// A separately scoped credential required by the profile is unavailable.
+    CredentialMissing,
     /// The command is documented but cannot be launched in this build.
     CommandNotImplemented,
 }
@@ -179,6 +191,116 @@ impl RunProfile {
     pub const fn availability_state(&self) -> AvailabilityState {
         self.availability_state
     }
+
+    /// Returns the closed executable selector captured by the supervisor.
+    #[must_use]
+    pub const fn executable(&self) -> ProfileExecutable {
+        self.executable
+    }
+
+    /// Returns the immutable reviewed argv vector. The browser cannot replace any element.
+    #[must_use]
+    pub fn argv(&self) -> &[String] {
+        &self.argv
+    }
+
+    /// Returns the fixed working-directory class.
+    #[must_use]
+    pub const fn working_directory(&self) -> WorkingDirectory {
+        self.working_directory
+    }
+
+    /// Returns the hard maximum execution duration.
+    #[must_use]
+    pub const fn maximum_duration_seconds(&self) -> u64 {
+        self.maximum_duration_seconds
+    }
+
+    /// Returns the hard ordinary-output byte ceiling.
+    #[must_use]
+    pub const fn maximum_output_bytes(&self) -> u64 {
+        self.resource_ceiling.output_bytes
+    }
+
+    /// Returns the hard evidence byte ceiling.
+    #[must_use]
+    pub const fn maximum_evidence_bytes(&self) -> u64 {
+        self.resource_ceiling.evidence_bytes
+    }
+
+    /// Returns the reviewed aggregate resident-memory ceiling in mebibytes.
+    #[must_use]
+    pub const fn maximum_memory_mib(&self) -> u64 {
+        self.resource_ceiling.memory_mib
+    }
+
+    /// Returns the reviewed maximum number of members in the owned process group.
+    #[must_use]
+    pub const fn maximum_processes(&self) -> u16 {
+        self.resource_ceiling.processes
+    }
+
+    /// Returns the bounded graceful-cancellation interval.
+    #[must_use]
+    pub const fn cancellation_grace_seconds(&self) -> u64 {
+        self.cancellation_grace_seconds
+    }
+
+    /// Returns the strict expected receipt schema identity.
+    #[must_use]
+    pub fn receipt_schema(&self) -> &str {
+        &self.receipt_schema
+    }
+
+    /// Returns the closed concurrency group.
+    #[must_use]
+    pub fn concurrency_group(&self) -> &str {
+        &self.concurrency_group
+    }
+
+    /// Reports whether this is a soak profile. Soak remains unavailable in this execution cohort.
+    #[must_use]
+    pub const fn is_soak(&self) -> bool {
+        matches!(self.kind, ProfileKind::Soak)
+    }
+
+    /// Reports whether the profile explicitly claims native macOS.
+    #[must_use]
+    pub fn supports_macos(&self) -> bool {
+        self.platforms.contains(&ProfilePlatform::Macos)
+    }
+
+    /// Returns the deterministic SHA-256 of the validated profile record.
+    pub fn digest_hex(&self) -> Result<String, ProfileRegistryError> {
+        let bytes =
+            serde_json::to_vec(self).map_err(|_error| ProfileRegistryError::InvalidRegistry)?;
+        Ok(hex_digest(&bytes))
+    }
+
+    /// Returns a public copy narrowed by immutable startup availability checks.
+    #[must_use]
+    pub fn with_availability(&self, availability: AvailabilityState) -> Self {
+        let mut profile = self.clone();
+        profile.availability_state = availability;
+        profile
+    }
+
+    /// Returns the reviewed relative receipt path when this command has a deterministic producer.
+    #[must_use]
+    pub fn receipt_relative_path(&self) -> Option<&str> {
+        if self.receipt_schema == "cigar.dashboard-schema-check.v1" {
+            return Some("dashboard-schema-check.v1.json");
+        }
+        if self.receipt_schema == "cigar.test-matrix-result.v1" {
+            return self
+                .argv
+                .windows(2)
+                .find(|arguments| arguments.first().is_some_and(|value| value == "--output"))
+                .and_then(|arguments| arguments.get(1))
+                .map(String::as_str);
+        }
+        None
+    }
 }
 
 #[derive(Deserialize)]
@@ -266,16 +388,7 @@ impl RunProfileRegistry {
     /// Returns the exact registry byte digest as lowercase hexadecimal.
     #[must_use]
     pub fn digest_hex(&self) -> String {
-        self.digest.iter().fold(
-            String::with_capacity(self.digest.len() * 2),
-            |mut output, byte| {
-                use std::fmt::Write as _;
-                if write!(output, "{byte:02x}").is_err() {
-                    return String::new();
-                }
-                output
-            },
-        )
+        hex_bytes(&self.digest)
     }
 
     /// Resolves only an exact reviewed profile ID.
@@ -286,6 +399,24 @@ impl RunProfileRegistry {
             .ok()
             .and_then(|index| self.profiles.get(index))
     }
+}
+
+fn hex_digest(source: &[u8]) -> String {
+    let digest: [u8; 32] = Sha256::digest(source).into();
+    hex_bytes(&digest)
+}
+
+fn hex_bytes(source: &[u8]) -> String {
+    source.iter().fold(
+        String::with_capacity(source.len() * 2),
+        |mut output, byte| {
+            use std::fmt::Write as _;
+            if write!(output, "{byte:02x}").is_err() {
+                return String::new();
+            }
+            output
+        },
+    )
 }
 
 fn validate_profile(profile: &RunProfile) -> Result<(), ProfileRegistryError> {
@@ -413,9 +544,28 @@ mod tests {
         assert_eq!(registry.digest_hex().len(), 64);
         assert!(registry.get("soak-smoke").is_some());
         assert!(registry.get("SOAK-SMOKE").is_none());
-        assert!(registry.profiles().iter().all(|profile| {
-            profile.availability_state() == AvailabilityState::CommandNotImplemented
-        }));
+        let available = registry
+            .profiles()
+            .iter()
+            .filter(|profile| profile.availability_state() == AvailabilityState::Available)
+            .map(|profile| profile.id())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            available,
+            vec![
+                "compatibility-matrix",
+                "dashboard-contracts",
+                "security-matrix"
+            ]
+        );
+        assert!(
+            registry
+                .profiles()
+                .iter()
+                .filter(|profile| profile.is_soak())
+                .all(|profile| profile.availability_state()
+                    == AvailabilityState::CommandNotImplemented)
+        );
         Ok(())
     }
 

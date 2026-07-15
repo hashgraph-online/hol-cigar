@@ -15,8 +15,19 @@ from pathlib import Path
 from typing import Any, Never, Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
+RELEASE_TOOLS = ROOT / "scripts" / "release"
+if str(RELEASE_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_TOOLS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
+
 MANIFEST = Path(__file__).with_name("quickstarts.json")
 IDENTITY = re.compile(r"^1220[0-9a-f]{64}$")
+GO_VERSION = re.compile(r"^go (1\.[0-9]+\.[0-9]+)$", re.MULTILINE)
 LANGUAGES = {"rust", "typescript", "python", "go"}
 MAX_OUTPUT = 8 * 1024 * 1024
 
@@ -52,6 +63,25 @@ def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def pinned_go_toolchain() -> str:
+    versions: set[str] = set()
+    for module in (
+        ROOT / "sdk" / "go" / "go.mod",
+        Path(__file__).with_name("go-workflow") / "go.mod",
+    ):
+        try:
+            payload = module.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise QuickstartError("Go toolchain pin is unreadable") from error
+        matches = GO_VERSION.findall(payload)
+        if len(matches) != 1:
+            fail("Go toolchain pin is invalid")
+        versions.add(matches[0])
+    if len(versions) != 1:
+        fail("Go toolchain pins do not match")
+    return f"go{versions.pop()}"
+
+
 def clean_environment(state: Path) -> dict[str, str]:
     allowed = {
         "PATH",
@@ -77,11 +107,14 @@ def clean_environment(state: Path) -> dict[str, str]:
             "GOCACHE": str(state / "go-build-cache"),
             "CARGO_NET_OFFLINE": "true",
             "UV_OFFLINE": "1",
-            "GOTOOLCHAIN": "local",
+            "GOTOOLCHAIN": pinned_go_toolchain(),
             "GOWORK": "off",
             "GOPROXY": "off",
-            "GOSUMDB": "off",
-            "GONOSUMDB": "*",
+            # Go requires the checksum-log name while selecting an exact cached
+            # toolchain. The loopback proxies and GOPROXY=off keep cache misses
+            # fail-closed without weakening the toolchain pin.
+            "GOSUMDB": "sum.golang.org",
+            "GONOSUMDB": "",
             "NO_PROXY": "127.0.0.1,localhost,::1",
             "no_proxy": "127.0.0.1,localhost,::1",
             "HTTP_PROXY": "http://127.0.0.1:9",
@@ -264,12 +297,45 @@ def parser() -> argparse.ArgumentParser:
         "--language", action="append", choices=sorted(LANGUAGES), default=[]
     )
     result.add_argument("--output", type=Path)
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     return result
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment and Path(argument) != Path(environment):
+        fail("--evidence-dir conflicts with CIGAR_EVIDENCE_DIR")
+    selected = argument if argument is not None else environment
+    if selected is None or os.fspath(selected) == "":
+        return None
+    path = Path(selected)
+    if not path.is_absolute():
+        fail("quickstart evidence directory must be absolute")
+    return path
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    workspace: EvidenceWorkspace | None = None
     try:
+        selected_evidence = selected_evidence_directory(args)
+        evidence_output: str | None = None
+        if selected_evidence is not None:
+            raw_output = args.output or Path("demos/sdk-quickstarts.json")
+            try:
+                evidence_output = "/".join(safe_evidence_path(os.fspath(raw_output)))
+            except EvidenceWorkspaceError as error:
+                raise QuickstartError(
+                    "quickstart evidence output path is unsafe"
+                ) from error
+            workspace = EvidenceWorkspace.create(
+                selected_evidence, repository_root=ROOT
+            )
         manifest = load_manifest()
         selected = args.language or sorted(LANGUAGES)
         if len(selected) != len(set(selected)):
@@ -315,7 +381,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "quickstarts": sorted(records, key=lambda item: item["language"]),
         }
         report["report_digest"] = digest(canonical(report))
-        if args.output:
+        if workspace is not None:
+            assert evidence_output is not None
+            workspace.write_json(evidence_output, report)
+        elif args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             payload = canonical(report) + b"\n"
             temporary = args.output.with_name(f".{args.output.name}.{os.getpid()}.tmp")
@@ -333,9 +402,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except QuickstartError as error:
         print(f"sdk-quickstart: {error}", file=sys.stderr)
         return 2
-    except OSError:
+    except (EvidenceWorkspaceError, OSError):
         print("sdk-quickstart: local artifact operation failed", file=sys.stderr)
         return 2
+    finally:
+        if workspace is not None:
+            workspace.close()
 
 
 if __name__ == "__main__":

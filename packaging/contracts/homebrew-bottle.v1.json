@@ -1,0 +1,16 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "homebrew-bottle-v1",
+  "formats": ["tar.gz"],
+  "allow": ["cigar/1.0.0-dev.1/**"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.dSYM/**", "**/*.key", "**/*.pem", "**/*.p12", "**/*.mobileprovision"],
+  "required": ["cigar/1.0.0-dev.1/.brew/cigar.rb", "cigar/1.0.0-dev.1/INSTALL_RECEIPT.json", "cigar/1.0.0-dev.1/bin/cigar", "cigar/1.0.0-dev.1/bin/cigard", "cigar/1.0.0-dev.1/bin/cigar-mcp", "cigar/1.0.0-dev.1/bin/cigar-claude-hook", "cigar/1.0.0-dev.1/etc/bash_completion.d/cigar", "cigar/1.0.0-dev.1/sbom.spdx.json", "cigar/1.0.0-dev.1/share/doc/cigar/LICENSE", "cigar/1.0.0-dev.1/share/doc/cigar/NOTICE", "cigar/1.0.0-dev.1/share/fish/vendor_completions.d/cigar.fish", "cigar/1.0.0-dev.1/share/man/man1/cigar.1", "cigar/1.0.0-dev.1/share/zsh/site-functions/_cigar"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644", "0755"],
+  "max_entries": 64,
+  "max_member_bytes": 268435456,
+  "max_total_bytes": 536870912,
+  "content_scan": true,
+  "content_scan_exemptions": []
+}

@@ -10,11 +10,23 @@ HAProxy alone is dual-homed onto `host-edge`, and publishes only its PostgreSQL 
 IPv4 loopback address; this keeps the real host-side repository test on the same guarded endpoint
 without publishing either database node.
 
+The primary creates a short-lived qualification CA and a TLS 1.3 server identity in a dedicated
+private volume before PostgreSQL initializes. The original primary, physical standby, rejoined
+former primary, and isolated restore all use the same certificate, whose SANs bind the two node
+names, router name, localhost, and the loopback IP. Only the public CA certificate is copied to an
+owner-private host directory; every production `PostgresStore` phase verifies that CA and the
+loopback server identity through the primary-only router. The CA signing key is destroyed before
+PostgreSQL starts. These test credentials are never suitable for deployment.
+
 Run the complete qualification from the repository root:
 
 ```sh
+CIGAR_EVIDENCE_DIR=/private/tmp/cigar-wp18-failover-evidence \
 tools/wp18-failover/qualify.sh
 ```
+
+The selected evidence directory must be an absolute path outside the repository and must either
+not exist or be an empty owner-owned `0700` directory. Use a new directory for every run.
 
 The runner creates random, per-run hexadecimal passwords in memory when none are supplied. It
 enables `synchronous_standby_names` only after the initial base backup is streaming and proves
@@ -37,14 +49,18 @@ non-recovery server. The harness then compares the restored timeline/replay LSN,
 qualification rows, repository revision, and a domain-separated CIGAR semantic root over migration
 identity, latest tenant-state bytes/checksums, object metadata, and atom projection records.
 
-The complete sanitized log and fail-closed JSON receipt are atomically published at
-`artifacts/qualification/wp18-failover.log` and
-`artifacts/qualification/wp18-failover.json`. The receipt contains a stable workspace digest,
-exact pre/post/lag commit and replay LSNs, timeline change, fixed router port, required commands,
-and zero-loss/zero-duplicate assertions. A run first replaces any older pass receipt with a
-non-passing `running` receipt, and publishes `pass` only after all live phases finish without a
-skip and Compose cleanup leaves no project containers, volumes, networks, or local image. Database
-URLs and secrets are neither printed nor persisted.
+The complete sanitized log and fail-closed JSON receipt are published create-new at
+`${CIGAR_EVIDENCE_DIR}/wp18-failover.log` and
+`${CIGAR_EVIDENCE_DIR}/wp18-failover.json`, both with mode `0400`. The external evidence broker
+holds the owner-private directory descriptor across the complete run, withholds its selector from
+Docker and Cargo, closes the terminal-state descriptor before every external command, rejects a
+nonempty or rebound path, and binds the log digest and byte count in canonical JSON. The receipt
+contains exact pre/post/lag commit and replay LSNs, timeline change,
+fixed router port, required commands, and zero-loss/zero-duplicate assertions. `pass` is impossible
+unless all live phases finish without a skip, Compose cleanup leaves no project containers,
+volumes, networks, or local image, and the exact Git worktree fingerprint is unchanged before and
+after the run. Database URLs and secrets are neither printed nor persisted. Historical files under
+`artifacts/qualification/` are not updated by this runner.
 
 Use `tools/wp18-failover/qualify.sh --syntax-only` for local Compose and shell parsing without
 starting containers. Set `CIGAR_KEEP_FAILOVER_DEPS=1` to retain a failed or successful project for

@@ -1,0 +1,295 @@
+{
+  "$schema": "compatibility-policy-v1.schema.json",
+  "claim_scope": {
+    "cross_platform_qualified": false,
+    "development_source_only": true,
+    "migration_qualified": false,
+    "release_frozen": false
+  },
+  "directions": {
+    "backward_reader": "candidate-reader-accepts-all-baseline-writer-output",
+    "forward_reader": "baseline-reader-accepts-candidate-writer-output",
+    "reader_definition": "accepted-input-language-and-observable-semantics",
+    "writer_definition": "possible-output-language-not-merely-current-fixtures"
+  },
+  "domains": {
+    "claude_plugin": {
+      "binding": {
+        "file_count": 1,
+        "inventory_sha256": "daed7199147f673ff73ba8bf82c4e4a8c1d5b987a3a6d39a019ae2ceae9af305",
+        "total_bytes": 286
+      },
+      "path": "adapters/claude-code/compatibility.json",
+      "rules": {
+        "additive_minor": [
+          "add-platform",
+          "widen-tested-version-window"
+        ],
+        "baseline_reader_of_candidate_writer": "candidate-must-select-version-platform-intersection",
+        "breaking_major": [
+          "change-context-abi-or-record-schema",
+          "narrow-tested-version-window",
+          "remove-platform"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      }
+    },
+    "cursor_stream": {
+      "binding": {
+        "file_count": 4,
+        "inventory_sha256": "9c8886af93eeade871794b688f1eb604f22878e5e5b48cc9785e4bbf540cde15",
+        "total_bytes": 64770
+      },
+      "cursor_wire_version": 1,
+      "paths": [
+        "crates/cigar-api/src/cursor.rs",
+        "schemas/json/page-cursor-v1.schema.json",
+        "spec/api/operation-payloads-v1.json",
+        "spec/api/operations-v1.json"
+      ],
+      "rules": {
+        "additive_minor": [
+          "add-independent-versioned-cursor-or-stream"
+        ],
+        "baseline_reader_of_candidate_writer": "new-state-emission-requires-version-or-capability-negotiation",
+        "breaking_major": [
+          "change-existing-cursor-codec-or-scope",
+          "change-existing-resume-or-ordering-semantics",
+          "change-existing-stream-kind-or-event-contract"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      },
+      "stream_operations": [
+        "subscribeSpaceEvents"
+      ]
+    },
+    "errors": {
+      "binding": {
+        "file_count": 4,
+        "inventory_sha256": "0a98fd25d5539eb1ce0d0c41b0fc1473b8ac9248e36ec6b94a3c8f31ba6da22d",
+        "total_bytes": 36665
+      },
+      "error_count": 34,
+      "paths": [
+        "crates/cigar-protocol/src/generated/error_registry.rs",
+        "schemas/openapi/error-registry-v1.json",
+        "schemas/proto/generated/error_codes.proto",
+        "spec/errors/catalog.yaml"
+      ],
+      "rules": {
+        "additive_minor": [
+          "add-unique-error-code-and-name"
+        ],
+        "baseline_reader_of_candidate_writer": "new-error-emission-requires-negotiation-or-unknown-error-fallback",
+        "breaking_major": [
+          "change-existing-code-name-transport-retry-or-disclosure",
+          "remove-existing-error",
+          "reuse-code-or-name"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      }
+    },
+    "extensions": {
+      "abi_package": "cigar:extension@1.0.0",
+      "binding": {
+        "file_count": 7,
+        "inventory_sha256": "7966f00009bb22179032ddff05434e030cff5c5164a9a2015448368c83b4d56d",
+        "total_bytes": 55533
+      },
+      "manifest_schema": "cigar.extension-manifest.v1",
+      "paths": [
+        "schemas/json/extension-cancel-v1.schema.json",
+        "schemas/json/extension-host-call-v1.schema.json",
+        "schemas/json/extension-invocation-v1.schema.json",
+        "schemas/json/extension-manifest-v1.schema.json",
+        "schemas/json/extension-observation-v1.schema.json",
+        "schemas/json/extension-response-v1.schema.json",
+        "spec/context-abi/cigar-extension-world-v1.wit"
+      ],
+      "rules": {
+        "additive_minor": [
+          "add-versioned-abi-world",
+          "add-versioned-extension-record",
+          "broaden-manifest-reader-with-negotiated-emission"
+        ],
+        "baseline_reader_of_candidate_writer": "new-abi-or-field-emission-requires-range-negotiation",
+        "breaking_major": [
+          "change-existing-wit-world",
+          "narrow-existing-extension-reader-domain",
+          "remove-existing-abi-or-record"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      }
+    },
+    "interface_projections": {
+      "binding": {
+        "file_count": 6,
+        "inventory_sha256": "ad51719e9ad32830c0907ba54ab1f14906ba75ac767880256800bf710da65192",
+        "total_bytes": 75810
+      },
+      "cli_mapping_count": 34,
+      "mcp_mapping_count": 10,
+      "paths": [
+        "crates/cigar-cli/src/generated/operation_mappings.rs",
+        "crates/cigar-dashboard/src/generated/protocol-catalog-v1.json",
+        "crates/cigar-mcp/src/generated/operation_mappings.rs",
+        "schemas/dashboard/dashboard-protocol-v1.schema.json",
+        "spec/api/interface-projections-v1.json",
+        "spec/api/operations-v1.md"
+      ],
+      "rules": {
+        "additive_minor": [
+          "add-operation-backed-interface-mapping"
+        ],
+        "baseline_reader_of_candidate_writer": "new-interface-exposure-requires-client-capability-negotiation",
+        "breaking_major": [
+          "add-unimplemented-surface-route",
+          "change-or-remove-existing-interface-mapping",
+          "expose-unknown-or-semantically-mismatched-operation"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      },
+      "source_path": "spec/api/interface-projections-v1.json"
+    },
+    "operations": {
+      "binding": {
+        "file_count": 1,
+        "inventory_sha256": "aae1aad0ad155d60138534c5fd517a7c7bf71ed11ec18e1c9c978f0a14d403c3",
+        "total_bytes": 13310
+      },
+      "operation_count": 45,
+      "path": "spec/api/operations-v1.json",
+      "rules": {
+        "additive_minor": [
+          "add-uniquely-bound-operation"
+        ],
+        "baseline_reader_of_candidate_writer": "new-operation-use-requires-capability-negotiation",
+        "breaking_major": [
+          "change-existing-auth-or-mutation-contract",
+          "change-existing-operation-identity-or-route",
+          "change-existing-stream-kind",
+          "remove-existing-operation"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      },
+      "service_count": 7
+    },
+    "payloads": {
+      "binding": {
+        "file_count": 2,
+        "inventory_sha256": "10b1578c53b78e5e25748371e0d5dc47e80dd1a11a45d4d605089f3d39a43bc7",
+        "total_bytes": 361530
+      },
+      "envelope_field_count": 6,
+      "operation_count": 45,
+      "paths": [
+        "schemas/json/api-payload-types-v1.schema.json",
+        "spec/api/operation-payloads-v1.json"
+      ],
+      "payload_type_count": 70,
+      "rules": {
+        "additive_minor": [
+          "add-payload-contract-for-new-operation"
+        ],
+        "baseline_reader_of_candidate_writer": "new-payload-use-requires-operation-negotiation",
+        "breaking_major": [
+          "change-existing-envelope-field",
+          "change-existing-operation-payload-bound-or-type",
+          "remove-existing-payload-contract"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      }
+    },
+    "public_schemas": {
+      "binding": {
+        "file_count": 42,
+        "inventory_sha256": "266231c8d08963dd4b332ee8abef1722478b4df0cb55f25c5d118700bd879716",
+        "total_bytes": 296405
+      },
+      "manifest_path": "schemas/generated-manifest.json",
+      "path_prefix": "schemas/",
+      "rules": {
+        "additive_minor": [
+          "add-versioned-schema-family",
+          "broaden-reader-with-baseline-writer-emission",
+          "optional-property-with-negotiated-writer-emission"
+        ],
+        "baseline_reader_of_candidate_writer": "baseline-emission-or-explicit-negotiation",
+        "breaking_major": [
+          "add-required-property",
+          "narrow-existing-reader-domain",
+          "remove-or-rename-existing-schema-family",
+          "unsupported-schema-keyword-change"
+        ],
+        "candidate_reader_of_baseline_writer": "required"
+      }
+    },
+    "stored_records": {
+      "binding": {
+        "file_count": 30,
+        "inventory_sha256": "eb78752c9f187dcc8edb976d493cd17cee573eafd658667a0eb9f2fd6a9e02b4",
+        "total_bytes": 1298945
+      },
+      "codec_paths": [
+        "crates/cigar-daemon/src/catalog_context_application.rs",
+        "crates/cigar-daemon/src/domain_identity.rs",
+        "crates/cigar-daemon/src/durable_idempotency.rs",
+        "crates/cigar-daemon/src/durable_replay.rs",
+        "crates/cigar-daemon/src/durable_snapshot.rs",
+        "crates/cigar-daemon/src/effect_replay_adapters.rs",
+        "crates/cigar-daemon/src/production_effect_authentication.rs",
+        "crates/cigar-daemon/src/production_effects.rs",
+        "crates/cigar-daemon/src/replay_jobs.rs",
+        "crates/cigar-store/src/memory.rs",
+        "crates/cigar-store/src/model.rs",
+        "crates/cigar-store/src/postgres.rs",
+        "crates/cigar-store/src/service_repository.rs",
+        "crates/cigar-store/src/sqlite.rs"
+      ],
+      "migration_paths": [
+        "crates/cigar-store/migrations/postgres/0001_shared_metadata.sql",
+        "crates/cigar-store/migrations/postgres/0002_object_outbox.sql",
+        "crates/cigar-store/migrations/postgres/0003_atom_projection.sql",
+        "crates/cigar-store/migrations/postgres/0004_gc_revision_guard.sql",
+        "crates/cigar-store/migrations/sqlite/0001_initial.sql",
+        "crates/cigar-store/migrations/sqlite/0002_compatibility_ledger.sql",
+        "crates/cigar-store/migrations/sqlite/0003_generation_bound_atom_projection.sql",
+        "crates/cigar-store/migrations/sqlite/0004_normalized_authoritative_catalog.sql",
+        "migrations/postgres/0001_shared_metadata.sql",
+        "migrations/postgres/0002_object_outbox.sql",
+        "migrations/postgres/0003_atom_projection.sql",
+        "migrations/postgres/0004_gc_revision_guard.sql",
+        "migrations/sqlite/0001_initial.sql",
+        "migrations/sqlite/0002_compatibility_ledger.sql",
+        "migrations/sqlite/0003_generation_bound_atom_projection.sql",
+        "migrations/sqlite/0004_normalized_authoritative_catalog.sql"
+      ],
+      "postgres_migration_count": 4,
+      "rules": {
+        "additive_minor": [
+          "add-versioned-record-envelope-with-retained-reader",
+          "append-versioned-migration-after-mixed-version-review"
+        ],
+        "baseline_reader_of_candidate_writer": "mixed-version-writer-safety-required",
+        "breaking_major": [
+          "change-or-remove-applied-migration",
+          "change-unversioned-record-codec",
+          "drop-retained-record-reader",
+          "reuse-migration-sequence-or-name"
+        ],
+        "candidate_reader_of_baseline_writer": "retained-record-fixtures-required"
+      },
+      "sqlite_migration_count": 4
+    }
+  },
+  "policy_id": "cigar.protocol-compatibility-policy.v1",
+  "policy_schema_sha256": "c99c502ba44ee48edaf3180abebaeebf69dca0312ef491534b4e59b1dd53f4b4",
+  "protocol_line": {
+    "context_abi": "cigar.context.v1",
+    "major": 1,
+    "minor": 0,
+    "protocol_max": "1.x",
+    "protocol_min": "1.0"
+  },
+  "status": "development-source-policy"
+}

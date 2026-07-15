@@ -53,10 +53,10 @@
     },
     {
       "id": "install-archive",
-      "block_sha256": "7f487949e875a084c8220108abce0ce17fd54a7e307ab460122f05829df1e4e4",
+      "block_sha256": "19721101483955ddf3be09a095835b8f8bcf8878d480c0c2ecbce79e5c025830",
       "mode": "installed-candidate",
       "cwd": ".",
-      "argv": ["python3", "scripts/release/qualify_install.py", "${BINARY_ARCHIVE}", "--contract", "packaging/contracts/binary-archive.v1.json", "--qualification-driver", "${CIGAR_QUALIFICATION_DRIVER}", "--expected-artifact-id", "${ARTIFACT_ID}", "--expected-target", "${TARGET_TRIPLE}"],
+      "argv": ["python3", "scripts/release/qualify_install.py", "${BINARY_ARCHIVE}", "--contract", "packaging/contracts/macos-runtime-archive.v1.json", "--runtime-build-receipt", "${CIGAR_RUNTIME_BUILD_RECEIPT}", "--qualification-tool-archive", "${CIGAR_QUALIFICATION_TOOL_ARCHIVE}", "--qualification-tool-contract", "packaging/contracts/macos-conformance-runner.v1.json", "--qualification-tool-build-receipt", "${CIGAR_QUALIFICATION_TOOL_BUILD_RECEIPT}", "--expected-artifact-id", "cli-daemon-macos-aarch64", "--expected-target", "aarch64-apple-darwin"],
       "expected_exit": 0
     },
     {

@@ -6,8 +6,8 @@
   "fixture": "fixture.json",
   "fixture_digest": "1220c92b048abc64eb4e09959b9ad314cde90322e1b10e653ed97d60fa573dbf9ee2",
   "driver": "driver.py",
-  "driver_digest": "1220577c51220eca10dfec5f4f0b14d39d5a72f9ae4a867127261bd19a00e97abdf6",
-  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "driver_digest": "12201b34bc842d78c2e0bc78cb8545db6a5be2193d98f496978797429b01fa0def69",
+  "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
   "recorded_mode": true,
   "setup": ["isolated-home", "recorded-hook-events", "fake-cigar-backend", "fixed-clock-and-seed"],
   "expected_assertions": [

@@ -1,34 +1,34 @@
- Network cigar-wp18-77427-76077_default Creating 
- Network cigar-wp18-77427-76077_default Created 
- Volume cigar-wp18-77427-76077_object-shared Creating 
- Volume cigar-wp18-77427-76077_object-shared Created 
- Volume cigar-wp18-77427-76077_postgres-shared Creating 
- Volume cigar-wp18-77427-76077_postgres-shared Created 
- Container cigar-wp18-77427-76077-object-storage-1 Creating 
- Container cigar-wp18-77427-76077-postgres-1 Creating 
- Container cigar-wp18-77427-76077-object-storage-1 Created 
- Container cigar-wp18-77427-76077-postgres-1 Created 
- Container cigar-wp18-77427-76077-postgres-1 Starting 
- Container cigar-wp18-77427-76077-object-storage-1 Starting 
- Container cigar-wp18-77427-76077-object-storage-1 Started 
- Container cigar-wp18-77427-76077-postgres-1 Started 
- Container cigar-wp18-77427-76077-object-storage-1 Waiting 
- Container cigar-wp18-77427-76077-postgres-1 Waiting 
- Container cigar-wp18-77427-76077-object-storage-1 Healthy 
- Container cigar-wp18-77427-76077-postgres-1 Healthy 
- Container cigar-wp18-77427-76077-object-storage-1 Running 
- Container cigar-wp18-77427-76077-object-storage-1 Waiting 
- Container cigar-wp18-77427-76077-object-storage-1 Healthy 
- Container cigar-wp18-77427-76077-object-bootstrap-run-6a65e333da16 Creating 
- Container cigar-wp18-77427-76077-object-bootstrap-run-6a65e333da16 Created 
+ Network cigar-wp18-77427-80566_default Creating 
+ Network cigar-wp18-77427-80566_default Created 
+ Volume cigar-wp18-77427-80566_object-shared Creating 
+ Volume cigar-wp18-77427-80566_object-shared Created 
+ Volume cigar-wp18-77427-80566_postgres-shared Creating 
+ Volume cigar-wp18-77427-80566_postgres-shared Created 
+ Container cigar-wp18-77427-80566-object-storage-1 Creating 
+ Container cigar-wp18-77427-80566-postgres-1 Creating 
+ Container cigar-wp18-77427-80566-object-storage-1 Created 
+ Container cigar-wp18-77427-80566-postgres-1 Created 
+ Container cigar-wp18-77427-80566-object-storage-1 Starting 
+ Container cigar-wp18-77427-80566-postgres-1 Starting 
+ Container cigar-wp18-77427-80566-object-storage-1 Started 
+ Container cigar-wp18-77427-80566-postgres-1 Started 
+ Container cigar-wp18-77427-80566-postgres-1 Waiting 
+ Container cigar-wp18-77427-80566-object-storage-1 Waiting 
+ Container cigar-wp18-77427-80566-postgres-1 Healthy 
+ Container cigar-wp18-77427-80566-object-storage-1 Healthy 
+ Container cigar-wp18-77427-80566-object-storage-1 Running 
+ Container cigar-wp18-77427-80566-object-storage-1 Waiting 
+ Container cigar-wp18-77427-80566-object-storage-1 Healthy 
+ Container cigar-wp18-77427-80566-object-bootstrap-run-c0a630ca2d6d Creating 
+ Container cigar-wp18-77427-80566-object-bootstrap-run-c0a630ca2d6d Created 
 Added `local` successfully.
 Bucket created successfully `local/cigar-shared`.
 Added user `cigar-runtime` successfully.
 Created policy `cigar-runtime` successfully.
 Attached Policies: [cigar-runtime]
 To User: cigar-runtime
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.15s
-[1m[92m     Running[0m tests/postgres_shared.rs (target/debug/deps/postgres_shared-7ac06081f1a858c9)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.53s
+[1m[92m     Running[0m tests/postgres_shared.rs (target/debug/deps/postgres_shared-ebd08ea90a09701c)
 
 running 1 test
 wp18: database created
@@ -44,8 +44,8 @@ wp18: wakeups claimed
 wp18: wakeup acknowledged
 wp18: 64 clients joined
 ;
-; Archive created at 2026-07-12 20:05:43 UTC
-;     dbname: cigar_wp18_76216_1
+; Archive created at 2026-07-14 21:21:33 UTC
+;     dbname: cigar_wp18_80701_1
 ;     TOC Entries: 48
 ;     Compression: gzip
 ;     Dump Version: 1.16-0
@@ -58,50 +58,50 @@ wp18: 64 clients joined
 ;
 ; Selected TOC Entries:
 ;
-227; 1255 16537 FUNCTION public cigar_gc_lock_repository_revision() cigar_migrator
-226; 1259 16506 TABLE public cigar_atom_projection cigar_migrator
-224; 1259 16468 TABLE public cigar_object_commits cigar_migrator
-220; 1259 16410 TABLE public cigar_repository_revision cigar_migrator
-221; 1259 16420 TABLE public cigar_repository_revisions cigar_migrator
-223; 1259 16448 TABLE public cigar_shared_wakeups cigar_migrator
-222; 1259 16429 TABLE public cigar_tenant_states cigar_migrator
-225; 1259 16485 TABLE public cigar_worker_claims cigar_migrator
-219; 1259 16393 TABLE public schema_migrations cigar_migrator
-3470; 0 16506 TABLE DATA public cigar_atom_projection cigar_migrator
-3468; 0 16468 TABLE DATA public cigar_object_commits cigar_migrator
-3464; 0 16410 TABLE DATA public cigar_repository_revision cigar_migrator
-3465; 0 16420 TABLE DATA public cigar_repository_revisions cigar_migrator
-3467; 0 16448 TABLE DATA public cigar_shared_wakeups cigar_migrator
-3466; 0 16429 TABLE DATA public cigar_tenant_states cigar_migrator
-3469; 0 16485 TABLE DATA public cigar_worker_claims cigar_migrator
-3463; 0 16393 TABLE DATA public schema_migrations cigar_migrator
-3300; 2606 16527 CONSTRAINT public cigar_atom_projection cigar_atom_projection_pkey cigar_migrator
-3302; 2606 16529 CONSTRAINT public cigar_atom_projection cigar_atom_projection_tenant_id_atom_id_key cigar_migrator
-3294; 2606 16483 CONSTRAINT public cigar_object_commits cigar_object_commits_pkey cigar_migrator
-3284; 2606 16419 CONSTRAINT public cigar_repository_revision cigar_repository_revision_pkey cigar_migrator
-3286; 2606 16428 CONSTRAINT public cigar_repository_revisions cigar_repository_revisions_pkey cigar_migrator
-3292; 2606 16460 CONSTRAINT public cigar_shared_wakeups cigar_shared_wakeups_pkey cigar_migrator
-3289; 2606 16440 CONSTRAINT public cigar_tenant_states cigar_tenant_states_pkey cigar_migrator
-3297; 2606 16503 CONSTRAINT public cigar_worker_claims cigar_worker_claims_pkey cigar_migrator
-3280; 2606 16409 CONSTRAINT public schema_migrations schema_migrations_name_key cigar_migrator
-3282; 2606 16407 CONSTRAINT public schema_migrations schema_migrations_pkey cigar_migrator
-3298; 1259 16535 INDEX public cigar_atom_projection_lineage cigar_migrator
-3290; 1259 16466 INDEX public cigar_shared_wakeups_by_revision cigar_migrator
-3287; 1259 16446 INDEX public cigar_tenant_states_latest cigar_migrator
-3295; 1259 16504 INDEX public cigar_worker_claims_expiry cigar_migrator
-3305; 2606 16530 FK CONSTRAINT public cigar_atom_projection cigar_atom_projection_published_revision_fkey cigar_migrator
-3304; 2606 16461 FK CONSTRAINT public cigar_shared_wakeups cigar_shared_wakeups_revision_fkey cigar_migrator
-3303; 2606 16441 FK CONSTRAINT public cigar_tenant_states cigar_tenant_states_revision_fkey cigar_migrator
-3457; 0 16506 ROW SECURITY public cigar_atom_projection cigar_migrator
-3462; 3256 16536 POLICY public cigar_atom_projection cigar_atom_projection_isolation cigar_migrator
-3455; 0 16468 ROW SECURITY public cigar_object_commits cigar_migrator
-3460; 3256 16484 POLICY public cigar_object_commits cigar_object_commits_isolation cigar_migrator
-3454; 0 16448 ROW SECURITY public cigar_shared_wakeups cigar_migrator
-3459; 3256 16467 POLICY public cigar_shared_wakeups cigar_shared_wakeups_isolation cigar_migrator
-3453; 0 16429 ROW SECURITY public cigar_tenant_states cigar_migrator
-3458; 3256 16447 POLICY public cigar_tenant_states cigar_tenant_states_isolation cigar_migrator
-3456; 0 16485 ROW SECURITY public cigar_worker_claims cigar_migrator
-3461; 3256 16505 POLICY public cigar_worker_claims cigar_worker_claims_isolation cigar_migrator
+228; 1255 16539 FUNCTION public cigar_gc_lock_repository_revision() cigar_migrator
+226; 1259 16508 TABLE public cigar_atom_projection cigar_migrator
+224; 1259 16470 TABLE public cigar_object_commits cigar_migrator
+220; 1259 16412 TABLE public cigar_repository_revision cigar_migrator
+221; 1259 16422 TABLE public cigar_repository_revisions cigar_migrator
+223; 1259 16450 TABLE public cigar_shared_wakeups cigar_migrator
+222; 1259 16431 TABLE public cigar_tenant_states cigar_migrator
+225; 1259 16487 TABLE public cigar_worker_claims cigar_migrator
+219; 1259 16395 TABLE public schema_migrations cigar_migrator
+3470; 0 16508 TABLE DATA public cigar_atom_projection cigar_migrator
+3468; 0 16470 TABLE DATA public cigar_object_commits cigar_migrator
+3464; 0 16412 TABLE DATA public cigar_repository_revision cigar_migrator
+3465; 0 16422 TABLE DATA public cigar_repository_revisions cigar_migrator
+3467; 0 16450 TABLE DATA public cigar_shared_wakeups cigar_migrator
+3466; 0 16431 TABLE DATA public cigar_tenant_states cigar_migrator
+3469; 0 16487 TABLE DATA public cigar_worker_claims cigar_migrator
+3463; 0 16395 TABLE DATA public schema_migrations cigar_migrator
+3300; 2606 16529 CONSTRAINT public cigar_atom_projection cigar_atom_projection_pkey cigar_migrator
+3302; 2606 16531 CONSTRAINT public cigar_atom_projection cigar_atom_projection_tenant_id_atom_id_key cigar_migrator
+3294; 2606 16485 CONSTRAINT public cigar_object_commits cigar_object_commits_pkey cigar_migrator
+3284; 2606 16421 CONSTRAINT public cigar_repository_revision cigar_repository_revision_pkey cigar_migrator
+3286; 2606 16430 CONSTRAINT public cigar_repository_revisions cigar_repository_revisions_pkey cigar_migrator
+3292; 2606 16462 CONSTRAINT public cigar_shared_wakeups cigar_shared_wakeups_pkey cigar_migrator
+3289; 2606 16442 CONSTRAINT public cigar_tenant_states cigar_tenant_states_pkey cigar_migrator
+3297; 2606 16505 CONSTRAINT public cigar_worker_claims cigar_worker_claims_pkey cigar_migrator
+3280; 2606 16411 CONSTRAINT public schema_migrations schema_migrations_name_key cigar_migrator
+3282; 2606 16409 CONSTRAINT public schema_migrations schema_migrations_pkey cigar_migrator
+3298; 1259 16537 INDEX public cigar_atom_projection_lineage cigar_migrator
+3290; 1259 16468 INDEX public cigar_shared_wakeups_by_revision cigar_migrator
+3287; 1259 16448 INDEX public cigar_tenant_states_latest cigar_migrator
+3295; 1259 16506 INDEX public cigar_worker_claims_expiry cigar_migrator
+3305; 2606 16532 FK CONSTRAINT public cigar_atom_projection cigar_atom_projection_published_revision_fkey cigar_migrator
+3304; 2606 16463 FK CONSTRAINT public cigar_shared_wakeups cigar_shared_wakeups_revision_fkey cigar_migrator
+3303; 2606 16443 FK CONSTRAINT public cigar_tenant_states cigar_tenant_states_revision_fkey cigar_migrator
+3457; 0 16508 ROW SECURITY public cigar_atom_projection cigar_migrator
+3462; 3256 16538 POLICY public cigar_atom_projection cigar_atom_projection_isolation cigar_migrator
+3455; 0 16470 ROW SECURITY public cigar_object_commits cigar_migrator
+3460; 3256 16486 POLICY public cigar_object_commits cigar_object_commits_isolation cigar_migrator
+3454; 0 16450 ROW SECURITY public cigar_shared_wakeups cigar_migrator
+3459; 3256 16469 POLICY public cigar_shared_wakeups cigar_shared_wakeups_isolation cigar_migrator
+3453; 0 16431 ROW SECURITY public cigar_tenant_states cigar_migrator
+3458; 3256 16449 POLICY public cigar_tenant_states cigar_tenant_states_isolation cigar_migrator
+3456; 0 16487 ROW SECURITY public cigar_worker_claims cigar_migrator
+3461; 3256 16507 POLICY public cigar_worker_claims cigar_worker_claims_isolation cigar_migrator
 wp18: database-native archive captured from exported snapshot
 wp18: database and exact object backup capture committed
 wp18: GC waited for backup exclusion and completed afterward
@@ -112,29 +112,31 @@ wp18: signed object backup restored into fresh namespace
 wp18: restored database and object roots activated under current trust
 test postgres_shared_conformance_rls_wakeups_and_64_client_idempotency ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.68s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.48s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.12s
-[1m[92m     Running[0m tests/object_s3.rs (target/debug/deps/object_s3-b4e6d15b0c99603c)
+[1m[92m   Compiling[0m cigar-store v1.0.0-dev.1 (/Users/construct/Documents/GitHub/CIGAR/cigar-honey/crates/cigar-store)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 3.85s
+[1m[92m     Running[0m tests/object_s3.rs (target/debug/deps/object_s3-a94ea22e69848535)
 
 running 1 test
 test s3_conditional_encrypted_cas_missing_object_and_expired_credentials ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.16s
-[1m[92m     Running[0m tests/deployment_assets.rs (target/debug/deps/deployment_assets-6cf1a1e5db1962df)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+[1m[92m     Running[0m tests/deployment_assets.rs (target/debug/deps/deployment_assets-6748f37ef6d9f236)
 
-running 7 tests
-test container_context_excludes_local_state_evidence_and_credentials ... ok
+running 8 tests
 test systemd_unit_is_non_root_fail_closed_and_sandbox_compatible ... ok
-test container_runs_non_root_complete_server ... ok
 test shared_development_dependencies_preserve_runtime_least_privilege ... ok
+test failover_qualification_preserves_one_verified_tls_identity ... ok
+test container_context_excludes_local_state_evidence_and_credentials ... ok
 test shared_runbooks_cover_migration_recovery_and_integrity_stops ... ok
+test container_runs_non_root_complete_server ... ok
 test shared_kubernetes_profile_separates_runtime_and_migration_authority ... ok
 test shared_example_is_a_strict_bounded_production_profile ... ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 backup successfully verified
 WP18 live shared-profile qualification passed.

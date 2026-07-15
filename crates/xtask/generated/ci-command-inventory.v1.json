@@ -1,0 +1,277 @@
+{
+  "audience": "ci",
+  "authority": "crates/xtask/src/lib.rs::PRD_28_1_COMMANDS",
+  "command_count": 29,
+  "commands": [
+    {
+      "command": "cargo xtask bootstrap --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bootstrap-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "command": "cargo xtask fmt --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "format-check",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "command": "cargo xtask generate --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "generate-check",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "command": "cargo xtask lint",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "lint",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "command": "cargo xtask docs --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "docs-check",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "command": "cargo xtask test unit",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-unit",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test vectors",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-vectors",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test compatibility",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-compatibility",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test integration",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-integration",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test conformance",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-conformance",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test e2e",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-e2e",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test security",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-security",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test offline",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-offline",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test models",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-models",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test coverage --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-coverage-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test mutations --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-mutations-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test chaos",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-chaos",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask test migrations",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-migrations",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "command": "cargo xtask bench micro --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-micro-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "command": "cargo xtask bench macro --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-macro-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "command": "cargo xtask bench efficacy",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-efficacy",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "command": "cargo xtask package --all",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "package-all",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask package --smoke dist/",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "package-smoke",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask release reproduce",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-reproduce",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask release sbom",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-sbom",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask release sign",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-sign",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask release attest",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-attest",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask release verify dist/",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-verify",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "command": "cargo xtask test sanitizers",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-sanitizers",
+      "receipt_implemented": true,
+      "receipt_required": true,
+      "release_eligible": false,
+      "work_packet": "WP19"
+    }
+  ],
+  "execution_policy": {
+    "evidence_workspace": "absolute-external-create-new",
+    "source_state": "clean-committed-git-checkout"
+  },
+  "generated_by": "cargo xtask generate",
+  "platform_scope": [
+    "macos-arm64"
+  ],
+  "schema_version": "cigar.xtask-ci-command-inventory.v1"
+}

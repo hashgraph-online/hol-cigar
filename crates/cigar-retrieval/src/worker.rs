@@ -2,13 +2,16 @@
 
 use crate::{
     InMemoryIndexManager, IndexBuild, IndexGenerationDescriptor, RetrievalContext, RetrievalError,
-    RetrievalErrorCode,
+    RetrievalErrorCode, VectorIndexBinding,
 };
 use cigar_protocol::{ContentDigest, ContextAtomV1, ContextEdge, RecordId, UtcTimestamp};
 use cigar_store::{OutboxRecord, StoreRevision};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Mutex;
+
+const CATALOG_COMMITTED_TOPIC: &str = "catalog.committed";
+const CATALOG_TOMBSTONED_TOPIC: &str = "catalog.atom-tombstoned";
 
 /// Canonical repository state loaded at one causal revision.
 #[derive(Clone, Debug)]
@@ -17,6 +20,8 @@ pub struct IndexSnapshot {
     pub atoms: Vec<ContextAtomV1>,
     /// Complete canonical edges visible at the revision.
     pub edges: Vec<ContextEdge>,
+    /// Per-tenant catalog revisions represented by the snapshot, including known empty tenants.
+    pub tenant_watermarks: BTreeMap<RecordId, StoreRevision>,
 }
 
 /// Authorization-bound canonical snapshot loader used by the worker.
@@ -32,7 +37,13 @@ pub trait IndexSnapshotProvider: Send + Sync {
 #[derive(Default)]
 struct WorkerState {
     watermark: StoreRevision,
-    processed: BTreeMap<RecordId, ContentDigest>,
+    processed: BTreeMap<RecordId, ProcessedCatalogMessage>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct ProcessedCatalogMessage {
+    topic: String,
+    payload_digest: ContentDigest,
 }
 
 /// Result of one idempotent worker pass.
@@ -59,7 +70,7 @@ impl fmt::Debug for IndexWorker {
 }
 
 impl IndexWorker {
-    /// Rebuilds through all new ordered catalog commits and advances only after activation.
+    /// Rebuilds through all new ordered catalog mutations and advances only after activation.
     #[allow(clippy::too_many_arguments)]
     pub fn process(
         &self,
@@ -67,7 +78,7 @@ impl IndexWorker {
         provider: &dyn IndexSnapshotProvider,
         manager: &InMemoryIndexManager,
         configuration_digest: ContentDigest,
-        vector_fingerprint: Option<ContentDigest>,
+        vector_binding: Option<VectorIndexBinding>,
         verified_at: UtcTimestamp,
         context: &RetrievalContext,
     ) -> Result<IndexWorkerReceipt, RetrievalError> {
@@ -84,15 +95,17 @@ impl IndexWorker {
                 return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
             }
             prior_revision = record.causal_revision;
-            if record.message.topic != "catalog.committed" {
+            if !catalog_index_topic(&record.message.topic) {
                 continue;
             }
             record
                 .message
                 .validate()
                 .map_err(|_error| RetrievalError::new(RetrievalErrorCode::InvalidMetadata))?;
-            if let Some(digest) = state.processed.get(&record.message.message_id) {
-                if digest != &record.message.payload_digest {
+            if let Some(processed) = state.processed.get(&record.message.message_id) {
+                if processed.topic != record.message.topic
+                    || processed.payload_digest != record.message.payload_digest
+                {
                     return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration));
                 }
                 continue;
@@ -116,9 +129,10 @@ impl IndexWorker {
                 atoms: snapshot.atoms,
                 edges: snapshot.edges,
                 built_through_revision: target,
+                tenant_watermarks: snapshot.tenant_watermarks,
                 configuration_digest,
                 verified_at,
-                vector_fingerprint,
+                vector_binding,
             },
             context,
         )?;
@@ -133,7 +147,10 @@ impl IndexWorker {
         for record in &new_records {
             state.processed.insert(
                 record.message.message_id.clone(),
-                record.message.payload_digest.clone(),
+                ProcessedCatalogMessage {
+                    topic: record.message.topic.clone(),
+                    payload_digest: record.message.payload_digest.clone(),
+                },
             );
         }
         state.watermark = target;
@@ -154,6 +171,10 @@ impl IndexWorker {
     }
 }
 
+fn catalog_index_topic(topic: &str) -> bool {
+    matches!(topic, CATALOG_COMMITTED_TOPIC | CATALOG_TOMBSTONED_TOPIC)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{IndexSnapshot, IndexSnapshotProvider, IndexWorker};
@@ -172,11 +193,15 @@ mod tests {
     impl IndexSnapshotProvider for StaticProvider {
         fn load(
             &self,
-            _revision: StoreRevision,
+            revision: StoreRevision,
             context: &RetrievalContext,
         ) -> Result<IndexSnapshot, RetrievalError> {
             context.check()?;
-            Ok(self.snapshot.clone())
+            let mut snapshot = self.snapshot.clone();
+            for watermark in snapshot.tenant_watermarks.values_mut() {
+                *watermark = revision;
+            }
+            Ok(snapshot)
         }
     }
 
@@ -205,25 +230,35 @@ mod tests {
         ))?)
     }
 
-    fn outbox(value: u16, revision: u64) -> Result<OutboxRecord, Box<dyn Error>> {
+    fn outbox_with_topic(
+        value: u16,
+        revision: u64,
+        topic: &str,
+    ) -> Result<OutboxRecord, Box<dyn Error>> {
         Ok(OutboxRecord {
             message: OutboxMessage {
                 message_id: record(value)?,
-                topic: "catalog.committed".to_owned(),
+                topic: topic.to_owned(),
                 payload_digest: digest(if value.is_multiple_of(2) { 'a' } else { 'b' })?,
             },
             causal_revision: StoreRevision(revision),
         })
     }
 
+    fn outbox(value: u16, revision: u64) -> Result<OutboxRecord, Box<dyn Error>> {
+        outbox_with_topic(value, revision, "catalog.committed")
+    }
+
     fn provider() -> Result<StaticProvider, Box<dyn Error>> {
         let fixture = deterministic_protocol_fixture("ContextAtomV1")
             .ok_or("missing deterministic ContextAtomV1 fixture")?;
         let atom: ContextAtomV1 = serde_json::from_value(fixture.input)?;
+        let tenant_id = atom.scope.tenant_id.clone();
         Ok(StaticProvider {
             snapshot: IndexSnapshot {
                 atoms: vec![atom],
                 edges: Vec::new(),
+                tenant_watermarks: [(tenant_id, StoreRevision(1))].into_iter().collect(),
             },
         })
     }
@@ -270,6 +305,94 @@ mod tests {
         )?;
         assert_eq!(replay.claimed_messages, 0);
         assert_eq!(replay.active_generation, first.active_generation);
+        Ok(())
+    }
+
+    #[test]
+    fn tombstone_only_wakes_projection_and_unknown_topics_are_ignored() -> Result<(), Box<dyn Error>>
+    {
+        let worker = IndexWorker::default();
+        let manager = InMemoryIndexManager::default();
+        let unknown = outbox_with_topic(10, 1, "effects.completed")?;
+        let ignored = worker.process(
+            std::slice::from_ref(&unknown),
+            &FailingProvider,
+            &manager,
+            digest('c')?,
+            None,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:03Z")?,
+            &context(),
+        )?;
+        assert_eq!(ignored.watermark, StoreRevision(0));
+        assert_eq!(ignored.claimed_messages, 0);
+        assert!(ignored.active_generation.is_none());
+
+        let tombstone = outbox_with_topic(11, 2, "catalog.atom-tombstoned")?;
+        let claimed = worker.process(
+            &[unknown, tombstone.clone()],
+            &provider()?,
+            &manager,
+            digest('c')?,
+            None,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:03Z")?,
+            &context(),
+        )?;
+        assert_eq!(claimed.watermark, StoreRevision(2));
+        assert_eq!(claimed.claimed_messages, 1);
+        assert_eq!(
+            claimed
+                .active_generation
+                .as_ref()
+                .map(|generation| generation.built_through_revision),
+            Some(StoreRevision(2))
+        );
+
+        let replay = worker.process(
+            &[tombstone],
+            &FailingProvider,
+            &manager,
+            digest('c')?,
+            None,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:03Z")?,
+            &context(),
+        )?;
+        assert_eq!(replay.watermark, StoreRevision(2));
+        assert_eq!(replay.claimed_messages, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn accepted_topic_substitution_under_one_message_identity_is_corrupt()
+    -> Result<(), Box<dyn Error>> {
+        let worker = IndexWorker::default();
+        let manager = InMemoryIndexManager::default();
+        let committed = outbox_with_topic(12, 1, "catalog.committed")?;
+        worker.process(
+            std::slice::from_ref(&committed),
+            &provider()?,
+            &manager,
+            digest('c')?,
+            None,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:03Z")?,
+            &context(),
+        )?;
+        let mut substituted = committed;
+        substituted.message.topic = "catalog.atom-tombstoned".to_owned();
+        assert_eq!(
+            worker
+                .process(
+                    &[substituted],
+                    &FailingProvider,
+                    &manager,
+                    digest('c')?,
+                    None,
+                    UtcTimestamp::parse_rfc3339("2026-07-10T00:00:03Z")?,
+                    &context(),
+                )
+                .map_err(|error| error.code()),
+            Err(RetrievalErrorCode::CorruptGeneration)
+        );
+        assert_eq!(worker.watermark()?, StoreRevision(1));
         Ok(())
     }
 

@@ -45,7 +45,7 @@ def main() -> None:
             for handler in group["hooks"]:
                 if handler.get("type") != "command":
                     fail(f"model, agent, HTTP, or MCP hook is forbidden: {event}")
-                if handler.get("command") != "cigar-claude-hook":
+                if handler.get("command") != "${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook":
                     fail(f"hook shell indirection is forbidden: {event}")
                 args = handler.get("args", [])
                 if (
@@ -55,7 +55,7 @@ def main() -> None:
                     fail(f"hook does not use documented plugin paths: {event}")
 
     mcp = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
-    if set(mcp) != {"cigar"} or mcp["cigar"].get("command") != "cigar-mcp":
+    if set(mcp) != {"cigar"} or mcp["cigar"].get("command") != "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp":
         fail(
             "MCP configuration may execute only the signed installed cigar-mcp package"
         )

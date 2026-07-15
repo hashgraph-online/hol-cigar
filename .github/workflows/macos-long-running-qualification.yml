@@ -1,0 +1,589 @@
+name: macos-long-running-qualification
+
+on:
+  schedule:
+    - cron: "41 5 * * 0"
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Native non-fuzz, non-soak lane to execute
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - mutation
+          - effect-rc
+          - scale-diagnostic
+          - performance-diagnostic
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: macos-long-running-qualification-${{ github.ref }}-${{ inputs.lane || 'weekly' }}
+  cancel-in-progress: false
+
+# Fuzz accumulation and cigar-soak are deliberately absent from this bounded
+# native Apple-silicon cohort. The physical 100-GiB scale workload also remains
+# a separately authorized installed-candidate qualification gate.
+jobs:
+  mutation:
+    name: full production mutation / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || inputs.lane == 'all' || inputs.lane == 'mutation' }}
+    runs-on: macos-15
+    timeout-minutes: 355
+    env:
+      CARGO_TERM_COLOR: never
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate external evidence
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-weekly-mutation-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          mkdir -m 0700 "${evidence}"
+          printf 'CIGAR_MUTATION_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+
+      - name: Install pinned mutation tools
+        run: |
+          cargo install cargo-nextest --version 0.9.140 --locked
+          cargo install cargo-mutants --version 27.1.0 --locked
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
+          test "$(cargo mutants --version)" = "cargo-mutants 27.1.0"
+
+      - name: Hydrate the locked Cargo cache
+        run: cargo fetch --locked --target aarch64-apple-darwin
+
+      - name: Run and independently verify the full non-fuzz mutation gate offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          unset CIGAR_EVIDENCE_DIR
+          command_binding='cargo xtask --evidence-dir <external>/mutation test mutations --verify'
+          cargo metadata --locked --offline --format-version 1 >/dev/null
+          cargo xtask \
+            --evidence-dir "${CIGAR_MUTATION_EVIDENCE}/mutation" \
+            test mutations --verify
+          raw="${CIGAR_MUTATION_EVIDENCE}/mutation/command-plane/test-mutations-verify.raw.json"
+          receipt="${CIGAR_MUTATION_EVIDENCE}/mutation/command-plane/test-mutations-verify.receipt.json"
+          test -s "${raw}"
+          test -s "${receipt}"
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_MUTATION_EVIDENCE}/workflow-receipt.json" \
+            --lane mutation \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "mutation-raw=${raw}" \
+            --attachment "mutation-receipt=${receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_MUTATION_EVIDENCE}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "mutation-raw=${raw}" \
+            --attachment "mutation-receipt=${receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve source- and builder-bound mutation receipts
+        id: upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-mutation-receipts-${{ github.sha }}
+          path: ${{ env.CIGAR_MUTATION_EVIDENCE }}
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable upload service digest
+        if: ${{ steps.upload.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY
+
+  effect-rc:
+    name: 24k process-kill effect RC / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || inputs.lane == 'all' || inputs.lane == 'effect-rc' }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: never
+      NEXTEST_HIDE_PROGRESS_BAR: "1"
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate private workspaces
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-weekly-effect-rc-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          scratch="${canonical_temp}/cigar-weekly-effect-rc-scratch-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          test ! -e "${scratch}"
+          mkdir -m 0700 "${evidence}" "${scratch}"
+          printf 'CIGAR_EFFECT_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_EFFECT_SCRATCH=%s\n' "${scratch}" >>"${GITHUB_ENV}"
+
+      - name: Install the pinned native test runner
+        run: |
+          cargo install cargo-nextest --version 0.9.140 --locked
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
+
+      - name: Hydrate the locked Cargo cache
+        run: cargo fetch --locked --target aarch64-apple-darwin
+
+      - name: Run the exact 24k process-kill and 100k logical-operation campaign offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          command_binding='CIGAR_EFFECT_RC_REPETITIONS=1000 cargo nextest run --locked --offline -p cigar-effects --test wp12_faults -P macos-qualification --no-tests fail'
+          stdout_path="${CIGAR_EFFECT_SCRATCH}/stdout.bin"
+          stderr_path="${CIGAR_EFFECT_SCRATCH}/stderr.bin"
+          result_path="${CIGAR_EFFECT_EVIDENCE}/effect-rc-result.json"
+          set +e
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            env CIGAR_EFFECT_RC_REPETITIONS=1000 \
+            cargo nextest run \
+              --locked \
+              --offline \
+              -p cigar-effects \
+              --test wp12_faults \
+              -P macos-qualification \
+              --no-tests fail \
+              >"${stdout_path}" 2>"${stderr_path}"
+          result_code=$?
+          set -e
+          python3 - \
+            "${result_path}" \
+            "${stdout_path}" \
+            "${stderr_path}" \
+            "${result_code}" \
+            "${command_binding}" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          output = Path(sys.argv[1])
+          stdout = Path(sys.argv[2]).read_bytes()
+          stderr = Path(sys.argv[3]).read_bytes()
+          result_code = int(sys.argv[4])
+          command = sys.argv[5]
+          if len(stdout) > 16 * 1024 * 1024 or len(stderr) > 16 * 1024 * 1024:
+              raise SystemExit("effect RC output exceeded its content-free capture bound")
+          summary = stderr.decode("utf-8", errors="strict")
+          if result_code != 0 or re.search(r"\b6 tests run: 6 passed\b", summary) is None:
+              raise SystemExit("effect RC campaign failed; protected output was withheld")
+          receipt = {
+              "schema_version": "cigar.effect-rc-ci-result.v1",
+              "status": "passed",
+              "command_sha256": hashlib.sha256(command.encode()).hexdigest(),
+              "process_kill_cases": 24_000,
+              "possible_remote_commit_logical_operations": 100_000,
+              "efx_case_ids": [f"EFX-C{index:02}" for index in range(1, 25)],
+              "test_count": 6,
+              "stdout": {"bytes": len(stdout), "sha256": hashlib.sha256(stdout).hexdigest()},
+              "stderr": {"bytes": len(stderr), "sha256": hashlib.sha256(stderr).hexdigest()},
+              "fuzz_executed": False,
+              "soak_executed": False,
+          }
+          payload = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+          descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          try:
+              os.write(descriptor, payload)
+              os.fsync(descriptor)
+              os.fchmod(descriptor, 0o400)
+          finally:
+              os.close(descriptor)
+          PY
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_EFFECT_EVIDENCE}/workflow-receipt.json" \
+            --lane effect-rc \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "effect-result=${result_path}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_EFFECT_EVIDENCE}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "effect-result=${result_path}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve content-free effect RC receipts
+        id: upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-effect-rc-receipts-${{ github.sha }}
+          path: ${{ env.CIGAR_EFFECT_EVIDENCE }}
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable upload service digest
+        if: ${{ steps.upload.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY
+
+  scale-diagnostic:
+    name: local scale preflight and reduced physical diagnostic / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || inputs.lane == 'all' || inputs.lane == 'scale-diagnostic' }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: never
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate private workspaces
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-weekly-scale-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          capacity="${canonical_temp}/cigar-weekly-scale-capacity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          test ! -e "${capacity}"
+          mkdir -m 0700 "${evidence}" "${capacity}"
+          printf 'CIGAR_SCALE_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_SCALE_CAPACITY=%s\n' "${capacity}" >>"${GITHUB_ENV}"
+
+      - name: Hydrate the locked scale-driver workspaces
+        run: |
+          cargo fetch \
+            --manifest-path benches/cigarbench/local_scale_probe/Cargo.toml \
+            --locked \
+            --target aarch64-apple-darwin
+          cargo fetch \
+            --manifest-path benches/cigarbench/local_scale_driver/Cargo.toml \
+            --locked \
+            --target aarch64-apple-darwin
+
+      - name: Run the reduced physical backup/recovery fixture offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            cargo test \
+              --manifest-path benches/cigarbench/local_scale_driver/Cargo.toml \
+              --locked \
+              --offline \
+              tests::scaled_physical_run_recovers_checkpoint_and_verifies_backup_restore \
+              -- \
+              --exact
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B -m unittest benches.cigarbench.tests.test_local_scale -v
+
+      - name: Run and verify the non-physical 300-GiB capacity preflight
+        run: |
+          command_binding='python3 benches/cigarbench/local_scale.py preflight --require-clean-source (physical scale not run)'
+          receipt="${CIGAR_SCALE_EVIDENCE}/local-scale-preflight.json"
+          set +e
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B benches/cigarbench/local_scale.py preflight \
+              --evidence-dir "${CIGAR_SCALE_EVIDENCE}" \
+              --capacity-path "${CIGAR_SCALE_CAPACITY}" \
+              --output local-scale-preflight.json \
+              --require-clean-source
+          result_code=$?
+          set -e
+          test "${result_code}" -eq 0 -o "${result_code}" -eq 3
+          python3 -B benches/cigarbench/local_scale.py verify --receipt "${receipt}"
+          python3 - "${receipt}" "${GITHUB_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt = json.loads(Path(sys.argv[1]).read_bytes())
+          source = receipt["source"]["git"]
+          allowed_blockers = {"large_local_initial_free_space_below_requirement"}
+          if source["commit"] != sys.argv[2] or source["clean"] is not True:
+              raise SystemExit("local-scale receipt is not bound to the clean event SHA")
+          if set(receipt["blockers"]) - allowed_blockers:
+              raise SystemExit("local-scale preflight reported a non-capacity blocker")
+          if receipt["release_scale_qualified"] is not False:
+              raise SystemExit("local-scale preflight overclaimed physical qualification")
+          claims = receipt["claims"]
+          if any(
+              claims[name]
+              for name in (
+                  "physical_scale_execution_attempted",
+                  "one_million_physical_atoms",
+                  "ten_million_physical_edges",
+                  "one_hundred_gib_referenced_blobs",
+                  "fuzz_executed",
+                  "soak_executed",
+              )
+          ):
+              raise SystemExit("local-scale preflight contains a prohibited execution claim")
+          PY
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_SCALE_EVIDENCE}/workflow-receipt.json" \
+            --lane scale-diagnostic \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "scale-preflight=${receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_SCALE_EVIDENCE}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "scale-preflight=${receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve source-bound scale diagnostic receipts
+        id: upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-scale-diagnostic-receipts-${{ github.sha }}
+          path: ${{ env.CIGAR_SCALE_EVIDENCE }}
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable upload service digest
+        if: ${{ steps.upload.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY
+
+  performance-diagnostic:
+    name: CIGARBench replay and performance harness diagnostic / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || inputs.lane == 'all' || inputs.lane == 'performance-diagnostic' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONNOUSERSITE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate external evidence
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-weekly-performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          mkdir -m 0700 "${evidence}"
+          printf 'CIGAR_PERFORMANCE_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+
+      - name: Run the bounded performance analyzers and exact smoke replay offline
+        run: |
+          command_binding='python performance unit suites; CIGARBench smoke replay; canary scan; profile guard (all diagnostic)'
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B -m unittest \
+              benches.cigarbench.tests.test_performance \
+              benches.cigarbench.tests.test_cigarbench \
+              -v
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B benches/cigarbench/cigarbench.py \
+              --evidence-dir "${CIGAR_PERFORMANCE_EVIDENCE}" \
+              replay \
+              --events benches/cigarbench/reports/smoke/events.jsonl \
+              --report benches/cigarbench/reports/smoke/report.json \
+              --plan benches/cigarbench/reports/smoke/plan.json \
+              --datasets benches/cigarbench/datasets/manifest.json \
+              --baselines baselines/cigarbench/manifest.json \
+              --canaries benches/cigarbench/canaries.json \
+              --environment benches/cigarbench/fixtures/smoke-environment.json \
+              --seed-file benches/cigarbench/fixtures/public-smoke-seed.txt
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B benches/cigarbench/cigarbench.py \
+              --evidence-dir "${CIGAR_PERFORMANCE_EVIDENCE}" \
+              canary-scan \
+              --registry benches/cigarbench/canaries.json \
+              benches/cigarbench/reports/smoke
+          /usr/bin/sandbox-exec \
+            -p '(version 1)(allow default)(deny network*)' \
+            python3 -B benches/cigarbench/cigarbench.py \
+              --evidence-dir "${CIGAR_PERFORMANCE_EVIDENCE}" \
+              guard-profile \
+              --repository .
+          replay_receipt="${CIGAR_PERFORMANCE_EVIDENCE}/cigarbench/replay.receipt.json"
+          canary_receipt="${CIGAR_PERFORMANCE_EVIDENCE}/cigarbench/canary-scan.receipt.json"
+          profile_receipt="${CIGAR_PERFORMANCE_EVIDENCE}/cigarbench/guard-profile.receipt.json"
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_PERFORMANCE_EVIDENCE}/workflow-receipt.json" \
+            --lane performance-diagnostic \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "canary-receipt=${canary_receipt}" \
+            --attachment "profile-receipt=${profile_receipt}" \
+            --attachment "replay-receipt=${replay_receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_PERFORMANCE_EVIDENCE}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "canary-receipt=${canary_receipt}" \
+            --attachment "profile-receipt=${profile_receipt}" \
+            --attachment "replay-receipt=${replay_receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve source-bound performance diagnostic receipts
+        id: upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-performance-diagnostic-receipts-${{ github.sha }}
+          path: ${{ env.CIGAR_PERFORMANCE_EVIDENCE }}
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable upload service digest
+        if: ${{ steps.upload.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY

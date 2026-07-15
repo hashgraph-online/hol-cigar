@@ -8,6 +8,17 @@
     "node": ">=24.10.0 <25"
   },
   "scripts": {
+    "build": "node scripts/build-assets.mjs && node scripts/verify-assets.mjs && node scripts/verify-browser-security.mjs",
+    "check:assets": "node scripts/verify-assets.mjs",
+    "check:browser-security": "node scripts/verify-browser-security.mjs",
+    "test": "pnpm run test:status && pnpm run test:browser-security && pnpm run check:assets && pnpm run check:browser-security",
+    "test:a11y": "playwright test e2e/accessibility.spec.ts",
+    "test:e2e": "playwright test",
+    "test:browser-security": "node --test scripts/verify-browser-security.test.mjs",
     "test:status": "node --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1"
   }
 }

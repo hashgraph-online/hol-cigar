@@ -4,40 +4,81 @@
   "title": "CIGAR installed artifact qualification",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "status", "artifact_id", "artifact_sha256", "artifact_bytes", "package_contract_sha256", "product_version", "context_abi", "source_revision", "target", "qualification_driver", "driver_receipt_sha256", "installed_binary_sha256", "unprivileged", "no_compiler_path", "no_egress", "path_cases", "checks", "uninstalled", "state_retained"],
+  "required": ["schema_version", "status", "artifact_id", "artifact_sha256", "artifact_bytes", "package_contract_sha256", "product_version", "context_abi", "source_revision", "target", "runtime_build_receipt", "qualification_tool", "build_receipt_authentication", "driver_receipt_sha256", "installed_binary_sha256", "installed_workflow", "unprivileged", "non_admin", "no_compiler_path", "no_egress", "no_egress_enforcement", "process_enforcement", "path_cases", "checks", "uninstalled", "state_retained"],
   "properties": {
     "schema_version": {"const": "cigar.install-qualification.v1"},
     "status": {"const": "passed"},
-    "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "artifact_id": {"const": "cli-daemon-macos-aarch64"},
     "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "artifact_bytes": {"type": "integer", "minimum": 1},
     "package_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "product_version": {"type": "string", "minLength": 1},
+    "product_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"},
     "context_abi": {"const": "cigar.context.v1"},
     "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
-    "target": {"type": "string", "pattern": "^[a-z0-9_]+-[a-z0-9_.-]+$"},
-    "qualification_driver": {
+    "target": {"const": "aarch64-apple-darwin"},
+    "runtime_build_receipt": {
       "type": "object", "additionalProperties": false,
-      "required": ["name", "sha256"],
+      "required": ["schema_version", "status", "sha256", "bytes"],
       "properties": {
-        "name": {"type": "string", "pattern": "^[^/\\\\\u0000-\u001f\u007f]{1,255}$"},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "schema_version": {"const": "cigar.development-native-archive-build.v1"},
+        "status": {"const": "built-unqualified"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1}
       }
     },
+    "qualification_tool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "archive_sha256", "archive_bytes", "contract_id", "contract_sha256", "source_revision", "build_receipt_schema_version", "build_receipt_status", "build_receipt_sha256", "build_receipt_bytes", "runner_path", "runner_sha256", "driver_path", "driver_sha256"],
+      "properties": {
+        "artifact_id": {"const": "cigar-conformance-macos-aarch64"},
+        "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "archive_bytes": {"type": "integer", "minimum": 1},
+        "contract_id": {"const": "macos-conformance-runner-v1"},
+        "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+        "build_receipt_schema_version": {"const": "cigar.development-qualification-tool-build.v1"},
+        "build_receipt_status": {"const": "built-unqualified"},
+        "build_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "build_receipt_bytes": {"type": "integer", "minimum": 1},
+        "runner_path": {"const": "bin/cigar-conformance"},
+        "runner_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "driver_path": {"const": "bin/cigar-install-qualifier"},
+        "driver_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "build_receipt_authentication": {"const": "not-authenticated-external-signing-required-v1"},
     "driver_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "installed_binary_sha256": {
       "type": "object", "additionalProperties": false,
-      "required": ["cigar", "cigard"],
+      "required": ["cigar", "cigard", "cigar-mcp", "cigar-claude-hook"],
       "properties": {
         "cigar": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "cigard": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "cigard": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigar-mcp": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigar-claude-hook": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "installed_workflow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "full_surface_sha256", "semantic_identity_sha256", "cigar_sha256", "cigard_sha256", "binding_sha256", "no_egress_enforcement"],
+      "properties": {
+        "profile": {"const": "cigar.full.offline-read-only.macos-aarch64.v1"},
+        "full_surface_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "semantic_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigar_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigard_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "no_egress_enforcement": {"const": "darwin-seatbelt-deny-network-mach-confine-writes-protect-candidate-workspace-unix-v1"}
       }
     },
     "unprivileged": {"const": true},
+    "non_admin": {"const": true},
     "no_compiler_path": {"const": true},
     "no_egress": {"const": true},
-    "path_cases": {"type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["spaces", "unicode", "long", "read-only-parent", "non-admin"]}},
-    "checks": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}},
+    "no_egress_enforcement": {"const": "darwin-seatbelt-deny-network-mach-confine-writes-protect-candidate-workspace-unix-v1"},
+    "process_enforcement": {"const": "darwin-seatbelt-deny-process-fork-signal-v1"},
+    "path_cases": {"const": ["spaces", "unicode", "long", "read-only-parent", "non-admin"]},
+    "checks": {"const": ["approved-source-config", "backup-restore", "catalog-query-retrieval", "claude-hook-schema", "compile", "daemon-lifecycle", "delta", "doctor", "effect-reconcile-cli-contract", "excluded-surface-negative", "explain", "full-surface", "handoff-preview-cli-contract", "help", "ingest", "init", "materialize", "mcp-schema", "no-egress", "offline-restart", "permission-denial", "replay-cli-contract", "revalidate", "source-add", "upgrade", "version", "version-binding"]},
     "uninstalled": {"const": true},
     "state_retained": {"const": true}
   }

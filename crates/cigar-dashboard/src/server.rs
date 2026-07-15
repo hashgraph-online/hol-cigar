@@ -1,7 +1,8 @@
 //! Authenticated loopback HTTP shell and verified static asset serving.
 
 use crate::{
-    BootstrapAuthority, CursorAuthority, CursorError, CursorKind, DashboardConfig, EventError,
+    AvailabilityState, BootstrapAuthority, ControlError, ControlPlane, CursorAuthority,
+    CursorError, CursorKind, DashboardConfig, DashboardProtocolCatalog, EventError,
     EvidenceDescriptor, HistoryClient, HistoryError, HistoryStore, RunProfile, RunProfileRegistry,
     RunRecord, SafeEventBroker, SessionError, SessionManager, StaticAssets, StatusMonitor,
     StatusService, VerifiedAsset, write_bootstrap_file,
@@ -57,6 +58,8 @@ pub enum DashboardServerError {
     HistoryUnavailable,
     /// The short-lived pagination cursor authority could not initialize.
     CursorUnavailable,
+    /// Enabled reviewed controls could not establish their safe native supervisor boundary.
+    ControlUnavailable,
 }
 
 impl fmt::Display for DashboardServerError {
@@ -70,6 +73,7 @@ impl fmt::Display for DashboardServerError {
             Self::EventsUnavailable => "dashboard event service is unavailable",
             Self::HistoryUnavailable => "dashboard history service is unavailable",
             Self::CursorUnavailable => "dashboard cursor service is unavailable",
+            Self::ControlUnavailable => "dashboard control service is unavailable",
         })
     }
 }
@@ -83,6 +87,7 @@ struct AppState {
     target_alias: Arc<str>,
     control_enabled: bool,
     profile_registry: Option<Arc<RunProfileRegistry>>,
+    control: Option<ControlPlane>,
     status: StatusService,
     events: SafeEventBroker,
     history: HistoryClient,
@@ -148,6 +153,18 @@ impl DashboardApplication {
         )
         .map_err(|_error| DashboardServerError::StatusUnavailable)?;
         let history_client = history.client();
+        let control = if config.control.enabled {
+            let registry = profile_registry
+                .as_ref()
+                .ok_or(DashboardServerError::ControlUnavailable)?
+                .clone();
+            Some(
+                ControlPlane::initialize(config, registry, history_client.clone(), events.clone())
+                    .map_err(|_error| DashboardServerError::ControlUnavailable)?,
+            )
+        } else {
+            None
+        };
         Ok(Self {
             state: AppState {
                 sessions: Arc::new(sessions),
@@ -155,6 +172,7 @@ impl DashboardApplication {
                 target_alias: Arc::from(config.display.target_alias.as_str()),
                 control_enabled: config.control.enabled,
                 profile_registry,
+                control,
                 status,
                 events,
                 history: history_client,
@@ -187,13 +205,15 @@ impl DashboardApplication {
         Router::new()
             .route("/healthz", get(health))
             .route("/api/v1/session:exchange", post(exchange_session))
+            .route("/api/v1/session:csrf", post(rotate_csrf))
             .route("/api/v1/session:logout", post(logout_session))
             .route("/api/v1/bootstrap", get(bootstrap))
+            .route("/api/v1/protocol", get(protocol))
             .route("/api/v1/run-profiles", get(run_profiles))
             .route("/api/v1/status", get(status))
             .route("/api/v1/events", get(events))
-            .route("/api/v1/runs", get(runs))
-            .route("/api/v1/runs/{run_id}", get(run_detail))
+            .route("/api/v1/runs", get(runs).post(start_run))
+            .route("/api/v1/runs/{run_id}", get(run_detail).post(cancel_run))
             .route("/api/v1/evidence", get(evidence))
             .route("/api/v1/evidence/{evidence_id}", get(evidence_detail))
             .fallback(static_fallback)
@@ -209,6 +229,13 @@ impl DashboardApplication {
             Err(_error) => {}
         }
         let _ignored = self.history.shutdown();
+    }
+
+    /// Cancels and settles every dashboard-owned child before history is closed.
+    pub async fn shutdown_controls(&self, deadline: Duration) {
+        if let Some(control) = &self.state.control {
+            control.shutdown(deadline).await;
+        }
     }
 
     /// Starts the typed SDK status monitor without changing daemon state.
@@ -254,6 +281,13 @@ struct ExchangeResponse<'a> {
 
 #[derive(Serialize)]
 #[serde(deny_unknown_fields)]
+struct CsrfResponse<'a> {
+    schema_version: &'static str,
+    csrf_token: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
 struct BootstrapResponse<'a> {
     schema_version: &'static str,
     sidecar_version: &'static str,
@@ -276,7 +310,13 @@ struct RunProfilesResponse<'a> {
     control_enabled: bool,
     registry_digest: Option<String>,
     source_revision: Option<&'a str>,
-    profiles: &'a [RunProfile],
+    profiles: Vec<RunProfile>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StartRunRequest {
+    profile_id: String,
 }
 
 #[derive(Serialize)]
@@ -383,6 +423,34 @@ async fn exchange_session(
     response
 }
 
+async fn rotate_csrf(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    if let Err(error) = validate_same_origin(&state, &headers) {
+        return request_guard_problem(error);
+    }
+    if !body.is_empty() {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "DASHBOARD_INVALID_ARGUMENT",
+            "Dashboard CSRF rotation request must be empty",
+        );
+    }
+    let session = match authorize(&state, &headers, false) {
+        Ok(session) => session,
+        Err(error) => return session_problem(error),
+    };
+    let csrf = match state.sessions.rotate_csrf(&session) {
+        Ok(csrf) => csrf,
+        Err(error) => return session_problem(error),
+    };
+    secure_json(
+        Json(CsrfResponse {
+            schema_version: "cigar.dashboard-session.v1",
+            csrf_token: &csrf,
+        })
+        .into_response(),
+    )
+}
+
 async fn bootstrap(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(error) = validate_host(&state, &headers) {
         return request_guard_problem(error);
@@ -411,16 +479,117 @@ async fn run_profiles(State(state): State<AppState>, headers: HeaderMap) -> Resp
         return session_problem(error);
     }
     let registry = state.profile_registry.as_deref();
+    let profiles = state.control.as_ref().map_or_else(
+        || {
+            registry.map_or_else(Vec::new, |registry| {
+                registry
+                    .profiles()
+                    .iter()
+                    .map(|profile| {
+                        if profile.availability_state() == AvailabilityState::Available {
+                            profile.with_availability(AvailabilityState::ControlDisabled)
+                        } else {
+                            profile.clone()
+                        }
+                    })
+                    .collect()
+            })
+        },
+        ControlPlane::public_profiles,
+    );
     secure_json(
         Json(RunProfilesResponse {
             schema_version: "cigar.dashboard-run-profiles.v1",
             control_enabled: state.control_enabled,
             registry_digest: registry.map(RunProfileRegistry::digest_hex),
             source_revision: registry.map(RunProfileRegistry::source_revision),
-            profiles: registry.map_or(&[], RunProfileRegistry::profiles),
+            profiles,
         })
         .into_response(),
     )
+}
+
+async fn start_run(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    if let Err(error) = validate_same_origin(&state, &headers) {
+        return request_guard_problem(error);
+    }
+    if let Err(error) = authorize(&state, &headers, true) {
+        return session_problem(error);
+    }
+    if !has_exact_json_content_type(&headers) {
+        return problem(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "DASHBOARD_INVALID_ARGUMENT",
+            "Dashboard content type is invalid",
+        );
+    }
+    let request: StartRunRequest = match serde_json::from_slice(&body) {
+        Ok(request) => request,
+        Err(_error) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                "DASHBOARD_INVALID_ARGUMENT",
+                "Dashboard run request is invalid",
+            );
+        }
+    };
+    let Some(control) = &state.control else {
+        return control_problem(ControlError::Unavailable);
+    };
+    match control.start(&request.profile_id) {
+        Ok(run) => secure_json((StatusCode::ACCEPTED, Json(run)).into_response()),
+        Err(error) => control_problem(error),
+    }
+}
+
+async fn cancel_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if let Err(error) = validate_same_origin(&state, &headers) {
+        return request_guard_problem(error);
+    }
+    if let Err(error) = authorize(&state, &headers, true) {
+        return session_problem(error);
+    }
+    if !body.is_empty() {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "DASHBOARD_INVALID_ARGUMENT",
+            "Dashboard cancellation request must be empty",
+        );
+    }
+    let Some(run_id) = run_id.strip_suffix(":cancel") else {
+        return problem(
+            StatusCode::NOT_FOUND,
+            "DASHBOARD_INVALID_ARGUMENT",
+            "Dashboard control route was not found",
+        );
+    };
+    let Some(control) = &state.control else {
+        return control_problem(ControlError::Unavailable);
+    };
+    match control.cancel(run_id) {
+        Ok(run) => secure_json((StatusCode::ACCEPTED, Json(run)).into_response()),
+        Err(error) => control_problem(error),
+    }
+}
+
+async fn protocol(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(error) = validate_host(&state, &headers) {
+        return request_guard_problem(error);
+    }
+    if let Err(error) = authorize(&state, &headers, false) {
+        return session_problem(error);
+    }
+    let mut response = Response::new(Body::from(DashboardProtocolCatalog::generated_json()));
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    secure_json(response)
 }
 
 async fn status(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -846,6 +1015,11 @@ fn has_json_content_type(headers: &HeaderMap) -> bool {
     })
 }
 
+fn has_exact_json_content_type(headers: &HeaderMap) -> bool {
+    unique_header(headers, CONTENT_TYPE.as_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("application/json"))
+}
+
 fn last_event_sequence(headers: &HeaderMap) -> Result<Option<u64>, EventError> {
     let name = HeaderName::from_static("last-event-id");
     let mut values = headers.get_all(name).iter();
@@ -1012,11 +1186,41 @@ fn history_problem(error: HistoryError) -> Response {
         HistoryError::UnsafePath
         | HistoryError::InvalidDatabase
         | HistoryError::InvalidEvent
+        | HistoryError::DiskFull
         | HistoryError::WriterUnavailable => problem(
             StatusCode::SERVICE_UNAVAILABLE,
             "DASHBOARD_INTERNAL",
             "Dashboard history service is unavailable",
         ),
+    }
+}
+
+fn control_problem(error: ControlError) -> Response {
+    match error {
+        ControlError::InvalidRequest => problem(
+            StatusCode::BAD_REQUEST,
+            "DASHBOARD_INVALID_ARGUMENT",
+            "Dashboard control request is invalid",
+        ),
+        ControlError::Unavailable
+        | ControlError::SourceMismatch
+        | ControlError::RecoveryRequired => problem(
+            StatusCode::CONFLICT,
+            "DASHBOARD_CONTROL_UNAVAILABLE",
+            "Dashboard control profile is unavailable",
+        ),
+        ControlError::Capacity => problem(
+            StatusCode::TOO_MANY_REQUESTS,
+            "DASHBOARD_LIMIT_EXCEEDED",
+            "Dashboard control capacity was reached",
+        ),
+        ControlError::UnsafePath | ControlError::Persistence | ControlError::SpawnFailed => {
+            problem(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "DASHBOARD_INTERNAL",
+                "Dashboard control service is unavailable",
+            )
+        }
     }
 }
 
@@ -1151,6 +1355,11 @@ mod tests {
         let assets = directory.path().join("assets");
         fs::create_dir(&runtime)?;
         fs::create_dir(&assets)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(&runtime, fs::Permissions::from_mode(0o700))?;
+        }
         let html = b"<!doctype html><title>CIGAR</title>";
         fs::write(assets.join("index.html"), html)?;
         let digest: [u8; 32] = Sha256::digest(html).into();
@@ -1281,6 +1490,62 @@ mod tests {
                 .map(Vec::len),
             Some(0)
         );
+
+        let rotated = application
+            .router()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/session:csrf")
+                    .header(HOST, "127.0.0.1:7460")
+                    .header(ORIGIN, "http://127.0.0.1:7460")
+                    .header(COOKIE, &cookie)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(rotated.status(), StatusCode::OK);
+        let body = to_bytes(rotated.into_body(), 4096).await?;
+        let rotated: Value = serde_json::from_slice(&body)?;
+        let csrf = rotated
+            .get("csrf_token")
+            .and_then(Value::as_str)
+            .ok_or("rotated csrf missing")?;
+
+        let disabled_control = application
+            .router()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/runs")
+                    .header(HOST, "127.0.0.1:7460")
+                    .header(ORIGIN, "http://127.0.0.1:7460")
+                    .header(COOKIE, &cookie)
+                    .header(CONTENT_TYPE, "application/json")
+                    .header("x-cigar-csrf", csrf)
+                    .body(Body::from(r#"{"profile_id":"dashboard-contracts"}"#))?,
+            )
+            .await?;
+        assert_eq!(disabled_control.status(), StatusCode::CONFLICT);
+
+        let protocol = application
+            .router()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/protocol")
+                    .header(HOST, "127.0.0.1:7460")
+                    .header(COOKIE, &cookie)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(protocol.status(), StatusCode::OK);
+        let body = to_bytes(protocol.into_body(), 64 * 1024).await?;
+        let payload: Value = serde_json::from_slice(&body)?;
+        assert_eq!(
+            payload.get("schema_version").and_then(Value::as_str),
+            Some("cigar.dashboard-protocol.v1")
+        );
+        assert_eq!(payload.get("service_count"), Some(&Value::from(7)));
+        assert_eq!(payload.get("operation_count"), Some(&Value::from(45)));
 
         let runs = application
             .router()

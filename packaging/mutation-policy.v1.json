@@ -1,0 +1,86 @@
+{
+  "schema_version": "cigar.mutation-policy.v1",
+  "platform_scope": ["macos-arm64"],
+  "cargo_mutants_version": "27.1.0",
+  "minimum_campaign_seconds": 14400,
+  "minimum_score_percent": 90.0,
+  "maximum_timeout_count": 0,
+  "maximum_critical_viable_survivor_count": 0,
+  "jobs": 4,
+  "per_command_timeout_seconds": 120,
+  "minimum_test_timeout_seconds": 20,
+  "production_packages": [
+    "cigar-api",
+    "cigar-aws-creds",
+    "cigar-canon",
+    "cigar-catalog",
+    "cigar-claude-hook",
+    "cigar-cli",
+    "cigar-code-intel",
+    "cigar-compiler",
+    "cigar-conformance",
+    "cigar-crypto",
+    "cigar-daemon",
+    "cigar-dashboard",
+    "cigar-effects",
+    "cigar-extension-host",
+    "cigar-mcp",
+    "cigar-observe",
+    "cigar-policy",
+    "cigar-protocol",
+    "cigar-replay",
+    "cigar-retrieval",
+    "cigar-rust-s3",
+    "cigar-sdk",
+    "cigar-space",
+    "cigar-store"
+  ],
+  "excluded_packages": [
+    {
+      "name": "cigar-sim",
+      "reason": "deterministic test and simulation support, not shipped production code"
+    },
+    {
+      "name": "cigar-soak",
+      "reason": "the soak workload driver is explicitly deferred for this run"
+    },
+    {
+      "name": "cigar-testkit",
+      "reason": "test fixture support, not shipped production code"
+    },
+    {
+      "name": "cigar-windows-ipc",
+      "reason": "Windows-only implementation is outside the native macOS release cohort"
+    },
+    {
+      "name": "xtask",
+      "reason": "workspace automation, not a shipped product runtime or SDK package"
+    }
+  ],
+  "excluded_source_globs": [
+    "**/benches/**",
+    "**/examples/**",
+    "**/generated/**",
+    "**/tests/**",
+    "vendor/**"
+  ],
+  "critical_packages": [
+    "cigar-canon",
+    "cigar-catalog",
+    "cigar-compiler",
+    "cigar-crypto",
+    "cigar-effects",
+    "cigar-policy",
+    "cigar-protocol",
+    "cigar-replay",
+    "cigar-retrieval",
+    "cigar-space",
+    "cigar-store"
+  ],
+  "critical_source_globs": [
+    "crates/cigar-api/src/auth*.rs",
+    "crates/cigar-daemon/src/*auth*.rs",
+    "crates/cigar-daemon/src/effect*.rs",
+    "crates/cigar-extension-host/src/**"
+  ]
+}

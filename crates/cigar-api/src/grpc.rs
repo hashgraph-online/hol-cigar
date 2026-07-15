@@ -3,7 +3,8 @@
 use crate::generated::{OperationContract, RevisionRequirement, StreamKind};
 use crate::service::{
     ContextInput, EnvelopeError, FacadeEventStream, MAX_OPERATION_PAYLOAD_BYTES, PathParameter,
-    RequestEnvelope, ResponseEnvelope, ServiceKernel, VerifiedClientIdentity, operation_by_id,
+    RequestEnvelope, ResponseEnvelope, ServiceKernel, TransportMetricEvent,
+    TransportMetricsObserver, VerifiedClientIdentity, operation_by_id,
 };
 use crate::{ApiError, CancellationToken, TraceId};
 use cigar_protocol::ErrorCode;
@@ -126,6 +127,7 @@ impl GrpcService {
             source,
             cancellation,
             self.kernel.config().stream_buffer_capacity(),
+            self.kernel.metrics_observer(),
         );
         let stream: GrpcEventStream = Box::pin(receiver);
         let mut response = Response::new(stream);
@@ -549,6 +551,7 @@ pub type GrpcEventStream =
 struct GrpcReceiverStream {
     receiver: mpsc::Receiver<Result<proto::OperationEvent, Status>>,
     cancellation: CancellationToken,
+    metrics: Option<std::sync::Arc<dyn TransportMetricsObserver>>,
 }
 
 impl Stream for GrpcReceiverStream {
@@ -561,6 +564,11 @@ impl Stream for GrpcReceiverStream {
 
 impl Drop for GrpcReceiverStream {
     fn drop(&mut self) {
+        if !self.cancellation.is_cancelled()
+            && let Some(metrics) = &self.metrics
+        {
+            metrics.record_transport_metric(TransportMetricEvent::StreamCancelled);
+        }
         self.cancellation.cancel();
     }
 }
@@ -569,9 +577,11 @@ fn bounded_grpc_receiver(
     mut source: FacadeEventStream,
     cancellation: CancellationToken,
     capacity: usize,
+    metrics: Option<std::sync::Arc<dyn TransportMetricsObserver>>,
 ) -> GrpcReceiverStream {
     let (sender, receiver) = mpsc::channel(capacity);
     let producer_cancellation = cancellation.clone();
+    let producer_metrics = metrics.clone();
     tokio::spawn(async move {
         loop {
             let item = poll_fn(|context| source.as_mut().poll_next(context)).await;
@@ -585,7 +595,19 @@ fn bounded_grpc_receiver(
             });
             let item = item.map_err(status_from_error);
             let terminal = item.is_err();
-            if sender.send(item).await.is_err() || terminal {
+            match sender.try_send(item) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(item)) => {
+                    if let Some(metrics) = &producer_metrics {
+                        metrics.record_transport_metric(TransportMetricEvent::StreamBlocked);
+                    }
+                    if sender.send(item).await.is_err() {
+                        break;
+                    }
+                }
+                Err(mpsc::error::TrySendError::Closed(_item)) => break,
+            }
+            if terminal {
                 break;
             }
         }
@@ -594,6 +616,7 @@ fn bounded_grpc_receiver(
     GrpcReceiverStream {
         receiver,
         cancellation,
+        metrics,
     }
 }
 

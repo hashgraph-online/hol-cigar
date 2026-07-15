@@ -23,6 +23,8 @@ members = [
   "crates/cigar-cli",
   "crates/cigar-claude-hook",
   "crates/cigar-mcp",
+  "crates/cigar-dashboard",
+  "crates/cigar-soak",
   "crates/cigar-testkit",
   "crates/cigar-sim",
   "crates/cigar-windows-ipc",
@@ -33,7 +35,7 @@ members = [
 default-members = ["crates/cigar-cli", "crates/cigar-daemon", "crates/cigar-mcp"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0-dev.1"
 edition = "2024"
 rust-version = "1.92"
 license = "Apache-2.0"
@@ -50,21 +52,23 @@ cap-std = { version = "=4.0.2" }
 argon2 = { version = "=0.5.3" }
 chacha20poly1305 = { version = "=0.11.0", features = ["zeroize"] }
 ciborium = { version = "=0.2.2" }
-cigar-api = { version = "=0.1.0", path = "crates/cigar-api" }
-cigar-protocol = { version = "=0.1.0", path = "crates/cigar-protocol" }
-cigar-canon = { version = "=0.1.0", path = "crates/cigar-canon" }
-cigar-catalog = { version = "=0.1.0", path = "crates/cigar-catalog" }
-cigar-code-intel = { version = "=0.1.0", path = "crates/cigar-code-intel" }
-cigar-compiler = { version = "=0.1.0", path = "crates/cigar-compiler" }
-cigar-crypto = { version = "=0.1.0", path = "crates/cigar-crypto" }
-cigar-effects = { version = "=0.1.0", path = "crates/cigar-effects" }
-cigar-mcp = { version = "=0.1.0", path = "crates/cigar-mcp" }
-cigar-policy = { version = "=0.1.0", path = "crates/cigar-policy" }
-cigar-replay = { version = "=0.1.0", path = "crates/cigar-replay" }
-cigar-retrieval = { version = "=0.1.0", path = "crates/cigar-retrieval" }
-cigar-space = { version = "=0.1.0", path = "crates/cigar-space" }
-cigar-testkit = { version = "=0.1.0", path = "crates/cigar-testkit" }
-cigar-store = { version = "=0.1.0", path = "crates/cigar-store" }
+cigar-api = { version = "=1.0.0-dev.1", path = "crates/cigar-api" }
+cigar-protocol = { version = "=1.0.0-dev.1", path = "crates/cigar-protocol" }
+cigar-canon = { version = "=1.0.0-dev.1", path = "crates/cigar-canon" }
+cigar-catalog = { version = "=1.0.0-dev.1", path = "crates/cigar-catalog" }
+cigar-code-intel = { version = "=1.0.0-dev.1", path = "crates/cigar-code-intel" }
+cigar-compiler = { version = "=1.0.0-dev.1", path = "crates/cigar-compiler" }
+cigar-crypto = { version = "=1.0.0-dev.1", path = "crates/cigar-crypto" }
+cigar-effects = { version = "=1.0.0-dev.1", path = "crates/cigar-effects" }
+cigar-observe = { version = "=1.0.0-dev.1", path = "crates/cigar-observe" }
+cigar-mcp = { version = "=1.0.0-dev.1", path = "crates/cigar-mcp" }
+cigar-policy = { version = "=1.0.0-dev.1", path = "crates/cigar-policy" }
+cigar-replay = { version = "=1.0.0-dev.1", path = "crates/cigar-replay" }
+cigar-retrieval = { version = "=1.0.0-dev.1", path = "crates/cigar-retrieval" }
+cigar-space = { version = "=1.0.0-dev.1", path = "crates/cigar-space" }
+cigar-testkit = { version = "=1.0.0-dev.1", path = "crates/cigar-testkit" }
+cigar-store = { version = "=1.0.0-dev.1", path = "crates/cigar-store" }
+cigar-sdk = { version = "=1.0.0-dev.1", path = "sdk/rust", default-features = false }
 futures-core = { version = "=0.3.32" }
 flate2 = { version = "=1.1.9" }
 schemars = { version = "=1.2.1", features = ["derive"] }

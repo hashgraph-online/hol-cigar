@@ -5,7 +5,7 @@ The local registry must first contain every registry dependency from the workspa
 
     cargo local-registry sync Cargo.lock /tmp/cigar-rust-registry
 
-This program then packages the two reviewed support forks, the sixteen CIGAR dependency crates,
+This program then packages the two reviewed support forks, the seventeen CIGAR dependency crates,
 and the SDK in publication order. Each freshly produced `.crate` is inserted into the local
 registry before its dependants are packaged. Cargo therefore performs the same normalized-manifest
 resolution required by crates.io without publishing or contacting an external registry.
@@ -27,26 +27,31 @@ import tomllib
 from typing import Any
 
 
+PRODUCT_VERSION = "1.0.0-dev.1"
+PRODUCT_PACKAGES = (
+    "cigar-canon",
+    "cigar-protocol",
+    "cigar-testkit",
+    "cigar-windows-ipc",
+    "cigar-crypto",
+    "cigar-replay",
+    "cigar-policy",
+    "cigar-store",
+    "cigar-effects",
+    "cigar-retrieval",
+    "cigar-space",
+    "cigar-catalog",
+    "cigar-code-intel",
+    "cigar-compiler",
+    "cigar-api",
+    "cigar-observe",
+    "cigar-daemon",
+    "cigar-sdk",
+)
 PACKAGES: tuple[tuple[str, str], ...] = (
     ("cigar-aws-creds", "0.39.1-cigar.1"),
     ("cigar-rust-s3", "0.37.2-cigar.1"),
-    ("cigar-canon", "0.1.0"),
-    ("cigar-protocol", "0.1.0"),
-    ("cigar-testkit", "0.1.0"),
-    ("cigar-windows-ipc", "0.1.0"),
-    ("cigar-crypto", "0.1.0"),
-    ("cigar-replay", "0.1.0"),
-    ("cigar-policy", "0.1.0"),
-    ("cigar-store", "0.1.0"),
-    ("cigar-effects", "0.1.0"),
-    ("cigar-retrieval", "0.1.0"),
-    ("cigar-space", "0.1.0"),
-    ("cigar-catalog", "0.1.0"),
-    ("cigar-code-intel", "0.1.0"),
-    ("cigar-compiler", "0.1.0"),
-    ("cigar-api", "0.1.0"),
-    ("cigar-daemon", "0.1.0"),
-    ("cigar-sdk", "0.1.0"),
+    *((name, PRODUCT_VERSION) for name in PRODUCT_PACKAGES),
 )
 
 
@@ -476,7 +481,7 @@ def main() -> int:
             (consumer / "Cargo.toml").write_text(
                 '[package]\nname = "cigar-sdk-clean-consumer"\nversion = "0.0.0"\n'
                 'edition = "2024"\nrust-version = "1.92"\npublish = false\n\n'
-                '[dependencies]\ncigar-sdk = "=0.1.0"\n',
+                f'[dependencies]\ncigar-sdk = "={PRODUCT_VERSION}"\n',
                 encoding="utf-8",
             )
             (consumer / "src/main.rs").write_text("fn main() {}\n", encoding="utf-8")

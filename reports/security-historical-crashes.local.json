@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "canary_scan": "passed",
+      "command_sha256": "7fb68a31b4401c9453079637dc992e169604cd385a587a2082046b901d925995",
+      "duration_ms": 1245,
+      "exit_code": 0,
+      "id": "SEC-MCP-002",
+      "status": "passed",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 1321,
+        "sha256": "f5c760650fb716864cfe22aa8afde2c7e69871c218b7b659747d2e79dcf0d75e"
+      }
+    }
+  ],
+  "failed_case_count": 0,
+  "finished_at": "2026-07-15T01:10:49.775Z",
+  "host": {
+    "architecture": "arm64",
+    "platform": "macos",
+    "python": "3.14.6"
+  },
+  "matrix": {
+    "path": "tests/security/matrix-v1.json",
+    "sha256": "98368d83eb391336e7ee5ca5145adfe8b095fc570cf32a6d62a2b38d682a6d20"
+  },
+  "passed_case_count": 1,
+  "profile": "local",
+  "release_eligible": false,
+  "schema_version": "cigar.test-matrix-result.v1",
+  "selected_case_count": 1,
+  "source": {
+    "clean": false,
+    "committed": true,
+    "kind": "git",
+    "revision": "56a5a1346bdfd362f67c279f4f8cd5d4ba7c46b2"
+  },
+  "started_at": "2026-07-15T01:10:48.529Z",
+  "status": "passed",
+  "suite": "security"
+}

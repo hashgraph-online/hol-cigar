@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/dashboard/dashboard-schema-check-v1.schema.json",
+  "title": "CIGAR dashboard schema check receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["host", "reference_count", "schema_count", "schema_set_sha256", "schema_version", "source_revision", "status"],
+  "properties": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architecture", "platform"],
+      "properties": {
+        "architecture": {"const": "arm64"},
+        "platform": {"const": "macos"}
+      }
+    },
+    "reference_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "schema_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "schema_set_sha256": {"$ref": "common-v1.schema.json#/$defs/Sha256"},
+    "schema_version": {"const": "cigar.dashboard-schema-check.v1"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "status": {"const": "passed"}
+  }
+}

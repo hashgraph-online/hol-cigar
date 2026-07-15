@@ -685,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-api"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "axum",
  "base64",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-canon"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-catalog"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "cap-fs-ext",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-claude-hook"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-canon",
  "serde",
@@ -763,9 +763,10 @@ dependencies = [
 
 [[package]]
 name = "cigar-cli"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
+ "cap-std",
  "cigar-api",
  "cigar-canon",
  "cigar-crypto",
@@ -788,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-code-intel"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-canon",
  "cigar-catalog",
@@ -814,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-compiler"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "cigar-canon",
@@ -829,13 +830,16 @@ dependencies = [
 
 [[package]]
 name = "cigar-conformance"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
+ "base64",
+ "ciborium",
  "cigar-api",
  "cigar-canon",
  "cigar-catalog",
  "cigar-compiler",
  "cigar-crypto",
+ "cigar-daemon",
  "cigar-effects",
  "cigar-mcp",
  "cigar-policy",
@@ -846,6 +850,8 @@ dependencies = [
  "cigar-store",
  "getrandom 0.4.3",
  "prost",
+ "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -860,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-crypto"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -869,6 +875,7 @@ dependencies = [
  "ed25519-dalek",
  "getrandom 0.4.3",
  "keyring",
+ "rustix",
  "serde",
  "tempfile",
  "zeroize",
@@ -876,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-daemon"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "axum",
  "axum-server",
@@ -888,6 +895,7 @@ dependencies = [
  "cigar-compiler",
  "cigar-crypto",
  "cigar-effects",
+ "cigar-observe",
  "cigar-policy",
  "cigar-protocol",
  "cigar-replay",
@@ -898,8 +906,10 @@ dependencies = [
  "cigar-windows-ipc",
  "futures-core",
  "getrandom 0.4.3",
+ "hmac 0.13.0",
  "opentelemetry",
  "opentelemetry-otlp",
+ "opentelemetry-proto",
  "opentelemetry_sdk",
  "rcgen",
  "reqwest 0.13.4",
@@ -908,6 +918,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "sysinfo",
  "tempfile",
  "tokio",
  "tokio-rustls",
@@ -917,11 +928,39 @@ dependencies = [
  "tower",
  "tower-http 0.7.0",
  "x509-parser",
+ "zeroize",
+]
+
+[[package]]
+name = "cigar-dashboard"
+version = "1.0.0-dev.1"
+dependencies = [
+ "axum",
+ "base64",
+ "cigar-observe",
+ "cigar-sdk",
+ "futures-core",
+ "getrandom 0.4.3",
+ "hmac 0.13.0",
+ "reqwest 0.13.4",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower",
+ "tower-http 0.7.0",
+ "zeroize",
 ]
 
 [[package]]
 name = "cigar-effects"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "cigar-canon",
@@ -937,15 +976,19 @@ dependencies = [
 
 [[package]]
 name = "cigar-extension-host"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
+ "cap-fs-ext",
+ "cap-std",
  "cigar-canon",
  "cigar-crypto",
  "cigar-protocol",
  "getrandom 0.4.3",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "sysinfo",
  "tempfile",
  "wasmtime",
  "wat",
@@ -953,18 +996,19 @@ dependencies = [
 
 [[package]]
 name = "cigar-mcp"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-protocol",
+ "getrandom 0.4.3",
 ]
 
 [[package]]
 name = "cigar-observe"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 
 [[package]]
 name = "cigar-policy"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-canon",
  "cigar-crypto",
@@ -979,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-protocol"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "prost",
@@ -991,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-replay"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-canon",
  "cigar-protocol",
@@ -1002,13 +1046,17 @@ dependencies = [
 
 [[package]]
 name = "cigar-retrieval"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
+ "cigar-policy",
  "cigar-protocol",
  "cigar-store",
  "cigar-testkit",
+ "getrandom 0.4.3",
+ "rustix",
  "serde_json",
  "sha2 0.11.0",
+ "tempfile",
 ]
 
 [[package]]
@@ -1041,6 +1089,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sysinfo",
+ "tempfile",
  "thiserror",
  "time",
  "tokio",
@@ -1051,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-sdk"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "cigar-api",
@@ -1061,6 +1110,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "reqwest 0.13.4",
+ "rustix",
  "rustls",
  "serde",
  "serde_json",
@@ -1072,11 +1122,23 @@ dependencies = [
 
 [[package]]
 name = "cigar-sim"
-version = "0.1.0"
+version = "1.0.0-dev.1"
+
+[[package]]
+name = "cigar-soak"
+version = "1.0.0-dev.1"
+dependencies = [
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "time",
+]
 
 [[package]]
 name = "cigar-space"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-canon",
  "cigar-crypto",
@@ -1089,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-store"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "ciborium",
  "cigar-crypto",
@@ -1110,12 +1172,13 @@ dependencies = [
  "sha2 0.11.0",
  "tempfile",
  "tokio-postgres-rustls",
+ "url",
  "webpki-roots",
 ]
 
 [[package]]
 name = "cigar-testkit"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64",
  "cigar-protocol",
@@ -1125,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-windows-ipc"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "tokio",
  "windows-sys 0.61.2",
@@ -4695,6 +4758,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -6000,12 +6064,13 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 dependencies = [
  "cigar-api",
  "cigar-canon",
  "cigar-protocol",
  "cigar-testkit",
+ "rustix",
  "schemars",
  "serde",
  "serde_json",
@@ -6227,9 +6292,9 @@ dependencies = [
 
 [[package]]
 name = "zmij"
-version = "1.0.22"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd2f034a4bebf216c9e4b7083603e024cf930873fd67830cfb083c9fa33129d9"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zvariant"

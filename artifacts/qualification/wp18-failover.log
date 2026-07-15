@@ -1,6 +1,6 @@
-Starting required WP18 failover qualification project cigar-wp18-failover-77427-73192.
-Source: workspace:sha256:b7aef1dbdb4d825d09a650690be0628bc58a68006c1ae1d99e4dbcec4f27c0f0
- Image cigar-wp18-failover-77427-73192-router Building 
+Starting required WP18 failover qualification project cigar-wp18-failover-77427-81759.
+Source: workspace:sha256:596b16c9791ae3049631efc144ee81cae0e9773e8d140ba2d68f99a00212c35b
+ Image cigar-wp18-failover-77427-81759-router Building 
 #1 [internal] load local bake definitions
 #1 reading from stdin 657B done
 #1 DONE 0.0s
@@ -24,13 +24,13 @@ Source: workspace:sha256:b7aef1dbdb4d825d09a650690be0628bc58a68006c1ae1d99e4dbce
 #6 transferring context: 69B done
 #6 DONE 0.0s
 
-#7 [3/5] COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
+#7 [2/5] RUN apk add --no-cache postgresql-client
 #7 CACHED
 
-#8 [4/5] COPY check-primary.sh /usr/local/bin/check-primary
+#8 [3/5] COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
 #8 CACHED
 
-#9 [2/5] RUN apk add --no-cache postgresql-client
+#9 [4/5] COPY check-primary.sh /usr/local/bin/check-primary
 #9 CACHED
 
 #10 [5/5] RUN chmod 0555 /usr/local/bin/check-primary     && haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
@@ -38,76 +38,78 @@ Source: workspace:sha256:b7aef1dbdb4d825d09a650690be0628bc58a68006c1ae1d99e4dbce
 
 #11 exporting to image
 #11 exporting layers done
-#11 exporting manifest sha256:a7fdc45fa97bd2ca7cde663701ad9b84ba20f68600892251bdcec8391d05d63e done
-#11 exporting config sha256:baebf7836029991a88358bd3d9ff20ad174e1bf658eae689944a6a0406a70e37 done
-#11 exporting attestation manifest sha256:a873176a2c71011729113e7739e4c56eceaecf777547d555e9c60584fb492746 done
-#11 exporting manifest list sha256:92adc4373d149c37691f1a6eb262ef1dbcc9205a397ecd1b12dc84b126b74b7b done
-#11 naming to docker.io/library/cigar-wp18-failover-77427-73192-router:latest done
-#11 unpacking to docker.io/library/cigar-wp18-failover-77427-73192-router:latest 0.0s done
+#11 exporting manifest sha256:911e45e6151c698fc1bc282a6700cb6175772e2a2e8a37a0df5d516aa7c163b3 done
+#11 exporting config sha256:252fd976d7f55a64e8d4594be0efc9c1a48ce2ce19ea1a9f05feabf7593012c6 done
+#11 exporting attestation manifest sha256:99dc383cfd7b1aa3f2b4a67e38a470ffb3c979533130761a95843174f448167d done
+#11 exporting manifest list sha256:7f637e3f60a901b271be8464cd5921ccf9e738c93f1e3b3a97d63cf1b5cd8adb done
+#11 naming to docker.io/library/cigar-wp18-failover-77427-81759-router:latest done
+#11 unpacking to docker.io/library/cigar-wp18-failover-77427-81759-router:latest 0.0s done
 #11 DONE 0.1s
 
 #12 resolving provenance for metadata file
 #12 DONE 0.0s
- Image cigar-wp18-failover-77427-73192-router Built 
- Network cigar-wp18-failover-77427-73192_host-edge Creating 
- Network cigar-wp18-failover-77427-73192_host-edge Created 
- Network cigar-wp18-failover-77427-73192_failover Creating 
- Network cigar-wp18-failover-77427-73192_failover Created 
- Volume cigar-wp18-failover-77427-73192_standby-data Creating 
- Volume cigar-wp18-failover-77427-73192_standby-data Created 
- Volume cigar-wp18-failover-77427-73192_primary-data Creating 
- Volume cigar-wp18-failover-77427-73192_primary-data Created 
- Container cigar-wp18-failover-77427-73192-primary-1 Creating 
- Container cigar-wp18-failover-77427-73192-primary-1 Created 
- Container cigar-wp18-failover-77427-73192-standby-1 Creating 
- Container cigar-wp18-failover-77427-73192-standby-1 Created 
- Container cigar-wp18-failover-77427-73192-router-1 Creating 
- Container cigar-wp18-failover-77427-73192-router-1 Created 
- Container cigar-wp18-failover-77427-73192-primary-1 Starting 
- Container cigar-wp18-failover-77427-73192-primary-1 Started 
- Container cigar-wp18-failover-77427-73192-primary-1 Waiting 
- Container cigar-wp18-failover-77427-73192-primary-1 Healthy 
- Container cigar-wp18-failover-77427-73192-standby-1 Starting 
- Container cigar-wp18-failover-77427-73192-standby-1 Started 
- Container cigar-wp18-failover-77427-73192-primary-1 Waiting 
- Container cigar-wp18-failover-77427-73192-standby-1 Waiting 
- Container cigar-wp18-failover-77427-73192-primary-1 Healthy 
- Container cigar-wp18-failover-77427-73192-standby-1 Healthy 
- Container cigar-wp18-failover-77427-73192-router-1 Starting 
- Container cigar-wp18-failover-77427-73192-router-1 Started 
- Container cigar-wp18-failover-77427-73192-router-1 Waiting 
- Container cigar-wp18-failover-77427-73192-primary-1 Waiting 
- Container cigar-wp18-failover-77427-73192-standby-1 Waiting 
- Container cigar-wp18-failover-77427-73192-primary-1 Healthy 
- Container cigar-wp18-failover-77427-73192-standby-1 Healthy 
- Container cigar-wp18-failover-77427-73192-router-1 Healthy 
+ Image cigar-wp18-failover-77427-81759-router Built 
+ Network cigar-wp18-failover-77427-81759_failover Creating 
+ Network cigar-wp18-failover-77427-81759_failover Created 
+ Network cigar-wp18-failover-77427-81759_host-edge Creating 
+ Network cigar-wp18-failover-77427-81759_host-edge Created 
+ Volume cigar-wp18-failover-77427-81759_primary-data Creating 
+ Volume cigar-wp18-failover-77427-81759_primary-data Created 
+ Volume cigar-wp18-failover-77427-81759_tls-data Creating 
+ Volume cigar-wp18-failover-77427-81759_tls-data Created 
+ Volume cigar-wp18-failover-77427-81759_standby-data Creating 
+ Volume cigar-wp18-failover-77427-81759_standby-data Created 
+ Container cigar-wp18-failover-77427-81759-primary-1 Creating 
+ Container cigar-wp18-failover-77427-81759-primary-1 Created 
+ Container cigar-wp18-failover-77427-81759-standby-1 Creating 
+ Container cigar-wp18-failover-77427-81759-standby-1 Created 
+ Container cigar-wp18-failover-77427-81759-router-1 Creating 
+ Container cigar-wp18-failover-77427-81759-router-1 Created 
+ Container cigar-wp18-failover-77427-81759-primary-1 Starting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Started 
+ Container cigar-wp18-failover-77427-81759-primary-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Healthy 
+ Container cigar-wp18-failover-77427-81759-standby-1 Starting 
+ Container cigar-wp18-failover-77427-81759-standby-1 Started 
+ Container cigar-wp18-failover-77427-81759-standby-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Healthy 
+ Container cigar-wp18-failover-77427-81759-standby-1 Healthy 
+ Container cigar-wp18-failover-77427-81759-router-1 Starting 
+ Container cigar-wp18-failover-77427-81759-router-1 Started 
+ Container cigar-wp18-failover-77427-81759-standby-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-router-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-standby-1 Healthy 
+ Container cigar-wp18-failover-77427-81759-primary-1 Healthy 
+ Container cigar-wp18-failover-77427-81759-router-1 Healthy 
 ready: physical standby streaming from the original primary
 ready: synchronous standby acknowledged by the original primary
 ready: original primary uses synchronous_commit=remote_apply
 ready: HAProxy admits only the original primary
 Running required production PostgresStore failover phase: before
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.12s
-[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-b5d54f0c955485e6)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-5118003eee92bfba)
 
 running 1 test
 test production_repository_survives_physical_failover_phase ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
 
 Pausing standby WAL replay to prove remote_apply does not acknowledge lagged writes.
 ready: standby WAL replay is paused
- Container cigar-wp18-failover-77427-73192-client-run-3bd3465aecd3 Creating 
- Container cigar-wp18-failover-77427-73192-client-run-3bd3465aecd3 Created 
+ Container cigar-wp18-failover-77427-81759-client-run-d638046c5dbc Creating 
+ Container cigar-wp18-failover-77427-81759-client-run-d638046c5dbc Created 
 ready: lagged write acknowledged only after its commit LSN replayed
- Container cigar-wp18-failover-77427-73192-client-run-7ca06c584501 Creating 
- Container cigar-wp18-failover-77427-73192-client-run-7ca06c584501 Created 
+ Container cigar-wp18-failover-77427-81759-client-run-482b237d87e7 Creating 
+ Container cigar-wp18-failover-77427-81759-client-run-482b237d87e7 Created 
 ready: pre-failover production commit applied on the standby
 Stopping the original primary and proving the router fails closed.
- Container cigar-wp18-failover-77427-73192-primary-1 Stopping 
- Container cigar-wp18-failover-77427-73192-primary-1 Stopped 
+ Container cigar-wp18-failover-77427-81759-primary-1 Stopping 
+ Container cigar-wp18-failover-77427-81759-primary-1 Stopped 
 Running required production PostgresStore failover phase: outage
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.13s
-[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-b5d54f0c955485e6)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-5118003eee92bfba)
 
 running 1 test
 test production_repository_survives_physical_failover_phase ... ok
@@ -121,25 +123,25 @@ ready: standby promotion completed
 ready: router moved to the promoted primary without losing the acknowledged write
 ready: the same router endpoint admits only the promoted primary
 Rewinding and rejoining the former primary as a physical standby.
- Container cigar-wp18-failover-77427-73192-rejoin-primary-run-87a2f859bb03 Creating 
- Container cigar-wp18-failover-77427-73192-rejoin-primary-run-87a2f859bb03 Created 
-waiting for server to start....2026-07-12 20:04:10.876 UTC [22] LOG:  starting PostgreSQL 18.2 (Debian 18.2-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
-2026-07-12 20:04:10.878 UTC [22] LOG:  listening on Unix socket "/tmp/.s.PGSQL.55434"
-2026-07-12 20:04:10.880 UTC [28] LOG:  database system was shut down at 2026-07-12 20:03:59 UTC
-2026-07-12 20:04:10.883 UTC [22] LOG:  database system is ready to accept connections
+ Container cigar-wp18-failover-77427-81759-rejoin-primary-run-6d7adf64e0a6 Creating 
+ Container cigar-wp18-failover-77427-81759-rejoin-primary-run-6d7adf64e0a6 Created 
+waiting for server to start....2026-07-14 21:22:22.958 UTC [23] LOG:  starting PostgreSQL 18.2 (Debian 18.2-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-07-14 21:22:22.959 UTC [23] LOG:  listening on Unix socket "/tmp/.s.PGSQL.55434"
+2026-07-14 21:22:22.963 UTC [29] LOG:  database system was shut down at 2026-07-14 21:22:12 UTC
+2026-07-14 21:22:22.968 UTC [23] LOG:  database system is ready to accept connections
  done
 server started
-2026-07-12 20:04:10.987 UTC [22] LOG:  received fast shutdown request
-2026-07-12 20:04:10.988 UTC [22] LOG:  aborting any active transactions
-2026-07-12 20:04:10.990 UTC [22] LOG:  background worker "logical replication launcher" (PID 31) exited with exit code 1
-2026-07-12 20:04:10.990 UTC [26] LOG:  shutting down
-2026-07-12 20:04:10.991 UTC [26] LOG:  checkpoint starting: shutdown immediate
-2026-07-12 20:04:10.998 UTC [26] LOG:  checkpoint complete: wrote 6 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 2 recycled; write=0.002 s, sync=0.002 s, total=0.009 s; sync files=8, longest=0.001 s, average=0.001 s; distance=9 kB, estimate=9 kB; lsn=0/3089BB0, redo lsn=0/3089BB0
-2026-07-12 20:04:11.003 UTC [22] LOG:  database system is shut down
+2026-07-14 21:22:23.069 UTC [23] LOG:  received fast shutdown request
+2026-07-14 21:22:23.070 UTC [23] LOG:  aborting any active transactions
+2026-07-14 21:22:23.072 UTC [23] LOG:  background worker "logical replication launcher" (PID 32) exited with exit code 1
+2026-07-14 21:22:23.072 UTC [27] LOG:  shutting down
+2026-07-14 21:22:23.073 UTC [27] LOG:  checkpoint starting: shutdown immediate
+2026-07-14 21:22:23.078 UTC [27] LOG:  checkpoint complete: wrote 6 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 2 recycled; write=0.002 s, sync=0.002 s, total=0.006 s; sync files=8, longest=0.001 s, average=0.001 s; distance=9 kB, estimate=9 kB; lsn=0/308BC68, redo lsn=0/308BC68
+2026-07-14 21:22:23.085 UTC [23] LOG:  database system is shut down
 created an isolated target-only WAL divergence for pg_rewind qualification
 pg_rewind: connected to server
-pg_rewind: servers diverged at WAL location 0/30875D0 on timeline 1
-pg_rewind: rewinding from last common checkpoint at 0/3087558 on timeline 1
+pg_rewind: servers diverged at WAL location 0/3089688 on timeline 1
+pg_rewind: rewinding from last common checkpoint at 0/3089610 on timeline 1
 pg_rewind: reading source file list
 pg_rewind: reading target file list
 pg_rewind: reading WAL in target
@@ -150,8 +152,8 @@ pg_rewind: creating backup label and updating control file
 pg_rewind: syncing target data directory
 pg_rewind: Done!
 former primary rewound; recovery target=standby slot=cigar_rejoined_slot application_name=cigar_standby
- Container cigar-wp18-failover-77427-73192-primary-1 Starting 
- Container cigar-wp18-failover-77427-73192-primary-1 Started 
+ Container cigar-wp18-failover-77427-81759-primary-1 Starting 
+ Container cigar-wp18-failover-77427-81759-primary-1 Started 
 ready: former primary is now a standby
 ready: pg_rewind removed the isolated former-primary divergence
 ready: rewound former primary caught up over physical streaming replication
@@ -159,41 +161,41 @@ ready: rejoined former primary accepted as synchronous standby
 ready: promoted primary uses synchronous_commit=remote_apply
 Running required production PostgresStore failover phase: after
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.13s
-[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-b5d54f0c955485e6)
+[1m[92m     Running[0m tests/postgres_failover.rs (target/debug/deps/postgres_failover-5118003eee92bfba)
 
 running 1 test
 test production_repository_survives_physical_failover_phase ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
 
- Container cigar-wp18-failover-77427-73192-client-run-8ded90d7910c Creating 
- Container cigar-wp18-failover-77427-73192-client-run-8ded90d7910c Created 
+ Container cigar-wp18-failover-77427-81759-client-run-7f695e4cecbf Creating 
+ Container cigar-wp18-failover-77427-81759-client-run-7f695e4cecbf Created 
 ready: post-promotion production commit applied on the rejoined former primary
 ready: both qualification writes visible through the primary-only router
 ready: revision, effect, and claim identifiers remain unique
 ready: failed duplicate transaction left no partial row
 Creating and verifying a streamed physical base backup of the promoted primary.
- Volume cigar-wp18-failover-77427-73192_physical-backup-data Creating 
- Volume cigar-wp18-failover-77427-73192_physical-backup-data Created 
- Container cigar-wp18-failover-77427-73192-physical-backup-run-78026b41e15b Creating 
- Container cigar-wp18-failover-77427-73192-physical-backup-run-78026b41e15b Created 
+ Volume cigar-wp18-failover-77427-81759_physical-backup-data Creating 
+ Volume cigar-wp18-failover-77427-81759_physical-backup-data Created 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-399ea2ea575d Creating 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-399ea2ea575d Created 
 waiting for checkpoint
 31881/31881 kB (100%), 0/1 tablespace
 31881/31881 kB (100%), 1/1 tablespace
 backup successfully verified
 verified exact physical base backup from the promoted primary
- Container cigar-wp18-failover-77427-73192-physical-backup-run-abd127ef69d4 Creating 
- Container cigar-wp18-failover-77427-73192-physical-backup-run-abd127ef69d4 Created 
- Container cigar-wp18-failover-77427-73192-physical-backup-run-f12494b5cb53 Creating 
- Container cigar-wp18-failover-77427-73192-physical-backup-run-f12494b5cb53 Created 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-72e4e5c66864 Creating 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-72e4e5c66864 Created 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-2109cfb3e7ee Creating 
+ Container cigar-wp18-failover-77427-81759-physical-backup-run-2109cfb3e7ee Created 
 Booting the exact base backup to its manifest recovery target without networking.
- Volume cigar-wp18-failover-77427-73192_physical-restore-data Creating 
- Volume cigar-wp18-failover-77427-73192_physical-restore-data Created 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Creating 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Created 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Starting 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Started 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Waiting 
- Container cigar-wp18-failover-77427-73192-physical-restore-1 Healthy 
+ Volume cigar-wp18-failover-77427-81759_physical-restore-data Creating 
+ Volume cigar-wp18-failover-77427-81759_physical-restore-data Created 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Creating 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Created 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Starting 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Started 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Waiting 
+ Container cigar-wp18-failover-77427-81759-physical-restore-1 Healthy 
 Physical restore is writable and CIGAR semantic root/revision exact.
 WP18 failover qualification result=pass production_phases=3 source_stable=true cleanup=1

@@ -930,7 +930,8 @@ fn persist_mutation(
 
 fn read_state(store: &StateDirectoryLock) -> Result<LocalState, CliError> {
     let bytes = store.read_bytes(MAX_STATE_BYTES)?;
-    cigar_canon::parse_strict_json(&bytes).map_err(|_error| CliError::state_corrupt())?;
+    crate::beta_state_compat::decode_frozen_beta_state(&bytes)
+        .map_err(|_error| CliError::state_corrupt())?;
     let state: LocalState =
         serde_json::from_slice(&bytes).map_err(|_error| CliError::state_corrupt())?;
     validate_state(&state)?;

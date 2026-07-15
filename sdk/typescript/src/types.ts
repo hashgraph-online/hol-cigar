@@ -66,6 +66,7 @@ export interface CallOptions {
 
 export interface ClientOptions {
   readonly baseUrl: string | URL;
+  /** Mandatory for remote HTTPS; no ambient or inherited credential source is consulted. */
   readonly bearerToken?: BearerTokenProvider;
   readonly defaultTimeoutMs?: number;
   readonly maxAttempts?: number;

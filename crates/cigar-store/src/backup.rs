@@ -18,11 +18,17 @@ use std::sync::Mutex;
 const MANIFEST_FILE: &str = "manifest.cbor";
 const SIGNATURE_FILE: &str = "manifest.signature.cbor";
 const DATABASE_FILE: &str = "database.sqlite3";
+/// Signed archive member containing the consistent SQLite repository snapshot.
+pub const BACKUP_DATABASE_FILE: &str = DATABASE_FILE;
 const BLOBS_DIRECTORY: &str = "blobs";
+/// Signed archive member containing the external monotonic effect checkpoint.
+pub const BACKUP_EFFECT_CHECKPOINT_FILE: &str = "effect-checkpoints.json";
 const MAX_BACKUP_FILES: usize = 1_000_000;
 const MAX_MANIFEST_BYTES: u64 = 67_108_864;
 const MAX_BLOB_FILE_BYTES: u64 = 67_110_000;
 const COPY_BUFFER_BYTES: usize = 1_048_576;
+
+type EffectCheckpointCapture<'a> = dyn Fn(&Path, &Path) -> Result<(), BackupErrorCode> + 'a;
 
 /// Stable content-free backup and restore failure categories.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -96,7 +102,7 @@ pub struct BackupFile {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackupManifest {
-    /// Backup manifest format version.
+    /// Backup manifest format: one is metadata/blobs; two also binds the effect checkpoint.
     pub format_version: u8,
     /// SQLite schema migration sequence.
     pub schema_version: u64,
@@ -235,6 +241,35 @@ pub fn create_backup<P: KeyProvider>(
         provider,
         identity,
         None,
+        None,
+    )
+}
+
+/// Creates a format-two backup whose signed inventory includes an exact external effect checkpoint.
+///
+/// The capture callback runs while the SQLite immediate transaction excludes all metadata writers.
+/// It must acquire the external checkpoint lock, prove that the checkpoint completely matches the
+/// supplied immutable database snapshot, and create the destination file durably.
+pub fn create_backup_with_effect_checkpoint<P, F>(
+    store: &SqliteStore,
+    blob_root: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    provider: &P,
+    identity: BackupIdentity<'_>,
+    capture: F,
+) -> Result<BackupManifest, BackupError>
+where
+    P: KeyProvider,
+    F: Fn(&Path, &Path) -> Result<(), BackupErrorCode>,
+{
+    create_backup_internal(
+        store,
+        blob_root.as_ref(),
+        destination.as_ref(),
+        provider,
+        identity,
+        Some(&capture),
+        None,
     )
 }
 
@@ -253,6 +288,7 @@ pub fn create_backup_with_failpoints<P: KeyProvider>(
         destination.as_ref(),
         provider,
         identity,
+        None,
         Some(failpoints),
     )
 }
@@ -263,6 +299,7 @@ fn create_backup_internal<P: KeyProvider>(
     destination: &Path,
     provider: &P,
     identity: BackupIdentity<'_>,
+    checkpoint_capture: Option<&EffectCheckpointCapture<'_>>,
     failpoints: Option<&BackupFailpoints>,
 ) -> Result<BackupManifest, BackupError> {
     if destination.exists() {
@@ -287,6 +324,13 @@ fn create_backup_internal<P: KeyProvider>(
             let blobs = temporary.path().join(BLOBS_DIRECTORY);
             copy_tree(blob_root, &blobs)?;
             trip_backup(failpoints, BackupFailpoint::AfterBlobCopy)?;
+            if let Some(capture) = checkpoint_capture {
+                capture(
+                    &database,
+                    &temporary.path().join(BACKUP_EFFECT_CHECKPOINT_FILE),
+                )
+                .map_err(BackupError::new)?;
+            }
             Ok(revision.0)
         })?;
     let files = inventory_data_files(temporary.path())?;
@@ -301,7 +345,7 @@ fn create_backup_internal<P: KeyProvider>(
     let canonical_root = inventory_root(&files)?;
     let schema_version = sqlite_schema_version(&database)?;
     let manifest = BackupManifest {
-        format_version: 1,
+        format_version: if checkpoint_capture.is_some() { 2 } else { 1 },
         schema_version,
         repository_revision,
         created_at_unix_nanos: identity.created_at_unix_nanos,
@@ -633,7 +677,14 @@ fn restore_signature(value: PersistedSignature) -> Result<SignatureEnvelope, Bac
 }
 
 fn validate_manifest(manifest: &BackupManifest) -> Result<(), BackupError> {
-    if manifest.format_version != 1
+    let checkpoint_count = manifest
+        .files
+        .iter()
+        .filter(|file| file.path == BACKUP_EFFECT_CHECKPOINT_FILE)
+        .count();
+    if !matches!(manifest.format_version, 1 | 2)
+        || (manifest.format_version == 1 && checkpoint_count != 0)
+        || (manifest.format_version == 2 && checkpoint_count != 1)
         || manifest.files.is_empty()
         || manifest.files.len() > MAX_BACKUP_FILES
         || manifest.key_references.is_empty()
@@ -785,9 +836,11 @@ fn sqlite_revision(database: &Path) -> Result<u64, BackupError> {
         rusqlite::Connection::open_with_flags(database, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(sqlite_error)?;
     connection
-        .query_row("SELECT MAX(revision) FROM state_snapshots", [], |row| {
-            row.get::<_, Option<i64>>(0)
-        })
+        .query_row(
+            "SELECT MAX(revision) FROM cigar_repository_revisions_v4",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )
         .map_err(sqlite_error)?
         .and_then(|value| u64::try_from(value).ok())
         .ok_or_else(|| BackupError::new(BackupErrorCode::Corrupt))
@@ -804,7 +857,16 @@ fn normalize_backup_database(database: &Path) -> Result<(), BackupError> {
         return Err(BackupError::new(BackupErrorCode::Unavailable));
     }
     connection
-        .execute_batch("PRAGMA synchronous = FULL;")
+        .execute_batch(
+            "PRAGMA synchronous = FULL;
+             BEGIN IMMEDIATE;
+             DELETE FROM atom_projection_fts;
+             DELETE FROM atom_projection_rows;
+             DELETE FROM atom_projection_activation;
+             DELETE FROM atom_projection_generations;
+             COMMIT;
+             VACUUM;",
+        )
         .map_err(sqlite_error)
 }
 
@@ -1049,8 +1111,9 @@ fn io_error(_error: std::io::Error) -> BackupError {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackupErrorCode, BackupFailpoint, BackupFailpoints, BackupIdentity, DATABASE_FILE,
-        copy_tree, create_backup, create_backup_with_failpoints, restore_backup,
+        BACKUP_EFFECT_CHECKPOINT_FILE, BackupErrorCode, BackupFailpoint, BackupFailpoints,
+        BackupIdentity, DATABASE_FILE, copy_tree, create_backup,
+        create_backup_with_effect_checkpoint, create_backup_with_failpoints, restore_backup,
         restore_backup_trusted, restore_backup_with_failpoints, verify_backup,
         verify_backup_trusted,
     };
@@ -1125,6 +1188,79 @@ mod tests {
         );
         assert!(matches!(
             result,
+            Err(error) if error.code() == BackupErrorCode::Corrupt
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn format_two_backup_signs_exact_effect_checkpoint_member()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let store = SqliteStore::open(directory.path().join("source.sqlite3"))?;
+        let provider = MemoryKeyProvider::default();
+        let signing = provider.create(CreateKeyRequest {
+            tenant: "tenant-checkpoint".to_owned(),
+            purpose: KeyPurpose::Signing,
+            algorithm: KeyAlgorithm::Ed25519,
+            created_at: 1,
+            activated_at: 1,
+        })?;
+        let archive = directory.path().join("archive");
+        let checkpoint_bytes = br#"{"schema_version":"test-checkpoint","generation":0}"#;
+        let manifest = create_backup_with_effect_checkpoint(
+            &store,
+            directory.path().join("empty-blobs"),
+            &archive,
+            &provider,
+            BackupIdentity {
+                signing_key: &signing.key_ref,
+                tenant: "tenant-checkpoint",
+                signer: "backup-operator",
+                created_at_unix_nanos: 2,
+            },
+            |_database, checkpoint| {
+                super::write_new_synced(checkpoint, checkpoint_bytes).map_err(|error| error.code())
+            },
+        )?;
+        assert_eq!(manifest.format_version, 2);
+        assert_eq!(
+            manifest
+                .files
+                .iter()
+                .filter(|file| file.path == BACKUP_EFFECT_CHECKPOINT_FILE)
+                .count(),
+            1
+        );
+        assert_eq!(
+            fs::read(archive.join(BACKUP_EFFECT_CHECKPOINT_FILE))?,
+            checkpoint_bytes
+        );
+        assert_eq!(
+            verify_backup(
+                &archive,
+                &provider,
+                "tenant-checkpoint",
+                "backup-operator",
+                3,
+            )?,
+            manifest
+        );
+
+        let substituted = directory.path().join("substituted");
+        copy_tree(&archive, &substituted)?;
+        fs::write(
+            substituted.join(BACKUP_EFFECT_CHECKPOINT_FILE),
+            b"substituted-checkpoint",
+        )?;
+        assert!(matches!(
+            verify_backup(
+                &substituted,
+                &provider,
+                "tenant-checkpoint",
+                "backup-operator",
+                3,
+            ),
             Err(error) if error.code() == BackupErrorCode::Corrupt
         ));
         Ok(())

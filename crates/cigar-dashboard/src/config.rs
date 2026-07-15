@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fmt;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read as _;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Component, Path, PathBuf};
 
@@ -182,18 +183,54 @@ impl DashboardConfig {
     /// Reads, bounds, parses, and validates one dashboard TOML file.
     pub fn from_file(path: &Path) -> Result<Self, DashboardConfigError> {
         normalized_absolute(path)?;
-        let metadata = fs::metadata(path)
+        let before = fs::symlink_metadata(path)
             .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
-        if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_CONFIG_BYTES {
+        if !before.is_file()
+            || before.file_type().is_symlink()
+            || before.len() == 0
+            || before.len() > MAX_CONFIG_BYTES
+            || !safe_owned_regular(&before)
+        {
             return Err(DashboardConfigError::new(
                 DashboardConfigErrorCode::InvalidSyntax,
             ));
         }
-        let bytes = fs::read(path)
+        let mut file = File::open(path)
             .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
+        let opened = file
+            .metadata()
+            .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
+        if !safe_owned_regular(&opened) || !same_file(&before, &opened) {
+            return Err(DashboardConfigError::new(
+                DashboardConfigErrorCode::InvalidPath,
+            ));
+        }
+        let mut bytes = Vec::with_capacity(usize::try_from(opened.len()).map_err(|_error| {
+            DashboardConfigError::new(DashboardConfigErrorCode::InvalidSyntax)
+        })?);
+        file.by_ref()
+            .take(MAX_CONFIG_BYTES.saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
+        let opened_after = file
+            .metadata()
+            .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
+        let after = fs::symlink_metadata(path)
+            .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::Unavailable))?;
+        if bytes.is_empty()
+            || bytes.len() > usize::try_from(MAX_CONFIG_BYTES).unwrap_or(usize::MAX)
+            || !same_file(&opened, &after)
+            || !same_file(&opened, &opened_after)
+        {
+            return Err(DashboardConfigError::new(
+                DashboardConfigErrorCode::InvalidPath,
+            ));
+        }
         let source = std::str::from_utf8(&bytes)
             .map_err(|_error| DashboardConfigError::new(DashboardConfigErrorCode::InvalidSyntax))?;
-        Self::from_toml(source)
+        let config = Self::from_toml(source)?;
+        config.validate_filesystem()?;
+        Ok(config)
     }
 
     /// Parses strict TOML and validates every local-only and bounded-resource invariant.
@@ -226,6 +263,329 @@ impl DashboardConfig {
         validate_path_separation(self)?;
         Ok(())
     }
+
+    /// Verifies the configured local filesystem objects and their canonical separation.
+    ///
+    /// This read-only preflight is intentionally part of `from_file`, so `--check-config` cannot
+    /// report success for a configuration that would later fail closed after binding a listener.
+    fn validate_filesystem(&self) -> Result<(), DashboardConfigError> {
+        let runtime =
+            canonical_directory(&self.server.runtime_directory, DirectoryPolicy::Private)?;
+        let assets = canonical_directory(&self.server.asset_directory, DirectoryPolicy::Ordinary)?;
+        let token = canonical_regular_file(
+            &self.target.bearer_token_file,
+            RegularFilePolicy::OwnerPrivate,
+        )?;
+        let token_parent = self
+            .target
+            .bearer_token_file
+            .parent()
+            .ok_or_else(invalid_path)?;
+        let _token_parent = canonical_directory(token_parent, DirectoryPolicy::NotPeerWritable)?;
+
+        let history_parent = self
+            .history
+            .database_file
+            .parent()
+            .ok_or_else(invalid_path)?;
+        let history_parent = canonical_directory(history_parent, DirectoryPolicy::Private)?;
+        let history =
+            canonical_optional_private_file(&self.history.database_file, &history_parent)?;
+
+        let workspace = self
+            .control
+            .workspace_root
+            .as_deref()
+            .map(|path| canonical_directory(path, DirectoryPolicy::Ordinary))
+            .transpose()?;
+        let registry = self
+            .control
+            .profile_registry
+            .as_deref()
+            .map(|path| canonical_regular_file(path, RegularFilePolicy::ImmutableInput))
+            .transpose()?;
+        let evidence = self
+            .control
+            .evidence_directory
+            .as_deref()
+            .map(canonical_private_directory_or_missing)
+            .transpose()?;
+        let sandbox = self
+            .control
+            .sandbox_directory
+            .as_deref()
+            .map(canonical_private_directory_or_missing)
+            .transpose()?;
+
+        let directories = [
+            Some(runtime.as_path()),
+            Some(assets.as_path()),
+            workspace.as_deref(),
+            evidence.as_deref(),
+            sandbox.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        let mut unique_directories = BTreeSet::new();
+        if directories
+            .iter()
+            .any(|path| !unique_directories.insert((*path).to_path_buf()))
+        {
+            return Err(invalid_path());
+        }
+
+        let mut unique_files = BTreeSet::new();
+        for path in [
+            Some(token.as_path()),
+            Some(history.as_path()),
+            registry.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !unique_files.insert(path.to_path_buf()) {
+                return Err(invalid_path());
+            }
+        }
+
+        if paths_overlap(&runtime, &assets)
+            || history.starts_with(&runtime)
+            || token.starts_with(&runtime)
+            || evidence.as_ref().is_some_and(|root| {
+                paths_overlap(root, &runtime)
+                    || history.starts_with(root)
+                    || token.starts_with(root)
+            })
+            || sandbox.as_ref().is_some_and(|root| {
+                paths_overlap(root, &runtime)
+                    || history.starts_with(root)
+                    || token.starts_with(root)
+            })
+            || evidence
+                .as_ref()
+                .zip(sandbox.as_ref())
+                .is_some_and(|(left, right)| paths_overlap(left, right))
+            || workspace.as_ref().is_some_and(|source| {
+                evidence
+                    .as_ref()
+                    .is_some_and(|root| paths_overlap(source, root))
+                    || sandbox
+                        .as_ref()
+                        .is_some_and(|root| paths_overlap(source, root))
+            })
+        {
+            return Err(invalid_path());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DirectoryPolicy {
+    Ordinary,
+    NotPeerWritable,
+    Private,
+}
+
+#[derive(Clone, Copy)]
+enum RegularFilePolicy {
+    ImmutableInput,
+    OwnerPrivate,
+}
+
+fn invalid_path() -> DashboardConfigError {
+    DashboardConfigError::new(DashboardConfigErrorCode::InvalidPath)
+}
+
+fn canonical_directory(
+    path: &Path,
+    policy: DirectoryPolicy,
+) -> Result<PathBuf, DashboardConfigError> {
+    let before = fs::symlink_metadata(path).map_err(|_error| invalid_path())?;
+    if !directory_metadata_accepted(&before, policy) {
+        return Err(invalid_path());
+    }
+    let canonical = path.canonicalize().map_err(|_error| invalid_path())?;
+    let after = fs::symlink_metadata(path).map_err(|_error| invalid_path())?;
+    let resolved = fs::symlink_metadata(&canonical).map_err(|_error| invalid_path())?;
+    if !directory_metadata_accepted(&after, policy)
+        || !directory_metadata_accepted(&resolved, policy)
+        || !same_identity(&before, &after)
+        || !same_identity(&before, &resolved)
+    {
+        return Err(invalid_path());
+    }
+    Ok(canonical)
+}
+
+fn canonical_regular_file(
+    path: &Path,
+    policy: RegularFilePolicy,
+) -> Result<PathBuf, DashboardConfigError> {
+    let before = fs::symlink_metadata(path).map_err(|_error| invalid_path())?;
+    if !regular_metadata_accepted(&before, policy) {
+        return Err(invalid_path());
+    }
+    let canonical = path.canonicalize().map_err(|_error| invalid_path())?;
+    let after = fs::symlink_metadata(path).map_err(|_error| invalid_path())?;
+    let resolved = fs::symlink_metadata(&canonical).map_err(|_error| invalid_path())?;
+    if !regular_metadata_accepted(&after, policy)
+        || !regular_metadata_accepted(&resolved, policy)
+        || !same_identity(&before, &after)
+        || !same_identity(&before, &resolved)
+    {
+        return Err(invalid_path());
+    }
+    Ok(canonical)
+}
+
+#[cfg(unix)]
+fn directory_metadata_accepted(metadata: &fs::Metadata, policy: DirectoryPolicy) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    let mode = metadata.mode() & 0o777;
+    let owner = metadata.uid() == rustix::process::geteuid().as_raw();
+    match policy {
+        DirectoryPolicy::Ordinary => true,
+        DirectoryPolicy::NotPeerWritable => mode & 0o022 == 0,
+        DirectoryPolicy::Private => owner && mode == 0o700,
+    }
+}
+
+#[cfg(not(unix))]
+fn directory_metadata_accepted(_metadata: &fs::Metadata, _policy: DirectoryPolicy) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn regular_metadata_accepted(metadata: &fs::Metadata, policy: RegularFilePolicy) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() == 0
+        || metadata.nlink() != 1
+    {
+        return false;
+    }
+    let owner = metadata.uid() == rustix::process::geteuid().as_raw();
+    let mode = metadata.mode() & 0o777;
+    match policy {
+        RegularFilePolicy::ImmutableInput => mode & 0o022 == 0,
+        RegularFilePolicy::OwnerPrivate => owner && mode & 0o077 == 0,
+    }
+}
+
+#[cfg(not(unix))]
+fn regular_metadata_accepted(_metadata: &fs::Metadata, _policy: RegularFilePolicy) -> bool {
+    false
+}
+
+fn canonical_optional_private_file(
+    path: &Path,
+    canonical_parent: &Path,
+) -> Result<PathBuf, DashboardConfigError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !private_file_metadata_accepted(&metadata) {
+                return Err(invalid_path());
+            }
+            let canonical = path.canonicalize().map_err(|_error| invalid_path())?;
+            let after = fs::symlink_metadata(path).map_err(|_error| invalid_path())?;
+            let resolved = fs::symlink_metadata(&canonical).map_err(|_error| invalid_path())?;
+            if !private_file_metadata_accepted(&after)
+                || !private_file_metadata_accepted(&resolved)
+                || !same_identity(&metadata, &after)
+                || !same_identity(&metadata, &resolved)
+            {
+                return Err(invalid_path());
+            }
+            Ok(canonical)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let name = path.file_name().ok_or_else(invalid_path)?;
+            Ok(canonical_parent.join(name))
+        }
+        Err(_error) => Err(invalid_path()),
+    }
+}
+
+#[cfg(unix)]
+fn private_file_metadata_accepted(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    metadata.is_file()
+        && !metadata.file_type().is_symlink()
+        && metadata.uid() == rustix::process::geteuid().as_raw()
+        && metadata.nlink() == 1
+        && metadata.mode() & 0o077 == 0
+}
+
+#[cfg(not(unix))]
+fn private_file_metadata_accepted(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn same_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_identity(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+    false
+}
+
+fn canonical_private_directory_or_missing(path: &Path) -> Result<PathBuf, DashboardConfigError> {
+    match fs::symlink_metadata(path) {
+        Ok(_metadata) => canonical_directory(path, DirectoryPolicy::Private),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let parent = path.parent().ok_or_else(invalid_path)?;
+            let parent = canonical_directory(parent, DirectoryPolicy::Private)?;
+            let name = path.file_name().ok_or_else(invalid_path)?;
+            Ok(parent.join(name))
+        }
+        Err(_error) => Err(invalid_path()),
+    }
+}
+
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    left.starts_with(right) || right.starts_with(left)
+}
+
+#[cfg(unix)]
+fn safe_owned_regular(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    metadata.is_file()
+        && metadata.nlink() == 1
+        && metadata.uid() == rustix::process::geteuid().as_raw()
+        && metadata.mode() & 0o022 == 0
+}
+
+#[cfg(not(unix))]
+fn safe_owned_regular(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn same_file(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev()
+        && left.ino() == right.ino()
+        && left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+}
+
+#[cfg(not(unix))]
+fn same_file(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+    false
 }
 
 fn validate_server(config: &DashboardServerConfig) -> Result<(), DashboardConfigError> {
@@ -401,6 +761,9 @@ fn normalized_absolute(path: &Path) -> Result<(), DashboardConfigError> {
 #[cfg(test)]
 mod tests {
     use super::{DashboardConfig, DashboardConfigErrorCode};
+    use std::fs;
+    #[cfg(unix)]
+    use std::path::{Path, PathBuf};
 
     const VALID: &str = include_str!("../../../tests/dashboard/fixtures/dashboard-valid.toml");
     const NON_LOOPBACK: &str =
@@ -434,6 +797,15 @@ mod tests {
             error.map_err(|failure| failure.code()),
             Err(DashboardConfigErrorCode::InvalidSyntax)
         );
+
+        let duplicate = VALID.replace(
+            "request_timeout_ms = 30000",
+            "request_timeout_ms = 30000\nrequest_timeout_ms = 30001",
+        );
+        assert_eq!(
+            DashboardConfig::from_toml(&duplicate).map_err(|failure| failure.code()),
+            Err(DashboardConfigErrorCode::InvalidSyntax)
+        );
     }
 
     #[test]
@@ -444,5 +816,283 @@ mod tests {
             error.map_err(|failure| failure.code()),
             Err(DashboardConfigErrorCode::IncompleteControlConfiguration)
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn config_file_rejects_symlinks_hardlinks_and_writable_peers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::{PermissionsExt as _, symlink};
+
+        let directory = tempfile::tempdir()?;
+        let source = directory.path().join("dashboard.toml");
+        fs::write(&source, VALID)?;
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o600))?;
+        let linked = directory.path().join("linked.toml");
+        fs::hard_link(&source, &linked)?;
+        assert!(DashboardConfig::from_file(&source).is_err());
+        fs::remove_file(&linked)?;
+
+        let alias = directory.path().join("alias.toml");
+        symlink(&source, &alias)?;
+        assert!(DashboardConfig::from_file(&alias).is_err());
+
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o620))?;
+        assert!(DashboardConfig::from_file(&source).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn endpoint_profile_rejects_dns_mapped_ipv6_credentials_and_url_suffixes() {
+        for endpoint in [
+            "http://localhost:7443/",
+            "http://0.0.0.0:7443/",
+            "http://[::ffff:127.0.0.1]:7443/",
+            "https://127.0.0.1:7443/",
+            "http://operator@127.0.0.1:7443/",
+            "http://operator:secret@127.0.0.1:7443/",
+            "http://127.0.0.1:7443/api",
+            "http://127.0.0.1:7443/?debug=true",
+            "http://127.0.0.1:7443/#secret",
+        ] {
+            let source = VALID.replace("http://127.0.0.1:7443/", endpoint);
+            assert_eq!(
+                DashboardConfig::from_toml(&source).map_err(|failure| failure.code()),
+                Err(DashboardConfigErrorCode::UnsafeEndpoint),
+                "endpoint unexpectedly accepted: {endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn relative_traversal_zero_excessive_and_overflow_values_fail_closed() {
+        let relative = VALID.replace(
+            "/tmp/cigar-dashboard/runtime",
+            "relative/../dashboard/runtime",
+        );
+        assert_eq!(
+            DashboardConfig::from_toml(&relative).map_err(|failure| failure.code()),
+            Err(DashboardConfigErrorCode::InvalidPath)
+        );
+
+        for (accepted, rejected) in [
+            ("max_sse_subscribers = 16", "max_sse_subscribers = 0"),
+            ("max_concurrent_runs = 1", "max_concurrent_runs = 9"),
+            ("max_age_days = 30", "max_age_days = 3651"),
+            ("connect_timeout_ms = 2000", "connect_timeout_ms = 99"),
+        ] {
+            let source = VALID.replace(accepted, rejected);
+            assert_eq!(
+                DashboardConfig::from_toml(&source).map_err(|failure| failure.code()),
+                Err(DashboardConfigErrorCode::InvalidLimit),
+                "limit unexpectedly accepted: {rejected}"
+            );
+        }
+
+        let overflow = VALID.replace("max_bytes = 1073741824", "max_bytes = 18446744073709551616");
+        assert_eq!(
+            DashboardConfig::from_toml(&overflow).map_err(|failure| failure.code()),
+            Err(DashboardConfigErrorCode::InvalidSyntax)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_configuration_preflight_accepts_a_separated_private_topology()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = FilesystemFixture::new(true)?;
+        let config = DashboardConfig::from_file(&fixture.config_file)?;
+        assert!(config.control.enabled);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn filesystem_preflight_rejects_unsafe_token_and_state_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let fixture = FilesystemFixture::new(false)?;
+        fs::set_permissions(&fixture.token_file, fs::Permissions::from_mode(0o640))?;
+        assert_invalid_path(&fixture.config_file);
+
+        let fixture = FilesystemFixture::new(false)?;
+        fs::set_permissions(
+            &fixture.history_directory,
+            fs::Permissions::from_mode(0o770),
+        )?;
+        assert_invalid_path(&fixture.config_file);
+
+        let fixture = FilesystemFixture::new(false)?;
+        let second_link = fixture.root.path().join("token-hard-link");
+        fs::hard_link(&fixture.token_file, second_link)?;
+        assert_invalid_path(&fixture.config_file);
+
+        let fixture = FilesystemFixture::new(false)?;
+        let original_runtime = fixture.root.path().join("runtime-original");
+        fs::rename(&fixture.runtime_directory, &original_runtime)?;
+        std::os::unix::fs::symlink(&original_runtime, &fixture.runtime_directory)?;
+        assert_invalid_path(&fixture.config_file);
+
+        let fixture = FilesystemFixture::new(false)?;
+        let nested_token = fixture.runtime_directory.join("daemon.token");
+        fs::write(&nested_token, b"overlapping-token\n")?;
+        fs::set_permissions(&nested_token, fs::Permissions::from_mode(0o600))?;
+        fixture.replace_path(&fixture.token_file, &nested_token)?;
+        assert_invalid_path(&fixture.config_file);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_aliases_and_evidence_inside_source_fail_closed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::{PermissionsExt as _, symlink};
+
+        let fixture = FilesystemFixture::new(false)?;
+        let alias_parent = fixture.root.path().join("alias-parent");
+        symlink(fixture.root.path(), &alias_parent)?;
+        let aliased_assets = alias_parent.join("runtime");
+        fixture.replace_path(&fixture.asset_directory, &aliased_assets)?;
+        assert_invalid_path(&fixture.config_file);
+
+        let fixture = FilesystemFixture::new(true)?;
+        let workspace = fixture
+            .workspace_directory
+            .as_ref()
+            .ok_or("missing workspace")?;
+        let nested_evidence = workspace.join("evidence");
+        fs::create_dir(&nested_evidence)?;
+        fs::set_permissions(&nested_evidence, fs::Permissions::from_mode(0o700))?;
+        let alias = fixture.root.path().join("source-alias");
+        symlink(workspace, &alias)?;
+        let hidden_nested_evidence = alias.join("evidence");
+        fixture.replace_path(
+            fixture
+                .evidence_directory
+                .as_ref()
+                .ok_or("missing evidence")?,
+            &hidden_nested_evidence,
+        )?;
+        assert_invalid_path(&fixture.config_file);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn assert_invalid_path(path: &Path) {
+        assert_eq!(
+            DashboardConfig::from_file(path).map_err(|failure| failure.code()),
+            Err(DashboardConfigErrorCode::InvalidPath)
+        );
+    }
+
+    #[cfg(unix)]
+    struct FilesystemFixture {
+        root: tempfile::TempDir,
+        config_file: PathBuf,
+        runtime_directory: PathBuf,
+        asset_directory: PathBuf,
+        token_file: PathBuf,
+        history_directory: PathBuf,
+        workspace_directory: Option<PathBuf>,
+        evidence_directory: Option<PathBuf>,
+    }
+
+    #[cfg(unix)]
+    impl FilesystemFixture {
+        fn new(control_enabled: bool) -> Result<Self, Box<dyn std::error::Error>> {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let root = tempfile::tempdir()?;
+            fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700))?;
+            let runtime_directory = root.path().join("runtime");
+            let asset_directory = root.path().join("assets");
+            let credential_directory = root.path().join("credentials");
+            let history_directory = root.path().join("history");
+            for directory in [
+                &runtime_directory,
+                &asset_directory,
+                &credential_directory,
+                &history_directory,
+            ] {
+                fs::create_dir(directory)?;
+                fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
+            }
+            let token_file = credential_directory.join("cigard.token");
+            fs::write(&token_file, b"local-dashboard-test-token\n")?;
+            fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600))?;
+            let history_file = history_directory.join("history.sqlite3");
+
+            let mut source = VALID
+                .replace(
+                    "/tmp/cigar-dashboard/runtime",
+                    &path_text(&runtime_directory)?,
+                )
+                .replace("/tmp/cigar-dashboard/assets", &path_text(&asset_directory)?)
+                .replace(
+                    "/tmp/cigar-dashboard/cigard.token",
+                    &path_text(&token_file)?,
+                )
+                .replace(
+                    "/tmp/cigar-dashboard/history.sqlite3",
+                    &path_text(&history_file)?,
+                );
+
+            let (workspace_directory, evidence_directory) = if control_enabled {
+                let workspace = root.path().join("workspace");
+                let evidence = root.path().join("evidence");
+                let sandbox = root.path().join("sandbox");
+                for directory in [&workspace, &evidence, &sandbox] {
+                    fs::create_dir(directory)?;
+                    fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
+                }
+                let registry = root.path().join("profiles.json");
+                fs::write(&registry, b"{}\n")?;
+                fs::set_permissions(&registry, fs::Permissions::from_mode(0o600))?;
+                source = source.replace(
+                    "enabled = false\nmax_concurrent_runs = 1",
+                    &format!(
+                        "enabled = true\nworkspace_root = \"{}\"\nprofile_registry = \"{}\"\nevidence_directory = \"{}\"\nsandbox_directory = \"{}\"\nmax_concurrent_runs = 1",
+                        path_text(&workspace)?,
+                        path_text(&registry)?,
+                        path_text(&evidence)?,
+                        path_text(&sandbox)?,
+                    ),
+                );
+                (Some(workspace), Some(evidence))
+            } else {
+                (None, None)
+            };
+
+            let config_file = root.path().join("dashboard.toml");
+            fs::write(&config_file, source)?;
+            fs::set_permissions(&config_file, fs::Permissions::from_mode(0o600))?;
+            Ok(Self {
+                root,
+                config_file,
+                runtime_directory,
+                asset_directory,
+                token_file,
+                history_directory,
+                workspace_directory,
+                evidence_directory,
+            })
+        }
+
+        fn replace_path(&self, from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+            let source = fs::read_to_string(&self.config_file)?;
+            let source = source.replace(&path_text(from)?, &path_text(to)?);
+            fs::write(&self.config_file, source)?;
+            Ok(())
+        }
+    }
+
+    #[cfg(unix)]
+    fn path_text(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        let value = path.to_str().ok_or("test path is not UTF-8")?;
+        if value.contains(['"', '\\']) {
+            return Err("test path cannot be embedded in TOML".into());
+        }
+        Ok(value.to_owned())
     }
 }

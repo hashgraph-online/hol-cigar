@@ -4,7 +4,7 @@
   "title": "CIGAR installed-candidate driver receipt",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "status", "artifact_id", "artifact_sha256", "product_version", "context_abi", "checks"],
+  "required": ["schema_version", "status", "artifact_id", "artifact_sha256", "product_version", "context_abi", "source_revision", "runtime_profile", "installed_workflow", "process_enforcement", "checks"],
   "properties": {
     "schema_version": {"const": "cigar.installed-driver.v1"},
     "status": {"const": "passed"},
@@ -12,6 +12,23 @@
     "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "product_version": {"type": "string", "minLength": 1},
     "context_abi": {"const": "cigar.context.v1"},
+    "source_revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "runtime_profile": {"const": "cigar.full.local-macos-aarch64.v1"},
+    "installed_workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "full_surface_sha256", "semantic_identity_sha256", "cigar_sha256", "cigard_sha256", "binding_sha256", "no_egress_enforcement"],
+      "properties": {
+        "profile": {"const": "cigar.full.offline-read-only.macos-aarch64.v1"},
+        "full_surface_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "semantic_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigar_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "cigard_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "no_egress_enforcement": {"const": "darwin-seatbelt-deny-network-mach-confine-writes-protect-candidate-workspace-unix-v1"}
+      }
+    },
+    "process_enforcement": {"const": "darwin-seatbelt-deny-process-fork-signal-v1"},
     "checks": {
       "type": "array",
       "minItems": 1,

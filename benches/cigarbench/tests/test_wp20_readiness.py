@@ -444,6 +444,43 @@ class Wp20ReadinessTests(unittest.TestCase):
         self.assertEqual(output.read_bytes(), b"receipt\n")
         self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
 
+    def test_shared_external_workspace_is_private_create_new_and_unambiguous(
+        self,
+    ) -> None:
+        evidence = self.base / "shared-evidence"
+        receipt = {
+            "schema_version": "test-only",
+            "harness_test_evidence": {"total_tests": 3},
+        }
+        arguments = [
+            "--root",
+            str(self.root),
+            "--out",
+            "wp20/readiness.json",
+            "--evidence-dir",
+            str(evidence),
+        ]
+        with (
+            mock.patch.object(MODULE, "run_harness_tests", return_value=[]),
+            mock.patch.object(MODULE, "git_source_binding", return_value={}),
+            mock.patch.object(MODULE, "build_receipt", return_value=receipt),
+        ):
+            self.assertEqual(MODULE.main(arguments), 0)
+            with self.assertRaisesRegex(MODULE.ReadinessError, "unsafe"):
+                MODULE.main(arguments)
+        output = evidence / "wp20" / "readiness.json"
+        self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o400)
+        self.assertEqual(load_json(output), receipt)
+
+        other = self.base / "other-evidence"
+        with mock.patch.dict(
+            os.environ, {"CIGAR_EVIDENCE_DIR": str(other)}, clear=False
+        ):
+            with self.assertRaisesRegex(MODULE.ReadinessError, "conflicts"):
+                MODULE.main(arguments)
+        self.assertFalse(other.exists())
+
     def test_test_subprocess_environment_is_sanitized_and_metadata_is_recorded(
         self,
     ) -> None:
@@ -525,7 +562,7 @@ class Wp20ReadinessTests(unittest.TestCase):
     def test_sanitized_demo_suite_integration_passes(self) -> None:
         result = MODULE._run_test_suite(ROOT, "demos", "demos/tests")
         self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["tests"], 9)
+        self.assertEqual(result["tests"], 11)
         self.assertRegex(result["command_sha256"], r"^[0-9a-f]{64}$")
 
     def test_generated_receipt_validates_against_registered_schema(self) -> None:

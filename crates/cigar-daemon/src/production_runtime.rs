@@ -112,9 +112,21 @@ struct RepositoryOperationalState {
     workers: Arc<DaemonWorkers>,
     blocking_pool: Arc<BlockingPool>,
     clock: Arc<dyn ProductionUnixClock>,
+    telemetry: Arc<DaemonTelemetry>,
 }
 
 impl RepositoryOperationalState {
+    fn observe_runtime(&self) -> Result<(), LifecycleError> {
+        let queues = self
+            .workers
+            .runtime()
+            .metrics()
+            .map_err(|_error| LifecycleError::action_failed())?;
+        self.telemetry
+            .observe_runtime(&queues, self.blocking_pool.metrics());
+        Ok(())
+    }
+
     fn metadata_store(&self) -> Result<(), LifecycleError> {
         let scope = ServiceListScope::new(self.system_tenant.clone(), HEALTH_NAMESPACE, None)
             .map_err(|_error| LifecycleError::action_failed())?;
@@ -189,6 +201,7 @@ impl RepositoryOperationalState {
                         &StoreCancellation::default(),
                     )
                     .map_err(|_error| LifecycleError::action_failed())?;
+                self.telemetry.observe_worker_lease(kind, 0);
             }
         }
         Ok(())
@@ -248,6 +261,8 @@ impl RepositoryOperationalState {
                         .map_err(|_error| LifecycleError::action_failed())?;
                 }
             }
+            self.telemetry
+                .observe_worker_lease(kind, expiry.saturating_sub(now) / 1_000_000_000);
         }
         Ok(())
     }
@@ -292,8 +307,10 @@ impl RepositoryOperationalState {
                 return Err(LifecycleError::action_failed());
             }
             self.checkpoint_state(&locator, &state, state.cursor().to_vec(), now, expiry)?;
+            self.telemetry
+                .observe_worker_lease(kind, expiry.saturating_sub(now) / 1_000_000_000);
         }
-        Ok(())
+        self.observe_runtime()
     }
 
     fn checkpoint_job(&self, kind: WorkerKind, job: &WorkerJob) -> Result<(), LifecycleError> {
@@ -314,7 +331,10 @@ impl RepositoryOperationalState {
             job.record_id.as_str().as_bytes().to_vec(),
             now,
             expiry,
-        )
+        )?;
+        self.telemetry
+            .observe_worker_lease(kind, expiry.saturating_sub(now) / 1_000_000_000);
+        self.observe_runtime()
     }
 
     fn release_all(&self) -> Result<(), LifecycleError> {
@@ -341,6 +361,7 @@ impl RepositoryOperationalState {
                         &StoreCancellation::default(),
                     )
                     .map_err(|_error| LifecycleError::action_failed())?;
+                self.telemetry.observe_worker_lease(kind, 0);
             }
         }
         Ok(())
@@ -368,6 +389,14 @@ impl RepositoryOperationalState {
                 && state
                     .lease_expires_at_unix_nanos()
                     .is_some_and(|expiry| expiry > now);
+            self.telemetry.observe_worker_lease(
+                kind,
+                state
+                    .lease_expires_at_unix_nanos()
+                    .unwrap_or(now)
+                    .saturating_sub(now)
+                    / 1_000_000_000,
+            );
             if !fresh || !live {
                 return Err(LifecycleError::action_failed());
             }
@@ -677,6 +706,7 @@ where
         workers: Arc::clone(&workers),
         blocking_pool: Arc::clone(&blocking_pool),
         clock: unix_clock,
+        telemetry: Arc::clone(&telemetry),
     });
     let startup_actions: Vec<Arc<dyn StartupAction>> = StartupStep::ALL
         .into_iter()
@@ -1049,6 +1079,7 @@ mod tests {
         let runtime = runtime.canonicalize()?;
         Ok(DaemonConfig {
             mode: DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime,
             unix_socket: None,
@@ -1072,6 +1103,7 @@ mod tests {
                 source_registry_file: root.join("sources.json"),
                 effect_registry_file: root.join("effects.json"),
             },
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 5_000,
             shutdown_deadline_ms: 5_000,
@@ -1087,6 +1119,7 @@ mod tests {
             },
             telemetry: crate::TelemetrySettings {
                 otlp_endpoint: None,
+                otlp_ca_certificate_file: None,
                 export_timeout_ms: 1_000,
                 metric_interval_ms: 1_000,
             },

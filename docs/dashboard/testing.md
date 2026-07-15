@@ -1,114 +1,140 @@
-# Dashboard test and soak model
+# Dashboard testing and evidence
 
-The dashboard never accepts commands, executable paths, environment variables, working directories,
-or arbitrary arguments from a browser. A control request selects only an exact ID from
-`tests/dashboard/run-profiles-v1.json`. The sidecar validates that strict registry, retains its
-exact-byte SHA-256 digest, and rejects duplicate or unsorted IDs, unknown fields, unsafe path
-selectors, unbounded resources, and release profiles that target a source checkout.
+Dashboard tests are optional and do not requalify a CIGAR release. The current execution cohort is
+native Apple-silicon macOS. Fuzzing and soak execution are excluded from this run; every soak
+control therefore remains unavailable.
 
-## Availability
+## Reviewed profile registry
 
-Registry availability is conservative. `command_not_implemented` is a static hard stop. Once the
-job supervisor exists, an `available` profile must also pass its closed runtime probes. Runtime
-availability is reported with one of these content-free reasons:
+`tests/dashboard/run-profiles-v1.json` is strict, sorted, source-revision bound, and SHA-256 bound at
+startup. A profile fixes its executable selector, argv, working-directory class, availability
+probes, platform, durations, resource metadata, network mode, concurrency group, cancellation grace,
+receipt schema, evidence category, and documentation. The browser supplies only its exact ID.
 
-- `available`
-- `control_disabled`
-- `source_checkout_required`
-- `tool_missing`
-- `platform_unsupported`
-- `dependency_cache_missing`
-- `credential_missing`
-- `command_not_implemented`
+Current macOS availability:
 
-The initial registry intentionally marks every profile `command_not_implemented`; none may launch
-until process-group isolation, environment sanitization, bounded output, cancellation, and strict
-receipt checking land together.
+| Profile | Runtime state | Receipt | Meaning |
+|---|---|---|---|
+| `dashboard-contracts` | available when control/tool/source checks pass | `cigar.dashboard-schema-check.v1` | validates all strict dashboard schemas and local references |
+| `compatibility-matrix` | `tool_missing` on the current Homebrew layout | `cigar.test-matrix-result.v1` | Node/Go/Corepack/uv ancestors are group-writable and are deliberately omitted; development evidence |
+| `security-matrix` | available only when every Rust/Python/shell tool lineage passes | `cigar.test-matrix-result.v1` | reviewed offline security matrix; development evidence |
+| `conformance-smoke` | `command_not_implemented` | — | command does not produce the required independent receipt |
+| `workspace-units` | `command_not_implemented` | — | command does not produce the required independent receipt |
+| every `soak-*` profile | `command_not_implemented` | — | production workload driver is unavailable and soak is excluded |
 
-## Soak profiles
+Static `available` is narrowed independently at startup to `control_disabled`,
+`platform_unsupported`, `source_checkout_required`, or `tool_missing` when its closed prerequisites
+fail. An unsafe optional tool is omitted; it never widens the trust boundary merely to keep a
+profile runnable. Other schema-enumerated reasons are retained for future reviewed probes:
+`dependency_cache_missing` and `credential_missing`. An unknown availability value fails closed in
+both Rust and browser code.
 
-| ID | Duration | Sessions | Meaning |
-|---|---:|---|---|
-| `soak-smoke` | 120 s | 1, 2 | Harness and receipt smoke; no qualification claim |
-| `soak-developer` | 900 s | 1, 2, 4, 8 | Local mixed-flow feedback; no qualification claim |
-| `soak-extended` | 3,600 s | 1 through 32 | Development-only leak and fault signal |
-| `soak-rc-24h` | 86,400 s | 1 through 64 | Release evidence only with exact installed-candidate bindings |
+## Run lifecycle
 
-`cigar-soak plan` generates a deterministic plan containing its seed, exact duration and session
-schedule, workload weights totaling 10,000 basis points, logical-operation fault schedule, source
-revision, daemon SHA-256, and profile-registry SHA-256. Existing plan paths are never replaced.
+The persisted legal lifecycle is:
 
-`cigar-soak verify` is offline. It binds a strict result to the exact plan bytes, source revision,
-profile, and daemon digest; verifies monotonic RFC 3339 duration; requires every phase, session,
-fault, sample class, and invariant; and rejects a passing status when duration, operations, or any
-invariant is insufficient. Duplicate JSON object names and unknown fields fail closed.
+```text
+queued -> preparing -> running -> passed | failed | timed_out | cancelled
+```
 
-The workload-running command currently exits with `DriverUnavailable`. This is intentional: plan
-and receipt validation are useful independently, but an incomplete harness must never emit or
-display a passing soak.
+Create requires an authenticated session, exact same Origin/Host, current CSRF value, exact JSON
+content type, and a body containing only `profile_id`. Cancellation requires the same boundary and a
+canonical active UUIDv7. The browser cannot construct a cancellation path for any other value.
 
-## Safe-event history and live status
+Capacity failures do not partially launch a command. A successful spawn is persisted as running
+before publication. User cancellation, timeout, and product failure are distinct terminal states.
+The sidecar sends TERM to the macOS process group, waits the reviewed grace, then sends KILL and
+reaps. Shutdown uses the same settlement path.
 
-The dashboard status stream is authenticated and same-origin at `GET /api/v1/events`. Events are
-committed to the dashboard-owned SQLite journal before being retained or published. The broker
-bounds event bytes, retained bytes/count, live buffer capacity, and concurrent subscribers. A valid
-`Last-Event-ID` replays only later retained sequences; an expired sequence or lagged subscriber
-receives `stream.resync_required` and the lagged stream closes.
+## Receipt interpretation
 
-History startup rejects non-private parent directories, symlinks, linked or permissive database
-files, unknown migrations, malformed retained JSON/run rows, sequence disagreement, and oversized
-events. Schema v2 contains only strict content-safe run metadata, transitions, evidence descriptors,
-closed preferences, and safe-event JSON; it never references daemon persistence.
+The product receipt and supervisor receipt have different roles:
 
-Run and evidence indexes use descending `(timestamp, opaque ID)` pagination. Cursors are URL-safe,
-HMAC-authenticated, collection-bound, expire after 15 minutes, and reject duplicate/unknown query
-fields, encoding aliases, tampering, cross-endpoint reuse, and oversized limits. They contain no
-credential or receipt content and intentionally expire across sidecar restarts.
+- The **product receipt** proves the reviewed check's schema-specific result. It must be canonical,
+  confined below the exact external run root, match the registry/source/profile/matrix/platform, and
+  agree with the process outcome.
+- The **supervisor receipt** proves what the sidecar launched and observed: executable/argv/profile/
+  registry/source/environment/tool-version digests, the exact dashboard executable digest, an exact
+  sorted execution-input manifest, a clean-source assertion and source-tree digest, UTC and
+  monotonic timing, output byte counts and hashes, exit status, stop reason, and any resource
+  violation.
 
-The internal history backup operation is serialized behind all previously acknowledged writes. It
-accepts only an absent absolute path under an owner-only directory, creates one `0600` ordinary file,
-uses SQLite's online backup API, verifies the exact schema version plus quick-check and foreign keys,
-syncs the snapshot and parent directory, and never overwrites an existing file. Tests reopen the
-snapshot and read back events, runs, and evidence while proving writes made after the snapshot are
-absent. Relative, existing, symlink, and permissive-parent destinations fail closed. There is no
-browser backup/restore route; restore policy remains an explicit post-integration operator concern.
+Exit zero with no, stale, malformed, unsafe, wrongly bound, or contradictory product receipt is
+`failed`. Nonzero remains failed even if a forged receipt claims pass. Raw receipt bytes, stdout,
+stderr, sandbox contents, and absolute paths are not copied to browser history. Currently available
+receipts are always classified `development`, never candidate-bound or release-qualifying.
 
-## Browser live-update controls
+## Local gates
 
-Pausing live updates preserves the last rendered operational, verification, and release
-classifications while closing EventSource and suppressing interval-driven refresh. The refresh
-button can still request one bounded observation, with concurrent manual requests coalesced to one
-follow-up. Resuming or returning a hidden tab to the foreground performs one immediate refresh;
-hidden tabs keep streaming and automatic polling suspended. Pure policy tests cover closed
-pause/visibility states. DASH-040 still requires real-browser lifecycle, reconnect, keyboard, and
-assistive-label verification after frontend integration.
+Run these from the repository root with the pinned toolchains and offline dependency caches:
 
-## Display preferences
+```sh
+python3 tests/dashboard/validate_schemas.py
+pnpm --filter @cigar/dashboard build
+pnpm --filter @cigar/dashboard test
+cargo test --locked --offline -p cigar-dashboard --all-targets
+cargo clippy --locked --offline -p cigar-dashboard --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --locked --offline -p cigar-dashboard --no-deps
+```
 
-The native display menu exposes closed theme (`system|light|dark`), density
-(`comfortable|compact`), and motion (`system|standard|reduced`) policies. Each control carries text
-and an icon, supports keyboard activation, and restores only its versioned allowlisted value from
-local storage. Unknown values and storage denial fall back safely. System motion follows
-`prefers-reduced-motion`; explicit reduced motion enforces near-zero durations, while explicit
-standard motion deliberately overrides that media query. The menu closes with Escape and keeps the
-three controls together at narrow widths. DASH-040 retains real-browser keyboard, media-query,
-cross-tab, 200% zoom, and 320 px verification.
+The schema command validates 18 schemas and 84 local references. With `CIGAR_EVIDENCE_DIR` and
+`CIGAR_SOURCE_REVISION` set by the supervisor it additionally emits a create-new canonical
+`dashboard-schema-check.v1.json` below the private external evidence root.
 
-## Health details
+The frontend build regenerates the exact-byte asset manifest and then runs both independent
+verifiers. Thirty-one browser unit/model cases cover the closed same-origin network wrapper,
+redirect/credential/referrer confinement, fail-closed control availability, canonical UUIDv7
+cancellation, generated 7-service/45-operation validation, health precedence/freshness,
+pause/visibility behavior, and closed display preferences. Twenty-three production-bundle verifier
+cases include hostile fixtures for external HTML/CSS, inline content, direct transports, Node APIs,
+dynamic code/DOM sinks, missing module dependencies, command/argv/raw-target/authorization fields,
+and wrapper weakening. The
+asset verifier separately rejects inventory, MIME, digest, size, symlink, source-map, and
+undeclared-file disagreement.
 
-The health disclosure consumes the same sanitized aggregate response as the persistent status rail;
-it never performs an independent daemon probe or derives aggregate health. It exposes exact
-aggregate/configuration/diagnostics timestamps, the redacted alias, closed deployment/transports/
-limits, failures, stale sources, and public component states/reason codes/latencies. Freshness is a
-separate display fact: `<10s` is fresh, `10s..=30s` is stale, and `>30s` is expired. Pure tests cover
-both boundaries, malformed ages, closed aggregate/component values, transport selection, and byte
-formatting. The reconnect button uses the existing coalesced manual refresh. Typed upstream problem
-codes, reviewed runbook links, hostile-text fixtures, and real-browser disclosure/table semantics
-remain post-integration gates.
+The focused Rust package suite contains 86 unit tests and 4 real-binary launcher integration tests.
+Its supervisor integration launches the real
+`dashboard-contracts` command under a private cleared environment, verifies both receipts, and
+persists only sanitized descriptors. It also proves the child inherits its owner-only liveness lock,
+a second supervisor refuses the live identity without signalling it, and a dead persisted PID/group
+reconciles to `lost`. A separate crash test exits the supervisor OS process without destructors
+while the child remains alive, proves restart fails closed, and reconciles only after that exact
+process identity disappears. Resource tests exercise actual CPU-time termination, file-size partial
+writes, open-file exhaustion, aggregate RSS/process-count stops, exact child CPU/core/file/FD
+limits, wrong launcher target digests, aggregate output/evidence accounting, over-limit pass
+rejection, disk-full classification, and hostile nested/link evidence trees. Durable retention
+tests cover event-byte, terminal-count, and terminal-age caps while preserving evidence-linked
+rows. Negative tests cover missing/mismatched receipts and distinct cancellation/timeout/resource
+classification. Source hostile tests cover same-HEAD dirty
+entrypoints/imports, capture-to-launch swaps, snapshot mutation, hard/symbolic links, unreviewed
+imports, unsafe executable ancestors, ancestor replacement, forged clean claims, and execution-input
+omission/addition/digest substitution. Ten configuration cases cover endpoint suffix/userinfo/DNS/
+mapped-address rejection, duplicate TOML, overflow and limit bounds, private owner/mode/link
+metadata, direct symlinks, canonical directory aliases, state/token overlap, and evidence hidden
+inside the source checkout. The local installed-artifact verifier binds exact archive/dashboard/
+asset-manifest/package-contract bytes and a source identity, requires the contract bytes to equal
+the reviewed development contract compiled into the verifier, rejects mutations, substituted
+contracts, and links, and can emit only a partial unqualified descriptor; it does not verify a
+signature or claim an installed smoke ran. Other tests cover sessions/CSRF, asset verification,
+strict JSON, metrics, status, cursor MACs, state transitions, SQLite migration/integrity/retention/
+backup, and API security headers.
 
-## Cancellation and receipts
+The exact 2026-07-14 command results and non-claims are recorded in
+`docs/dashboard/integration-evidence/nonsoak-macos-closure-20260714.md`.
 
-When the supervisor and driver are implemented, cancellation creates a terminal `cancelled`
-receipt with at least one sorted failure code. It does not count elapsed time toward a later run.
-A retry always creates a new plan and run ID. Zero exit status without a strict, current receipt is
-failure; browser-visible progress is structured and content-free, never raw stdout or stderr.
+## Deferred qualification
+
+These commands are not substitutes for the missing gates:
+
+- The current Chromium, Firefox, and WebKit observer/auth/control-disabled slice passes 27/27, but
+  live browser launch/cancel/reload/receipt flows and the broader visual/status matrix remain open.
+- No PID-reuse campaign, interrupted-preparing/legacy repair, destructive aggregate disk
+  exhaustion, exhaustive escaped-descendant, or kernel-hard RSS/process-limit receipt exists. The
+  real supervisor-process crash, error-classification, launcher-limit, and polled group-limit tests
+  are narrower than those gates.
+- No produced/installed archive or image, upgrade/uninstall, installed smoke,
+  SBOM/signature/provenance, or candidate binding has been tested. The local byte-binding verifier
+  is development source, not installed qualification.
+- No fuzzing, 1-hour observation, two-minute/15-minute/24-hour soak, or real soak driver was run.
+
+Do not mark the full dashboard packet or release evidence green until those selected gates exist.

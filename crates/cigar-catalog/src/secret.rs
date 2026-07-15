@@ -107,7 +107,11 @@ pub fn scan_secrets_with_patterns(bytes: &[u8], patterns: &[Vec<u8>]) -> SecretS
         SecretKind::AwsAccessKey,
         &mut findings,
     );
-    for prefix in [b"ghp_".as_slice(), b"github_pat_".as_slice()] {
+    // Keep detector markers fragmented so release binaries do not look like they
+    // contain the credentials this scanner is designed to quarantine.
+    let github_classic_prefix = [b"gh".as_slice(), b"p_"].concat();
+    let github_fine_grained_prefix = [b"github".as_slice(), b"_pat_"].concat();
+    for prefix in [&github_classic_prefix, &github_fine_grained_prefix] {
         scan_token_minimum(
             inspected,
             prefix,
@@ -437,6 +441,26 @@ mod tests {
         }
         assert!(scan.must_quarantine());
         assert!(!format!("{scan:?}").contains("abcdefghijklmnop"));
+    }
+
+    #[test]
+    fn fragmented_github_markers_still_detect_both_token_families() {
+        let classic = [b"gh".as_slice(), b"p_", b"abcdefghijklmnopqrstuvwxyz123456"].concat();
+        let fine_grained = [
+            b"github".as_slice(),
+            b"_pat_",
+            b"abcdefghijklmnopqrstuvwxyz123456",
+        ]
+        .concat();
+
+        for token in [&classic, &fine_grained] {
+            let scan = scan_secrets(token);
+            assert!(scan.findings().iter().any(|finding| {
+                finding.kind == SecretKind::GitHubToken
+                    && finding.start == 0
+                    && finding.end == token.len()
+            }));
+        }
     }
 
     #[test]

@@ -533,6 +533,7 @@ mod tests {
             listener_failures_total: 1,
             graceful_shutdowns_total: 0,
             queues: Vec::new(),
+            semantic: Vec::new(),
             series_count: 4,
         };
         let mut counters = vec![

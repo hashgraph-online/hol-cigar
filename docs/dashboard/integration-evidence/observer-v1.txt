@@ -1,0 +1,53 @@
+CIGAR dashboard observer-v1 integration evidence
+date=2026-07-13
+baseline_head=56a5a1346bdfd362f67c279f4f8cd5d4ba7c46b2
+baseline_tree=d06cf0075faf21ffa7d6c55d0da3229f4cebc4b1
+scope=optional_read_only_dashboard_observer
+control_plane=disabled_command_not_implemented
+secure_beta_release_evidence=unchanged_not_requalified
+
+PASS cargo fmt --all -- --check
+PASS cargo check --offline -p cigar-dashboard -p cigar-soak
+PASS cargo clippy --locked --offline -p cigar-dashboard -p cigar-soak --all-targets -- -D warnings
+PASS cargo test --locked --offline -p cigar-dashboard -p cigar-soak
+RESULT cigar-dashboard=52_passed cigar-soak=5_passed
+PASS cargo test --locked --offline -p cigar-sdk --test remote_http
+RESULT remote_http=6_passed includes_typed_unhealthy_503=true
+PASS pnpm --filter @cigar/dashboard test
+RESULT browser_models=23_passed assets=8_verified
+PASS python3 tests/dashboard/validate_schemas.py
+RESULT schemas=15 local_references=55
+PASS cargo xtask generate --check
+PASS cargo xtask architecture-check
+PASS python3 scripts/release/beta_profile.py check --root .
+PASS python3 -B -m unittest tools.quality.tests.test_beta_profile -v
+RESULT beta_profile_tests=8_passed
+PASS python3 scripts/release/selftest_release_verifier.py
+PASS cargo test --locked --offline -p cigar-cli --no-default-features --features beta-embedded --lib --test beta_surface
+RESULT beta_cli_lib=10_passed beta_surface=12_passed
+PASS cargo clippy --locked --offline -p cigar-cli --no-default-features --features beta-embedded --all-targets -- -D warnings
+
+PASS standalone cigar-dashboard startup against absent loopback daemon
+RESULT session_exchange=201 bootstrap_consumed=true aggregate=unreachable control_enabled=false
+RESULT protocol_source=cigar-api-generated-registry services=7 operations=45 unique_operation_ids=45
+RESULT exact_index_bytes=14146 healthz=200 graceful_shutdown=clean
+PASS occupied-listener regression
+RESULT second_start=listener_failed bootstrap_file_created=false
+
+OPTIONALITY default_members=crates/cigar-cli,crates/cigar-daemon,crates/cigar-mcp
+OPTIONALITY fresh_default_build_binaries=cigar,cigar-mcp,cigard
+OPTIONALITY fresh_default_build_dashboard_binary=absent
+OPTIONALITY fresh_default_build_soak_binary=absent
+OPTIONALITY core_dependency_closure_dashboard=absent
+OPTIONALITY core_dependency_closure_soak=absent
+OPTIONALITY cli_help_identical=true
+OPTIONALITY daemon_help_identical=true
+OPTIONALITY cli_help_sha256=d675e961eab03c88d53bf543bdeae388fa56021200f48e2942588d661925a027
+OPTIONALITY daemon_help_sha256=3a253d905704887c51fda52e54292d60a76d03547b990aad9ea5f4d9a4e61563
+OPTIONALITY base_deploy_dashboard_reference=absent
+OPTIONALITY pnpm_dashboard_importer_dependencies=none
+
+KNOWN_BASELINE_TOOLING_FAILURE cargo_xtask_lint=failed_before_clippy_on_preexisting_vendored_cigar_aws_creds_and_cigar_rust_s3_TODO_secret_markers
+KNOWN_BASELINE_TOOLING_ACTION=not_modified_not_suppressed
+POST_BASELINE_EXTERNAL_PATH=README_BETA.md
+POST_BASELINE_EXTERNAL_ACTION=preserved_unmodified

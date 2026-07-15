@@ -512,10 +512,7 @@ impl S3CompatibleObjectStorage {
         let prefix = normalize_prefix(prefix.into())?;
         let access_key = access_key.into();
         let secret_key = secret_key.into();
-        if !endpoint.starts_with("https://")
-            && !endpoint.starts_with("http://127.0.0.1:")
-            && !endpoint.starts_with("http://localhost:")
-        {
+        if !valid_s3_endpoint(&endpoint) {
             return Err(ObjectStorageError::new(
                 ObjectStorageErrorCode::InvalidMetadata,
             ));
@@ -643,6 +640,26 @@ impl S3CompatibleObjectStorage {
         }
         Ok(keys)
     }
+}
+
+fn valid_s3_endpoint(value: &str) -> bool {
+    url::Url::parse(value).is_ok_and(|endpoint| {
+        let root_path = endpoint.path().is_empty() || endpoint.path() == "/";
+        let no_ambient_authority = endpoint.username().is_empty()
+            && endpoint.password().is_none()
+            && endpoint.query().is_none()
+            && endpoint.fragment().is_none();
+        let secure = endpoint.scheme() == "https" && endpoint.host_str().is_some();
+        let loopback_http = endpoint.scheme() == "http"
+            && endpoint.port().is_some()
+            && endpoint
+                .host_str()
+                .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]"));
+        root_path
+            && no_ambient_authority
+            && !endpoint.cannot_be_a_base()
+            && (secure || loopback_http)
+    })
 }
 
 impl ObjectStorage for S3CompatibleObjectStorage {
@@ -1470,7 +1487,7 @@ mod tests {
     use super::{
         BoundedObjectWriter, InMemoryObjectStorage, MAX_S3_LIST_ELAPSED, MAX_S3_LIST_PAGES,
         ObjectFailpoint, ObjectRepositoryBlobStore, ObjectStorage, ObjectStorageErrorCode,
-        S3ListingBudget, restore_object_backup_inventory,
+        S3CompatibleObjectStorage, S3ListingBudget, restore_object_backup_inventory,
     };
     use crate::{
         BlobRecord, GarbageCollectionPolicy, RepositoryBlobStore,
@@ -1644,6 +1661,48 @@ mod tests {
         assert!(writer.overflowed);
         assert_eq!(writer.bytes.len(), 4);
         Ok(())
+    }
+
+    #[test]
+    fn s3_endpoint_is_a_closed_origin_without_embedded_authority() {
+        let construct = |endpoint: &str| {
+            S3CompatibleObjectStorage::new(
+                endpoint,
+                "us-east-1",
+                "cigar-shared",
+                "production",
+                "explicit-access-key",
+                "explicit-secret-key",
+                None,
+                false,
+            )
+        };
+        for invalid in [
+            "https://user@objects.example",
+            "https://user:password@objects.example",
+            "https://objects.example/path",
+            "https://objects.example?tenant=other",
+            "https://objects.example#fragment",
+            "http://objects.example:9000",
+            "http://localhost",
+        ] {
+            assert_eq!(
+                construct(invalid).err().map(|error| error.code()),
+                Some(ObjectStorageErrorCode::InvalidMetadata),
+                "endpoint {invalid:?} must fail closed"
+            );
+        }
+        for allowed in [
+            "https://objects.example",
+            "http://localhost:9000",
+            "http://127.0.0.1:9000",
+            "http://[::1]:9000",
+        ] {
+            assert!(
+                construct(allowed).is_ok(),
+                "endpoint {allowed:?} should pass"
+            );
+        }
     }
 
     #[test]

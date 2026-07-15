@@ -79,6 +79,9 @@ pub const PROTOCOL_MIN: &str = "1.0";
 /// Latest compatible protocol line this build accepts.
 pub const PROTOCOL_MAX: &str = "1.x";
 
+/// Stable semantic ABI implemented by this build.
+pub const CONTEXT_ABI: &str = "cigar.context.v1";
+
 /// Stable build metadata reported by deployable binaries.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BuildMetadata {
@@ -86,6 +89,8 @@ pub struct BuildMetadata {
     pub version: &'static str,
     /// Source revision injected by the release build, or `unknown`.
     pub source_revision: &'static str,
+    /// Semantic Context ABI implemented by this build.
+    pub context_abi: &'static str,
     /// Minimum accepted protocol version.
     pub protocol_min: &'static str,
     /// Maximum accepted protocol line.
@@ -104,6 +109,7 @@ impl BuildMetadata {
                 Some(revision) => revision,
                 None => "unknown",
             },
+            context_abi: CONTEXT_ABI,
             protocol_min: PROTOCOL_MIN,
             protocol_max: PROTOCOL_MAX,
             build_profile: if cfg!(debug_assertions) {
@@ -121,6 +127,7 @@ impl BuildMetadata {
             concat!(
                 "{{\"version\":\"{}\",",
                 "\"source_revision\":\"{}\",",
+                "\"context_abi\":\"{}\",",
                 "\"protocol_min\":\"{}\",",
                 "\"protocol_max\":\"{}\",",
                 "\"build_profile\":\"{}\",",
@@ -128,6 +135,7 @@ impl BuildMetadata {
             ),
             self.version,
             self.source_revision,
+            self.context_abi,
             self.protocol_min,
             self.protocol_max,
             self.build_profile
@@ -144,6 +152,7 @@ mod tests {
         let actual = BuildMetadata {
             version: "1.2.3",
             source_revision: "abc123",
+            context_abi: "cigar.context.v1",
             protocol_min: "1.0",
             protocol_max: "1.x",
             build_profile: "release",
@@ -155,6 +164,7 @@ mod tests {
             concat!(
                 "{\"version\":\"1.2.3\",",
                 "\"source_revision\":\"abc123\",",
+                "\"context_abi\":\"cigar.context.v1\",",
                 "\"protocol_min\":\"1.0\",",
                 "\"protocol_max\":\"1.x\",",
                 "\"build_profile\":\"release\",",

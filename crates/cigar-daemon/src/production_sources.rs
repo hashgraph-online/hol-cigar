@@ -2,19 +2,21 @@
 
 use crate::{CatalogContextApplication, ConfiguredSourceRuntime, SourceConfiguration};
 use cigar_canon::parse_strict_json;
-use cigar_catalog::{Atomizer, GitConnector, LocalFilesystemConnector, SourceConnector};
+use cigar_catalog::{
+    Atomizer, FILESYSTEM_CONNECTOR_ID, GIT_CONNECTOR_ID, GitConnector, LocalFilesystemConnector,
+    SourceConnector, atomizer_registry_digest,
+};
 use cigar_code_intel::{AtomizationProfile, BuiltinAtomizer};
-use cigar_protocol::{GovernanceEnvelope, QualityEnvelope, RecordId, ScopeEnvelope};
+use cigar_protocol::{ContentDigest, GovernanceEnvelope, QualityEnvelope, RecordId, ScopeEnvelope};
 use cigar_store::{CancellationToken, Repository, ServiceRepository};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 const SOURCE_REGISTRY_SCHEMA: &str = "cigar.production-source-registry.v1";
 const MAX_CONFIGURED_SOURCES: usize = 4_096;
-const FILESYSTEM_CONNECTOR_ID: &str = "cigar.builtin.filesystem.v1";
-const GIT_CONNECTOR_ID: &str = "cigar.builtin.git.v1";
 
 /// Stable content-free source-registry construction failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -71,6 +73,20 @@ pub struct ProductionAtomizationConfiguration {
     pub atomizer_set: String,
 }
 
+impl ProductionAtomizationConfiguration {
+    /// Derives the exact ordered built-in atomizer-registry digest required by a production
+    /// source configuration for `tenant_id`.
+    ///
+    /// Configuration authors must use this derivation rather than copying a digest from another
+    /// tenant or profile. Startup independently recomputes the value and rejects substitutions.
+    pub fn registry_digest(
+        &self,
+        tenant_id: &RecordId,
+    ) -> Result<ContentDigest, ProductionSourceRegistryError> {
+        atomization_digest(tenant_id, self)
+    }
+}
+
 /// One tenant-scoped configured source.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -121,8 +137,13 @@ impl ProductionSourceRegistry {
             return Err(ProductionSourceRegistryError::InvalidConfiguration);
         }
         let project = checked_canonical_directory(project_directory)?;
+        let mut roots = BTreeSet::new();
         for entry in &self.sources {
             entry.validate(&project)?;
+            let root = checked_canonical_directory(&entry.connector.root_directory)?;
+            if !roots.insert((entry.tenant_id.clone(), root)) {
+                return Err(ProductionSourceRegistryError::InvalidConfiguration);
+            }
         }
         Ok(())
     }
@@ -162,18 +183,16 @@ impl ProductionSourceRegistry {
                         .map_err(|_error| ProductionSourceRegistryError::Unavailable)?,
                 ),
             };
-            let profile = AtomizationProfile {
-                scope: ScopeEnvelope {
-                    tenant_id: entry.tenant_id.clone(),
-                    project_ids: entry.atomization.project_ids.clone(),
-                },
-                governance: entry.atomization.governance.clone(),
-                quality: entry.atomization.quality,
-                lexical_enabled: entry.atomization.lexical_enabled,
-                embedding_eligible: entry.atomization.embedding_eligible,
-            };
-            let atomizers: Vec<Arc<dyn Atomizer>> = BuiltinAtomizer::required_v1(profile)
-                .map_err(|_error| ProductionSourceRegistryError::InvalidConfiguration)?
+            let mut configured = BuiltinAtomizer::required_v1(atomization_profile(
+                &entry.tenant_id,
+                &entry.atomization,
+            ))
+            .map_err(|_error| ProductionSourceRegistryError::InvalidConfiguration)?;
+            configured.sort_by_key(|atomizer| {
+                let descriptor = atomizer.descriptor();
+                (descriptor.id, descriptor.version)
+            });
+            let atomizers: Vec<Arc<dyn Atomizer>> = configured
                 .into_iter()
                 .map(|atomizer| Arc::new(atomizer) as Arc<dyn Atomizer>)
                 .collect();
@@ -206,6 +225,8 @@ impl ProductionSourceEntry {
             || !strictly_sorted(&self.atomization.governance.allowed_purposes)
             || !strictly_sorted(&self.atomization.governance.processor_constraints)
             || self.atomization.quality.authority == 0
+            || self.source.atomization_profile_digest
+                != self.atomization.registry_digest(&self.tenant_id)?
         {
             return Err(ProductionSourceRegistryError::InvalidConfiguration);
         }
@@ -232,6 +253,37 @@ fn source_key(entry: &ProductionSourceEntry) -> (&RecordId, &RecordId) {
 
 fn strictly_sorted(values: &[String]) -> bool {
     values.windows(2).all(|pair| pair.first() < pair.get(1))
+}
+
+fn atomization_digest(
+    tenant_id: &RecordId,
+    configuration: &ProductionAtomizationConfiguration,
+) -> Result<ContentDigest, ProductionSourceRegistryError> {
+    let mut atomizers = BuiltinAtomizer::required_v1(atomization_profile(tenant_id, configuration))
+        .map_err(|_error| ProductionSourceRegistryError::InvalidConfiguration)?;
+    atomizers.sort_by_key(|atomizer| {
+        let descriptor = atomizer.descriptor();
+        (descriptor.id, descriptor.version)
+    });
+    let descriptors: Vec<_> = atomizers.iter().map(Atomizer::descriptor).collect();
+    atomizer_registry_digest(&descriptors)
+        .map_err(|_error| ProductionSourceRegistryError::InvalidConfiguration)
+}
+
+fn atomization_profile(
+    tenant_id: &RecordId,
+    configuration: &ProductionAtomizationConfiguration,
+) -> AtomizationProfile {
+    AtomizationProfile {
+        scope: ScopeEnvelope {
+            tenant_id: tenant_id.clone(),
+            project_ids: configuration.project_ids.clone(),
+        },
+        governance: configuration.governance.clone(),
+        quality: configuration.quality,
+        lexical_enabled: configuration.lexical_enabled,
+        embedding_eligible: configuration.embedding_eligible,
+    }
 }
 
 fn checked_canonical_directory(path: &Path) -> Result<PathBuf, ProductionSourceRegistryError> {
@@ -278,7 +330,7 @@ mod tests {
         FILESYSTEM_CONNECTOR_ID, GIT_CONNECTOR_ID, ProductionAtomizationConfiguration,
         ProductionSourceConnectorConfiguration, ProductionSourceConnectorKind,
         ProductionSourceEntry, ProductionSourceRegistry, ProductionSourceRegistryError,
-        SOURCE_REGISTRY_SCHEMA, canonical_file_uri,
+        SOURCE_REGISTRY_SCHEMA, atomization_digest, canonical_file_uri,
     };
     use crate::{
         AuthorityClock, AuthorityError, BlockingPool, CatalogContextApplication,
@@ -366,6 +418,23 @@ mod tests {
     }
 
     fn entry(root: &Path, source: &str) -> Result<ProductionSourceEntry, Box<dyn Error>> {
+        let atomization = ProductionAtomizationConfiguration {
+            project_ids: vec![RecordId::new(PROJECT)?],
+            governance: GovernanceEnvelope {
+                classification: Classification::Internal,
+                allowed_purposes: vec!["coding".to_owned()],
+                processor_constraints: Vec::new(),
+                instruction_authority: InstructionAuthority::Data,
+            },
+            quality: QualityEnvelope {
+                confidence: FixedPoint::new(FixedPoint::ONE)?,
+                coverage: FixedPoint::new(FixedPoint::ONE)?,
+                authority: 1,
+            },
+            lexical_enabled: true,
+            embedding_eligible: false,
+            atomizer_set: "required_v1".to_owned(),
+        };
         Ok(ProductionSourceEntry {
             tenant_id: RecordId::new(TENANT)?,
             source: SourceConfiguration {
@@ -373,6 +442,10 @@ mod tests {
                 source_id: RecordId::new(source)?,
                 root: SourceUri::new(canonical_file_uri("file", root)?)?,
                 connector_identity: FILESYSTEM_CONNECTOR_ID.to_owned(),
+                atomization_profile_digest: atomization_digest(
+                    &RecordId::new(TENANT)?,
+                    &atomization,
+                )?,
                 discovery_policy: SourceDiscoveryPolicyConfiguration {
                     max_items: 1_000,
                     max_total_bytes: 16 * 1024 * 1024,
@@ -388,23 +461,7 @@ mod tests {
                 kind: ProductionSourceConnectorKind::Filesystem,
                 root_directory: root.to_path_buf(),
             },
-            atomization: ProductionAtomizationConfiguration {
-                project_ids: vec![RecordId::new(PROJECT)?],
-                governance: GovernanceEnvelope {
-                    classification: Classification::Internal,
-                    allowed_purposes: vec!["coding".to_owned()],
-                    processor_constraints: Vec::new(),
-                    instruction_authority: InstructionAuthority::Data,
-                },
-                quality: QualityEnvelope {
-                    confidence: FixedPoint::new(FixedPoint::ONE)?,
-                    coverage: FixedPoint::new(FixedPoint::ONE)?,
-                    authority: 1,
-                },
-                lexical_enabled: true,
-                embedding_eligible: false,
-                atomizer_set: "required_v1".to_owned(),
-            },
+            atomization,
         })
     }
 
@@ -487,6 +544,29 @@ mod tests {
         };
         assert_eq!(
             ProductionSourceRegistry::from_json(&serde_json::to_vec(&reversed)?, &project),
+            Err(ProductionSourceRegistryError::InvalidConfiguration)
+        );
+
+        let duplicate_root = ProductionSourceRegistry {
+            schema_version: SOURCE_REGISTRY_SCHEMA.to_owned(),
+            sources: vec![entry(&project, SOURCE)?, entry(&project, later_source)?],
+        };
+        assert_eq!(
+            ProductionSourceRegistry::from_json(&serde_json::to_vec(&duplicate_root)?, &project),
+            Err(ProductionSourceRegistryError::InvalidConfiguration)
+        );
+
+        let mut mismatched_profile = entry(&project, SOURCE)?;
+        mismatched_profile.atomization.lexical_enabled = false;
+        let mismatched_profile = ProductionSourceRegistry {
+            schema_version: SOURCE_REGISTRY_SCHEMA.to_owned(),
+            sources: vec![mismatched_profile],
+        };
+        assert_eq!(
+            ProductionSourceRegistry::from_json(
+                &serde_json::to_vec(&mismatched_profile)?,
+                &project,
+            ),
             Err(ProductionSourceRegistryError::InvalidConfiguration)
         );
         Ok(())

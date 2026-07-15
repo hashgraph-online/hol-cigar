@@ -1,9 +1,9 @@
 //! Real typed application adapters for durable context spaces and signed handoffs.
 
 use crate::{
-    AuthorityClock, DomainIdentityResolver, DurableContextSpaceService, DurableHandoffService,
-    DurableSnapshotAuthenticator, DurableStateError, DurableStateErrorCode,
-    ProductionApplicationBuilder, ResolvedDomainIdentity,
+    AuthorityClock, DaemonTelemetry, DomainIdentityResolver, DurableContextSpaceService,
+    DurableHandoffService, DurableSnapshotAuthenticator, DurableStateError, DurableStateErrorCode,
+    HandoffAcceptanceOutcome, ProductionApplicationBuilder, ResolvedDomainIdentity,
 };
 use base64::Engine as _;
 use cigar_api::{
@@ -435,6 +435,7 @@ pub struct SpaceHandoffApplication {
     errors: Arc<dyn FacadeErrorFactory>,
     cursor_ttl: Duration,
     stream_poll_interval: Duration,
+    telemetry: Option<Arc<DaemonTelemetry>>,
 }
 
 impl SpaceHandoffApplication {
@@ -468,7 +469,15 @@ impl SpaceHandoffApplication {
             errors,
             cursor_ttl,
             stream_poll_interval,
+            telemetry: None,
         })
+    }
+
+    /// Attaches the process telemetry authority used by production composition.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
     }
 
     fn invocation(
@@ -1393,8 +1402,21 @@ impl TypedUnaryService<AcceptHandoffOperation> for SpaceHandoffApplication {
                     compile,
                     &invocation.cancellation,
                 )
+            };
+            let acceptance = match acceptance {
+                Ok(acceptance) => acceptance,
+                Err(error) => {
+                    if let Some(outcome) = handoff_acceptance_metric_outcome(error)
+                        && let Some(telemetry) = &self.telemetry
+                    {
+                        telemetry.record_handoff_acceptance(outcome);
+                    }
+                    return Err(self.durable(error));
+                }
+            };
+            if let Some(telemetry) = &self.telemetry {
+                telemetry.record_handoff_acceptance(HandoffAcceptanceOutcome::Accepted);
             }
-            .map_err(|error| self.durable(error))?;
             Ok(revision_response(acceptance, expected.0))
         })
     }
@@ -1653,6 +1675,11 @@ impl TypedUnaryService<MergeHandoffOperation> for SpaceHandoffApplication {
             let revision = commit
                 .as_ref()
                 .map_or(expected.0, |published| published.sequence);
+            if let Some(telemetry) = &self.telemetry {
+                telemetry.record_handoff_merge_conflicts(
+                    u64::try_from(conflict_ids.len()).unwrap_or(u64::MAX),
+                );
+            }
             Ok(revision_response(
                 HandoffMergeResponse {
                     delta_id: receipt.delta_id,
@@ -2098,6 +2125,20 @@ fn map_durable_error(error: DurableStateError) -> cigar_protocol::ErrorCode {
                 cigar_protocol::ErrorCode::DependencyUnavailable
             }
         },
+    }
+}
+
+const fn handoff_acceptance_metric_outcome(
+    error: DurableStateError,
+) -> Option<HandoffAcceptanceOutcome> {
+    match error.code() {
+        DurableStateErrorCode::Handoff(HandoffError::Expired) => {
+            Some(HandoffAcceptanceOutcome::Expired)
+        }
+        DurableStateErrorCode::Handoff(HandoffError::Unavailable)
+        | DurableStateErrorCode::Snapshot(_)
+        | DurableStateErrorCode::Space(_) => None,
+        DurableStateErrorCode::Handoff(_) => Some(HandoffAcceptanceOutcome::Rejected),
     }
 }
 
@@ -3100,6 +3141,132 @@ mod tests {
                 .log(&created.space_id)?
                 .len(),
             3
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn typed_event_resume_crosses_hidden_project_gap_without_disclosure() -> TestResult<()> {
+        let fixture = fixture()?;
+        let (space, _) = call::<CreateSpaceOperation>(
+            &fixture,
+            &create_space_payload(fixture.project.clone())?,
+            CallOptions {
+                principal: "issuer",
+                dry_run: false,
+                expected_revision: None,
+                page_cursor: None,
+                page_size: None,
+            },
+        )
+        .await?;
+        let services = fixture
+            .application
+            .states
+            .services(&fixture.tenant, &StoreCancellationToken::default())?;
+        let hidden_project = record(600)?;
+        let hidden_event_id = record(601)?;
+        services.spaces.append_events(
+            &space.space_id,
+            hidden_project,
+            PublishRequest {
+                expected_head: ExpectedRevision(1),
+                actor_id: fixture.issuer.clone(),
+                purpose: "hidden project event".to_owned(),
+                policy_snapshot_digest: content(903)?,
+                committed_at: time(11)?,
+                event_id: record(602)?,
+            },
+            vec![CoordinationEvent {
+                event_id: hidden_event_id.clone(),
+                kind: CoordinationEventKind::TaskCheckpointed,
+                payload_digest: content(601)?,
+            }],
+            &StoreCancellationToken::default(),
+        )?;
+        let visible_event_id = record(603)?;
+        services.spaces.append_events(
+            &space.space_id,
+            fixture.project.clone(),
+            PublishRequest {
+                expected_head: ExpectedRevision(2),
+                actor_id: fixture.issuer.clone(),
+                purpose: "visible project event".to_owned(),
+                policy_snapshot_digest: content(903)?,
+                committed_at: time(12)?,
+                event_id: record(604)?,
+            },
+            vec![CoordinationEvent {
+                event_id: visible_event_id.clone(),
+                kind: CoordinationEventKind::TaskCheckpointed,
+                payload_digest: content(603)?,
+            }],
+            &StoreCancellationToken::default(),
+        )?;
+
+        let stream_payload = SpaceIdRequest {
+            space_id: space.space_id.clone(),
+        };
+        let stream_adapter = TypedStreamAdapter::<
+            SubscribeSpaceEventsOperation,
+            SpaceHandoffApplication,
+        >::new(fixture.application.clone(), fixture.errors.clone());
+        let initial_request = RequestEnvelope::new_with_dry_run(
+            SubscribeSpaceEventsOperation::OPERATION_ID,
+            encode_operation_payload(&stream_payload, cigar_api::MAX_OPERATION_PAYLOAD_BYTES)?,
+            false,
+            None,
+            None,
+            None,
+            Some(1),
+            vec![PathParameter::new(
+                "space_id",
+                stream_payload.space_id.as_str(),
+            )?],
+        )?;
+        let mut initial = stream_adapter
+            .subscribe(
+                context(SubscribeSpaceEventsOperation::OPERATION_ID, "issuer")?,
+                initial_request,
+            )
+            .await?;
+        let genesis = initial.next().await.ok_or("initial stream ended")??;
+        assert_ne!(genesis.event_id(), hidden_event_id.as_str());
+
+        let resume_request = RequestEnvelope::new_with_dry_run(
+            SubscribeSpaceEventsOperation::OPERATION_ID,
+            encode_operation_payload(&stream_payload, cigar_api::MAX_OPERATION_PAYLOAD_BYTES)?,
+            false,
+            None,
+            None,
+            Some(genesis.event_id().to_owned()),
+            Some(1),
+            vec![PathParameter::new(
+                "space_id",
+                stream_payload.space_id.as_str(),
+            )?],
+        )?;
+        let mut resumed = stream_adapter
+            .subscribe(
+                context(SubscribeSpaceEventsOperation::OPERATION_ID, "issuer")?,
+                resume_request,
+            )
+            .await?;
+        let visible = resumed.next().await.ok_or("resumed stream ended")??;
+        assert_eq!(visible.event_id(), visible_event_id.as_str());
+        let payload: SpaceEventPayload =
+            decode_operation_payload(visible.payload_cbor(), cigar_api::MAX_EVENT_PAYLOAD_BYTES)?;
+        assert_eq!(payload.project_id, fixture.project);
+        assert_eq!(
+            services
+                .spaces
+                .event_cursor_for_id(
+                    &space.space_id,
+                    &BTreeSet::from([fixture.project]),
+                    &hidden_event_id,
+                )
+                .map_err(|error| error.code()),
+            Err(DurableStateErrorCode::Space(SpaceError::NotFound))
         );
         Ok(())
     }

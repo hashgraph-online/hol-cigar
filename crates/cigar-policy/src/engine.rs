@@ -6,20 +6,27 @@ use crate::{
     PolicyResource, PolicyRule, PolicySnapshot, TimingClass,
 };
 use cigar_canon::{parse_strict_json, to_deterministic_cbor};
-use cigar_protocol::{ContentDigest, Lifecycle, RecordId, RiskLevel, UtcTimestamp};
+use cigar_protocol::{
+    Capability, Classification, ContentDigest, InstructionAuthority, Lifecycle, RecordId,
+    RiskLevel, UtcTimestamp,
+};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::{
-    RwLock,
+    Arc, RwLock, Weak,
     atomic::{AtomicU64, Ordering},
 };
+use std::time::{Duration, Instant};
 
 /// Maximum number of policy decisions retained by one engine process.
 pub const MAX_POLICY_CACHE_ENTRIES: usize = 4_096;
 
 /// Maximum number of policy decisions retained for one tenant.
 pub const MAX_POLICY_CACHE_ENTRIES_PER_TENANT: usize = 512;
+
+/// Maximum process-local lifetime of a retrieval proof even when upstream grants live longer.
+pub const MAX_RETRIEVAL_AUTHORIZATION_TTL: Duration = Duration::from_secs(300);
 
 /// Content-free policy decision-cache measurements.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +43,351 @@ pub struct PolicyCacheStatistics {
     pub capacity_evictions: u64,
     /// Entries removed after their exclusive expiry.
     pub expired_evictions: u64,
+}
+
+/// Immutable retrieval claims released only by a current policy-issued authorization.
+///
+/// The claims contain no protected content. Callers must obtain them through
+/// [`RetrievalAuthorization::revalidate`], which checks the issuing engine's current policy,
+/// availability, revocation epoch, principal, grants, resources, and monotonic expiry.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RetrievalAuthorizationClaims {
+    principal_id: RecordId,
+    tenant_id: RecordId,
+    project_ids: BTreeSet<RecordId>,
+    purpose: String,
+    processor: String,
+    maximum_classification: cigar_protocol::Classification,
+    maximum_instruction_authority: cigar_protocol::InstructionAuthority,
+    valid_at: UtcTimestamp,
+    observed_as_of: UtcTimestamp,
+    vector_allowed: bool,
+    policy_digest: ContentDigest,
+    policy_revision: u64,
+    revocation_epoch: u64,
+    partition_digest: ContentDigest,
+}
+
+/// Canonical per-record metadata evaluated before a record may enter retrieval scoring.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RetrievalResourceAuthorizationRequest {
+    /// Exact normalized resource digest subject to current resource revocation.
+    pub input_digest: ContentDigest,
+    /// Canonical owning tenant from the indexed record.
+    pub tenant_id: RecordId,
+    /// Canonical project scope from the indexed record.
+    pub project_ids: BTreeSet<RecordId>,
+    /// Canonical allowed purposes from the indexed record.
+    pub allowed_purposes: BTreeSet<String>,
+    /// Canonical processor constraints; empty means no additional record-level restriction.
+    pub allowed_processors: BTreeSet<String>,
+    /// Canonical information classification.
+    pub classification: Classification,
+    /// Canonical lifecycle.
+    pub lifecycle: Lifecycle,
+    /// Whether canonical record integrity was verified.
+    pub integrity_verified: bool,
+    /// Inclusive canonical world-valid start.
+    pub valid_from: UtcTimestamp,
+    /// Exclusive canonical world-valid end.
+    pub valid_until: Option<UtcTimestamp>,
+    /// Canonical transaction observation time.
+    pub observed_at: UtcTimestamp,
+    /// Canonical instruction authority.
+    pub instruction_authority: InstructionAuthority,
+}
+
+impl fmt::Debug for RetrievalResourceAuthorizationRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RetrievalResourceAuthorizationRequest")
+            .field("project_count", &self.project_ids.len())
+            .field("allowed_purpose_count", &self.allowed_purposes.len())
+            .field("allowed_processor_count", &self.allowed_processors.len())
+            .field("classification", &self.classification)
+            .field("lifecycle", &self.lifecycle)
+            .field("integrity_verified", &self.integrity_verified)
+            .field("valid_from", &self.valid_from)
+            .field("valid_until", &self.valid_until)
+            .field("observed_at", &self.observed_at)
+            .field("instruction_authority", &self.instruction_authority)
+            .finish_non_exhaustive()
+    }
+}
+
+impl RetrievalAuthorizationClaims {
+    /// Authenticated principal bound to this authorization.
+    #[must_use]
+    pub const fn principal_id(&self) -> &RecordId {
+        &self.principal_id
+    }
+
+    /// Exact owning tenant bound to this authorization.
+    #[must_use]
+    pub const fn tenant_id(&self) -> &RecordId {
+        &self.tenant_id
+    }
+
+    /// Non-empty exact project scope authorized by current policy.
+    #[must_use]
+    pub const fn project_ids(&self) -> &BTreeSet<RecordId> {
+        &self.project_ids
+    }
+
+    /// Exact authorized use purpose.
+    #[must_use]
+    pub fn purpose(&self) -> &str {
+        &self.purpose
+    }
+
+    /// Exact authorized processor.
+    #[must_use]
+    pub fn processor(&self) -> &str {
+        &self.processor
+    }
+
+    /// Greatest caller-visible information classification.
+    #[must_use]
+    pub const fn maximum_classification(&self) -> cigar_protocol::Classification {
+        self.maximum_classification
+    }
+
+    /// Greatest caller-visible instruction authority.
+    #[must_use]
+    pub const fn maximum_instruction_authority(&self) -> cigar_protocol::InstructionAuthority {
+        self.maximum_instruction_authority
+    }
+
+    /// World-valid instant frozen by the policy request.
+    #[must_use]
+    pub const fn valid_at(&self) -> UtcTimestamp {
+        self.valid_at
+    }
+
+    /// Transaction-time observation bound frozen by the policy request.
+    #[must_use]
+    pub const fn observed_as_of(&self) -> UtcTimestamp {
+        self.observed_as_of
+    }
+
+    /// Whether the exact processor gate permits the optional vector channel.
+    #[must_use]
+    pub const fn vector_allowed(&self) -> bool {
+        self.vector_allowed
+    }
+
+    /// Immutable installed policy digest used for this authorization.
+    #[must_use]
+    pub const fn policy_digest(&self) -> &ContentDigest {
+        &self.policy_digest
+    }
+
+    /// Immutable installed policy revision used for this authorization.
+    #[must_use]
+    pub const fn policy_revision(&self) -> u64 {
+        self.policy_revision
+    }
+
+    /// Exact current revocation epoch used for this authorization.
+    #[must_use]
+    pub const fn revocation_epoch(&self) -> u64 {
+        self.revocation_epoch
+    }
+
+    /// Digest of every retrieval authorization and partition semantic.
+    #[must_use]
+    pub const fn partition_digest(&self) -> &ContentDigest {
+        &self.partition_digest
+    }
+}
+
+impl fmt::Debug for RetrievalAuthorizationClaims {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RetrievalAuthorizationClaims")
+            .field("project_count", &self.project_ids.len())
+            .field("purpose_bytes", &self.purpose.len())
+            .field("processor_bytes", &self.processor.len())
+            .field("maximum_classification", &self.maximum_classification)
+            .field(
+                "maximum_instruction_authority",
+                &self.maximum_instruction_authority,
+            )
+            .field("valid_at", &self.valid_at)
+            .field("observed_as_of", &self.observed_as_of)
+            .field("vector_allowed", &self.vector_allowed)
+            .field("policy_revision", &self.policy_revision)
+            .field("revocation_epoch", &self.revocation_epoch)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Opaque process-local proof that current policy authorized one retrieval partition.
+///
+/// This type cannot be constructed or deserialized outside the policy engine. Cloning preserves
+/// the same issuing engine, snapshot, revocation epoch, and monotonic lifetime; it cannot add
+/// projects, change purpose or processor, increase classification, or enable vectors.
+#[derive(Clone)]
+pub struct RetrievalAuthorization {
+    authority: Weak<CompiledPolicyEngine>,
+    claims: RetrievalAuthorizationClaims,
+    grant_ids: BTreeSet<RecordId>,
+    resource_digests: BTreeSet<ContentDigest>,
+    request_template: PolicyRequest,
+    monotonic_expires_at: Instant,
+}
+
+impl RetrievalAuthorization {
+    /// Rechecks the issuing engine's current state before protected retrieval work or disclosure.
+    pub fn revalidate(&self) -> Result<RetrievalAuthorizationClaims, PolicyError> {
+        if Instant::now() >= self.monotonic_expires_at {
+            return Err(PolicyError::new(PolicyErrorCode::Revoked));
+        }
+        let authority = self
+            .authority
+            .upgrade()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        let state = authority
+            .state
+            .read()
+            .map_err(|_error| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        let snapshot = state
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        if !state.available {
+            return Err(PolicyError::new(PolicyErrorCode::Unavailable));
+        }
+        if !snapshot.descriptor.protected
+            || snapshot.descriptor.revision != self.claims.policy_revision
+            || snapshot.descriptor.policy_digest != self.claims.policy_digest
+            || state.revocation_epoch != self.claims.revocation_epoch
+            || state.revoked_principals.contains(&self.claims.principal_id)
+            || !self.grant_ids.is_disjoint(&state.revoked_grants)
+            || !self.resource_digests.is_disjoint(&state.revoked_resources)
+        {
+            return Err(PolicyError::new(PolicyErrorCode::Revoked));
+        }
+        Ok(self.claims.clone())
+    }
+
+    /// Evaluates one canonical record through current metadata policy before scoring.
+    ///
+    /// A determinate denial returns `Ok(false)` so it is indistinguishable from absence. Policy
+    /// outage, snapshot change, revocation after proof issuance, and proof expiry fail the complete
+    /// query closed.
+    pub fn authorize_resource(
+        &self,
+        resource: &RetrievalResourceAuthorizationRequest,
+        processor_required: bool,
+    ) -> Result<bool, PolicyError> {
+        self.revalidate()?;
+        if resource.project_ids.is_empty()
+            || resource.project_ids.len() > crate::MAX_POLICY_SELECTORS
+            || resource.allowed_purposes.is_empty()
+            || resource.allowed_purposes.len() > crate::MAX_POLICY_SELECTORS
+            || resource.allowed_processors.len() > crate::MAX_POLICY_SELECTORS
+        {
+            return Err(PolicyError::new(PolicyErrorCode::InvalidInput));
+        }
+        let projects: BTreeSet<_> = resource
+            .project_ids
+            .intersection(&self.claims.project_ids)
+            .cloned()
+            .collect();
+        if projects.is_empty() || resource.tenant_id != self.claims.tenant_id {
+            return Ok(false);
+        }
+        let authority = self
+            .authority
+            .upgrade()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        let state = authority
+            .state
+            .read()
+            .map_err(|_error| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        let snapshot = state
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        if !state.available
+            || !snapshot.descriptor.protected
+            || snapshot.descriptor.revision != self.claims.policy_revision
+            || snapshot.descriptor.policy_digest != self.claims.policy_digest
+            || state.revocation_epoch != self.claims.revocation_epoch
+        {
+            return Err(PolicyError::new(PolicyErrorCode::Revoked));
+        }
+        for project_id in projects {
+            let mut request = self.request_template.clone();
+            request.input_digest = resource.input_digest.clone();
+            request.tenant_id = resource.tenant_id.clone();
+            request.project_id = Some(project_id);
+            request
+                .allowed_purposes
+                .clone_from(&resource.allowed_purposes);
+            request.allowed_processors = if resource.allowed_processors.is_empty() {
+                BTreeSet::from(["*".to_owned()])
+            } else {
+                resource.allowed_processors.clone()
+            };
+            request.classification = resource.classification;
+            request.lifecycle = resource.lifecycle;
+            request.integrity_verified = resource.integrity_verified;
+            request.valid_from = resource.valid_from;
+            request.valid_until = resource.valid_until;
+            request.observed_at = resource.observed_at;
+            request.instruction_authority = resource.instruction_authority;
+            let mut allowed = true;
+            let mut resources = vec![PolicyResource::Metadata, PolicyResource::Content];
+            if processor_required {
+                resources.push(PolicyResource::Processor);
+            }
+            for policy_resource in resources {
+                request.resource = policy_resource;
+                validate_request(policy_resource, &request)?;
+                let decision = evaluate(
+                    snapshot,
+                    &request,
+                    &state.revoked_principals,
+                    &state.revoked_grants,
+                    &state.revoked_resources,
+                )?;
+                if decision.outcome != PolicyOutcome::Allow {
+                    allowed = false;
+                    break;
+                }
+            }
+            if allowed {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+impl PartialEq for RetrievalAuthorization {
+    fn eq(&self, other: &Self) -> bool {
+        self.authority.ptr_eq(&other.authority)
+            && self.claims == other.claims
+            && self.grant_ids == other.grant_ids
+            && self.resource_digests == other.resource_digests
+            && self.request_template == other.request_template
+            && self.monotonic_expires_at == other.monotonic_expires_at
+    }
+}
+
+impl Eq for RetrievalAuthorization {}
+
+impl fmt::Debug for RetrievalAuthorization {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RetrievalAuthorization")
+            .field("claims", &self.claims)
+            .field("grant_count", &self.grant_ids.len())
+            .field("resource_count", &self.resource_digests.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// Non-bypassable policy entry points for every protected resource boundary.
@@ -115,6 +467,162 @@ impl fmt::Debug for CompiledPolicyEngine {
 }
 
 impl CompiledPolicyEngine {
+    /// Atomically authorizes and seals one non-empty multi-project retrieval partition.
+    ///
+    /// Every project is evaluated through both the partition and processor hard gates under one
+    /// immutable protected policy snapshot. The returned proof is process-local and is rejected as
+    /// soon as policy, revocation, availability, or its monotonic decision lifetime changes.
+    pub fn authorize_retrieval_partition(
+        self: &Arc<Self>,
+        requests: &[PolicyRequest],
+    ) -> Result<RetrievalAuthorization, PolicyError> {
+        let first = requests
+            .first()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::InvalidInput))?;
+        if requests.len() > crate::MAX_POLICY_SELECTORS {
+            return Err(PolicyError::new(PolicyErrorCode::LimitExceeded));
+        }
+        if first.processor.is_none() {
+            return Err(PolicyError::new(PolicyErrorCode::InvalidInput));
+        }
+        let mut project_ids = BTreeSet::new();
+        let mut normalized_first = first.clone();
+        normalized_first.project_id = None;
+        for request in requests {
+            validate_request(PolicyResource::Partition, request)?;
+            let project_id = request
+                .project_id
+                .clone()
+                .ok_or_else(|| PolicyError::new(PolicyErrorCode::InvalidInput))?;
+            if !project_ids.insert(project_id) {
+                return Err(PolicyError::new(PolicyErrorCode::InvalidInput));
+            }
+            let mut normalized = request.clone();
+            normalized.project_id = None;
+            if normalized != normalized_first {
+                return Err(PolicyError::new(PolicyErrorCode::InvalidInput));
+            }
+        }
+
+        let state = self
+            .state
+            .read()
+            .map_err(|_error| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        if !state.available {
+            return Err(PolicyError::new(PolicyErrorCode::Unavailable));
+        }
+        let snapshot = state
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::Unavailable))?;
+        if !snapshot.descriptor.protected {
+            return Err(PolicyError::new(PolicyErrorCode::Unavailable));
+        }
+
+        let mut expires_at = first.decision_expires_at;
+        let mut request_digests = BTreeSet::new();
+        let mut resource_digests = BTreeSet::new();
+        let mut grant_ids = BTreeSet::new();
+        for request in requests {
+            let partition_decision = evaluate(
+                snapshot,
+                request,
+                &state.revoked_principals,
+                &state.revoked_grants,
+                &state.revoked_resources,
+            )?;
+            let mut processor_request = request.clone();
+            processor_request.resource = PolicyResource::Processor;
+            validate_request(PolicyResource::Processor, &processor_request)?;
+            let processor_decision = evaluate(
+                snapshot,
+                &processor_request,
+                &state.revoked_principals,
+                &state.revoked_grants,
+                &state.revoked_resources,
+            )?;
+            if partition_decision.outcome != PolicyOutcome::Allow
+                || processor_decision.outcome != PolicyOutcome::Allow
+            {
+                return Err(PolicyError::new(PolicyErrorCode::Revoked));
+            }
+            expires_at = expires_at
+                .min(partition_decision.expires_at)
+                .min(processor_decision.expires_at);
+            request_digests.insert(retrieval_request_semantic_digest(request)?);
+            resource_digests.insert(request.input_digest.clone());
+            if let Some(grant_id) = request
+                .capability
+                .as_ref()
+                .and_then(|capability| capability.grant_id.clone())
+            {
+                grant_ids.insert(grant_id);
+            }
+        }
+        if expires_at <= first.observed_as_of {
+            return Err(PolicyError::new(PolicyErrorCode::Revoked));
+        }
+        let requested_lifetime_nanos = u64::try_from(
+            expires_at
+                .unix_nanos()
+                .checked_sub(first.observed_as_of.unix_nanos())
+                .ok_or_else(|| PolicyError::new(PolicyErrorCode::InvalidInput))?,
+        )
+        .map_err(|_error| PolicyError::new(PolicyErrorCode::LimitExceeded))?;
+        let requested_lifetime = Duration::from_nanos(requested_lifetime_nanos);
+        let proof_lifetime = requested_lifetime.min(MAX_RETRIEVAL_AUTHORIZATION_TTL);
+        let monotonic_expires_at = Instant::now()
+            .checked_add(proof_lifetime)
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::LimitExceeded))?;
+        let processor = first
+            .processor
+            .clone()
+            .ok_or_else(|| PolicyError::new(PolicyErrorCode::InvalidInput))?;
+        let vector_allowed = first.required_capability == Some(Capability::CompileContext)
+            && first.capability.as_ref().is_some_and(|capability| {
+                capability
+                    .capabilities
+                    .contains(&Capability::CompileContext)
+            });
+        let partition_digest = retrieval_partition_digest(
+            &first.principal_id,
+            &first.tenant_id,
+            &project_ids,
+            &first.purpose,
+            &processor,
+            first.maximum_classification,
+            first.maximum_instruction_authority,
+            vector_allowed,
+            &snapshot.descriptor,
+            state.revocation_epoch,
+            &request_digests,
+        )?;
+        let claims = RetrievalAuthorizationClaims {
+            principal_id: first.principal_id.clone(),
+            tenant_id: first.tenant_id.clone(),
+            project_ids,
+            purpose: first.purpose.clone(),
+            processor,
+            maximum_classification: first.maximum_classification,
+            maximum_instruction_authority: first.maximum_instruction_authority,
+            valid_at: first.valid_at,
+            observed_as_of: first.observed_as_of,
+            vector_allowed,
+            policy_digest: snapshot.descriptor.policy_digest.clone(),
+            policy_revision: snapshot.descriptor.revision,
+            revocation_epoch: state.revocation_epoch,
+            partition_digest,
+        };
+        Ok(RetrievalAuthorization {
+            authority: Arc::downgrade(self),
+            claims,
+            grant_ids,
+            resource_digests,
+            request_template: first.clone(),
+            monotonic_expires_at,
+        })
+    }
+
     /// Returns bounded, content-free cache measurements without tenant identifiers.
     pub fn cache_statistics(&self) -> Result<PolicyCacheStatistics, PolicyError> {
         let state = self
@@ -861,6 +1369,81 @@ fn profile_digest(profile: &PolicyProfile) -> Result<ContentDigest, PolicyError>
     let cbor = to_deterministic_cbor(&node)
         .map_err(|_error| PolicyError::new(PolicyErrorCode::InvalidInput))?;
     digest_parts(b"CIGAR-POLICY-PROFILE\0v1\0", &[&cbor])
+}
+
+#[allow(clippy::too_many_arguments)]
+fn retrieval_partition_digest(
+    principal_id: &RecordId,
+    tenant_id: &RecordId,
+    project_ids: &BTreeSet<RecordId>,
+    purpose: &str,
+    processor: &str,
+    maximum_classification: cigar_protocol::Classification,
+    maximum_instruction_authority: cigar_protocol::InstructionAuthority,
+    vector_allowed: bool,
+    snapshot: &PolicySnapshot,
+    revocation_epoch: u64,
+    request_digests: &BTreeSet<ContentDigest>,
+) -> Result<ContentDigest, PolicyError> {
+    let mut hasher = Sha256::new();
+    hasher.update(b"CIGAR-RETRIEVAL-AUTHORIZATION\0v2\0");
+    hash_field(&mut hasher, b"principal", principal_id.as_str().as_bytes());
+    hash_field(&mut hasher, b"tenant", tenant_id.as_str().as_bytes());
+    for project_id in project_ids {
+        hash_field(&mut hasher, b"project", project_id.as_str().as_bytes());
+    }
+    hash_field(&mut hasher, b"purpose", purpose.as_bytes());
+    hash_field(&mut hasher, b"processor", processor.as_bytes());
+    hash_field(
+        &mut hasher,
+        b"maximum_classification",
+        format!("{maximum_classification:?}").as_bytes(),
+    );
+    hash_field(
+        &mut hasher,
+        b"maximum_instruction_authority",
+        format!("{maximum_instruction_authority:?}").as_bytes(),
+    );
+    hash_field(&mut hasher, b"vector_allowed", &[u8::from(vector_allowed)]);
+    hash_field(
+        &mut hasher,
+        b"policy_digest",
+        snapshot.policy_digest.as_str().as_bytes(),
+    );
+    hash_field(
+        &mut hasher,
+        b"policy_revision",
+        &snapshot.revision.to_be_bytes(),
+    );
+    hash_field(
+        &mut hasher,
+        b"revocation_epoch",
+        &revocation_epoch.to_be_bytes(),
+    );
+    for request_digest in request_digests {
+        hash_field(
+            &mut hasher,
+            b"request_digest",
+            request_digest.as_str().as_bytes(),
+        );
+    }
+    let bytes = hasher.finalize();
+    digest_parts(b"CIGAR-RETRIEVAL-PARTITION\0v2\0", &[&bytes])
+}
+
+fn retrieval_request_semantic_digest(
+    request: &PolicyRequest,
+) -> Result<ContentDigest, PolicyError> {
+    let mut stable = request.clone();
+    stable.valid_at = stable.valid_from;
+    stable.observed_at = stable.valid_from;
+    stable.observed_as_of = stable.valid_from;
+    stable.decision_expires_at = stable.valid_until.unwrap_or(stable.valid_from);
+    let digest = request_digest(&stable)?;
+    digest_parts(
+        b"CIGAR-RETRIEVAL-REQUEST-SEMANTICS\0v1\0",
+        &[digest.as_str().as_bytes()],
+    )
 }
 
 fn request_digest(request: &PolicyRequest) -> Result<ContentDigest, PolicyError> {

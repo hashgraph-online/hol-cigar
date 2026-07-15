@@ -5,12 +5,18 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
 import time
 from pathlib import Path
 from typing import Any
 
 from assemble_evidence import _enforce_metric_gates, _require_artifact_qualification
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -22,9 +28,8 @@ from release_lib import (
     sha256_file,
     validate_qualification_policy,
     validate_release_policy_documents,
-    write_json,
 )
-from signatures import public_key_id, verify as verify_signature
+from signatures import _secure_openssl, public_key_id, verify as verify_signature
 from verify_package import verify as verify_package
 
 
@@ -39,12 +44,132 @@ def parse_arguments() -> argparse.Namespace:
         help="offline key scope/status policy and adjacent public roots",
     )
     parser.add_argument(
+        "--openssl",
+        type=Path,
+        required=True,
+        help="absolute path to the independently reviewed OpenSSL executable",
+    )
+    parser.add_argument(
+        "--openssl-sha256",
+        required=True,
+        help="lowercase SHA-256 of the independently reviewed OpenSSL executable",
+    )
+    parser.add_argument(
         "--verification-time",
         type=int,
         help="Unix time for signature validity; defaults to the current time",
     )
-    parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="external private evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="create-new report path, relative to --evidence-dir when selected",
+    )
     return parser.parse_args()
+
+
+def _selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment:
+        argument_path = argument.expanduser()
+        environment_path = Path(environment).expanduser()
+        if os.fspath(argument_path) != os.fspath(environment_path):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; "
+                "provide one evidence directory"
+            )
+    if argument is not None:
+        return argument.expanduser()
+    if environment:
+        return Path(environment).expanduser()
+    return None
+
+
+def _is_same_or_beneath(path: Path, directory: Path) -> bool:
+    try:
+        path.relative_to(directory)
+    except ValueError:
+        return False
+    return True
+
+
+class _ReportOutput:
+    """Pinned secure destination for one offline-verification report."""
+
+    def __init__(
+        self,
+        workspace: EvidenceWorkspace,
+        relative: str,
+    ) -> None:
+        self.workspace = workspace
+        self.relative = relative
+
+    @classmethod
+    def open(
+        cls,
+        arguments: argparse.Namespace,
+        *,
+        repository_root: Path,
+        dist: Path,
+    ) -> _ReportOutput | None:
+        if arguments.report is None:
+            _selected_evidence_directory(arguments)
+            return None
+
+        evidence_root = _selected_evidence_directory(arguments)
+        requested = arguments.report.expanduser()
+        if evidence_root is not None:
+            if requested.is_absolute():
+                raise ReleaseError(
+                    "--report must be relative when an evidence directory is selected"
+                )
+            parts = safe_evidence_path(os.fspath(requested))
+            relative = "/".join(parts)
+        else:
+            if not requested.is_absolute():
+                raise ReleaseError(
+                    "--report must be absolute unless --evidence-dir or "
+                    "CIGAR_EVIDENCE_DIR is selected"
+                )
+            parts = safe_evidence_path(requested.name)
+            relative = "/".join(parts)
+            evidence_root = requested.parent
+
+        tentative_report = evidence_root.joinpath(*relative.split("/"))
+        require_distinct_output(
+            tentative_report, [arguments.trust_policy], "release verification"
+        )
+        if evidence_root.is_absolute() and _is_same_or_beneath(tentative_report, dist):
+            raise ReleaseError(
+                "release verification report must be written outside the "
+                "verified directory"
+            )
+        workspace = EvidenceWorkspace.create(
+            evidence_root,
+            repository_root=repository_root,
+        )
+        try:
+            report_path = workspace.root.joinpath(*relative.split("/"))
+            if _is_same_or_beneath(report_path, dist):
+                raise ReleaseError(
+                    "release verification report must be written outside the "
+                    "verified directory"
+                )
+            return cls(workspace, relative)
+        except BaseException:
+            workspace.close()
+            raise
+
+    def publish(self, report: dict[str, Any]) -> None:
+        self.workspace.write_json(self.relative, report)
+
+    def close(self) -> None:
+        self.workspace.close()
 
 
 def _referenced_file(dist: Path, reference: dict[str, Any]) -> Path:
@@ -102,7 +227,9 @@ def _signature_payload(dist: Path, envelope: dict[str, Any]) -> Path:
     return _find_unique(dist, Path(name).name)
 
 
-def _load_trust_policy(path: Path) -> dict[str, dict[str, Any]]:
+def _load_trust_policy(
+    path: Path, *, openssl_path: Path, openssl_sha256: str
+) -> dict[str, dict[str, Any]]:
     if path.is_symlink() or not path.is_file():
         raise ReleaseError("release trust policy must be a regular, non-symlink file")
     document = load_json(path)
@@ -143,7 +270,14 @@ def _load_trust_policy(path: Path) -> dict[str, dict[str, Any]]:
             "public_key_sha256"
         ):
             raise ReleaseError(f"trusted public key digest mismatch: {relative}")
-        if public_key_id(key_path) != identifier:
+        if (
+            public_key_id(
+                key_path,
+                openssl_path=openssl_path,
+                openssl_sha256=openssl_sha256,
+            )
+            != identifier
+        ):
             raise ReleaseError(f"trusted public key id mismatch: {relative}")
         principal = entry.get("signer_principal")
         purposes = entry.get("purposes")
@@ -205,6 +339,9 @@ def _verify_envelope(
     trusted: dict[str, dict[str, Any]],
     expected_purpose: str,
     verification_time: int,
+    *,
+    openssl_path: Path,
+    openssl_sha256: str,
 ) -> Path:
     envelope = load_json(envelope_path)
     key_id = envelope.get("key_id") if isinstance(envelope, dict) else None
@@ -225,6 +362,8 @@ def _verify_envelope(
         expected_purpose=expected_purpose,
         expected_signer=trust["signer_principal"],
         verification_time=verification_time,
+        openssl_path=openssl_path,
+        openssl_sha256=openssl_sha256,
     )
     if expected_purpose not in trust["purposes"]:
         raise ReleaseError(
@@ -756,21 +895,13 @@ def _validate_sboms(
     }
 
 
-def main() -> int:
-    arguments = parse_arguments()
+def _run_verification(
+    arguments: argparse.Namespace, report_output: _ReportOutput | None
+) -> int:
     root = arguments.root.resolve()
     dist = arguments.directory.resolve()
     if not dist.is_dir():
         raise ReleaseError("release directory does not exist")
-    if arguments.report is not None:
-        report_path = arguments.report.resolve()
-        require_distinct_output(
-            report_path, [arguments.trust_policy], "release verification"
-        )
-        if report_path == dist or dist in report_path.parents:
-            raise ReleaseError(
-                "release verification report must be written outside the verified directory"
-            )
     verification_time = (
         int(time.time())
         if arguments.verification_time is None
@@ -778,6 +909,9 @@ def main() -> int:
     )
     if verification_time < 0 or verification_time > 253_402_300_799:
         raise ReleaseError("verification time must be a non-negative Unix timestamp")
+    if re.fullmatch(r"[0-9a-f]{64}", arguments.openssl_sha256) is None:
+        raise ReleaseError("reviewed OpenSSL SHA-256 must be 64 lowercase hex digits")
+    reviewed_openssl = _secure_openssl(arguments.openssl, arguments.openssl_sha256)
     for path in dist.rglob("*"):
         if path.is_symlink():
             raise ReleaseError(
@@ -1078,7 +1212,11 @@ def main() -> int:
             category_paths.add(attachment)
 
     trust_policy_path = arguments.trust_policy.absolute()
-    trusted = _load_trust_policy(trust_policy_path)
+    trusted = _load_trust_policy(
+        trust_policy_path,
+        openssl_path=reviewed_openssl,
+        openssl_sha256=arguments.openssl_sha256,
+    )
     purpose_by_payload: dict[Path, str] = {
         path.resolve(): "release-artifact" for path in artifacts.values()
     }
@@ -1139,13 +1277,25 @@ def main() -> int:
             )
         signed_paths.add(
             _verify_envelope(
-                envelope_path, dist, trusted, expected_purpose, verification_time
+                envelope_path,
+                dist,
+                trusted,
+                expected_purpose,
+                verification_time,
+                openssl_path=reviewed_openssl,
+                openssl_sha256=arguments.openssl_sha256,
             ).resolve()
         )
     release_signature = _find_unique(dist, "release-evidence.json.sig.json")
     signed_paths.add(
         _verify_envelope(
-            release_signature, dist, trusted, "release-evidence", verification_time
+            release_signature,
+            dist,
+            trusted,
+            "release-evidence",
+            verification_time,
+            openssl_path=reviewed_openssl,
+            openssl_sha256=arguments.openssl_sha256,
         ).resolve()
     )
     for artifact in artifacts.values():
@@ -1213,18 +1363,36 @@ def main() -> int:
         "signature_count": len(expected_envelopes),
         "trusted_key_ids": sorted(trusted),
         "trust_policy_sha256": sha256_file(trust_policy_path),
+        "reviewed_openssl_sha256": arguments.openssl_sha256,
         "verification_time": verification_time,
     }
-    if arguments.report is not None:
-        write_json(arguments.report.resolve(), report)
+    if report_output is not None:
+        report_output.publish(report)
     print(
         f"offline release verification passed for {len(artifacts)} artifacts and {len(receipts)} evidence receipts"
     )
     return 0
 
 
+def main() -> int:
+    arguments = parse_arguments()
+    dist = arguments.directory.resolve()
+    if not dist.is_dir():
+        raise ReleaseError("release directory does not exist")
+    report_output = _ReportOutput.open(
+        arguments,
+        repository_root=arguments.root.resolve(),
+        dist=dist,
+    )
+    try:
+        return _run_verification(arguments, report_output)
+    finally:
+        if report_output is not None:
+            report_output.close()
+
+
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except ReleaseError as error:
+    except (EvidenceWorkspaceError, ReleaseError) as error:
         raise SystemExit(f"offline release verification failed: {error}") from error

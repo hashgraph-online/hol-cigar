@@ -1,0 +1,676 @@
+{
+  "additional_command_count": 1,
+  "additional_commands": [
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "sanitizers"
+        }
+      ],
+      "command": "cargo xtask test sanitizers",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-sanitizers",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    }
+  ],
+  "authority": "crates/xtask/src/lib.rs::PRD_28_1_COMMANDS",
+  "command_count": 29,
+  "commands": [
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "bootstrap"
+        },
+        {
+          "kind": "literal",
+          "value": "--verify"
+        }
+      ],
+      "command": "cargo xtask bootstrap --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bootstrap-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "fmt"
+        },
+        {
+          "kind": "literal",
+          "value": "--check"
+        }
+      ],
+      "command": "cargo xtask fmt --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "format-check",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "generate"
+        },
+        {
+          "kind": "literal",
+          "value": "--check"
+        }
+      ],
+      "command": "cargo xtask generate --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "generate-check",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "lint"
+        }
+      ],
+      "command": "cargo xtask lint",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "lint",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "docs"
+        },
+        {
+          "kind": "literal",
+          "value": "--check"
+        }
+      ],
+      "command": "cargo xtask docs --check",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "docs-check",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP00"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "unit"
+        }
+      ],
+      "command": "cargo xtask test unit",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-unit",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "vectors"
+        }
+      ],
+      "command": "cargo xtask test vectors",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-vectors",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "compatibility"
+        }
+      ],
+      "command": "cargo xtask test compatibility",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-compatibility",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "integration"
+        }
+      ],
+      "command": "cargo xtask test integration",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-integration",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "conformance"
+        }
+      ],
+      "command": "cargo xtask test conformance",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-conformance",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "e2e"
+        }
+      ],
+      "command": "cargo xtask test e2e",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-e2e",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "security"
+        }
+      ],
+      "command": "cargo xtask test security",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-security",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "offline"
+        }
+      ],
+      "command": "cargo xtask test offline",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-offline",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "fuzz"
+        },
+        {
+          "kind": "literal",
+          "value": "smoke"
+        }
+      ],
+      "command": "cargo xtask fuzz smoke",
+      "gate_state": "unavailable",
+      "id": "fuzz-smoke",
+      "receipt": {
+        "implemented": false,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "models"
+        }
+      ],
+      "command": "cargo xtask test models",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-models",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "coverage"
+        },
+        {
+          "kind": "literal",
+          "value": "--verify"
+        }
+      ],
+      "command": "cargo xtask test coverage --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-coverage-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "mutations"
+        },
+        {
+          "kind": "literal",
+          "value": "--verify"
+        }
+      ],
+      "command": "cargo xtask test mutations --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-mutations-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "chaos"
+        }
+      ],
+      "command": "cargo xtask test chaos",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-chaos",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "test"
+        },
+        {
+          "kind": "literal",
+          "value": "migrations"
+        }
+      ],
+      "command": "cargo xtask test migrations",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "test-migrations",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP19"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "bench"
+        },
+        {
+          "kind": "literal",
+          "value": "micro"
+        },
+        {
+          "kind": "literal",
+          "value": "--verify"
+        }
+      ],
+      "command": "cargo xtask bench micro --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-micro-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "bench"
+        },
+        {
+          "kind": "literal",
+          "value": "macro"
+        },
+        {
+          "kind": "literal",
+          "value": "--verify"
+        }
+      ],
+      "command": "cargo xtask bench macro --verify",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-macro-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "bench"
+        },
+        {
+          "kind": "literal",
+          "value": "efficacy"
+        }
+      ],
+      "command": "cargo xtask bench efficacy",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "bench-efficacy",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP20"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "package"
+        },
+        {
+          "kind": "literal",
+          "value": "--all"
+        }
+      ],
+      "command": "cargo xtask package --all",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "package-all",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "package"
+        },
+        {
+          "kind": "literal",
+          "value": "--smoke"
+        },
+        {
+          "example": "dist/",
+          "kind": "safe-relative-path",
+          "name": "artifact-directory"
+        }
+      ],
+      "command": "cargo xtask package --smoke dist/",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "package-smoke",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "release"
+        },
+        {
+          "kind": "literal",
+          "value": "reproduce"
+        }
+      ],
+      "command": "cargo xtask release reproduce",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-reproduce",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "release"
+        },
+        {
+          "kind": "literal",
+          "value": "sbom"
+        }
+      ],
+      "command": "cargo xtask release sbom",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-sbom",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "release"
+        },
+        {
+          "kind": "literal",
+          "value": "sign"
+        }
+      ],
+      "command": "cargo xtask release sign",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-sign",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "release"
+        },
+        {
+          "kind": "literal",
+          "value": "attest"
+        }
+      ],
+      "command": "cargo xtask release attest",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-attest",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    },
+    {
+      "arguments": [
+        {
+          "kind": "literal",
+          "value": "release"
+        },
+        {
+          "kind": "literal",
+          "value": "verify"
+        },
+        {
+          "example": "dist/",
+          "kind": "safe-relative-path",
+          "name": "artifact-directory"
+        }
+      ],
+      "command": "cargo xtask release verify dist/",
+      "gate_state": "implemented-with-source-bound-content-free-receipt",
+      "id": "release-verify",
+      "receipt": {
+        "implemented": true,
+        "required": true
+      },
+      "release_eligible": false,
+      "work_packet": "WP21"
+    }
+  ],
+  "execution_policy": {
+    "evidence_workspace": "absolute-external-create-new",
+    "source_state": "clean-committed-git-checkout"
+  },
+  "generator": "cargo xtask generate",
+  "platform_scope": [
+    "macos-arm64"
+  ],
+  "projections": {
+    "ci": "crates/xtask/generated/ci-command-inventory.v1.json",
+    "readme": "crates/xtask/generated/readme-command-inventory.md",
+    "release": "crates/xtask/generated/release-command-inventory.v1.json"
+  },
+  "schema_version": 1,
+  "source": "prd.md#28.1-clean-source-qualification"
+}

@@ -87,6 +87,35 @@ impl EncryptedDevelopmentKeystore {
         Ok(store)
     }
 
+    /// Opens an existing encrypted keystore from bytes already read through a validated descriptor.
+    ///
+    /// This entry point is for service bootstraps that must bind ownership, link count, mode, and
+    /// file identity to the same descriptor used for the read. The path is retained only as the
+    /// durability destination; callers must not expose a mutable provider when the source mount is
+    /// required to remain immutable.
+    pub fn open_existing_bytes(
+        path: impl AsRef<Path>,
+        passphrase: SecretBytes,
+        encoded: &[u8],
+    ) -> Result<Self, CryptoError> {
+        if passphrase.len() < MIN_PASSPHRASE_BYTES || encoded.len() > MAX_KEYSTORE_BYTES as usize {
+            return Err(CryptoError::new(CryptoErrorCode::InvalidMetadata));
+        }
+        let path = path.as_ref().to_path_buf();
+        if path.parent().is_none() {
+            return Err(CryptoError::new(CryptoErrorCode::InvalidMetadata));
+        }
+        let (salt, inner) = decode_keystore(encoded, &passphrase)?;
+        Ok(Self {
+            path,
+            passphrase,
+            salt,
+            inner,
+            mutation: Mutex::new(()),
+            failpoints: Mutex::new(BTreeSet::new()),
+        })
+    }
+
     /// Arms one named one-shot durability failpoint.
     pub fn inject_failpoint(&self, failpoint: KeystoreFailpoint) -> Result<(), CryptoError> {
         self.failpoints
@@ -445,7 +474,7 @@ fn read_keystore(
     path: &Path,
     passphrase: &SecretBytes,
 ) -> Result<([u8; KEYSTORE_SALT_BYTES], MemoryKeyProvider), CryptoError> {
-    let mut file = File::open(path).map_err(provider_io)?;
+    let mut file = open_bounded_read(path).map_err(provider_io)?;
     let length = file.metadata().map_err(provider_io)?.len();
     if length > MAX_KEYSTORE_BYTES {
         return Err(CryptoError::new(CryptoErrorCode::InvalidMetadata));
@@ -454,7 +483,14 @@ fn read_keystore(
         .map_err(|_error| CryptoError::new(CryptoErrorCode::InvalidMetadata))?;
     let mut bytes = Vec::with_capacity(capacity);
     file.read_to_end(&mut bytes).map_err(provider_io)?;
-    let (salt, envelope) = decode_file(&bytes)?;
+    decode_keystore(&bytes, passphrase)
+}
+
+fn decode_keystore(
+    bytes: &[u8],
+    passphrase: &SecretBytes,
+) -> Result<([u8; KEYSTORE_SALT_BYTES], MemoryKeyProvider), CryptoError> {
+    let (salt, envelope) = decode_file(bytes)?;
     let key = derive_key(passphrase, &salt)?;
     let mut plaintext = decrypt_xchacha20_bytes(&key, &envelope, &keystore_aad(&salt))?;
     let keys = decode_provider(&plaintext);
@@ -465,6 +501,98 @@ fn read_keystore(
             keys: Mutex::new(keys?),
         },
     ))
+}
+
+#[cfg(unix)]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    open_bounded_read_before_final(path, || Ok(()))
+}
+
+#[cfg(unix)]
+fn open_bounded_read_before_final(
+    path: &Path,
+    before_final: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<File> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::path::Component;
+
+    let mut absolute = false;
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir if names.is_empty() && !absolute => absolute = true,
+            Component::Normal(name) => names.push(name),
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::ParentDir => return Err(invalid_read_path()),
+        }
+    }
+    let (file_name, ancestors) = names.split_last().ok_or_else(invalid_read_path)?;
+    let base = if absolute {
+        Path::new("/")
+    } else {
+        Path::new(".")
+    };
+    let mut directory = open(
+        base,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)?;
+    validate_read_ancestor(&directory.metadata()?)?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            *ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(std::io::Error::from)?;
+        validate_read_ancestor(&directory.metadata()?)?;
+    }
+    before_final()?;
+    openat(
+        &directory,
+        *file_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)
+}
+
+#[cfg(unix)]
+fn validate_read_ancestor(metadata: &std::fs::Metadata) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let owner = metadata.uid();
+    let mode = metadata.mode();
+    let writable_by_others = mode & 0o022 != 0;
+    let protected_sticky_root = owner == 0 && mode & 0o1000 != 0;
+    if metadata.is_dir()
+        && (owner == 0 || owner == rustix::process::geteuid().as_raw())
+        && (!writable_by_others || protected_sticky_root)
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "unsafe file ancestor",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn invalid_read_path() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid file path")
+}
+
+#[cfg(not(unix))]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    File::open(path)
 }
 
 fn derive_key(
@@ -578,6 +706,8 @@ fn provider_io(_error: std::io::Error) -> CryptoError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::open_bounded_read_before_final;
     use super::{EncryptedDevelopmentKeystore, KeystoreFailpoint};
     use crate::{
         CreateKeyRequest, CryptoErrorCode, KeyAlgorithm, KeyProvider, KeyPurpose, SecretBytes,
@@ -601,7 +731,8 @@ mod tests {
     fn encrypted_keystore_persists_rotates_and_rejects_wrong_passphrase()
     -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
-        let path = directory.path().join("keys.cigar");
+        let root = std::fs::canonicalize(directory.path())?;
+        let path = root.join("keys.cigar");
         let first = {
             let store = EncryptedDevelopmentKeystore::open(&path, passphrase())?;
             let first = store.create(request())?;
@@ -648,7 +779,8 @@ mod tests {
     fn keystore_failpoints_distinguish_pre_and_post_publication()
     -> Result<(), Box<dyn std::error::Error>> {
         let directory = tempfile::tempdir()?;
-        let path = directory.path().join("keys.cigar");
+        let root = std::fs::canonicalize(directory.path())?;
+        let path = root.join("keys.cigar");
         let store = EncryptedDevelopmentKeystore::open(&path, passphrase())?;
         store.inject_failpoint(KeystoreFailpoint::AfterFileSync)?;
         assert_eq!(
@@ -665,6 +797,40 @@ mod tests {
         drop(store);
         let reopened = EncryptedDevelopmentKeystore::open(&path, passphrase())?;
         assert_eq!(reopened.inner.lock()?.len(), 1);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keystore_reads_reject_symlinked_ancestors_and_pin_open_directories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Read as _;
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let trusted = root.join("trusted");
+        let replacement = root.join("replacement");
+        std::fs::create_dir(&trusted)?;
+        std::fs::create_dir(&replacement)?;
+        std::fs::write(trusted.join("value"), b"trusted")?;
+        std::fs::write(replacement.join("value"), b"substituted")?;
+
+        let alias = root.join("alias");
+        symlink(&trusted, &alias)?;
+        assert!(open_bounded_read_before_final(&alias.join("value"), || Ok(())).is_err());
+
+        let moved = root.join("moved");
+        let requested = trusted.join("value");
+        let mut opened = open_bounded_read_before_final(&requested, || {
+            std::fs::rename(&trusted, &moved)?;
+            std::fs::rename(&replacement, &trusted)?;
+            Ok(())
+        })?;
+        let mut value = String::new();
+        opened.read_to_string(&mut value)?;
+        assert_eq!(value, "trusted");
+        assert_eq!(std::fs::read_to_string(&requested)?, "substituted");
         Ok(())
     }
 }

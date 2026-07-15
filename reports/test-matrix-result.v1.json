@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "canary_scan": "passed",
+      "command_sha256": "198bf1821e135c30beb863213951386357b9ec1fa8d42cce553cb1af0ac86a82",
+      "duration_ms": 536,
+      "exit_code": 0,
+      "id": "MIG-POSTGRES-STATIC-001",
+      "status": "passed",
+      "stderr": {
+        "bytes": 355,
+        "sha256": "53aa01085d895e2933787df645f10db524497bcf030f4692d2f9464940e3857f"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "failed_case_count": 0,
+  "finished_at": "2026-07-14T16:55:40.838Z",
+  "host": {
+    "architecture": "arm64",
+    "platform": "macos",
+    "python": "3.14.6"
+  },
+  "matrix": {
+    "path": "tests/migration/matrix-v1.json",
+    "sha256": "c3c1cf91c47c484fb3896530b66a60fe3a12c6861f99ff922175086497f21ac2"
+  },
+  "passed_case_count": 1,
+  "profile": "local",
+  "release_eligible": false,
+  "schema_version": "cigar.test-matrix-result.v1",
+  "selected_case_count": 1,
+  "source": {
+    "clean": false,
+    "committed": true,
+    "kind": "git",
+    "revision": "56a5a1346bdfd362f67c279f4f8cd5d4ba7c46b2"
+  },
+  "started_at": "2026-07-14T16:55:40.300Z",
+  "status": "passed",
+  "suite": "migration"
+}

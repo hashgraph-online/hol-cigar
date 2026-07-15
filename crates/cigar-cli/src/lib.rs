@@ -11,6 +11,9 @@ mod administration;
 #[path = "beta/administration.rs"]
 mod administration;
 mod arguments;
+mod beta_state_compat;
+#[cfg(all(feature = "full", unix))]
+mod beta_state_transition;
 #[cfg(feature = "full")]
 mod claude_plugin;
 #[cfg(feature = "full")]
@@ -25,6 +28,9 @@ mod configuration;
 #[path = "beta/configuration.rs"]
 mod configuration;
 mod error;
+#[cfg(feature = "full")]
+#[path = "generated/operation_mappings.rs"]
+mod operation_mappings;
 mod render;
 
 use arguments::{ParsedInvocation, parse};
@@ -303,7 +309,10 @@ fn beta_build_metadata() -> Result<String, CliError> {
 
     let metadata = BetaBuildMetadata {
         schema_version: "cigar.beta.build-metadata.v1",
-        version: concat!(env!("CARGO_PKG_VERSION"), "-beta.1"),
+        // The embedded beta composition is a frozen compatibility artifact.  Its
+        // externally visible identity must not drift when the full workspace
+        // advances to a new development version.
+        version: crate::beta_state_compat::FROZEN_BETA_RELEASE,
         source_revision: match option_env!("CIGAR_SOURCE_REVISION") {
             Some(revision) => revision,
             None => "unknown",
@@ -471,6 +480,7 @@ mod tests {
         )?;
         let config = cigar_daemon::DaemonConfig {
             mode: cigar_daemon::DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime.clone(),
             unix_socket: Some(runtime.join("cigard.sock")),
@@ -494,6 +504,7 @@ mod tests {
                 source_registry_file: sources_file,
                 effect_registry_file: effects_file,
             },
+            local_vector: cigar_daemon::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 5_000,
             shutdown_deadline_ms: 5_000,
@@ -519,6 +530,7 @@ mod tests {
             },
             telemetry: cigar_daemon::TelemetrySettings {
                 otlp_endpoint: None,
+                otlp_ca_certificate_file: None,
                 export_timeout_ms: 1_000,
                 metric_interval_ms: 1_000,
             },
@@ -563,7 +575,7 @@ mod tests {
     async fn version_and_help_are_stable_without_a_target() {
         let version = run(args(&["version"]), TerminalContext::default()).await;
         assert_eq!(version.status, 0);
-        assert!(version.stdout.contains("\"version\":\"0.1.0\""));
+        assert!(version.stdout.contains("\"version\":\"1.0.0-dev.1\""));
         assert!(version.stderr.is_empty());
 
         let help = run(Vec::new(), TerminalContext::default()).await;
@@ -777,7 +789,7 @@ mod tests {
         use cigar_crypto::{EncryptedDevelopmentKeystore, KeyProvider as _, SecretBytes};
         use cigar_protocol::{BlobRef, ContentDigest, MediaType};
         use cigar_store::{
-            BlobRecord, MultiTenantLocalRepositoryBlobStore, RepositoryBlobStore as _,
+            BlobRecord, MultiTenantLocalRepositoryBlobStore, RepositoryBlobStore as _, SqliteStore,
         };
         use sha2::{Digest as _, Sha256};
         use std::fmt::Write as _;
@@ -914,9 +926,11 @@ mod tests {
         );
         assert!(created.stdout.contains("\"signed\":true"));
         assert!(created.stdout.contains("\"verified\":true"));
+        assert!(created.stdout.contains("\"format_version\":2"));
         assert!(backup.join("manifest.cbor").is_file());
         assert!(backup.join("manifest.signature.cbor").is_file());
         assert!(backup.join("database.sqlite3").is_file());
+        assert!(backup.join("effect-checkpoints.json").is_file());
 
         let verified = run(
             args(&[
@@ -981,7 +995,14 @@ mod tests {
         .await;
         assert_eq!(restored_outcome.status, 0, "{}", restored_outcome.stderr);
         assert!(restored.join("database.sqlite3").is_file());
+        assert!(restored.join("effect-checkpoints.json").is_file());
         assert!(restored.join("blobs").is_dir());
+        let source_semantic_root =
+            SqliteStore::open(&daemon.production.metadata_database)?.semantic_root()?;
+        assert_eq!(
+            SqliteStore::open(restored.join("database.sqlite3"))?.semantic_root()?,
+            source_semantic_root
+        );
 
         let passphrase = b"0123456789abcdef0123456789abcdef";
         let keys = Arc::new(EncryptedDevelopmentKeystore::open(
@@ -1015,10 +1036,18 @@ mod tests {
         let tenant = record(1)?;
         repository.put(&tenant, &blob)?;
 
+        let blocked_gc_plan = daemon
+            .state_directory
+            .parent()
+            .ok_or("missing fixture root")?
+            .join("blocked-gc-plan.json");
+        let blocked_gc_plan_text = blocked_gc_plan.display().to_string();
         let plan = run(
             args(&[
                 "gc",
                 "plan",
+                &blocked_gc_plan_text,
+                "--yes",
                 "--config",
                 &cli_config_text,
                 "--output",
@@ -1028,10 +1057,58 @@ mod tests {
         )
         .await;
         assert_eq!(plan.status, 0, "{}", plan.stderr);
-        assert!(plan.stdout.contains(&encoded_digest), "{}", plan.stdout);
+        assert!(
+            plan.stdout.contains("\"candidate_count\":1"),
+            "{}",
+            plan.stdout
+        );
         assert!(plan.stdout.contains("retention_or_replay_window"));
         assert!(plan.stdout.contains("legal_hold"));
         assert!(plan.stdout.contains("backup_policy"));
+        let blocked_plan_bytes = std::fs::read(&blocked_gc_plan)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(
+                std::fs::metadata(&blocked_gc_plan)?.permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        let no_clobber = run(
+            args(&[
+                "gc",
+                "plan",
+                &blocked_gc_plan_text,
+                "--yes",
+                "--config",
+                &cli_config_text,
+                "--output",
+                "json",
+            ]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_ne!(no_clobber.status, 0);
+        assert_eq!(std::fs::read(&blocked_gc_plan)?, blocked_plan_bytes);
+        let blocked_run = run(
+            args(&[
+                "gc",
+                "run",
+                &blocked_gc_plan_text,
+                "--yes",
+                "--config",
+                &cli_config_text,
+                "--output",
+                "json",
+            ]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_ne!(blocked_run.status, 0);
+        assert_eq!(
+            repository.get(&tenant, &blob.reference)?,
+            Some(blob.clone())
+        );
 
         let gc_policy = daemon
             .state_directory
@@ -1043,10 +1120,17 @@ mod tests {
             br#"{"schema_version":"cigar.gc-policy.v1","retention_satisfied":true,"legal_hold":false,"backup_complete":true,"max_files":10}"#,
         )?;
         let gc_policy_text = gc_policy.display().to_string();
-        let collected = run(
+        let signed_gc_plan = daemon
+            .state_directory
+            .parent()
+            .ok_or("missing fixture root")?
+            .join("signed-gc-plan.json");
+        let signed_gc_plan_text = signed_gc_plan.display().to_string();
+        let planned = run(
             args(&[
                 "gc",
-                "run",
+                "plan",
+                &signed_gc_plan_text,
                 "--yes",
                 "--input",
                 &gc_policy_text,
@@ -1058,9 +1142,88 @@ mod tests {
             TerminalContext::default(),
         )
         .await;
-        assert_eq!(collected.status, 0, "{}", collected.stderr);
+        assert_eq!(planned.status, 0, "{}", planned.stderr);
+        assert!(planned.stdout.contains("\"signed\":true"));
+        let signed_plan: cigar_store::SignedGarbageCollectionPlan =
+            serde_json::from_slice(&std::fs::read(&signed_gc_plan)?)?;
+        assert!(signed_plan.unverified_plan().policy().retention_satisfied);
+        assert!(!signed_plan.unverified_plan().policy().legal_hold);
+        assert!(signed_plan.unverified_plan().policy().backup_complete);
+        assert_eq!(signed_plan.unverified_plan().maximum_candidates(), 10);
+        let inspection_keys = Arc::new(EncryptedDevelopmentKeystore::open(
+            &daemon.production.keystore_file,
+            SecretBytes::new(passphrase.to_vec()),
+        )?);
+        let verification_time = i128::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos(),
+        )?;
+        let verified_plan = cigar_store::verify_garbage_collection_plan_trusted(
+            signed_plan.clone(),
+            inspection_keys.as_ref(),
+            verification_time,
+            |_identity| true,
+        )
+        .map_err(|error| format!("signed plan verification failed: {:?}", error.code()))?;
+        let inspection_repository: Arc<dyn cigar_store::RepositoryBlobStore> =
+            Arc::new(MultiTenantLocalRepositoryBlobStore::open(
+                &daemon.production.blob_directory,
+                &daemon.production.blob_key_reference_directory,
+                inspection_keys,
+                verification_time,
+            )?);
+        SqliteStore::run_garbage_collection_plan_at(
+            &daemon.production.metadata_database,
+            inspection_repository,
+            &verified_plan,
+            true,
+        )
+        .map_err(|error| format!("signed plan dry run failed: {:?}", error.code()))?;
+        let previewed = run(
+            args(&[
+                "gc",
+                "run",
+                &signed_gc_plan_text,
+                "--dry-run",
+                "--config",
+                &cli_config_text,
+                "--output",
+                "json",
+            ]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(
+            previewed.status, 0,
+            "stdout={} stderr={}",
+            previewed.stdout, previewed.stderr
+        );
+        let collected = run(
+            args(&[
+                "gc",
+                "run",
+                &signed_gc_plan_text,
+                "--yes",
+                "--config",
+                &cli_config_text,
+                "--output",
+                "json",
+            ]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(
+            collected.status, 0,
+            "stdout={} stderr={}",
+            collected.stdout, collected.stderr
+        );
         assert!(collected.stdout.contains("\"deleted\":1"));
         assert_eq!(repository.get(&tenant, &blob.reference)?, None);
+        assert_eq!(
+            SqliteStore::open(&daemon.production.metadata_database)?.semantic_root()?,
+            source_semantic_root
+        );
 
         let authority_bytes = std::fs::read(&daemon.production.authority_file)?;
         let mut authority: cigar_daemon::ProductionAuthorityConfiguration =
@@ -1137,16 +1300,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remote_only_admin_surface_fails_without_semantic_aliasing() {
+    async fn remote_only_admin_surface_fails_without_semantic_aliasing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let authorization = directory.path().join("remote.authorization");
+        restricted_write(&authorization, b"Bearer test-only-remote-authority")?;
         let outcome = run(
-            args(&[
-                "effect",
-                "list",
-                "--remote",
-                "https://example.test",
-                "--output",
-                "json",
-            ]),
+            vec![
+                OsString::from("effect"),
+                OsString::from("list"),
+                OsString::from("--remote"),
+                OsString::from("https://example.test"),
+                OsString::from("--authorization-file"),
+                authorization.into_os_string(),
+                OsString::from("--output"),
+                OsString::from("json"),
+            ],
             TerminalContext::default(),
         )
         .await;
@@ -1154,6 +1323,7 @@ mod tests {
         assert!(outcome.stdout.contains("CLI_UNSUPPORTED_SURFACE"));
         assert!(!outcome.stdout.contains("getDiagnostics"));
         assert!(!outcome.stdout.contains("getConfiguration"));
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

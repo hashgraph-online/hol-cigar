@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "cigar": {
-      "command": "cigar-mcp",
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp",
       "args": [
         "serve"
       ],

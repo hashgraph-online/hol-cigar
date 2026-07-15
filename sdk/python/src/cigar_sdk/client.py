@@ -274,6 +274,8 @@ class _Core:
         loopback = hostname in {"localhost", "127.0.0.1", "::1"}
         if parsed.scheme == "http" and (not loopback or not allow_insecure_loopback):
             raise ValidationError("cleartext HTTP requires explicit allow_insecure_loopback for loopback")
+        if parsed.scheme == "https" and bearer_token is None:
+            raise ValidationError("remote HTTPS requires an explicit bearer token provider")
         self.base_url = base_url.rstrip("/")
         self.bearer_token = bearer_token
         self.timeout = _timeout(timeout)

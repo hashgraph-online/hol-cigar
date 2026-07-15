@@ -52,14 +52,14 @@ use url::Url;
 /// use awscreds::Credentials;
 ///
 /// // Load credentials directly
-/// let access_key = "AKIAIOSFODNN7EXAMPLE";
-/// let secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+/// let access_key = "example-access-key";
+/// let secret_key = "example-secret-key";
 /// let credentials = Credentials::new(Some(access_key), Some(secret_key), None, None, None);
 ///
 /// // Load credentials from the environment
 /// use std::env;
-/// env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
-/// env::set_var("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY");
+/// env::set_var("AWS_ACCESS_KEY_ID", "example-access-key");
+/// env::set_var("AWS_SECRET_ACCESS_KEY", "example-secret-key");
 /// let credentials = Credentials::new(None, None, None, None, None);
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -189,10 +189,21 @@ fn http_get(url: &str) -> attohttpc::Result<attohttpc::Response> {
 
 impl Credentials {
     pub fn refresh(&mut self) -> Result<(), CredentialsError> {
+        self.refresh_with(OffsetDateTime::now_utc(), Credentials::default)
+    }
+
+    fn refresh_with<F>(
+        &mut self,
+        now: OffsetDateTime,
+        load_credentials: F,
+    ) -> Result<(), CredentialsError>
+    where
+        F: FnOnce() -> Result<Credentials, CredentialsError>,
+    {
         if let Some(expiration) = self.expiration {
-            if expiration.0 <= OffsetDateTime::now_utc() {
+            if expiration.0 <= now {
                 debug!("Refreshing credentials!");
-                let refreshed = Credentials::default()?;
+                let refreshed = load_credentials()?;
                 *self = refreshed
             }
         }
@@ -503,7 +514,8 @@ struct CredentialsFromInstanceMetadata {
     access_key_id: String,
     secret_access_key: String,
     token: String,
-    expiration: Rfc3339OffsetDateTime, // TODO fix #163
+    // Retained as the fork's compatibility wrapper until upstream issue #163 is resolved.
+    expiration: Rfc3339OffsetDateTime,
 }
 
 #[cfg(test)]
@@ -522,8 +534,8 @@ mod tests {
     #[test]
     fn test_from_credentials_file_custom_location() {
         let content = r#"[default]
-aws_access_key_id = AKIAIOSFODNN7EXAMPLE
-aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_access_key_id = DEFAULT_KEY
+aws_secret_access_key = DEFAULT_SECRET
 
 [production]
 aws_access_key_id = PROD_KEY
@@ -534,7 +546,7 @@ aws_session_token = PROD_SESSION_TOKEN
 
         // Test default section
         let creds = Credentials::from_credentials_file(file.path(), None).unwrap();
-        assert_eq!(creds.access_key.unwrap(), "AKIAIOSFODNN7EXAMPLE");
+        assert_eq!(creds.access_key.unwrap(), "DEFAULT_KEY");
 
         // Test custom section
         let creds = Credentials::from_credentials_file(file.path(), Some("production")).unwrap();
@@ -591,8 +603,8 @@ fn test_instance_metadata_creds_deserialization() {
             "Code" : "Success",
             "LastUpdated" : "2012-04-26T16:39:16Z",
             "Type" : "AWS-HMAC",
-            "AccessKeyId" : "ASIAIOSFODNN7EXAMPLE",
-            "SecretAccessKey" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "AccessKeyId" : "EXAMPLE_ACCESS_KEY",
+            "SecretAccessKey" : "EXAMPLE_SECRET_KEY",
             "Token" : "token",
             "Expiration" : "2017-05-17T15:09:54Z"
         }
@@ -602,13 +614,46 @@ fn test_instance_metadata_creds_deserialization() {
 }
 
 #[cfg(test)]
-#[ignore]
 #[test]
 fn test_credentials_refresh() {
-    let mut c = Credentials::default().expect("Could not generate credentials");
-    let e = Rfc3339OffsetDateTime(OffsetDateTime::now_utc());
-    c.expiration = Some(e);
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    c.refresh().expect("Could not refresh");
-    assert!(c.expiration.is_none())
+    let now = OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap();
+    let mut credentials = Credentials::new(
+        Some("expired-access-key"),
+        Some("expired-secret-key"),
+        Some("expired-security-token"),
+        Some("expired-session-token"),
+        None,
+    )
+    .unwrap();
+    credentials.expiration = Some(Rfc3339OffsetDateTime(now - time::Duration::seconds(1)));
+
+    credentials
+        .refresh_with(now, || {
+            Credentials::new(
+                Some("refreshed-access-key"),
+                Some("refreshed-secret-key"),
+                Some("refreshed-security-token"),
+                Some("refreshed-session-token"),
+                None,
+            )
+        })
+        .unwrap();
+
+    assert_eq!(
+        credentials.access_key.as_deref(),
+        Some("refreshed-access-key")
+    );
+    assert_eq!(
+        credentials.secret_key.as_deref(),
+        Some("refreshed-secret-key")
+    );
+    assert_eq!(
+        credentials.security_token.as_deref(),
+        Some("refreshed-security-token")
+    );
+    assert_eq!(
+        credentials.session_token.as_deref(),
+        Some("refreshed-session-token")
+    );
+    assert_eq!(credentials.expiration, None);
 }

@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/development-local-macos-aarch64.v1.schema.json",
+  "title": "CIGAR local macOS aarch64 development artifact projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "product",
+    "version_binding",
+    "artifact_matrix",
+    "target",
+    "deployment_modes",
+    "release_state",
+    "published",
+    "supported",
+    "observed_host",
+    "selected_artifacts",
+    "deferred_artifacts",
+    "missing_artifacts",
+    "qualification_obligations",
+    "fail_closed"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.development-artifact-profile.v1"},
+    "profile_id": {"const": "cigar.development.local.macos-aarch64.v1"},
+    "product": {"const": "cigar"},
+    "version_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "version", "target_release_version"],
+      "properties": {
+        "path": {"const": "packaging/product-version.v1.json"},
+        "sha256": {"const": "055375b4142926fb950280b56077f7ad1a31055537be4e14e6efbf10dbac30c4"},
+        "version": {"const": "1.0.0-dev.1"},
+        "target_release_version": {"const": "1.0.0"}
+      }
+    },
+    "artifact_matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schema_version", "artifact_id_inventory_sha256"],
+      "properties": {
+        "path": {"const": "packaging/artifact-matrix.v1.json"},
+        "schema_version": {"const": "cigar.artifact-matrix.v1"},
+        "artifact_id_inventory_sha256": {"const": "b5f25d88f278943ff7f3fe9cea42d335df272913afa4538d1acb30071ecec1c7"}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_os", "host_arch", "target_triple"],
+      "properties": {
+        "host_os": {"const": "macos"},
+        "host_arch": {"const": "arm64"},
+        "target_triple": {"const": "aarch64-apple-darwin"}
+      }
+    },
+    "deployment_modes": {"const": ["embedded", "local-sidecar"]},
+    "release_state": {"const": "development"},
+    "published": {"const": false},
+    "supported": {"const": false},
+    "observed_host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "os", "version", "build", "architecture", "minimum_support_claim"],
+      "properties": {
+        "status": {"const": "observation-only"},
+        "os": {"const": "macos"},
+        "version": {"const": "15.6"},
+        "build": {"const": "24G84"},
+        "architecture": {"const": "arm64"},
+        "minimum_support_claim": {"const": false}
+      }
+    },
+    "selected_artifacts": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "source"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "docs"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "schemas"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "conformance"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "benchmarks"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "licenses"}, "selection_group": {"const": "portable"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "cli-daemon-macos-aarch64"}, "selection_group": {"const": "native-runtime"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "cigar-conformance-macos-aarch64"}, "selection_group": {"const": "qualification-conformance"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "cigarbench-macos-aarch64"}, "selection_group": {"const": "qualification-benchmark"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "macos-homebrew-formula-arm64"}, "selection_group": {"const": "installer-metadata"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "macos-installer-arm64"}, "selection_group": {"const": "installer-native"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "typescript-sdk"}, "selection_group": {"const": "sdk-typescript"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "rust-sdk-crate"}, "selection_group": {"const": "sdk-rust"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "python-sdk-sdist"}, "selection_group": {"const": "sdk-python"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "python-sdk-wheel"}, "selection_group": {"const": "sdk-python"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "go-sdk"}, "selection_group": {"const": "sdk-go"}}}]},
+        {"allOf": [{"$ref": "#/$defs/selected"}, {"properties": {"id": {"const": "claude-code-plugin"}, "selection_group": {"const": "adapter"}}}]}
+      ],
+      "items": false
+    },
+    "deferred_artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/deferred"}, {"properties": {"id": {"const": "cli-daemon-linux-x86_64-gnu"}}}]},
+        {"allOf": [{"$ref": "#/$defs/deferred"}, {"properties": {"id": {"const": "cli-daemon-linux-aarch64-gnu"}}}]},
+        {"allOf": [{"$ref": "#/$defs/deferred"}, {"properties": {"id": {"const": "cli-daemon-macos-x86_64"}}}]},
+        {"allOf": [{"$ref": "#/$defs/deferred"}, {"properties": {"id": {"const": "cli-daemon-windows-x86_64"}}}]},
+        {"allOf": [{"$ref": "#/$defs/deferred"}, {"properties": {"id": {"const": "shared-oci"}}}]}
+      ],
+      "items": false
+    },
+    "missing_artifacts": {
+      "type": "array",
+      "maxItems": 0,
+      "items": false
+    },
+    "qualification_obligations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fuzz_accumulation", "soak", "signing", "notarization"],
+      "properties": {
+        "fuzz_accumulation": {"$ref": "#/$defs/deferredCampaign"},
+        "soak": {"$ref": "#/$defs/deferredCampaign"},
+        "signing": {"$ref": "#/$defs/externalEvidence"},
+        "notarization": {"$ref": "#/$defs/externalEvidence"}
+      }
+    },
+    "fail_closed": {"const": true}
+  },
+  "$defs": {
+    "selected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "selection_group", "status", "built", "qualified"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "selection_group": {"type": "string", "minLength": 1},
+        "status": {"const": "planned"},
+        "built": {"const": false},
+        "qualified": {"const": false}
+      }
+    },
+    "deferred": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "status": {"const": "deferred-separate-profile"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "missing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "status": {"const": "missing"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "deferredCampaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement", "current_run", "qualifying_evidence"],
+      "properties": {
+        "requirement": {"const": "mandatory"},
+        "current_run": {"const": "deferred"},
+        "qualifying_evidence": {"const": false}
+      }
+    },
+    "externalEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement", "execution_boundary", "evidence_status"],
+      "properties": {
+        "requirement": {"const": "mandatory"},
+        "execution_boundary": {"const": "external"},
+        "evidence_status": {"const": "not-evidenced"}
+      }
+    }
+  }
+}

@@ -2,32 +2,85 @@ name: security
 
 on:
   pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "17 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
 jobs:
   dependency-policy:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
       - run: cargo install cargo-deny --version 0.20.2 --locked
       - run: cargo deny check
       - run: cargo install cargo-audit --version 0.22.1 --locked
       - run: cargo audit --deny warnings
-      - run: cargo xtask lint
+      - name: Install pinned Trivy dependency scanner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: "v0.69.2"
+          cache: false
+      - name: Scan and classify all dependency locks
+        id: trivy_dependency_policy
+        continue-on-error: true
+        run: |
+          evidence_parent="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-trivy-dependency-evidence"
+          test ! -e "${evidence_parent}"
+          mkdir -m 0700 "${evidence_parent}"
+          python3 tools/quality/trivy_policy.py scan \
+            --report "${evidence_parent}/report.json" \
+            --receipt "${evidence_parent}/receipt.json"
+      - name: Preserve Trivy dependency evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-dependency-evidence
+          path: ${{ runner.temp }}/cigar-trivy-dependency-evidence
+          if-no-files-found: ignore
+      - name: Run native macOS lint with external command evidence
+        run: |
+          evidence_parent="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-security-command-evidence"
+          test ! -e "${evidence_parent}"
+          mkdir -m 0700 "${evidence_parent}"
+          cargo xtask --evidence-dir "${evidence_parent}/lint" lint
+      - name: Enforce Trivy dependency policy
+        if: always()
+        env:
+          TRIVY_POLICY_OUTCOME: ${{ steps.trivy_dependency_policy.outcome }}
+        run: test "${TRIVY_POLICY_OUTCOME}" = "success"
 
   static-security:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.5"
           cache: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -40,20 +93,47 @@ jobs:
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           "$(go env GOPATH)/bin/actionlint" .github/workflows/*.yml
-      - name: Run static application security rules
+      - name: Audit Go SDK and demo dependencies
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          (cd sdk/go && "$(go env GOPATH)/bin/govulncheck" ./...)
+          (cd demos/sdk-clients/go-workflow && env GOWORK=off "$(go env GOPATH)/bin/govulncheck" ./...)
+      - name: Hydrate pinned static application security rules
         run: |
           python -m pip install --disable-pip-version-check semgrep==1.168.0
-          semgrep scan --config auto --error --timeout 30 --exclude target --exclude vendor --exclude node_modules --exclude dist --exclude .venv .
+          evidence_directory="$(cd "$RUNNER_TEMP" && pwd -P)/cigar-semgrep-security"
+          test ! -e "$evidence_directory"
+          mkdir -m 0700 "$evidence_directory"
+          python tools/quality/semgrep_policy.py hydrate \
+            --output "$evidence_directory/rules.yml"
+      - name: Run pinned static application security rules offline
+        run: |
+          evidence_directory="$(cd "$RUNNER_TEMP" && pwd -P)/cigar-semgrep-security"
+          python tools/quality/semgrep_policy.py scan \
+            --ruleset "$evidence_directory/rules.yml" \
+            --report "$evidence_directory/report.json" \
+            --receipt "$evidence_directory/receipt.json"
+      - name: Preserve static security evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: semgrep-security-evidence
+          path: ${{ runner.temp }}/cigar-semgrep-security
+          if-no-files-found: ignore
 
   sdk-dependency-policy:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24.10.0"
-          cache: pnpm
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.14"
@@ -61,25 +141,347 @@ jobs:
         with:
           version: "0.11.8"
           enable-cache: true
-      - name: Audit TypeScript production dependencies
+      - name: Hydrate and verify the pinned pnpm 11 audit-only distribution
         run: |
-          corepack enable
-          corepack pnpm install --frozen-lockfile
-          corepack pnpm audit --prod --audit-level high
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          corepack_home="${canonical_temp}/cigar-pnpm-auditor-corepack"
+          test ! -e "${corepack_home}"
+          mkdir -m 0700 "${corepack_home}"
+          export COREPACK_HOME="${corepack_home}"
+          corepack prepare pnpm@11.13.0 --activate
+          auditor_root="${corepack_home}/v1/pnpm/11.13.0"
+          CIGAR_AUDIT_NODE="$(command -v node)"
+          python3 tools/quality/pnpm_audit.py verify-tool \
+            --node "${CIGAR_AUDIT_NODE}" \
+            --pnpm-root "${auditor_root}"
+          printf 'COREPACK_HOME=%s\n' "${corepack_home}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_AUDIT_NODE=%s\n' "${CIGAR_AUDIT_NODE}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_PNPM_AUDITOR_ROOT=%s\n' "${auditor_root}" >>"${GITHUB_ENV}"
+      - name: Audit TypeScript production dependencies with content-free evidence
+        id: typescript_production_audit
+        continue-on-error: true
+        run: |
+          evidence="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-pnpm-production-audit-evidence"
+          test ! -e "${evidence}"
+          mkdir -m 0700 "${evidence}"
+          python3 tools/quality/pnpm_audit.py scan \
+            --node "${CIGAR_AUDIT_NODE}" \
+            --pnpm-root "${CIGAR_PNPM_AUDITOR_ROOT}" \
+            --receipt "${evidence}/receipt.json"
+          python3 tools/quality/pnpm_audit.py verify-receipt \
+            --node "${CIGAR_AUDIT_NODE}" \
+            --pnpm-root "${CIGAR_PNPM_AUDITOR_ROOT}" \
+            --receipt "${evidence}/receipt.json"
+      - name: Preserve TypeScript production dependency audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pnpm-production-audit-evidence
+          path: ${{ runner.temp }}/cigar-pnpm-production-audit-evidence
+          if-no-files-found: ignore
       - name: Audit Python production dependencies
+        if: always()
         run: |
           uv sync --project sdk/python --frozen
           uv export --project sdk/python --no-dev --format requirements-txt --no-emit-project --no-hashes | uvx --from pip-audit==2.10.1 pip-audit --strict --no-deps -r /dev/stdin
+      - name: Enforce the TypeScript production dependency audit
+        if: always()
+        env:
+          TYPESCRIPT_PRODUCTION_AUDIT_OUTCOME: ${{ steps.typescript_production_audit.outcome }}
+        run: test "${TYPESCRIPT_PRODUCTION_AUDIT_OUTCOME}" = "success"
 
   coverage:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    name: full branch coverage / macOS 15 arm64
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      NEXTEST_HIDE_PROGRESS_BAR: "1"
+      NO_COLOR: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - run: rustup component add llvm-tools-preview
-      - run: cargo install cargo-llvm-cov --version 0.8.7 --locked
-      - run: cargo llvm-cov --workspace --all-targets --lcov --output-path reports/lcov.info
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+      - name: Verify the native host and pinned Rust toolchain
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          printf 'CARGO_TARGET_DIR=%s\n' \
+            "${canonical_temp}/cigar-security-coverage-target" \
+            >>"${GITHUB_ENV}"
+      - name: Install pinned coverage tools
+        run: |
+          rustup toolchain install nightly-2026-07-13-aarch64-apple-darwin \
+            --profile minimal \
+            --component llvm-tools-preview
+          cargo install cargo-nextest --version 0.9.140 --locked
+          cargo install cargo-llvm-cov --version 0.8.7 --locked
+          test "$(rustc +nightly-2026-07-13 --version | awk '{print $2}')" = "1.99.0-nightly"
+          test "$(rustc +nightly-2026-07-13 --version --verbose | awk '/^commit-hash:/ {print $2}')" = "77cf889bc178ddb44d6a1c78e5a820b5abb31d8d"
+          test "$(cargo +nightly-2026-07-13 --version --verbose | awk '/^commit-hash:/ {print $2}')" = "59800466c5c41c444d264b1010b4d57e85a7117f"
+          test "$(cargo +nightly-2026-07-13 nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
+          test "$(cargo +nightly-2026-07-13 llvm-cov --version | awk '{print $2}')" = "0.8.7"
+      - name: Hydrate both locked Cargo workspaces
+        run: |
+          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch \
+            --manifest-path tests/properties/Cargo.toml \
+            --locked \
+            --target aarch64-apple-darwin
+      - name: Run the source-bound non-fuzz non-soak branch coverage gate offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence_parent="${canonical_temp}/cigar-security-coverage-evidence"
+          report_directory="${canonical_temp}/cigar-security-coverage-reports"
+          test ! -e "${evidence_parent}"
+          test ! -e "${report_directory}"
+          mkdir -m 0700 "${evidence_parent}"
+          CIGAR_COVERAGE_REPORT_DIR="${report_directory}" \
+            cargo xtask \
+              --evidence-dir "${evidence_parent}/coverage" \
+              test coverage --verify
+      - name: Preserve validated branch coverage reports and command evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rust-coverage
-          path: reports/lcov.info
+          path: |
+            ${{ runner.temp }}/cigar-security-coverage-evidence
+            ${{ runner.temp }}/cigar-security-coverage-reports
+          if-no-files-found: error
+      - name: Assert coverage left the checkout clean
+        if: ${{ always() }}
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+  nightly-production-sanitizers:
+    name: production TSan and ASan manifest / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      CARGO_TERM_COLOR: never
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the immutable native source and allocate external evidence
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence="${canonical_temp}/cigar-nightly-sanitizers-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${evidence}"
+          test ! -e /private/tmp/cigar-production-sanitizers-v1
+          mkdir -m 0700 "${evidence}"
+          printf 'CIGAR_SANITIZER_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+
+      - name: Hydrate the exact sanitizer toolchains
+        run: |
+          rustup toolchain install nightly-2026-07-13-aarch64-apple-darwin \
+            --profile minimal \
+            --component rust-src
+          if ! brew list --versions llvm >/dev/null 2>&1; then
+            brew install llvm
+          fi
+          test "$(brew list --versions llvm)" = "llvm 22.1.8"
+          test "$(rustc +nightly-2026-07-13 --version | awk '{print $2}')" = "1.99.0-nightly"
+          test "$(rustc +nightly-2026-07-13 --version --verbose | awk '/^commit-hash:/ {print $2}')" = "77cf889bc178ddb44d6a1c78e5a820b5abb31d8d"
+          test "$(rustc +nightly-2026-07-13 --version --verbose | awk '/^LLVM version:/ {print $3}')" = "22.1.8"
+          test "$(/opt/homebrew/opt/llvm/bin/clang --version | sed -n '1s/ (.*//p')" = "Homebrew clang version 22.1.8"
+          rustup component list \
+            --toolchain nightly-2026-07-13-aarch64-apple-darwin \
+            --installed \
+            | grep -Fx 'rust-src'
+
+      - name: Hydrate both locked Cargo workspaces
+        run: |
+          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch \
+            --manifest-path tests/properties/Cargo.toml \
+            --locked \
+            --target aarch64-apple-darwin
+
+      - name: Run the exact production sanitizer manifest and verify its receipt
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          command_binding='python3 tools/quality/production_sanitizers.py verify-manifest; run; verify-receipt'
+          receipt="${CIGAR_SANITIZER_EVIDENCE}/sanitizer-receipt.json"
+          python3 -B tools/quality/production_sanitizers.py verify-manifest
+          python3 -B tools/quality/production_sanitizers.py run --receipt "${receipt}"
+          python3 -B tools/quality/production_sanitizers.py verify-receipt --receipt "${receipt}"
+          python3 - "${receipt}" "${GITHUB_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt = json.loads(Path(sys.argv[1]).read_bytes())
+          if receipt["source_before"]["revision"] != sys.argv[2]:
+              raise SystemExit("sanitizer receipt is not bound to the event SHA")
+          if receipt["source_after"]["revision"] != sys.argv[2]:
+              raise SystemExit("sanitizer source changed during execution")
+          if receipt["claims"]["fuzz_built_or_run"] is not False:
+              raise SystemExit("sanitizer receipt contains a fuzz execution claim")
+          if receipt["claims"]["soak_built_or_run"] is not False:
+              raise SystemExit("sanitizer receipt contains a soak execution claim")
+          PY
+          python3 tools/quality/ci_workflow_receipt.py publish \
+            --output "${CIGAR_SANITIZER_EVIDENCE}/workflow-receipt.json" \
+            --lane production-sanitizers \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "sanitizer-receipt=${receipt}"
+          python3 tools/quality/ci_workflow_receipt.py verify \
+            --receipt "${CIGAR_SANITIZER_EVIDENCE}/workflow-receipt.json" \
+            --event-sha "${GITHUB_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --command "${command_binding}" \
+            --attachment "sanitizer-receipt=${receipt}"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Preserve content-free production sanitizer receipts
+        id: upload_sanitizers
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-production-sanitizer-receipts-${{ github.sha }}
+          path: ${{ env.CIGAR_SANITIZER_EVIDENCE }}
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 9
+
+      - name: Validate the immutable sanitizer upload service digest
+        if: ${{ steps.upload_sanitizers.outcome == 'success' }}
+        env:
+          ARTIFACT_DIGEST: ${{ steps.upload_sanitizers.outputs.artifact-digest }}
+        run: |
+          python3 - "${ARTIFACT_DIGEST}" <<'PY'
+          import re
+          import sys
+
+          if re.fullmatch(r"[0-9a-f]{64}", sys.argv[1]) is None:
+              raise SystemExit("artifact service returned an invalid digest")
+          PY
+
+  nightly-native-qualification:
+    name: models, adversarial matrices, migrations, chaos, package smoke / macOS 15 arm64
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      NEXTEST_HIDE_PROGRESS_BAR: "1"
+      NO_COLOR: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the native host, source, and pinned toolchains
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          printf 'CARGO_TARGET_DIR=%s\n' \
+            "${canonical_temp}/cigar-nightly-native-target" \
+            >>"${GITHUB_ENV}"
+          printf 'CIGAR_NIGHTLY_EVIDENCE_PARENT=%s\n' \
+            "${canonical_temp}/cigar-nightly-native-evidence" \
+            >>"${GITHUB_ENV}"
+
+      - name: Install the pinned native test runner
+        run: |
+          cargo install cargo-nextest --version 0.9.140 --locked
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
+
+      - name: Hydrate both locked Cargo workspaces
+        run: |
+          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch \
+            --manifest-path tests/properties/Cargo.toml \
+            --locked \
+            --target aarch64-apple-darwin
+
+      - name: Run source-bound native models and adversarial matrices offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          evidence_parent="${CIGAR_NIGHTLY_EVIDENCE_PARENT}"
+          test ! -e "${evidence_parent}"
+          mkdir -m 0700 "${evidence_parent}"
+          cargo xtask --evidence-dir "${evidence_parent}/models" test models
+          cargo xtask --evidence-dir "${evidence_parent}/security" test security
+          cargo xtask --evidence-dir "${evidence_parent}/migrations" test migrations
+          cargo xtask --evidence-dir "${evidence_parent}/chaos" test chaos
+
+      - name: Run non-publishing macOS package producer and verifier smoke tests
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          python3 -m unittest \
+            scripts.release.tests.test_build_macos_aarch64_archive \
+            scripts.release.tests.test_build_macos_homebrew_artifacts \
+            scripts.release.tests.test_build_macos_qualification_tools \
+            scripts.release.tests.test_macos_development_assembly
+
+      - name: Preserve content-free native qualification receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-native-nightly-receipts
+          path: ${{ env.CIGAR_NIGHTLY_EVIDENCE_PARENT }}
+          if-no-files-found: error
+          include-hidden-files: false
+
+      - name: Assert nightly qualification left the checkout clean
+        if: ${{ always() }}
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

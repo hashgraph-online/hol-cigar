@@ -1,0 +1,53 @@
+{
+  "effective_ruleset": {
+    "bytes": 2423543,
+    "sha256": "5bd3ce2eb24029ab89f37850ffcc5d3a6b860006e387a56dd5d90fd7a86c954e"
+  },
+  "rule_exceptions": [
+    {
+      "path": "packaging/licenses/rust/COPYRIGHT-library.html",
+      "rationale": "This is the byte-exact Rust 1.92.0 standard-library legal notice. Its archival HTTP license references are neither fetched nor executed, and changing the notice would invalidate its upstream provenance.",
+      "rule_id": "html.security.plaintext-http-link.plaintext-http-link",
+      "subject_bytes": 411104,
+      "subject_sha256": "c90d52b09be83ce6e930d00f4b26559611eadcee806b2307184e04f2c78ad522"
+    }
+  ],
+  "scan": {
+    "exclude": [
+      ".cigar",
+      ".git",
+      ".shared-secrets",
+      ".tmp",
+      ".venv",
+      "**/*.egg-info",
+      "dist",
+      "build",
+      "artifacts/packages",
+      "fuzz/.work",
+      "node_modules",
+      "target",
+      "vendor",
+      "**/__pycache__",
+      "**/.mypy_cache",
+      "**/.pytest_cache",
+      "**/.ruff_cache"
+    ],
+    "timeout_seconds": 30,
+    "use_git_ignore": false
+  },
+  "scanner": {
+    "name": "semgrep",
+    "version": "1.168.0"
+  },
+  "schema_version": "cigar.semgrep-policy.v1",
+  "upstream_ruleset": {
+    "canonical": {
+      "bytes": 2423467,
+      "sha256": "7c6e80adeb6ede2016aebfb4292513d1f7832aad778fc5d395a240bc48452e55"
+    },
+    "canonicalization": "cigar.semgrep-rule-block-order.v1",
+    "retrieved_utc": "2026-07-14T20:07:41Z",
+    "rule_count": 1074,
+    "url": "https://semgrep.dev/c/p/default"
+  }
+}

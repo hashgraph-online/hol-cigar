@@ -12,7 +12,9 @@ Contract normalization applies field-specific NFC, whitespace, case, and set rul
 protocol validator and hashes deterministic CBOR. Candidates are sorted by immutable version and
 logical aliases collapse under balanced-v1 score, token cost, canonical URI, and version ties. Typed
 claims reconcile by world-valid time, observation time, authority, verification, and stable source
-order. Equal-rank contradictory rule/task claims fail as unresolved critical conflicts.
+order. Candidate requirement indices outside the normalized contract fail before scoring. Equal-rank
+contradictory claims fail as unresolved critical conflicts when either side belongs to the rule or
+task lane, so a higher-scoring non-critical candidate cannot hide a critical conflict.
 
 Dependencies form a bounded acyclic graph. Every blocking requirement chooses an authorized root;
 explicit mandatory roots and their transitive dependencies must have a lossless representation. The
@@ -30,7 +32,10 @@ Balanced-v1 retrieval features remain integer-valued. Packing adds requirement a
 gain and subtracts versioned loss penalties. Priority ratios use checked cross multiplication, not
 floating point. Mandatory closure is inserted first, lane minima second, and positive-utility optional
 content last. Fixed-pass local repair can replace one optional item with one or two better alternatives
-under the same exact budgets. Final repair reruns lane and total token arithmetic.
+under the same exact budgets. Dependency closure participates in both token and item-cap feasibility.
+Every proposed repair rechecks lane tokens, profile item maxima, and blocking-requirement coverage;
+the final result additionally rechecks applicable lane minima. A lane minimum is inactive only when
+that lane has no eligible candidate. Final repair reruns all lane and total token arithmetic.
 
 ## Seal and explain
 
@@ -43,4 +48,5 @@ disposition, supplementary reasons, and provenance digest.
 The full manifest is protected. `CompileOutput::explain` accepts a freshly authorized version set and
 omits every other entry, so an explanation cannot reveal denied IDs, counts, reasons, or provenance.
 The same normalized contract and frozen inputs produce identical bytes under candidate permutations
-and concurrent execution.
+and concurrent execution. macOS process qualification also varies input order, locale, timezone, and
+process hash-seed environment while requiring identical plan, manifest, and bundle identities.

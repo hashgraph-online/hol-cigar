@@ -85,10 +85,13 @@ workers, and readiness checks before a listener can bind.
 These limits do not change the exact-45 ownership above, and this section is not a waiver of any
 remaining WP14 gate.
 
-- The stock standalone composition injects `RecordedOnlyReplayServices`. The live-comparison
-  operation and durable authorization workflow exist, but a deployment that performs real live
-  provider calls must inject an explicit tenant-bound verifier/provider/effect gate. Host adapter
-  integration is owned by WP17.
+- The stock standalone composition injects `RecordedOnlyReplayServices`. A local macOS embedding
+  can select the reviewed `cigar.production-live-replay.tenant-bound.v1` profile only through
+  `compose_production_server_with_live_replay`, supplying an explicit authorization repository and
+  a complete tenant-bound verifier/provider/effect-gate factory. The composer admits only active
+  authority-document tenants; the engine consumes one-use current authorization and rejects effect
+  identities retained by the source decision. No daemon setting or environment fallback enables
+  this path. Provider-specific host qualification remains owned by WP17.
 - The built-in effect registry supports demo issue, confined filesystem, and idempotent HTTPS
   connector families. HTTPS composition requires an explicit bounded `HttpTransport`; the stock
   bootstrap supplies none and therefore fails closed if that connector is enabled.

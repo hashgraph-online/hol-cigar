@@ -20,6 +20,19 @@ import {
   isAggregateStatus,
   isComponentStatus,
 } from "./health-details.20260713.js";
+import {
+  filterProtocolOperations,
+  normalizeProtocolCatalog,
+} from "./protocol-catalog.20260713.js";
+import {
+  cancellableRunId,
+  cancellationPath,
+  profileControlPresentation,
+} from "./controls.20260714.js";
+import {
+  openSidecarEventStream,
+  sidecarFetch,
+} from "./browser-security.20260714.js";
 
 const $ = (id) => document.getElementById(id);
 const THEME_STORAGE_KEY = "cigar.dashboard.theme.v1";
@@ -140,6 +153,8 @@ let selectedTheme = applyTheme(readTheme());
 let selectedDensity = applyDensity(readDensity());
 let selectedMotion = applyMotion(readMotion());
 let updatesPaused = false;
+let csrfToken = null;
+let activeRunId = null;
 
 function showToast(message) {
   const toast = $("toast");
@@ -361,16 +376,13 @@ function renderProfiles(value) {
       row.append(element("dt", label), element("dd", fact));
       facts.append(row);
     }
-    const button = element(
-      "button",
-      profile.availability_state === "available" && value.control_enabled
-        ? "Launch contract pending"
-        : profile.availability_state === "command_not_implemented"
-          ? "Supervisor not implemented"
-          : "Control disabled",
-    );
+    const control = profileControlPresentation(profile.availability_state, value.control_enabled);
+    const button = element("button", control.label);
     button.type = "button";
-    button.disabled = true;
+    button.disabled = !control.enabled;
+    if (!button.disabled) {
+      button.addEventListener("click", () => startProfile(profile));
+    }
     card.append(
       heading,
       element("h3", profile.title),
@@ -393,12 +405,55 @@ function renderProfiles(value) {
   }
 }
 
+let protocolCatalog = null;
+
+function renderProtocol(value, query = "") {
+  protocolCatalog = normalizeProtocolCatalog(value);
+  const operations = filterProtocolOperations(protocolCatalog, query);
+  $("protocol-count").textContent = `${operations.length} of ${protocolCatalog.operation_count} operations`;
+  $("protocol-badge").textContent = `${protocolCatalog.service_count} services · ${protocolCatalog.operation_count} operations`;
+  const serviceCounts = protocolCatalog.services.map((service) => {
+    const item = element("span", `${service.name.replace(/Service$/, "")} · ${service.operations.length}`);
+    item.setAttribute("role", "listitem");
+    return item;
+  });
+  $("protocol-services").replaceChildren(...serviceCounts);
+  const rows = operations.map((operation) => {
+    const row = document.createElement("tr");
+    const identity = document.createElement("td");
+    identity.append(element("strong", operation.operation_id), element("small", operation.rpc));
+    const route = document.createElement("td");
+    route.append(element("span", operation.http_method, `method method-${operation.http_method.toLowerCase()}`), element("code", operation.http_path));
+    const contract = document.createElement("td");
+    const badges = [
+      operation.auth,
+      operation.mutation ? "mutation" : "read",
+      operation.stream === "server_stream" ? "stream" : "unary",
+      operation.idempotency === "required" ? "idempotent" : null,
+      operation.revision === "required" ? "revisioned" : null,
+    ].filter(Boolean);
+    contract.append(...badges.map((badge) => element("span", title(badge), "contract-badge")));
+    row.append(identity, route, contract);
+    return row;
+  });
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = element("td", "No generated operation matches this search.", "empty-copy");
+    cell.colSpan = 3;
+    row.append(cell);
+    rows.push(row);
+  }
+  $("protocol-operations").replaceChildren(...rows);
+}
+
 function renderRuns(value) {
   if (value?.schema_version !== "cigar.dashboard-runs.v1" || !Array.isArray(value.runs)) {
     throw new Error("Run history returned an incompatible response.");
   }
   const latest = value.runs[0];
   if (!latest) {
+    activeRunId = null;
+    $("cancel-run").hidden = true;
     $("verification-state").textContent = "Not run";
     $("verification-detail").textContent = "No persisted dashboard run";
     return;
@@ -420,6 +475,8 @@ function renderRuns(value) {
   }
   $("verification-state").textContent = label;
   $("verification-detail").textContent = `${latest.profile_id} · dashboard run history`;
+  activeRunId = cancellableRunId(latest);
+  $("cancel-run").hidden = activeRunId === null || latest.state === "cancelling";
 }
 
 function renderEvidence(value) {
@@ -447,14 +504,79 @@ async function exchangeBootstrap() {
   const secret = fragment.get("bootstrap");
   if (!secret) return;
   history.replaceState(null, "", `${location.pathname}${location.search}`);
-  const response = await fetch("/api/v1/session:exchange", {
+  const response = await sidecarFetch("/api/v1/session:exchange", {
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ bootstrap_secret: secret }),
   });
   if (!response.ok) throw new Error("The one-time dashboard link was rejected.");
-  await response.json();
+  const value = await response.json();
+  csrfToken = value.csrf_token;
+}
+
+async function ensureCsrfToken() {
+  if (typeof csrfToken === "string" && csrfToken.length > 0) return csrfToken;
+  const response = await sidecarFetch("/api/v1/session:csrf", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("The local control proof could not be refreshed.");
+  const value = await response.json();
+  if (value?.schema_version !== "cigar.dashboard-session.v1" || typeof value.csrf_token !== "string") {
+    throw new Error("The local control proof was invalid.");
+  }
+  csrfToken = value.csrf_token;
+  return csrfToken;
+}
+
+async function startProfile(profile) {
+  if (profile.availability_state !== "available") return;
+  const accepted = window.confirm(
+    `Launch reviewed profile “${profile.id}”?\n\nThe executable and arguments are fixed by the verified registry. Ordinary output is never shown in the browser.`,
+  );
+  if (!accepted) return;
+  try {
+    const csrf = await ensureCsrfToken();
+    const response = await sidecarFetch("/api/v1/runs", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-cigar-csrf": csrf,
+      },
+      body: JSON.stringify({ profile_id: profile.id }),
+    });
+    if (!response.ok) throw new Error("The reviewed profile was not started.");
+    const run = await response.json();
+    activeRunId = run.run_id;
+    showToast(`Started ${profile.id}.`);
+    await refresh(true);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "The reviewed profile was not started.");
+  }
+}
+
+async function cancelActiveRun() {
+  if (typeof activeRunId !== "string") return;
+  const path = cancellationPath(activeRunId);
+  if (path === null) return;
+  try {
+    const csrf = await ensureCsrfToken();
+    const response = await sidecarFetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "x-cigar-csrf": csrf },
+    });
+    if (!response.ok) throw new Error("The reviewed run could not be cancelled.");
+    showToast("Cancellation requested; the process group is settling.");
+    await refresh(true);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "The reviewed run could not be cancelled.");
+  }
 }
 
 let refreshInFlight = false;
@@ -464,10 +586,10 @@ let eventStream = null;
 function connectEventStream() {
   if (
     eventStream
-    || typeof EventSource === "undefined"
     || !shouldRefreshAutomatically(updatesPaused, document.visibilityState)
   ) return;
-  const source = new EventSource("/api/v1/events", { withCredentials: true });
+  const source = openSidecarEventStream();
+  if (source === null) return;
   source.addEventListener("status", () => refresh());
   source.addEventListener("run", () => refresh());
   source.addEventListener("evidence", () => refresh());
@@ -531,7 +653,7 @@ async function refresh(manual = false) {
   try {
     await exchangeBootstrap();
     if (!manual && !shouldRefreshAutomatically(updatesPaused, document.visibilityState)) return;
-    const response = await fetch("/api/v1/bootstrap", { credentials: "same-origin", cache: "no-store" });
+    const response = await sidecarFetch("/api/v1/bootstrap", { cache: "no-store" });
     if (!manual && !shouldRefreshAutomatically(updatesPaused, document.visibilityState)) return;
     if (response.status === 401) {
       disconnectEventStream();
@@ -553,31 +675,37 @@ async function refresh(manual = false) {
       : document.visibilityState === "visible"
         ? "Authenticated local session"
         : "Authenticated local session · background updates suspended";
-    const [statusResponse, profilesResponse, runsResponse, evidenceResponse] = await Promise.all([
-      fetch("/api/v1/status", { credentials: "same-origin", cache: "no-store" }),
-      fetch("/api/v1/run-profiles", { credentials: "same-origin", cache: "no-store" }),
-      fetch("/api/v1/runs", { credentials: "same-origin", cache: "no-store" }),
-      fetch("/api/v1/evidence", { credentials: "same-origin", cache: "no-store" }),
+    const [statusResponse, protocolResponse, profilesResponse, runsResponse, evidenceResponse] = await Promise.all([
+      sidecarFetch("/api/v1/status", { cache: "no-store" }),
+      sidecarFetch("/api/v1/protocol", { cache: "no-store" }),
+      sidecarFetch("/api/v1/run-profiles", { cache: "no-store" }),
+      sidecarFetch("/api/v1/runs", { cache: "no-store" }),
+      sidecarFetch("/api/v1/evidence", { cache: "no-store" }),
     ]);
     if (!statusResponse.ok) throw new Error("Typed daemon status is unavailable.");
+    if (!protocolResponse.ok) throw new Error("Generated protocol catalog is unavailable.");
     if (!profilesResponse.ok) throw new Error("Reviewed run profiles are unavailable.");
     if (!runsResponse.ok) throw new Error("Dashboard run history is unavailable.");
     if (!evidenceResponse.ok) throw new Error("Dashboard evidence history is unavailable.");
-    const [status, profiles, runs, evidence] = await Promise.all([
+    const [status, protocol, profiles, runs, evidence] = await Promise.all([
       statusResponse.json(),
+      protocolResponse.json(),
       profilesResponse.json(),
       runsResponse.json(),
       evidenceResponse.json(),
     ]);
     if (!manual && !shouldRefreshAutomatically(updatesPaused, document.visibilityState)) return;
     renderDaemonStatus(status);
+    renderProtocol(protocol, $("protocol-search")?.value || "");
     renderProfiles(profiles);
     renderRuns(runs);
     renderEvidence(evidence);
   } catch (error) {
     if (!manual && !shouldRefreshAutomatically(updatesPaused, document.visibilityState)) return;
     setStatus("unreachable", "Sidecar unavailable", "The local dashboard sidecar did not return a valid response");
+    $("sidecar-badge").textContent = "Unreachable";
     $("session-state").textContent = "Connection failed";
+    $("health-details")?.setAttribute("open", "");
     showToast(error instanceof Error ? error.message : "Dashboard refresh failed.");
   } finally {
     refreshInFlight = false;
@@ -589,6 +717,10 @@ async function refresh(manual = false) {
 }
 
 $("refresh")?.addEventListener("click", () => refresh(true));
+$("cancel-run")?.addEventListener("click", cancelActiveRun);
+$("protocol-search")?.addEventListener("input", (event) => {
+  if (protocolCatalog) renderProtocol(protocolCatalog, event.currentTarget.value);
+});
 $("health-reconnect")?.addEventListener("click", () => refresh(true));
 $("live-updates-toggle")?.addEventListener("click", () => {
   applyLiveUpdateState(!updatesPaused);
@@ -605,12 +737,14 @@ $("motion-toggle")?.addEventListener("click", () => {
   selectedMotion = applyMotion(nextMotion(selectedMotion));
   storeMotion(selectedMotion);
 });
-$("display-menu")?.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.currentTarget.removeAttribute("open");
-    event.currentTarget.querySelector("summary")?.focus();
+document.addEventListener("keydown", (event) => {
+  const menu = $("display-menu");
+  if (event.key === "Escape" && menu?.hasAttribute("open")) {
+    event.preventDefault();
+    menu.removeAttribute("open");
+    menu.querySelector("summary")?.focus();
   }
-});
+}, true);
 window.addEventListener("storage", (event) => {
   if (event.key === THEME_STORAGE_KEY || event.key === null) {
     selectedTheme = applyTheme(event.newValue);

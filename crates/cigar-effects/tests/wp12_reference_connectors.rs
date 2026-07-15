@@ -410,6 +410,130 @@ fn filesystem_connector_rejects_symlink_root_and_target() -> TestResult {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn filesystem_connector_pins_root_descriptor_across_path_substitution() -> TestResult {
+    let container = TemporaryDirectory::new("filesystem-root-substitution")?;
+    let configured = container.path().join("configured");
+    let original = container.path().join("original");
+    fs::create_dir(&configured)?;
+    let connector = FilesystemEffectConnector::new("reference.filesystem", &configured)?;
+    let arguments = connector.stage_write(FilesystemWriteRequest::new(
+        "result.txt",
+        b"descriptor-pinned".to_vec(),
+        None,
+    )?)?;
+    let intent = intent(
+        "reference.filesystem",
+        "write_file",
+        arguments,
+        "result.txt".to_owned(),
+        RetryPolicy::Never,
+        Vec::new(),
+    )?;
+
+    fs::rename(&configured, &original)?;
+    fs::create_dir(&configured)?;
+    let (_engine, completed) = dispatch_once(Arc::new(connector), intent, 10_180)?;
+    assert_eq!(completed.state, EffectState::Succeeded);
+    assert_eq!(fs::read(original.join("result.txt"))?, b"descriptor-pinned");
+    assert!(!configured.join("result.txt").exists());
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn filesystem_connector_rejects_writable_directories_hardlinks_and_fence_substitution() -> TestResult
+{
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let unsafe_root = TemporaryDirectory::new("filesystem-writable-root")?;
+    fs::set_permissions(unsafe_root.path(), fs::Permissions::from_mode(0o770))?;
+    assert_eq!(
+        FilesystemEffectConnector::new("reference.filesystem", unsafe_root.path())
+            .err()
+            .map(EffectError::code),
+        Some(EffectErrorCode::Unauthorized)
+    );
+
+    let root = TemporaryDirectory::new("filesystem-owned-metadata")?;
+    let nested = root.path().join("nested");
+    fs::create_dir(&nested)?;
+    fs::set_permissions(&nested, fs::Permissions::from_mode(0o770))?;
+    let connector = FilesystemEffectConnector::new("reference.filesystem", root.path())?;
+    let arguments = connector.stage_write(FilesystemWriteRequest::new(
+        "nested/result.txt",
+        b"blocked".to_vec(),
+        None,
+    )?)?;
+    let nested_intent = intent(
+        "reference.filesystem",
+        "write_file",
+        arguments,
+        "nested/result.txt".to_owned(),
+        RetryPolicy::Never,
+        Vec::new(),
+    )?;
+    assert_eq!(
+        connector
+            .check_preconditions(&nested_intent, UtcTimestamp::from_unix_nanos(2)?)
+            .err()
+            .map(EffectError::code),
+        Some(EffectErrorCode::Unauthorized)
+    );
+
+    fs::set_permissions(&nested, fs::Permissions::from_mode(0o700))?;
+    fs::write(root.path().join("linked.txt"), b"linked")?;
+    fs::hard_link(
+        root.path().join("linked.txt"),
+        root.path().join("linked-copy.txt"),
+    )?;
+    let linked = FilesystemEffectConnector::content_digest(b"linked")?;
+    let linked_arguments = connector.stage_write(FilesystemWriteRequest::new(
+        "linked.txt",
+        b"replacement".to_vec(),
+        Some(linked.clone()),
+    )?)?;
+    let linked_intent = intent(
+        "reference.filesystem",
+        "write_file",
+        linked_arguments,
+        "linked.txt".to_owned(),
+        RetryPolicy::Never,
+        vec![linked],
+    )?;
+    assert_eq!(
+        connector
+            .check_preconditions(&linked_intent, UtcTimestamp::from_unix_nanos(2)?)
+            .err()
+            .map(EffectError::code),
+        Some(EffectErrorCode::Unauthorized)
+    );
+
+    fs::remove_file(root.path().join(".cigar-effect-write.lock"))?;
+    fs::write(
+        root.path().join(".cigar-effect-write.lock"),
+        b"replacement-fence",
+    )?;
+    let clean_arguments = connector.stage_write(FilesystemWriteRequest::new(
+        "clean.txt",
+        b"must-not-write".to_vec(),
+        None,
+    )?)?;
+    let clean_intent = intent(
+        "reference.filesystem",
+        "write_file",
+        clean_arguments,
+        "clean.txt".to_owned(),
+        RetryPolicy::Never,
+        Vec::new(),
+    )?;
+    let (_engine, completed) = dispatch_once(Arc::new(connector), clean_intent, 10_200)?;
+    assert_eq!(completed.state, EffectState::Unknown);
+    assert!(!root.path().join("clean.txt").exists());
+    Ok(())
+}
+
 struct RecordingHttpTransport {
     sends: Mutex<Vec<(String, HttpMethod, String, usize)>>,
     request_debug: Mutex<Vec<String>>,

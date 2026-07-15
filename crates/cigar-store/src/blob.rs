@@ -6,6 +6,7 @@ use cigar_crypto::{
     KeyRef, KeyStatus, decrypt_xchacha20_bytes, encrypt_xchacha20, generate_xchacha20_key,
 };
 use cigar_protocol::{BlobRef, ContentDigest, RecordId};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -103,7 +104,8 @@ pub struct ReconciliationReport {
 }
 
 /// Preconditions for physical mark-and-sweep deletion.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct GarbageCollectionPolicy {
     /// All replay and retention windows have expired.
     pub retention_satisfied: bool,
@@ -123,7 +125,8 @@ pub struct GarbageCollectionReport {
 }
 
 /// One tenant-qualified zero-reference blob selected by repository-owned reachability.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RepositoryGarbageCollectionCandidate {
     /// Exact tenant partition that owns the encrypted blob file.
     pub tenant_id: RecordId,
@@ -641,6 +644,51 @@ impl<P: KeyProvider> RepositoryBlobStore for MultiTenantLocalRepositoryBlobStore
         Ok(())
     }
 
+    fn garbage_collect_candidates(
+        &self,
+        _authorization: &SharedGarbageCollectionAuthorization,
+        candidates: &[RepositoryGarbageCollectionCandidate],
+        policy: GarbageCollectionPolicy,
+        dry_run: bool,
+        max_files: usize,
+    ) -> Result<RepositoryGarbageCollectionReport, StoreError> {
+        if !policy.retention_satisfied || policy.legal_hold || !policy.backup_complete {
+            return Err(StoreError::new(StoreErrorCode::InvalidContext));
+        }
+        if max_files == 0
+            || max_files > MAX_RECONCILE_ENTRIES
+            || candidates.len() > max_files
+            || candidates.windows(2).any(|pair| {
+                pair.first().zip(pair.get(1)).is_some_and(|(left, right)| {
+                    (&left.tenant_id, &left.digest) >= (&right.tenant_id, &right.digest)
+                })
+            })
+        {
+            return Err(StoreError::new(StoreErrorCode::LimitExceeded));
+        }
+        let store = LocalBlobStore::open(&self.root, Arc::clone(&self.provider))
+            .map_err(blob_store_error)?;
+        let mut by_tenant: BTreeMap<&RecordId, Vec<&ContentDigest>> = BTreeMap::new();
+        for candidate in candidates {
+            by_tenant
+                .entry(&candidate.tenant_id)
+                .or_default()
+                .push(&candidate.digest);
+        }
+        let mut report = RepositoryGarbageCollectionReport::default();
+        for (tenant, digests) in by_tenant {
+            let deleted = store
+                .garbage_collect_exact(tenant.as_str(), &digests, policy, dry_run)
+                .map_err(blob_store_error)?;
+            report.deleted = report
+                .deleted
+                .checked_add(deleted)
+                .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        }
+        report.eligible = candidates.to_vec();
+        Ok(report)
+    }
+
     fn garbage_collect(
         &self,
         live: &BTreeMap<String, BTreeSet<ContentDigest>>,
@@ -895,6 +943,60 @@ impl<P: KeyProvider> LocalBlobStore<P> {
             sync_directory(&directory)?;
         }
         Ok(report)
+    }
+
+    fn garbage_collect_exact(
+        &self,
+        tenant: &str,
+        candidates: &[&ContentDigest],
+        policy: GarbageCollectionPolicy,
+        dry_run: bool,
+    ) -> Result<u64, BlobError> {
+        validate_tenant(tenant)?;
+        if !policy.retention_satisfied || policy.legal_hold || !policy.backup_complete {
+            return Err(BlobError::new(BlobErrorCode::DeletionDenied));
+        }
+        if candidates.len() > MAX_RECONCILE_ENTRIES
+            || candidates.windows(2).any(|pair| {
+                pair.first()
+                    .zip(pair.get(1))
+                    .is_some_and(|(left, right)| left >= right)
+            })
+        {
+            return Err(BlobError::new(BlobErrorCode::LimitExceeded));
+        }
+        let directory = self.blob_directory(tenant);
+        let mut paths = Vec::with_capacity(candidates.len());
+        for digest in candidates {
+            let path = directory.join(digest.as_str());
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) => {
+                    validate_open_blob_metadata(&metadata)?;
+                    paths.push(path);
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(io_error(error)),
+            }
+        }
+        if dry_run || paths.is_empty() {
+            return Ok(0);
+        }
+        let mut deleted = 0_u64;
+        for path in paths {
+            match fs::remove_file(path) {
+                Ok(()) => {
+                    deleted = deleted
+                        .checked_add(1)
+                        .ok_or_else(|| BlobError::new(BlobErrorCode::LimitExceeded))?;
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(io_error(error)),
+            }
+        }
+        if deleted > 0 {
+            sync_directory(&directory)?;
+        }
+        Ok(deleted)
     }
 
     /// Lists bounded corruption invalidations emitted during quarantine.

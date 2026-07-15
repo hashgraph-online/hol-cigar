@@ -327,7 +327,7 @@ mod tests {
     fn production_shell_matches_its_verified_manifest() -> Result<(), Box<dyn std::error::Error>> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/dashboard/public");
         let assets = StaticAssets::load(&root)?;
-        assert_eq!(assets.file_count(), 7);
+        assert_eq!(assets.file_count(), 10);
         assert!(assets.total_bytes() > 20_000);
         assert!(assets.index().bytes().starts_with(b"<!doctype html>"));
         Ok(())

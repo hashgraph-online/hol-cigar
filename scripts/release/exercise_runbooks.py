@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import EvidenceWorkspace, EvidenceWorkspaceError
 from release_lib import (
     ReleaseError,
     file_reference,
@@ -46,8 +47,79 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--candidate-manifest", type=Path)
     parser.add_argument("--driver-directory", type=Path)
     parser.add_argument("--source-date-epoch", type=int, default=0)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="evidence output directory (or set CIGAR_EVIDENCE_DIR)",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="legacy alias for --evidence-dir",
+    )
     return parser.parse_args()
+
+
+def _selected_evidence_directory(arguments: argparse.Namespace) -> Path:
+    selections: list[tuple[str, Path]] = []
+    if arguments.evidence_dir is not None:
+        selections.append(("--evidence-dir", arguments.evidence_dir.expanduser()))
+    if arguments.out is not None:
+        selections.append(("--out", arguments.out.expanduser()))
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if environment:
+        selections.append(("CIGAR_EVIDENCE_DIR", Path(environment).expanduser()))
+    if not selections:
+        raise ReleaseError(
+            "set --evidence-dir, --out, or CIGAR_EVIDENCE_DIR for operation evidence"
+        )
+    selected_name, selected_path = selections[0]
+    for name, path in selections[1:]:
+        if os.fspath(path) != os.fspath(selected_path):
+            raise ReleaseError(
+                f"{name} conflicts with {selected_name}; provide one evidence directory"
+            )
+    return selected_path
+
+
+class _EvidenceOutput:
+    """Publish operation evidence through the selected safety profile."""
+
+    def __init__(self, root: Path, workspace: EvidenceWorkspace | None) -> None:
+        self.root = root
+        self.workspace = workspace
+
+    @classmethod
+    def open(
+        cls, path: Path, *, repository_root: Path, secure: bool
+    ) -> _EvidenceOutput:
+        if secure:
+            workspace = EvidenceWorkspace.create(
+                path,
+                repository_root=repository_root,
+            )
+            try:
+                workspace.read_files(set(), strict_read_only=False)
+            except BaseException:
+                workspace.close()
+                raise
+            return cls(workspace.root, workspace)
+        output = path.resolve()
+        output.mkdir(parents=True, exist_ok=True)
+        if any(output.iterdir()):
+            raise ReleaseError("operation evidence output directory must be empty")
+        return cls(output, None)
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
+
+    def write_json(self, relative: str, value: Any) -> dict[str, Any]:
+        if self.workspace is not None:
+            return self.workspace.write_json(relative, value).as_dict()
+        path = self.root / relative
+        write_json(path, value)
+        return file_reference(path, self.root)
 
 
 def _source(
@@ -298,145 +370,159 @@ def main() -> int:
         else arguments.candidate_manifest.resolve()
     )
     subject_manifest_sha256 = sha256_file(subject_manifest)
-    output = arguments.out.resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    if any(output.iterdir()):
-        raise ReleaseError("operation evidence output directory must be empty")
+    selected_output = _selected_evidence_directory(arguments)
+    evidence = _EvidenceOutput.open(
+        selected_output,
+        repository_root=root,
+        secure=arguments.mode == "live" or arguments.candidate_manifest is not None,
+    )
     receipts: list[dict[str, Any]] = []
-    receipt_paths: list[tuple[str, Path]] = []
+    receipt_references: list[tuple[str, dict[str, Any]]] = []
 
-    if arguments.mode == "static":
-        for entry in exercises:
-            document = resolve_beneath(root, entry["document"])
-            text = document.read_text(encoding="utf-8")
-            terms = entry.get("required_terms")
-            if (
-                not isinstance(terms, list)
-                or not terms
-                or not all(isinstance(term, str) and term in text for term in terms)
-            ):
-                raise ReleaseError(
-                    f"runbook {entry['id']} is missing a required stop/recovery term"
-                )
-            receipt = {
-                "schema_version": "cigar.operation-exercise.v1",
-                "exercise": entry["id"],
-                "mode": "static",
-                "source_revision": revision,
-                "artifact_ids": artifact_ids,
-                "subject_manifest_sha256": subject_manifest_sha256,
-                "producer": {
-                    "name": Path(__file__).name,
-                    "sha256": sha256_file(Path(__file__).resolve()),
-                },
-                "source_date_epoch": epoch,
-                "status": "passed",
-                "checks": [
-                    {
-                        "id": "document-present",
-                        "status": "passed",
-                        "detail": entry["document"],
-                    },
-                    {
-                        "id": "required-terms",
-                        "status": "passed",
-                        "detail": f"{len(terms)} required terms present",
-                    },
-                ],
-            }
-            receipt_path = output / f"{entry['id']}.static.json"
-            write_json(receipt_path, receipt)
-            receipts.append(receipt)
-            receipt_paths.append((entry["id"], receipt_path))
-    else:
-        if os.environ.get("CIGAR_OPERATION_SANDBOX_ENFORCED") != "1":
-            raise ReleaseError(
-                "live exercises require an environment-enforced operation sandbox"
-            )
-        if arguments.driver_directory is None:
-            raise ReleaseError("live exercises require --driver-directory")
-        if arguments.driver_directory.is_symlink():
-            raise ReleaseError("live driver directory must not be a symlink")
-        driver_directory = arguments.driver_directory.resolve()
-        if not driver_directory.is_dir():
-            raise ReleaseError("live driver directory does not exist")
-        with tempfile.TemporaryDirectory(
-            prefix="cigar-operation-drivers-"
-        ) as temporary:
-            staged_directory = Path(temporary)
+    try:
+        if arguments.mode == "static":
             for entry in exercises:
-                driver = driver_directory / entry["id"]
+                document = resolve_beneath(root, entry["document"])
+                text = document.read_text(encoding="utf-8")
+                terms = entry.get("required_terms")
                 if (
-                    driver.is_symlink()
-                    or not driver.is_file()
-                    or not os.access(driver, os.X_OK)
+                    not isinstance(terms, list)
+                    or not terms
+                    or not all(isinstance(term, str) and term in text for term in terms)
                 ):
                     raise ReleaseError(
-                        f"live driver is missing, linked, or not executable: {entry['id']}"
+                        f"runbook {entry['id']} is missing a required stop/recovery term"
                     )
-                driver_digest = sha256_file(driver)
-                staged_driver = staged_directory / entry["id"]
-                shutil.copyfile(driver, staged_driver)
-                os.chmod(staged_driver, 0o500)
-                if sha256_file(staged_driver) != driver_digest:
-                    raise ReleaseError(
-                        f"live driver changed while staging: {entry['id']}"
-                    )
-                command = [
-                    str(staged_driver),
-                    "--candidate-manifest",
-                    str(subject_manifest),
-                    "--source-date-epoch",
-                    str(epoch),
-                ]
-                result = run_bounded(
-                    command,
-                    cwd=root,
-                    timeout=3600,
-                    max_stdout=2 * 1024 * 1024,
-                    max_stderr=2 * 1024 * 1024,
-                )
-                if result.returncode != 0:
-                    raise ReleaseError(
-                        process_failure_summary(result, f"live driver {entry['id']}")
-                    )
-                receipt = _validate_driver_receipt(
-                    load_json_bytes(result.stdout, f"live driver {entry['id']} stdout"),
-                    entry["id"],
-                    revision,
-                    epoch,
-                    artifact_ids,
-                )
-                if (
-                    sha256_file(staged_driver) != driver_digest
-                    or sha256_file(subject_manifest) != subject_manifest_sha256
-                ):
-                    raise ReleaseError(
-                        f"live driver or candidate manifest changed during exercise: {entry['id']}"
-                    )
-                receipt["subject_manifest_sha256"] = subject_manifest_sha256
-                receipt["producer"] = {"name": driver.name, "sha256": driver_digest}
-                receipt_path = output / f"{entry['id']}.live.json"
-                write_json(receipt_path, receipt)
+                receipt = {
+                    "schema_version": "cigar.operation-exercise.v1",
+                    "exercise": entry["id"],
+                    "mode": "static",
+                    "source_revision": revision,
+                    "artifact_ids": artifact_ids,
+                    "subject_manifest_sha256": subject_manifest_sha256,
+                    "producer": {
+                        "name": Path(__file__).name,
+                        "sha256": sha256_file(Path(__file__).resolve()),
+                    },
+                    "source_date_epoch": epoch,
+                    "status": "passed",
+                    "checks": [
+                        {
+                            "id": "document-present",
+                            "status": "passed",
+                            "detail": entry["document"],
+                        },
+                        {
+                            "id": "required-terms",
+                            "status": "passed",
+                            "detail": f"{len(terms)} required terms present",
+                        },
+                    ],
+                }
+                relative = f"{entry['id']}.static.json"
+                reference = evidence.write_json(relative, receipt)
                 receipts.append(receipt)
-                receipt_paths.append((entry["id"], receipt_path))
+                receipt_references.append((entry["id"], reference))
+        else:
+            if os.environ.get("CIGAR_OPERATION_SANDBOX_ENFORCED") != "1":
+                raise ReleaseError(
+                    "live exercises require an environment-enforced operation sandbox"
+                )
+            if arguments.driver_directory is None:
+                raise ReleaseError("live exercises require --driver-directory")
+            if arguments.driver_directory.is_symlink():
+                raise ReleaseError("live driver directory must not be a symlink")
+            driver_directory = arguments.driver_directory.resolve()
+            if not driver_directory.is_dir():
+                raise ReleaseError("live driver directory does not exist")
+            with tempfile.TemporaryDirectory(
+                prefix="cigar-operation-drivers-"
+            ) as temporary:
+                staged_directory = Path(temporary)
+                for entry in exercises:
+                    driver = driver_directory / entry["id"]
+                    if (
+                        driver.is_symlink()
+                        or not driver.is_file()
+                        or not os.access(driver, os.X_OK)
+                    ):
+                        raise ReleaseError(
+                            "live driver is missing, linked, or not executable: "
+                            f"{entry['id']}"
+                        )
+                    driver_digest = sha256_file(driver)
+                    staged_driver = staged_directory / entry["id"]
+                    shutil.copyfile(driver, staged_driver)
+                    os.chmod(staged_driver, 0o500)
+                    if sha256_file(staged_driver) != driver_digest:
+                        raise ReleaseError(
+                            f"live driver changed while staging: {entry['id']}"
+                        )
+                    command = [
+                        str(staged_driver),
+                        "--candidate-manifest",
+                        str(subject_manifest),
+                        "--source-date-epoch",
+                        str(epoch),
+                    ]
+                    result = run_bounded(
+                        command,
+                        cwd=root,
+                        timeout=3600,
+                        max_stdout=2 * 1024 * 1024,
+                        max_stderr=2 * 1024 * 1024,
+                    )
+                    if result.returncode != 0:
+                        raise ReleaseError(
+                            process_failure_summary(
+                                result, f"live driver {entry['id']}"
+                            )
+                        )
+                    receipt = _validate_driver_receipt(
+                        load_json_bytes(
+                            result.stdout, f"live driver {entry['id']} stdout"
+                        ),
+                        entry["id"],
+                        revision,
+                        epoch,
+                        artifact_ids,
+                    )
+                    if (
+                        sha256_file(staged_driver) != driver_digest
+                        or sha256_file(subject_manifest) != subject_manifest_sha256
+                    ):
+                        raise ReleaseError(
+                            "live driver or candidate manifest changed during exercise: "
+                            f"{entry['id']}"
+                        )
+                    receipt["subject_manifest_sha256"] = subject_manifest_sha256
+                    receipt["producer"] = {
+                        "name": driver.name,
+                        "sha256": driver_digest,
+                    }
+                    relative = f"{entry['id']}.live.json"
+                    reference = evidence.write_json(relative, receipt)
+                    receipts.append(receipt)
+                    receipt_references.append((entry["id"], reference))
 
-    summary = {
-        "schema_version": "cigar.operation-exercise-summary.v1",
-        "mode": arguments.mode,
-        "source_revision": revision,
-        "artifact_ids": artifact_ids,
-        "subject_manifest_sha256": subject_manifest_sha256,
-        "source_date_epoch": epoch,
-        "status": "passed",
-        "exercise_count": len(receipts),
-        "exercises": sorted(receipt["exercise"] for receipt in receipts),
-        "receipts": [
-            {"exercise": exercise, **file_reference(path, output)}
-            for exercise, path in sorted(receipt_paths)
-        ],
-    }
-    write_json(output / "summary.json", summary)
+        summary = {
+            "schema_version": "cigar.operation-exercise-summary.v1",
+            "mode": arguments.mode,
+            "source_revision": revision,
+            "artifact_ids": artifact_ids,
+            "subject_manifest_sha256": subject_manifest_sha256,
+            "source_date_epoch": epoch,
+            "status": "passed",
+            "exercise_count": len(receipts),
+            "exercises": sorted(receipt["exercise"] for receipt in receipts),
+            "receipts": [
+                {"exercise": exercise, **reference}
+                for exercise, reference in sorted(receipt_references)
+            ],
+        }
+        evidence.write_json("summary.json", summary)
+    finally:
+        evidence.close()
     print(f"{arguments.mode} operation exercise passed for {len(receipts)} runbooks")
     return 0
 
@@ -444,5 +530,10 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, subprocess.TimeoutExpired, ReleaseError) as error:
+    except (
+        EvidenceWorkspaceError,
+        OSError,
+        subprocess.TimeoutExpired,
+        ReleaseError,
+    ) as error:
         raise SystemExit(f"operation exercise failed: {error}") from error

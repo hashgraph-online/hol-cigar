@@ -16,6 +16,7 @@ from release_lib import (
     ReleaseError,
     canonical_json_bytes,
     load_json,
+    reject_evidence_directory,
     repo_root,
     safe_relative_path,
     sha256_file,
@@ -231,7 +232,7 @@ EXPECTED_SCHEMA_SHA256 = {
         "8928adddbd3b9b71d00d9172da688585c39fb0c65d170db1179297b00cd4e726"
     ),
     "packaging/beta/schemas/beta-cargo-resolution.v1.schema.json": (
-        "eabe491486c4be52efb1f337b9de32d13cce30559d7a9a990b6de008b599473b"
+        "d79ae17ea64b1215206bfe58b998b9d6f0baef12101ee450080950268b869c84"
     ),
     "packaging/beta/schemas/beta-package-contract.v1.schema.json": (
         "3210e9c73676d6f1ad06a11e7f515c999ff6d575122527bb1c4117306e89d186"
@@ -305,7 +306,7 @@ EXPECTED_CONTRACT_SHA256 = {
 }
 
 EXPECTED_CARGO_RESOLUTION_SHA256 = (
-    "962a14112bb87e98497030b2feab4cefdd67ad80cbf4ce5165cef0a0d3f79440"
+    "486879346f723babc1c9de481dfbd04f4f0610dca29799de0fcd24e1f7ef95b5"
 )
 
 
@@ -383,10 +384,10 @@ def expected_cargo_resolution() -> dict[str, Any]:
         "component_count": 45,
         "dependency_edge_count": 66,
         "sbom_resolution_sha256": (
-            "45d5434dfa44efb692e49d04debcc9e109e5f3bfb8e09b5e894970553d7abdf8"
+            "0daf6f21ba9d65f4ef081b3737997bd0d968dce6c03c009bd50a3c2b8bafd8b6"
         ),
         "metadata_resolution_sha256": (
-            "d872be685bfe1cbbe1130ee286f44a959f02edd01b140ec33372a45995b9b288"
+            "d09930c3934c0741e49e1fb3e6778d3857df84fe7e9524ae6e38392e316e4d75"
         ),
     }
 
@@ -1390,11 +1391,20 @@ def parse_arguments() -> argparse.Namespace:
     for command in ("generate", "check"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--root", type=Path, default=repo_root())
+        subparser.add_argument(
+            "--evidence-dir",
+            type=Path,
+            help=(
+                "reserved external evidence selector (or set CIGAR_EVIDENCE_DIR); "
+                "profile source generation/checking does not emit release evidence"
+            ),
+        )
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    reject_evidence_directory(arguments.evidence_dir, "beta profile operation")
     if arguments.command == "generate":
         generate(arguments.root)
         print(f"generated beta profile {PROFILE_ID} ({VERSION})")

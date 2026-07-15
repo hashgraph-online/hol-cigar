@@ -22,6 +22,14 @@ formats carry the same canonical artifact binding, and every regular file in the
 be an artifact, referenced evidence/attachment, required supply-chain document, or expected signature
 envelope. An unreferenced file is a verification failure.
 
+For pre-candidate Apple-silicon development, `assemble_macos_development_artifacts.py` accepts only
+the ten exact external producer workspaces selected by
+`cigar.development.local.macos-aarch64.v1`. Its separate
+`verify_macos_development_assembly.py` command reconstructs the manifest and checksums from all 17
+assembled artifacts. That output deliberately uses `cigar.local-archive-build.v1`; production
+evidence assembly, release verification, and live runbooks reject it. It does not evidence clean
+candidate provenance, signatures, notarization, installed bytes, publication, or support.
+
 Every qualification receipt identifies the producing tool and version, records its tool digest and
 redacted argument vector, and binds at least one nonempty raw report attachment by relative path, media type,
 byte length, and SHA-256. The verifier resolves every attachment beneath the distribution directory;
@@ -60,9 +68,13 @@ uninstall/offline/upgrade failures, license/SBOM review, signatures, provenance,
 documentation, demos, operations, and final security scan coverage. A signed prose summary without
 the required finite metric and raw attachment does not satisfy a gate.
 
-The low-level verifier is invoked with `--trust-policy /independent/root/release-trust-policy.json`.
-The production `cigar release verify` command supplies the same policy through its configured trusted
-root bundle and never accepts an unscoped public key by itself.
+The low-level verifier requires the independently distributed trust policy plus an explicitly
+reviewed OpenSSL executable and its lowercase SHA-256: `--trust-policy
+/independent/root/release-trust-policy.json --openssl /independent/tools/openssl
+--openssl-sha256 <sha256>`. It never discovers a verifier from ambient `PATH` or a package-manager
+prefix. The production `cigar release verify` command supplies the same policy and reviewed-tool
+binding through its configured trusted root bundle and never accepts an unscoped public key by
+itself.
 
 See [reproducibility and signing](reproducibility-signing.md) and the recorded
 [qualification gaps](qualification-gaps.md).

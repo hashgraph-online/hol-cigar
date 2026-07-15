@@ -1,5 +1,6 @@
 {
   "schema_version": "cigar.claude-code-compatibility.v1",
+  "context_abi": "cigar.context.v1",
   "claude_code": {
     "minimum_inclusive": "2.1.207",
     "maximum_exclusive": "2.1.208"

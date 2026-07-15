@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import stat
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "baselines" / "cigarbench" / "qualify_matrix.py"
@@ -77,6 +80,42 @@ class MatrixTests(unittest.TestCase):
             report["input_digest"] = "1220" + "f" * 64
         with self.assertRaises(matrix.MatrixError):
             matrix.validate_matrix_reports(reports, self.inventory)
+
+    def test_cli_publishes_external_create_new_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary).resolve() / "evidence"
+
+            def fake_qualify(arguments, analyzer):
+                analyzer.write_json(arguments.output, {"status": "pass"})
+                return 0
+
+            arguments = [
+                "--evidence-dir",
+                str(evidence),
+                "--evidence-root",
+                "input",
+                "--datasets",
+                "datasets.json",
+                "--baselines",
+                "baselines.json",
+                "--canaries",
+                "canaries.json",
+                "--environment",
+                "environment.json",
+                "--seed-file",
+                "seed",
+                "--attestation-key-file",
+                "key",
+                "--output",
+                "matrix/report.json",
+            ]
+            with mock.patch.object(matrix, "qualify", side_effect=fake_qualify):
+                self.assertEqual(matrix.main(arguments), 0)
+                self.assertEqual(matrix.main(arguments), 2)
+            output = evidence / "matrix" / "report.json"
+            receipt = evidence / "matrix" / "report.json.receipt.json"
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o400)
+            self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o400)
 
 
 if __name__ == "__main__":

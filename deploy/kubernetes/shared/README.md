@@ -44,6 +44,7 @@ Create these inputs without putting secret values on a command line:
 | `cigar-shared-migrator` | `postgres-migrator-url` |
 | `cigar-shared-runtime` | `postgres-runtime-url`, `object-access-key`, `object-secret-key`, `object-session-token`, `object-blinding-key` (exactly 32 raw bytes), `keystore-passphrase`, `keystore.cigar`, `cursor.key` |
 | `cigar-shared-backup` | `postgres-backup-url`, backup-object credentials, inventory-signing capability |
+| `cigar-shared-gc` | `postgres-gc-url`, live-object deletion credentials |
 | `cigar-shared-tls` | `tls.crt`, `tls.key`, `ca.crt` |
 | `cigar-postgres-tls` | `ca.crt` (the private/public CA that issued the PostgreSQL server certificate) |
 | `cigar-shared-trusted` | `policy.json`, `authority.json`, `sources.json`, `effects.json`, `object-wrapping-keys.json` |
@@ -63,13 +64,19 @@ runtime Deployment never mounts `cigar-shared-migrator`.
 
 The separately scheduled backup controller mounts only `cigar-shared-backup`; neither the runtime
 Deployment nor migration Job mounts it. Its PostgreSQL role is `NOSUPERUSER`, data-read-only,
-`BYPASSRLS`, and has explicit `EXECUTE` on `pg_control_system()` and the migration-owned
-`cigar_gc_lock_repository_revision()` function. The latter has a fixed system-only search path and
-permits a revision-row lock without granting arbitrary table updates. These capabilities let inventory
-capture derive a content-free cluster/database identity, enumerate the authoritative tenant set, and
-safely exclude GC. Its object
+`BYPASSRLS`, and has explicit `EXECUTE` only on `pg_control_system()`. These capabilities let
+inventory capture derive a content-free cluster/database identity and enumerate the authoritative
+tenant set while the shared advisory lock excludes GC. Its object
 identity can create and delete only dedicated backup prefixes. Do not reuse migrator, runtime, or GC
 credentials for backup capture or activation verification.
+
+The separately scheduled GC controller mounts only `cigar-shared-gc`. Its distinct PostgreSQL role
+is `NOSUPERUSER`, data-read-only, `BYPASSRLS`, and has explicit `EXECUTE` only on the
+migration-owned `cigar_gc_lock_repository_revision()` function. The function has a fixed system-only
+search path and permits a revision-row lock without granting arbitrary table updates. Only the GC
+object identity may delete live immutable objects. Revoke both authority-bearing functions from
+PUBLIC; backup must not execute the GC guard, GC must not execute `pg_control_system()`, and runtime
+must execute neither. Store construction and each protected operation verify this split fail closed.
 
 Both PostgreSQL URL secrets must use exactly the `host` configured as
 `shared_storage.postgres.server_name`; use `hostaddr` separately when a fixed network address is
@@ -78,8 +85,9 @@ bundle, and verifies that exact host name for runtime and migration connections.
 server, untrusted issuer, wrong name, or URL downgrade setting therefore fails before SQL runs.
 
 After a `pg_restore --no-acl` drill, the target-role provisioning step must explicitly revoke PUBLIC
-execution of `cigar_gc_lock_repository_revision()` and grant it only to the dedicated backup/GC role
-before activation. Repository startup verifies this fail-closed invariant.
+execution of `pg_control_system()` and `cigar_gc_lock_repository_revision()`, grant the former only
+to backup and the latter only to GC, and prove runtime has neither before activation. Repository
+startup verifies this fail-closed invariant.
 
 Apply the Namespace, configuration, and Secrets first. Run and inspect the migration Job before
 creating the Deployment. Provision and validate the shared checkpoint PVC before that final step.

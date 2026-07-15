@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     file_reference,
@@ -16,6 +22,7 @@ from release_lib import (
     repo_root,
     resolve_beneath,
     safe_relative_path,
+    selected_evidence_directory,
     sha256_file,
     validate_qualification_policy,
     validate_release_policy_documents,
@@ -36,12 +43,51 @@ def parse_arguments() -> argparse.Namespace:
         "--requirements", default="packaging/release-requirements.v1.json"
     )
     parser.add_argument("--out", default="release-evidence.json")
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external output workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     parser.add_argument("--allow-development", action="store_true")
     return parser.parse_args()
 
 
 def _inside(base: Path, supplied: str) -> Path:
     return resolve_beneath(base, supplied)
+
+
+def _publish_assembled(
+    arguments: argparse.Namespace,
+    *,
+    root: Path,
+    dist: Path,
+    occupied_paths: set[Path],
+    document: dict[str, Any],
+) -> None:
+    """Publish to pinned external evidence or the legacy distribution path."""
+
+    selected = selected_evidence_directory(arguments.evidence_dir)
+    if selected is None:
+        output_path = dist / safe_relative_path(arguments.out)
+        if output_path.resolve() in occupied_paths:
+            raise ReleaseError("release evidence output overlaps an input payload")
+        write_json(output_path, document)
+        return
+
+    try:
+        parts = safe_evidence_path(os.fspath(arguments.out))
+        workspace = EvidenceWorkspace.create(selected, repository_root=root)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+    try:
+        output_path = workspace.root.joinpath(*parts)
+        if output_path.resolve(strict=False) in occupied_paths:
+            raise ReleaseError("release evidence output overlaps an input payload")
+        workspace.write_json("/".join(parts), document)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"cannot publish release evidence: {error}") from error
+    finally:
+        workspace.close()
 
 
 def _artifact_ids(matrix: dict[str, Any]) -> set[str]:
@@ -209,6 +255,8 @@ def _enforce_metric_gates(
     gates = requirements.get("metric_gates")
     if not isinstance(gates, list) or not gates:
         raise ReleaseError("release metric gates are missing")
+    _enforce_fuzz_metric_shape(receipts, gates)
+    _enforce_mutation_metric_shape(receipts, gates)
     observed: dict[str, float] = {}
     seen: set[tuple[str, str]] = set()
     for gate in gates:
@@ -302,6 +350,143 @@ def _enforce_metric_gates(
             )
         observed[f"{category}:{name}"] = value
     return observed
+
+
+def _enforce_fuzz_metric_shape(
+    receipts: list[dict[str, Any]], gates: list[object]
+) -> None:
+    """Require one reconciled per-target fuzz ledger summary.
+
+    Generic numeric aggregation is intentionally insufficient here: without an
+    exact target inventory, one long-running target (or duplicate summaries of
+    the same ledger) could satisfy an aggregate seven-day threshold while the
+    other governed harnesses never ran.
+    """
+
+    fuzz_gates = [
+        gate
+        for gate in gates
+        if isinstance(gate, dict) and gate.get("category") == "fuzz"
+    ]
+    fuzz_receipts = [
+        receipt for receipt in receipts if receipt.get("category") == "fuzz"
+    ]
+    if not fuzz_gates and not fuzz_receipts:
+        return
+    if not fuzz_gates:
+        raise ReleaseError(
+            "fuzz evidence exists without an authoritative metric policy"
+        )
+    if len(fuzz_receipts) != 1:
+        raise ReleaseError(
+            "release fuzz evidence must contain exactly one verified ledger summary"
+        )
+
+    gate_names = [gate.get("name") for gate in fuzz_gates]
+    target_prefix = "fuzz.target_seconds."
+    target_names = [
+        name
+        for name in gate_names
+        if isinstance(name, str) and name.startswith(target_prefix)
+    ]
+    expected_control_names = {"fuzz.total_seconds", "fuzz.unresolved_defect_count"}
+    if (
+        len(target_names) != 14
+        or len(set(target_names)) != 14
+        or set(gate_names) != set(target_names) | expected_control_names
+        or any(
+            re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name.removeprefix(target_prefix))
+            is None
+            for name in target_names
+        )
+    ):
+        raise ReleaseError("release fuzz policy does not name exactly fourteen targets")
+
+    metrics = fuzz_receipts[0].get("metrics")
+    if not isinstance(metrics, dict) or set(metrics) != set(gate_names):
+        raise ReleaseError(
+            "fuzz ledger summary metrics do not exactly match the governed target inventory"
+        )
+    for name in target_names:
+        value = metrics[name]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ReleaseError(
+                f"fuzz target duration is not a nonnegative integer: {name}"
+            )
+    total = metrics["fuzz.total_seconds"]
+    defects = metrics["fuzz.unresolved_defect_count"]
+    if (
+        isinstance(total, bool)
+        or not isinstance(total, int)
+        or total != sum(metrics[name] for name in target_names)
+        or isinstance(defects, bool)
+        or not isinstance(defects, int)
+        or defects < 0
+    ):
+        raise ReleaseError("fuzz ledger aggregate or defect count does not reconcile")
+
+
+def _enforce_mutation_metric_shape(
+    receipts: list[dict[str, Any]], gates: list[object]
+) -> None:
+    """Require one complete production mutation campaign result.
+
+    A duration sum across representative or interrupted runs must not satisfy
+    the four-hour release-candidate campaign gate.
+    """
+
+    mutation_gates = [
+        gate
+        for gate in gates
+        if isinstance(gate, dict) and gate.get("category") == "mutation"
+    ]
+    mutation_receipts = [
+        receipt for receipt in receipts if receipt.get("category") == "mutation"
+    ]
+    if not mutation_gates and not mutation_receipts:
+        return
+    if not mutation_gates:
+        raise ReleaseError(
+            "mutation evidence exists without an authoritative metric policy"
+        )
+    if len(mutation_receipts) != 1:
+        raise ReleaseError(
+            "release mutation evidence must contain exactly one complete campaign"
+        )
+    expected_names = {
+        "mutation.score_percent",
+        "mutation.duration_seconds",
+        "mutation.production_package_fraction",
+        "mutation.timeout_count",
+        "mutation.critical_viable_survivor_count",
+    }
+    if {gate.get("name") for gate in mutation_gates} != expected_names:
+        raise ReleaseError("release mutation policy has an unexpected metric inventory")
+    metrics = mutation_receipts[0].get("metrics")
+    if not isinstance(metrics, dict) or set(metrics) != expected_names:
+        raise ReleaseError(
+            "mutation campaign metrics do not exactly match the governed inventory"
+        )
+    score = metrics["mutation.score_percent"]
+    fraction = metrics["mutation.production_package_fraction"]
+    duration = metrics["mutation.duration_seconds"]
+    timeouts = metrics["mutation.timeout_count"]
+    critical = metrics["mutation.critical_viable_survivor_count"]
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(float(score))
+        or isinstance(fraction, bool)
+        or not isinstance(fraction, (int, float))
+        or not math.isfinite(float(fraction))
+        or isinstance(duration, bool)
+        or not isinstance(duration, int)
+        or isinstance(timeouts, bool)
+        or not isinstance(timeouts, int)
+        or isinstance(critical, bool)
+        or not isinstance(critical, int)
+    ):
+        raise ReleaseError("mutation campaign metrics have invalid numeric types")
 
 
 def _mapped_requirements(specification: Any, label: str) -> list[dict[str, str]]:
@@ -634,7 +819,6 @@ def main() -> int:
     if not signature_paths and not arguments.allow_development:
         raise ReleaseError("no detached signature envelopes were found")
     signatures = [file_reference(path, dist) for path in signature_paths]
-    output_path = dist / safe_relative_path(arguments.out)
     occupied_paths = (
         artifact_paths
         | receipt_file_paths
@@ -646,8 +830,6 @@ def main() -> int:
         | {path.resolve() for path in signature_paths}
         | {build_manifest_path.resolve()}
     )
-    if output_path.resolve() in occupied_paths:
-        raise ReleaseError("release evidence output overlaps an input payload")
     assembled = {
         "schema_version": "cigar.release-evidence.v1",
         "product_version": matrix["product_version"],
@@ -659,7 +841,13 @@ def main() -> int:
         "evidence": evidence,
         "signatures": signatures,
     }
-    write_json(output_path, assembled)
+    _publish_assembled(
+        arguments,
+        root=root,
+        dist=dist,
+        occupied_paths=occupied_paths,
+        document=assembled,
+    )
     print(
         f"assembled {len(artifacts)} artifacts, {len(evidence)} evidence receipts, and {len(signatures)} signatures"
     )

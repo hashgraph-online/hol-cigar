@@ -10,7 +10,8 @@ qualified for publication.
 - `contracts/` contains fail-closed content and archive contracts.
 - `schemas/` contains the release evidence, provenance, signature, and exercise schemas.
 - `release-requirements.v1.json` defines the evidence categories that a candidate must satisfy.
-- `licenses/` records the declared project license and third-party inventory policy.
+- `licenses/` records the declared project license, third-party inventory policy, and exact
+  lock-bound upstream evidence used only when local dependency metadata is unavailable.
 
 The scripts in `scripts/release/` use only the Python standard library, except for detached Ed25519
 signing and verification, which intentionally delegates key operations to OpenSSL. Production keys
