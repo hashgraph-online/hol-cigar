@@ -85,10 +85,10 @@
     },
     {
       "id": "release-verify",
-      "block_sha256": "3993882b80b6bc7a6307d7678b0c0015cb04ae4ed0a730f15df37bdfba2dfd34",
+      "block_sha256": "35b278db4824957e5c4167e8eb90d34e7f617a002936eafa3ce5ff9c0588c650",
       "mode": "installed-candidate",
       "cwd": "${EMPTY_WORKSPACE}",
-      "argv": ["${CIGAR_BIN}", "release", "verify", "${DIST_DIRECTORY}"],
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/verify_honey_release.py", "${DIST_DIRECTORY}"],
       "expected_exit": 0
     },
     {

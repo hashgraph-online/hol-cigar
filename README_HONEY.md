@@ -51,6 +51,9 @@ credential-free, and network-free. The local daemon may expose loopback or Unix-
 for generated clients; that is not a remote-service support claim.
 
 The release is unsigned and unnotarized. Review the checksum and release manifest before extraction.
+The bounded Honey verifier is `scripts/release/verify_honey_release.py` in the exact source archive;
+run it against a directory containing all 13 attachments. Its
+`passed-artifact-integrity` result is deliberately narrower than signed production verification.
 If macOS blocks an executable, use the normal Privacy & Security review flow only after deciding to
 trust the exact verified bytes. Do not disable Gatekeeper globally.
 
