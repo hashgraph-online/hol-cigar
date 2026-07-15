@@ -105,6 +105,19 @@ def additional_context(value: dict[str, Any]) -> str:
     return context if isinstance(context, str) else ""
 
 
+def development_plugin_source_environment(
+    plugin_root: Path, *, installed_package: bool
+) -> dict[str, str]:
+    """Select the mutable-source injection only for checkout development runs."""
+
+    if installed_package:
+        return {}
+    return {
+        "CIGAR_CLAUDE_PLUGIN_SOURCE": str(plugin_root),
+        "CIGAR_TEST_PLUGIN_SOURCE": str(plugin_root),
+    }
+
+
 def run() -> None:
     args = parser().parse_args()
     fixture = validate_paths(
@@ -215,19 +228,20 @@ print(json.dumps({
         or not (plugin_root / "hooks" / "hooks.json").is_file()
     ):
         fail("Claude plugin root is incomplete")
-    environment = clean_environment(
-        args.state,
-        {
-            "CIGAR_HOME": str(args.state / "cigar-home"),
-            "CIGAR_CLAUDE_PLUGIN_SOURCE": str(plugin_root),
-            "CIGAR_TEST_PLUGIN_SOURCE": str(plugin_root),
-            "CIGAR_CLAUDE_BINARY": str(fake_claude),
-            "CIGAR_MCP_BINARY": str(successful_component),
-            "CIGAR_CLAUDE_HOOK_BINARY": str(hook_binary),
-            "CIGAR_CLAUDE_DAEMON_CHECK_BINARY": str(successful_component),
-            "CIGAR_DEMO_CLAUDE_LOG": str(invocation_log),
-        },
+    environment_additions = {
+        "CIGAR_HOME": str(args.state / "cigar-home"),
+        "CIGAR_CLAUDE_BINARY": str(fake_claude),
+        "CIGAR_MCP_BINARY": str(successful_component),
+        "CIGAR_CLAUDE_HOOK_BINARY": str(hook_binary),
+        "CIGAR_CLAUDE_DAEMON_CHECK_BINARY": str(successful_component),
+        "CIGAR_DEMO_CLAUDE_LOG": str(invocation_log),
+    }
+    environment_additions.update(
+        development_plugin_source_environment(
+            plugin_root, installed_package=plugin_root_value is not None
+        )
     )
+    environment = clean_environment(args.state, environment_additions)
     install = cli(
         args.cigar_binary,
         [

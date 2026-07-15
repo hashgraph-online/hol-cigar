@@ -23,9 +23,41 @@ def load(name: str, path: Path):
 
 
 honey = load("cigar_honey_demo_tests", ROOT / "demos" / "run_honey.py")
+claude_driver = load(
+    "cigar_honey_claude_driver_tests", ROOT / "demos" / "claude-code" / "driver.py"
+)
 
 
 class HoneyDemoTests(unittest.TestCase):
+    def test_honey_environment_does_not_require_deferred_go_inputs(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            mock.patch.object(
+                honey.demo_runner,
+                "pinned_go_toolchain",
+                side_effect=AssertionError("Honey must not load Go pins"),
+            ),
+        ):
+            environment = honey.demo_runner.clean_environment(
+                Path(temporary), include_go_toolchain=False
+            )
+        self.assertEqual(environment["CARGO_NET_OFFLINE"], "true")
+        self.assertNotIn("GOTOOLCHAIN", environment)
+
+    def test_installed_claude_story_does_not_use_mutable_source_injection(self) -> None:
+        plugin_root = ROOT / "adapters" / "claude-code"
+        self.assertEqual(
+            claude_driver.development_plugin_source_environment(
+                plugin_root, installed_package=True
+            ),
+            {},
+        )
+        development = claude_driver.development_plugin_source_environment(
+            plugin_root, installed_package=False
+        )
+        self.assertEqual(development["CIGAR_CLAUDE_PLUGIN_SOURCE"], str(plugin_root))
+        self.assertEqual(development["CIGAR_TEST_PLUGIN_SOURCE"], str(plugin_root))
+
     def test_suite_is_exactly_four_stories_and_two_agent_fixture_has_one_worker(
         self,
     ) -> None:

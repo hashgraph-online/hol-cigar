@@ -479,7 +479,10 @@ def scan_tree(root: Path, registry: dict[str, bytes]) -> None:
 
 
 def clean_environment(
-    state: Path, extra_environment: Sequence[str] = ()
+    state: Path,
+    extra_environment: Sequence[str] = (),
+    *,
+    include_go_toolchain: bool = True,
 ) -> dict[str, str]:
     allowed = {
         "PATH",
@@ -500,17 +503,8 @@ def clean_environment(
             # infrastructure; product and user state remain temporary.
             "CARGO_HOME": os.environ.get("CARGO_HOME", str(Path.home() / ".cargo")),
             "RUSTUP_HOME": os.environ.get("RUSTUP_HOME", str(Path.home() / ".rustup")),
-            "GOMODCACHE": os.environ.get(
-                "GOMODCACHE", str(Path.home() / "go" / "pkg" / "mod")
-            ),
-            "GOCACHE": str(state / "go-build-cache"),
             "CARGO_NET_OFFLINE": "true",
             "UV_OFFLINE": "1",
-            "GOTOOLCHAIN": pinned_go_toolchain(),
-            "GOWORK": "off",
-            "GOPROXY": "off",
-            "GOSUMDB": "sum.golang.org",
-            "GONOSUMDB": "",
             "CIGAR_HOME": str(state / "cigar-home"),
             "CIGAR_CONFIG": str(state / "cigar.toml"),
             "NO_PROXY": "127.0.0.1,localhost,::1",
@@ -522,6 +516,20 @@ def clean_environment(
             "TZ": "UTC",
         }
     )
+    if include_go_toolchain:
+        environment.update(
+            {
+                "GOMODCACHE": os.environ.get(
+                    "GOMODCACHE", str(Path.home() / "go" / "pkg" / "mod")
+                ),
+                "GOCACHE": str(state / "go-build-cache"),
+                "GOTOOLCHAIN": pinned_go_toolchain(),
+                "GOWORK": "off",
+                "GOPROXY": "off",
+                "GOSUMDB": "sum.golang.org",
+                "GONOSUMDB": "",
+            }
+        )
     return environment
 
 

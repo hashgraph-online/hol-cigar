@@ -400,7 +400,9 @@ def run_component_once(
         command, enforcement = demo_runner.sandboxed_driver_command(command)
         if enforcement == "unavailable":
             fail("Honey installed demos require the macOS no-egress boundary")
-        environment = demo_runner.clean_environment(state)
+        # Honey deliberately defers the Go SDK.  Its packaged runner therefore
+        # must not depend on repository-only Go module pins or a Go toolchain.
+        environment = demo_runner.clean_environment(state, include_go_toolchain=False)
         environment["CIGAR_DEMO_NO_EGRESS"] = enforcement
         if python_root is not None:
             environment["CIGAR_DEMO_PYTHON_SDK_ROOT"] = str(python_root)
