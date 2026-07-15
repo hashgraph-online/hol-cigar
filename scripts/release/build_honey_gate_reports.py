@@ -379,11 +379,12 @@ def _bounded_checks(root: Path) -> dict[str, Any]:
     environment = _environment()
     records: list[dict[str, Any]] = []
     for identifier, commands in CHECKS:
+        command_argv = [list(command) for command in commands]
         stdout = hashlib.sha256()
         stderr = hashlib.sha256()
-        for command in commands:
+        for command in command_argv:
             result = run_bounded(
-                list(command),
+                command,
                 cwd=root,
                 env=environment,
                 timeout=1_800,
@@ -401,7 +402,7 @@ def _bounded_checks(root: Path) -> dict[str, Any]:
                 "id": identifier,
                 "status": "passed",
                 "exit_code": 0,
-                "command_sha256": sha256_bytes(canonical_json_bytes(commands)),
+                "command_sha256": sha256_bytes(canonical_json_bytes(command_argv)),
                 "stdout_sha256": stdout.hexdigest(),
                 "stderr_sha256": stderr.hexdigest(),
             }

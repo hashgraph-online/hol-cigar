@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -41,6 +43,22 @@ class HoneyGateReportTests(unittest.TestCase):
                 for _identifier, commands in gates.CHECKS
                 for command in commands
             )
+        )
+
+    def test_bounded_check_digest_canonicalizes_immutable_command_inventory(
+        self,
+    ) -> None:
+        checks = (("fixture", (("tool", "--check"),)),)
+        completed = SimpleNamespace(returncode=0, stdout=b"ok\n", stderr=b"")
+        with (
+            mock.patch.object(gates, "CHECKS", checks),
+            mock.patch.object(gates, "run_bounded", return_value=completed),
+        ):
+            result = gates._bounded_checks(ROOT)
+        self.assertEqual(result["failed_checks"], 0)
+        self.assertEqual(
+            result["checks"][0]["command_sha256"],
+            sha256_bytes(canonical_json_bytes([["tool", "--check"]])),
         )
 
     def test_suppression_requires_exact_path_finding_and_authority(self) -> None:
