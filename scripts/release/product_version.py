@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Propagate and verify the authoritative full-product development identity.
+"""Propagate and verify the authoritative full-product release identity.
 
 This deliberately uses a closed file and field inventory.  It does not search and replace
 version-looking strings across the repository: beta release material, support forks, protocol
@@ -26,7 +26,9 @@ from release_lib import ReleaseError, reject_evidence_directory
 
 
 MANIFEST_PATH = "packaging/product-version.v1.json"
-EXPECTED_TARGET_RELEASE = "1.0.0"
+DEVELOPMENT_TARGET_RELEASE = "1.0.0"
+HONEY_TARGET_RELEASE = "0.9.0"
+HONEY_CHANNEL = "honey"
 EXPECTED_CONTEXT_ABI = "cigar.context.v1"
 MAX_JSON_BYTES = 16 * 1024 * 1024
 SEMVER = re.compile(
@@ -41,7 +43,7 @@ SEMVER_FRAGMENT = (
 )
 PRODUCT_VERSION_FRAGMENT = (
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
-    r"(?:-dev\.[1-9][0-9]*)?"
+    r"(?:-(?:dev|honey)\.[1-9][0-9]*)?"
 )
 PYTHON_DISTRIBUTION_VERSION_FRAGMENT = (
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -67,6 +69,7 @@ ROOT_DEPENDENCIES = (
     "cigar-crypto",
     "cigar-effects",
     "cigar-mcp",
+    "cigar-observe",
     "cigar-policy",
     "cigar-replay",
     "cigar-retrieval",
@@ -77,6 +80,7 @@ ROOT_DEPENDENCIES = (
 )
 CARGO_DEPENDENCY_BINDINGS: dict[str, tuple[str, ...]] = {
     "Cargo.toml": ROOT_DEPENDENCIES,
+    "conformance/runner/Cargo.toml": ("cigar-daemon",),
     "crates/cigar-cli/Cargo.toml": ("cigar-daemon", "cigar-effects"),
     "crates/cigar-daemon/Cargo.toml": (
         "cigar-api",
@@ -121,9 +125,16 @@ ROOT_CARGO_PACKAGES = (
     "cigar-store",
     "cigar-testkit",
     "cigar-windows-ipc",
+    "xtask",
 )
 CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
     "Cargo.lock": ROOT_CARGO_PACKAGES,
+    "benches/cigarbench/local_scale_driver/Cargo.lock": (
+        "cigar-canon",
+        "cigar-crypto",
+        "cigar-protocol",
+        "cigar-store",
+    ),
     "fuzz/Cargo.lock": (
         "cigar-canon",
         "cigar-catalog",
@@ -145,11 +156,18 @@ CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
         "cigar-catalog",
         "cigar-compiler",
         "cigar-crypto",
+        "cigar-daemon",
         "cigar-effects",
+        "cigar-observe",
         "cigar-policy",
         "cigar-protocol",
+        "cigar-replay",
         "cigar-retrieval",
+        "cigar-space",
         "cigar-store",
+        "cigar-code-intel",
+        "cigar-api",
+        "cigar-windows-ipc",
     ),
     "demos/sdk-clients/rust-workflow/Cargo.lock": (
         "cigar-api",
@@ -180,6 +198,7 @@ CRATE_RELEASE_RECORDS = {
         "cigar-crypto",
         "cigar-daemon",
         "cigar-effects",
+        "cigar-observe",
         "cigar-policy",
         "cigar-protocol",
         "cigar-replay",
@@ -219,6 +238,7 @@ PUBLISHABLE_PRODUCT_PACKAGES = (
     "cigar-code-intel",
     "cigar-compiler",
     "cigar-api",
+    "cigar-observe",
     "cigar-daemon",
     "cigar-sdk",
 )
@@ -245,7 +265,7 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
         re.compile(
             rf"`(?:{_publishable_names}) = (?P<version>{PRODUCT_VERSION_FRAGMENT})`"
         ),
-        19,
+        20,
     ),
     "sdk/rust/qualify_publication_chain.py": (
         _surrounded('PRODUCT_VERSION = "', '"'),
@@ -300,7 +320,7 @@ PYTHON_TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
             rf"cigar_sdk-(?P<version>{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
             r"(?=-py3-none-any\.whl)"
         ),
-        1,
+        2,
     ),
 }
 DERIVED_VERSION_CONSUMERS = {
@@ -309,7 +329,7 @@ DERIVED_VERSION_CONSUMERS = {
         1,
     ),
     "sdk/python/tests/test_release_contract.py": (
-        'release["version"].replace("-dev.", ".dev")',
+        'release["version"].replace("-honey.", ".dev")',
         1,
     ),
 }
@@ -392,8 +412,8 @@ CONTRACT_BINDINGS: dict[str, tuple[str, re.Pattern[str], tuple[str, ...]]] = {
         "cargo-crate-v1",
         re.compile(r"cigar-sdk-([^/]+)/"),
         (
-            *_indices("allow", 9),
-            *_indices("required", 9),
+            *_indices("allow", 12),
+            *_indices("required", 12),
             "/required_patterns/0",
             "/version_binding/path_pattern",
             "/abi_binding/path_pattern",
@@ -488,10 +508,24 @@ def python_distribution_version(version: str) -> str:
     prerelease = match.group(4)
     if prerelease is None:
         return base
-    development = re.fullmatch(r"dev\.([1-9][0-9]*)", prerelease)
+    development = re.fullmatch(r"(?:dev|honey)\.([1-9][0-9]*)", prerelease)
     if development is None:
         raise VersionError(f"unsupported Python distribution prerelease: {version!r}")
     return f"{base}.dev{development.group(1)}"
+
+
+def derived_versions(version: str) -> dict[str, str]:
+    """Return the closed package/archive version projection for one product identity."""
+
+    if SEMVER.fullmatch(version) is None:
+        raise VersionError(f"cannot derive package versions: {version!r}")
+    return {
+        "typescript": version,
+        "python": python_distribution_version(version),
+        "rust": version,
+        "plugin": version,
+        "archive": version,
+    }
 
 
 def _read_json(path: Path) -> Any:
@@ -647,25 +681,36 @@ def load_manifest(root: Path) -> dict[str, Any]:
         raise VersionError("product version manifest has an unexpected key inventory")
     version = document.get("version")
     target = document.get("target_release_version")
-    if (
-        document.get("schema_version") != "cigar.product-version.v1"
-        or document.get("product") != "cigar"
-        or target != EXPECTED_TARGET_RELEASE
-        or not isinstance(version, str)
-        or SEMVER.fullmatch(version) is None
-        or not version.startswith(f"{target}-dev.")
-        or not version.removeprefix(f"{target}-dev.").isdigit()
-        or int(version.removeprefix(f"{target}-dev.")) < 1
-        or document.get("context_abi") != EXPECTED_CONTEXT_ABI
-        or document.get("release_state") != "development"
-        or document.get("channel") != "development"
-        or document.get("prerelease") is not True
-        or document.get("published") is not False
-        or document.get("supported") is not False
-        or document.get("tag") is not None
-    ):
+    common_valid = (
+        document.get("schema_version") == "cigar.product-version.v1"
+        and document.get("product") == "cigar"
+        and isinstance(version, str)
+        and SEMVER.fullmatch(version) is not None
+        and document.get("context_abi") == EXPECTED_CONTEXT_ABI
+        and document.get("prerelease") is True
+        and document.get("published") is False
+        and document.get("supported") is False
+    )
+    development_valid = (
+        target == DEVELOPMENT_TARGET_RELEASE
+        and isinstance(version, str)
+        and re.fullmatch(r"1\.0\.0-dev\.[1-9][0-9]*", version) is not None
+        and document.get("release_state") == "development"
+        and document.get("channel") == "development"
+        and document.get("tag") is None
+    )
+    honey_valid = (
+        target == HONEY_TARGET_RELEASE
+        and isinstance(version, str)
+        and re.fullmatch(r"0\.9\.0-honey\.[1-9][0-9]*", version) is not None
+        and document.get("release_state") == "developer-preview"
+        and document.get("channel") == HONEY_CHANNEL
+        and document.get("tag") == f"v{version}"
+    )
+    if not common_valid or not (development_valid or honey_valid):
         raise VersionError(
-            "product version manifest is not a non-published 1.0 development identity"
+            "product version manifest is not an accepted non-published development "
+            "or Honey developer-preview identity"
         )
     canonical = json.dumps(document, indent=2, ensure_ascii=True) + "\n"
     if path.read_text(encoding="utf-8") != canonical:
@@ -757,14 +802,19 @@ def _update_toml_manifests(root: Path, version: str, *, write: bool) -> None:
             actual_name = section.get("name")
         if actual_name != expected_name or not isinstance(section.get("version"), str):
             raise VersionError(f"package identity drift in {relative}")
+        desired_version = (
+            python_distribution_version(version)
+            if relative in {"pyproject.toml", "sdk/python/pyproject.toml"}
+            else version
+        )
         if write:
             _write(
                 path,
                 _replace_section_version(
-                    path.read_text(encoding="utf-8"), section_name, version
+                    path.read_text(encoding="utf-8"), section_name, desired_version
                 ),
             )
-        elif section["version"] != version:
+        elif section["version"] != desired_version:
             raise VersionError(
                 f"product version drift in {relative}: {section['version']!r}"
             )
@@ -849,7 +899,9 @@ def _update_locks(root: Path, version: str, *, write: bool) -> None:
     for relative, name in UV_LOCK_BINDINGS.items():
         path = root / relative
         text = path.read_text(encoding="utf-8")
-        generated = _replace_lock_package_versions(text, (name,), version)
+        generated = _replace_lock_package_versions(
+            text, (name,), python_distribution_version(version)
+        )
         if write:
             _write(path, generated)
         elif generated != text:

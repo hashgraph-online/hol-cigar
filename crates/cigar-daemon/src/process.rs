@@ -479,7 +479,7 @@ mod tests {
 
         let version = execute_process_command(&arguments(&["version"]));
         assert_eq!(version.status, 0);
-        assert!(version.stdout.contains("\"version\":\"1.0.0-dev.1\""));
+        assert!(version.stdout.contains("\"version\":\"0.9.0-honey.1\""));
         assert!(version.stderr.is_empty());
     }
 

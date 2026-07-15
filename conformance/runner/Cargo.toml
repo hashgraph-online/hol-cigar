@@ -19,7 +19,7 @@ cigar-api.workspace = true
 cigar-catalog.workspace = true
 cigar-compiler.workspace = true
 cigar-crypto.workspace = true
-cigar-daemon = { path = "../../crates/cigar-daemon", version = "=1.0.0-dev.1" }
+cigar-daemon = { path = "../../crates/cigar-daemon", version = "=0.9.0-honey.1" }
 cigar-effects.workspace = true
 cigar-mcp.workspace = true
 cigar-policy.workspace = true
