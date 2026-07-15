@@ -1,0 +1,24 @@
+CIGAR dashboard integration baseline
+captured_at_utc=2026-07-13
+ownership_handoff=user_confirmed_main_job_complete
+head=56a5a1346bdfd362f67c279f4f8cd5d4ba7c46b2
+tree=d06cf0075faf21ffa7d6c55d0da3229f4cebc4b1
+branch=main
+git_status_short=<empty>
+git_diff_stat=<empty>
+git_diff_cached_stat=<empty>
+git_index_lock=absent
+active_process_audit=unavailable_in_managed_sandbox
+active_process_audit_detail=ps_operation_not_permitted_and_pgrep_sysmond_unavailable
+rustc=1.92.0_ded5c06cf_2025-12-08
+cargo=1.92.0_344c4567c_2025-10-21
+node=v24.10.0
+pnpm=10.34.5
+default_build=cargo_build_locked_offline_passed
+default_members=crates/cigar-cli,crates/cigar-daemon,crates/cigar-mcp
+cli_help_sha256=d675e961eab03c88d53bf543bdeae388fa56021200f48e2942588d661925a027
+daemon_help_sha256=3a253d905704887c51fda52e54292d60a76d03547b990aad9ea5f4d9a4e61563
+preexisting_changes=<none>
+dashboard_commit=56a5a134_beta_v_honey
+scope_note=This integration does not modify or re-qualify WP19-WP22 release evidence.
+scope_note=The dashboard remains outside Cargo default-members and every base runtime/deployment path.

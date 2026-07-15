@@ -84,5 +84,6 @@ idempotency_wait_ms = 30000
 
 [telemetry]
 otlp_endpoint = "https://telemetry.example.invalid:4317"
+otlp_ca_certificate_file = "/run/secrets/cigar/telemetry-ca.pem"
 export_timeout_ms = 5000
 metric_interval_ms = 30000

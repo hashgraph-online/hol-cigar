@@ -6,7 +6,7 @@ import threading
 import time
 import unittest
 from collections.abc import Iterator, Mapping
-from pathlib import Path
+from importlib import resources
 
 from cigar_sdk import (
     CallOptions,
@@ -23,7 +23,7 @@ from cigar_sdk.transport import HttpResponse, StreamResponse
 
 _UUID = "01900000-0000-7000-8000-000000000001"
 _DIGEST = "1220" + "1" * 64
-_PROBLEM = (Path(__file__).resolve().parents[2] / "fixtures/problem-index-unavailable-v1.json").read_bytes()
+_PROBLEM = resources.files("cigar_sdk.fixtures").joinpath("problem-index-unavailable-v1.json").read_bytes()
 
 
 class _FakeStream(StreamResponse):

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "cigar",
   "displayName": "CIGAR",
-  "version": "0.1.0",
+  "version": "1.0.0-dev.1",
   "description": "Deterministic, inspectable, governed context for Claude Code through public hooks and MCP.",
   "author": {
     "name": "CIGAR contributors"

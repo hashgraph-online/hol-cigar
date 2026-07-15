@@ -20,6 +20,10 @@ two-file archive/descriptor freeze; verification recomputes the complete committ
 from Git object bytes. Native `build` requires the verified freeze, rejects a mismatched clean
 checkout, builds only from its read-only materialized archive contents, and preserves the frozen
 archive and descriptor bytes unchanged in the candidate.
+`freeze-source` and `build` select their create-new external workspace with `--evidence-dir` or
+`CIGAR_EVIDENCE_DIR`; legacy `--out` is mutually exclusive. The signed-release `plan` and
+`assemble` actions use the same selector. Verification-only actions are stdout-only and reject an
+inherited selector, so callers must unset `CIGAR_EVIDENCE_DIR` before independent verification.
 Cargo metadata and both clean-target builds request Cargo offline mode against 47
 checksum-verified resolver sources; only external OS-enforced evidence may claim no-egress. The
 target-specific Cargo closure contains two workspace packages and 43 external runtime packages.

@@ -47,23 +47,44 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
-const MIGRATIONS: &[(&str, &str)] = &[
-    (
-        "shared_metadata",
-        include_str!("../migrations/postgres/0001_shared_metadata.sql"),
-    ),
-    (
-        "object_outbox",
-        include_str!("../migrations/postgres/0002_object_outbox.sql"),
-    ),
-    (
-        "atom_projection",
-        include_str!("../migrations/postgres/0003_atom_projection.sql"),
-    ),
-    (
-        "gc_revision_guard",
-        include_str!("../migrations/postgres/0004_gc_revision_guard.sql"),
-    ),
+#[derive(Clone, Copy)]
+struct PostgresMigrationSource {
+    name: &'static str,
+    sql: &'static str,
+    minimum_application_major: i32,
+    maximum_application_major: i32,
+    online: bool,
+}
+
+const MIGRATIONS: &[PostgresMigrationSource] = &[
+    PostgresMigrationSource {
+        name: "shared_metadata",
+        sql: include_str!("../migrations/postgres/0001_shared_metadata.sql"),
+        minimum_application_major: 1,
+        maximum_application_major: 2,
+        online: true,
+    },
+    PostgresMigrationSource {
+        name: "object_outbox",
+        sql: include_str!("../migrations/postgres/0002_object_outbox.sql"),
+        minimum_application_major: 1,
+        maximum_application_major: 2,
+        online: true,
+    },
+    PostgresMigrationSource {
+        name: "atom_projection",
+        sql: include_str!("../migrations/postgres/0003_atom_projection.sql"),
+        minimum_application_major: 1,
+        maximum_application_major: 2,
+        online: true,
+    },
+    PostgresMigrationSource {
+        name: "gc_revision_guard",
+        sql: include_str!("../migrations/postgres/0004_gc_revision_guard.sql"),
+        minimum_application_major: 1,
+        maximum_application_major: 2,
+        online: true,
+    },
 ];
 const MIGRATION_LOCK_KEY: i64 = 4_843_415_282_449_238_323;
 const BACKUP_GC_LOCK_KEY: i64 = 4_843_415_282_449_238_324;
@@ -81,6 +102,7 @@ const POSTGRES_BACKUP_SIGNATURE_PURPOSE: &str = "postgres-backup-inventory-v2";
 const APPLICATION_MAJOR: i32 = 1;
 const MAX_POSTGRES_CA_PEM_BYTES: usize = 2 * 1024 * 1024;
 const MAX_POSTGRES_CA_CERTIFICATES: usize = 64;
+const POSTGRES_FIXED_OPTIONS: &str = "-c search_path=public,pg_catalog,pg_temp";
 
 #[derive(Clone, Eq, PartialEq)]
 enum PostgresTrustRoots {
@@ -254,7 +276,14 @@ impl PostgresConfiguration {
     fn connection_configuration(&self) -> Result<postgres::Config, StoreError> {
         let mut configuration = postgres::Config::from_str(&self.database_url)
             .map_err(|_error| StoreError::new(StoreErrorCode::InvalidContext))?;
+        if configuration.get_options().is_some() {
+            return Err(StoreError::new(StoreErrorCode::InvalidContext));
+        }
         validate_postgres_tls_binding(&configuration, &self.tls)?;
+        // Do not let a caller-controlled DSN or server-side role default redirect
+        // unqualified protocol relations. Explicitly listing pg_temp last also prevents
+        // temporary relations from shadowing the durable public-schema objects.
+        configuration.options(POSTGRES_FIXED_OPTIONS);
         configuration.ssl_mode(SslMode::Require);
         Ok(configuration)
     }
@@ -356,6 +385,52 @@ pub struct PostgresMigrationReceipt {
     pub latest_sequence: u32,
     /// Number of embedded migration checksums verified after installation.
     pub checksums_verified: u32,
+}
+
+/// One-shot PostgreSQL migration boundary available only to explicit qualification builds.
+#[cfg(any(test, feature = "migration-fault-injection"))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PostgresMigrationFailpoint {
+    /// After durable creation/verification of the migration-ledger table.
+    AfterLedgerBootstrap,
+    /// After acquiring the transaction-scoped migration advisory lock.
+    AfterAdvisoryLock,
+    /// After one missing migration's DDL executes inside the transaction.
+    AfterMigrationSql(u32),
+    /// After the matching immutable ledger row is inserted inside the transaction.
+    AfterLedgerInsert(u32),
+    /// Immediately before committing the serializable migration transaction.
+    BeforeCommit,
+    /// Immediately after commit, modeling an ambiguous client outcome recovered by verification.
+    AfterCommit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PostgresMigrationBoundary {
+    AfterLedgerBootstrap,
+    AfterAdvisoryLock,
+    AfterMigrationSql(u32),
+    AfterLedgerInsert(u32),
+    BeforeCommit,
+    AfterCommit,
+}
+
+#[cfg(any(test, feature = "migration-fault-injection"))]
+impl From<PostgresMigrationBoundary> for PostgresMigrationFailpoint {
+    fn from(boundary: PostgresMigrationBoundary) -> Self {
+        match boundary {
+            PostgresMigrationBoundary::AfterLedgerBootstrap => Self::AfterLedgerBootstrap,
+            PostgresMigrationBoundary::AfterAdvisoryLock => Self::AfterAdvisoryLock,
+            PostgresMigrationBoundary::AfterMigrationSql(sequence) => {
+                Self::AfterMigrationSql(sequence)
+            }
+            PostgresMigrationBoundary::AfterLedgerInsert(sequence) => {
+                Self::AfterLedgerInsert(sequence)
+            }
+            PostgresMigrationBoundary::BeforeCommit => Self::BeforeCommit,
+            PostgresMigrationBoundary::AfterCommit => Self::AfterCommit,
+        }
+    }
 }
 
 /// Read-routing guarantee for the shared transactional profile.
@@ -587,10 +662,18 @@ pub struct PostgresBackupSignatureIdentity {
 
 type Manager = PostgresConnectionManager<MakeRustlsConnect>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PostgresAuthority {
+    Runtime,
+    Backup,
+    GarbageCollection,
+}
+
 /// PostgreSQL repository whose stored state rows each contain exactly one tenant partition.
 pub struct PostgresStore {
     pool: Pool<Manager>,
     configuration: PostgresConfiguration,
+    authority: PostgresAuthority,
     blob_repository: Option<Arc<dyn crate::RepositoryBlobStore>>,
     fail_next_commit: AtomicBool,
     failpoints: Mutex<BTreeSet<PostgresFailpoint>>,
@@ -607,7 +690,7 @@ impl PostgresStore {
     ///
     /// This path executes no DDL and works for a non-owner runtime role without `BYPASSRLS`.
     pub fn connect(configuration: PostgresConfiguration) -> Result<Self, StoreError> {
-        Self::connect_internal(configuration, None)
+        Self::connect_internal(configuration, None, PostgresAuthority::Runtime)
     }
 
     /// Applies append-only migrations using an explicit owner/migrator connection.
@@ -625,6 +708,58 @@ impl PostgresStore {
         verify_migrations(&mut connection)
     }
 
+    /// Runs the real migrator with one injected boundary failure for external qualification.
+    ///
+    /// This API is absent from default builds. Qualification must use a disposable retained
+    /// database and rerun the normal migrator plus semantic verification after every injected
+    /// error, including the ambiguous `AfterCommit` outcome.
+    #[cfg(feature = "migration-fault-injection")]
+    pub fn migrate_with_failpoint(
+        configuration: &PostgresConfiguration,
+        failpoint: PostgresMigrationFailpoint,
+    ) -> Result<PostgresMigrationReceipt, StoreError> {
+        configuration.validate()?;
+        let postgres_configuration = configuration.connection_configuration()?;
+        let tls_connector = configuration.tls.connector()?;
+        let mut connection = postgres_configuration
+            .connect(tls_connector)
+            .map_err(postgres_error)?;
+        migrate_with_observer(&mut connection, |boundary| {
+            if PostgresMigrationFailpoint::from(boundary) == failpoint {
+                Err(StoreError::new(StoreErrorCode::InjectedAbort))
+            } else {
+                Ok(())
+            }
+        })?;
+        verify_schema(&mut connection)?;
+        verify_migrations(&mut connection)
+    }
+
+    /// Qualification-only process abort at one exact PostgreSQL migration boundary.
+    ///
+    /// This API is available only with `migration-fault-injection`. The caller must target a
+    /// disposable database owned by the authenticated migrator role.
+    #[cfg(feature = "migration-fault-injection")]
+    pub fn migrate_with_process_abort(
+        configuration: &PostgresConfiguration,
+        failpoint: PostgresMigrationFailpoint,
+    ) -> Result<PostgresMigrationReceipt, StoreError> {
+        configuration.validate()?;
+        let postgres_configuration = configuration.connection_configuration()?;
+        let tls_connector = configuration.tls.connector()?;
+        let mut connection = postgres_configuration
+            .connect(tls_connector)
+            .map_err(postgres_error)?;
+        migrate_with_observer(&mut connection, |boundary| {
+            if PostgresMigrationFailpoint::from(boundary) == failpoint {
+                std::process::abort();
+            }
+            Ok(())
+        })?;
+        verify_schema(&mut connection)?;
+        verify_migrations(&mut connection)
+    }
+
     /// Explicit test/development convenience that migrates before opening the runtime pool.
     pub fn connect_and_migrate(configuration: PostgresConfiguration) -> Result<Self, StoreError> {
         Self::migrate(&configuration)?;
@@ -636,12 +771,49 @@ impl PostgresStore {
         configuration: PostgresConfiguration,
         blob_repository: Arc<dyn crate::RepositoryBlobStore>,
     ) -> Result<Self, StoreError> {
-        Self::connect_internal(configuration, Some(blob_repository))
+        Self::connect_internal(
+            configuration,
+            Some(blob_repository),
+            PostgresAuthority::Runtime,
+        )
+    }
+
+    /// Opens a read-only cross-tenant backup/restore store under a dedicated backup principal.
+    ///
+    /// The connected role must be a non-superuser `BYPASSRLS` principal, must not own the
+    /// database, must be able to call `pg_control_system()`, and must not be able to execute the
+    /// repository GC revision guard. Runtime and GC principals fail closed at construction.
+    pub fn connect_backup_with_blob_repository(
+        configuration: PostgresConfiguration,
+        blob_repository: Arc<dyn crate::RepositoryBlobStore>,
+    ) -> Result<Self, StoreError> {
+        Self::connect_internal(
+            configuration,
+            Some(blob_repository),
+            PostgresAuthority::Backup,
+        )
+    }
+
+    /// Opens a cross-tenant physical-GC store under a dedicated GC principal.
+    ///
+    /// The connected role must be a non-superuser `BYPASSRLS` principal, must not own the
+    /// database, must be able to execute only the repository GC revision guard, and must not be
+    /// able to call `pg_control_system()`. Runtime and backup principals fail closed.
+    pub fn connect_garbage_collection_with_blob_repository(
+        configuration: PostgresConfiguration,
+        blob_repository: Arc<dyn crate::RepositoryBlobStore>,
+    ) -> Result<Self, StoreError> {
+        Self::connect_internal(
+            configuration,
+            Some(blob_repository),
+            PostgresAuthority::GarbageCollection,
+        )
     }
 
     fn connect_internal(
         configuration: PostgresConfiguration,
         blob_repository: Option<Arc<dyn crate::RepositoryBlobStore>>,
+        authority: PostgresAuthority,
     ) -> Result<Self, StoreError> {
         configuration.validate()?;
         let postgres_configuration = configuration.connection_configuration()?;
@@ -657,10 +829,12 @@ impl PostgresStore {
             let mut connection = pool.get().map_err(pool_error)?;
             verify_schema(&mut connection)?;
             verify_migrations(&mut *connection)?;
+            verify_connection_authority(&mut *connection, authority)?;
         }
         Ok(Self {
             pool,
             configuration,
+            authority,
             blob_repository,
             fail_next_commit: AtomicBool::new(false),
             failpoints: Mutex::new(BTreeSet::new()),
@@ -669,7 +843,9 @@ impl PostgresStore {
 
     /// Returns the current global MVCC revision.
     pub fn revision(&self) -> Result<StoreRevision, StoreError> {
+        self.require_configured_authority(PostgresAuthority::Runtime)?;
         let mut connection = self.connection()?;
+        verify_connection_authority(&mut *connection, PostgresAuthority::Runtime)?;
         current_revision(&mut *connection)
     }
 
@@ -783,6 +959,7 @@ impl PostgresStore {
         tenant: &RecordId,
         blob: &BlobRecord,
     ) -> Result<(), StoreError> {
+        self.require_configured_authority(PostgresAuthority::Runtime)?;
         self.blob_repository
             .as_ref()
             .ok_or_else(|| StoreError::new(StoreErrorCode::Unavailable))?
@@ -829,6 +1006,7 @@ impl PostgresStore {
         dry_run: bool,
         max_objects: usize,
     ) -> Result<RepositoryGarbageCollectionReport, StoreError> {
+        self.require_configured_authority(PostgresAuthority::GarbageCollection)?;
         if candidates.is_empty()
             || max_objects == 0
             || candidates.len() > max_objects
@@ -854,7 +1032,7 @@ impl PostgresStore {
             .start()
             .map_err(postgres_error)?;
         configure_backup_transaction(&mut transaction, &self.configuration, &first.tenant_id)?;
-        require_backup_owner(&mut transaction)?;
+        verify_connection_authority(&mut transaction, PostgresAuthority::GarbageCollection)?;
         transaction
             .query_one("SELECT pg_advisory_xact_lock($1)", &[&BACKUP_GC_LOCK_KEY])
             .map_err(postgres_error)?;
@@ -929,6 +1107,7 @@ impl PostgresStore {
     where
         F: FnOnce(&PostgresBackupSnapshot) -> Result<PostgresDatabaseBackupArtifact, E>,
     {
+        self.require_configured_authority(PostgresAuthority::Backup)?;
         validate_sorted_tenants(tenants)?;
         if created_at_unix_nanos <= 0 {
             return Err(StoreError::new(StoreErrorCode::InvalidContext));
@@ -944,7 +1123,7 @@ impl PostgresStore {
             .start()
             .map_err(postgres_error)?;
         configure_backup_transaction(&mut transaction, &self.configuration, first)?;
-        require_backup_owner(&mut transaction)?;
+        verify_connection_authority(&mut transaction, PostgresAuthority::Backup)?;
         transaction
             .query_one(
                 "SELECT pg_advisory_xact_lock_shared($1)",
@@ -1035,6 +1214,7 @@ impl PostgresStore {
         P: KeyProvider,
         F: FnOnce(&PostgresBackupSignatureIdentity) -> bool,
     {
+        self.require_configured_authority(PostgresAuthority::Backup)?;
         verify_postgres_backup_inventory_trusted(signed, provider, now_unix_nanos, trust)?;
         self.verify_restored_state(signed, archive, object_receipt)
     }
@@ -1073,7 +1253,7 @@ impl PostgresStore {
             .start()
             .map_err(postgres_error)?;
         configure_backup_transaction(&mut transaction, &self.configuration, first)?;
-        require_backup_owner(&mut transaction)?;
+        verify_connection_authority(&mut transaction, PostgresAuthority::Backup)?;
         let destination_database_identity = database_identity(&mut transaction)?;
         if destination_database_identity == signed.inventory.database.source_database_identity {
             return Err(StoreError::new(StoreErrorCode::Unavailable));
@@ -1284,13 +1464,23 @@ impl PostgresStore {
         connection: &'connection mut PooledConnection<Manager>,
         tenant: &RecordId,
     ) -> Result<Transaction<'connection>, StoreError> {
+        self.require_configured_authority(PostgresAuthority::Runtime)?;
         let mut transaction = connection
             .build_transaction()
             .isolation_level(IsolationLevel::Serializable)
             .start()
             .map_err(postgres_error)?;
         configure_transaction(&mut transaction, &self.configuration, tenant)?;
+        verify_connection_authority(&mut transaction, PostgresAuthority::Runtime)?;
         Ok(transaction)
+    }
+
+    fn require_configured_authority(&self, expected: PostgresAuthority) -> Result<(), StoreError> {
+        if self.authority == expected {
+            Ok(())
+        } else {
+            Err(StoreError::new(StoreErrorCode::Unavailable))
+        }
     }
 
     fn trip(&self, failpoint: PostgresFailpoint) -> Result<(), StoreError> {
@@ -1910,15 +2100,76 @@ where
     Ok(())
 }
 
-fn require_backup_owner(connection: &mut impl GenericClient) -> Result<(), StoreError> {
-    let authorized: bool = connection
+fn verify_connection_authority(
+    connection: &mut impl GenericClient,
+    expected: PostgresAuthority,
+) -> Result<(), StoreError> {
+    let row = connection
         .query_one(
-            "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user",
+            "SELECT session_user = current_user,
+                    database_owner.rolname <> current_user,
+                    authenticated_role.rolsuper,
+                    authenticated_role.rolbypassrls,
+                    authenticated_role.rolinherit,
+                    authenticated_role.rolcreaterole,
+                    authenticated_role.rolcreatedb,
+                    authenticated_role.rolreplication,
+                    authenticated_role.rolcanlogin,
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM pg_roles AS selectable_role
+                        WHERE selectable_role.oid <> authenticated_role.oid
+                          AND pg_has_role(
+                              authenticated_role.oid,
+                              selectable_role.oid,
+                              'SET'
+                          )
+                    ),
+                    has_function_privilege(
+                        current_user,
+                        'pg_catalog.pg_control_system()'::regprocedure,
+                        'EXECUTE'
+                    ),
+                    has_function_privilege(
+                        current_user,
+                        'public.cigar_gc_lock_repository_revision()'::regprocedure,
+                        'EXECUTE'
+                    )
+             FROM pg_roles AS authenticated_role
+             JOIN pg_database AS database ON database.datname = current_database()
+             JOIN pg_roles AS database_owner ON database_owner.oid = database.datdba
+             WHERE authenticated_role.rolname = current_user",
             &[],
         )
-        .map_err(postgres_error)?
-        .get(0);
-    if authorized {
+        .map_err(postgres_error)?;
+    let session_exact: bool = row.get(0);
+    let not_owner: bool = row.get(1);
+    let superuser: bool = row.get(2);
+    let bypass_rls: bool = row.get(3);
+    let inherits_roles: bool = row.get(4);
+    let create_role: bool = row.get(5);
+    let create_database: bool = row.get(6);
+    let replication: bool = row.get(7);
+    let can_login: bool = row.get(8);
+    let no_set_memberships: bool = row.get(9);
+    let control_system: bool = row.get(10);
+    let gc_guard: bool = row.get(11);
+    let exact = match expected {
+        PostgresAuthority::Runtime => !bypass_rls && !control_system && !gc_guard,
+        PostgresAuthority::Backup => bypass_rls && control_system && !gc_guard,
+        PostgresAuthority::GarbageCollection => bypass_rls && !control_system && gc_guard,
+    };
+    if session_exact
+        && not_owner
+        && !superuser
+        && !inherits_roles
+        && !create_role
+        && !create_database
+        && !replication
+        && can_login
+        && no_set_memberships
+        && exact
+    {
         Ok(())
     } else {
         Err(StoreError::new(StoreErrorCode::Unavailable))
@@ -1961,7 +2212,7 @@ fn migration_backup_inventory(
             "SELECT sequence, name, checksum, minimum_application_major,
                     maximum_application_major, online,
                     (extract(epoch FROM applied_at) * 1000000)::bigint
-             FROM schema_migrations ORDER BY sequence",
+             FROM public.schema_migrations ORDER BY sequence",
             &[],
         )
         .map_err(postgres_error)?;
@@ -2989,9 +3240,18 @@ fn validate_staged_shape(staged: &[StagedMutation]) -> Result<(), StoreError> {
 }
 
 fn migrate(connection: &mut postgres::Client) -> Result<(), StoreError> {
+    migrate_with_observer(connection, |_boundary| Ok(()))
+}
+
+fn migrate_with_observer(
+    connection: &mut postgres::Client,
+    mut observe: impl FnMut(PostgresMigrationBoundary) -> Result<(), StoreError>,
+) -> Result<(), StoreError> {
+    verify_migrator_authority(connection)?;
     connection
         .batch_execute(
-            "CREATE TABLE IF NOT EXISTS schema_migrations (
+            "REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+             CREATE TABLE IF NOT EXISTS public.schema_migrations (
                 sequence integer PRIMARY KEY,
                 name text NOT NULL UNIQUE,
                 checksum text NOT NULL,
@@ -3002,6 +3262,7 @@ fn migrate(connection: &mut postgres::Client) -> Result<(), StoreError> {
              )",
         )
         .map_err(postgres_error)?;
+    observe(PostgresMigrationBoundary::AfterLedgerBootstrap)?;
     let mut transaction = connection
         .build_transaction()
         .isolation_level(IsolationLevel::Serializable)
@@ -3010,34 +3271,74 @@ fn migrate(connection: &mut postgres::Client) -> Result<(), StoreError> {
     transaction
         .query_one("SELECT pg_advisory_xact_lock($1)", &[&MIGRATION_LOCK_KEY])
         .map_err(postgres_error)?;
-    for (index, (name, sql)) in MIGRATIONS.iter().enumerate() {
+    observe(PostgresMigrationBoundary::AfterAdvisoryLock)?;
+    for (index, migration) in MIGRATIONS.iter().enumerate() {
         let sequence = i32::try_from(index + 1)
             .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?;
-        let checksum = checksum_bytes(sql.as_bytes());
+        let checksum = checksum_bytes(migration.sql.as_bytes());
         let stored = transaction
             .query_opt(
-                "SELECT name, checksum FROM schema_migrations WHERE sequence = $1",
+                "SELECT name, checksum FROM public.schema_migrations WHERE sequence = $1",
                 &[&sequence],
             )
             .map_err(postgres_error)?;
         if let Some(stored) = stored {
-            if stored.get::<_, String>(0) != *name || stored.get::<_, String>(1) != checksum {
+            if stored.get::<_, String>(0) != migration.name
+                || stored.get::<_, String>(1) != checksum
+            {
                 return Err(StoreError::new(StoreErrorCode::Unavailable));
             }
             continue;
         }
-        transaction.batch_execute(sql).map_err(postgres_error)?;
+        transaction
+            .batch_execute(migration.sql)
+            .map_err(postgres_error)?;
+        observe(PostgresMigrationBoundary::AfterMigrationSql(
+            u32::try_from(sequence)
+                .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?,
+        ))?;
         transaction
             .execute(
-                "INSERT INTO schema_migrations
+                "INSERT INTO public.schema_migrations
                    (sequence, name, checksum, minimum_application_major,
                     maximum_application_major, online)
-                 VALUES ($1, $2, $3, 1, 2, true)",
-                &[&sequence, name, &checksum],
+                 VALUES ($1, $2, $3, $4, $5, $6)",
+                &[
+                    &sequence,
+                    &migration.name,
+                    &checksum,
+                    &migration.minimum_application_major,
+                    &migration.maximum_application_major,
+                    &migration.online,
+                ],
             )
             .map_err(postgres_error)?;
+        observe(PostgresMigrationBoundary::AfterLedgerInsert(
+            u32::try_from(sequence)
+                .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?,
+        ))?;
     }
-    transaction.commit().map_err(postgres_error)
+    observe(PostgresMigrationBoundary::BeforeCommit)?;
+    transaction.commit().map_err(postgres_error)?;
+    observe(PostgresMigrationBoundary::AfterCommit)
+}
+
+fn verify_migrator_authority(connection: &mut postgres::Client) -> Result<(), StoreError> {
+    let owns_database: bool = connection
+        .query_one(
+            "SELECT owner.rolname = current_user AND session_user = current_user
+             FROM pg_database AS database
+             JOIN pg_roles AS owner ON owner.oid = database.datdba
+             WHERE database.datname = current_database()",
+            &[],
+        )
+        .map_err(postgres_error)?
+        .get(0);
+    if owns_database {
+        Ok(())
+    } else {
+        Err(StoreError::new(StoreErrorCode::Unavailable))
+    }
 }
 
 fn verify_schema(connection: &mut postgres::Client) -> Result<(), StoreError> {
@@ -3046,7 +3347,7 @@ fn verify_schema(connection: &mut postgres::Client) -> Result<(), StoreError> {
             "SELECT count(*)
              FROM pg_class AS c
              JOIN pg_namespace AS n ON n.oid = c.relnamespace
-             WHERE n.nspname = current_schema()
+             WHERE n.nspname = 'public'
                AND c.relname IN ('cigar_tenant_states', 'cigar_shared_wakeups',
                                  'cigar_object_commits', 'cigar_worker_claims',
                                  'cigar_atom_projection')
@@ -3059,15 +3360,15 @@ fn verify_schema(connection: &mut postgres::Client) -> Result<(), StoreError> {
         .query_one(
             "SELECT
                (SELECT count(*) FROM pg_attribute
-                WHERE attrelid = 'cigar_atom_projection'::regclass
+                WHERE attrelid = 'public.cigar_atom_projection'::regclass
                   AND attnum > 0 AND NOT attisdropped),
                count(*) FILTER (WHERE contype = 'p'),
                count(*) FILTER (WHERE contype = 'u'),
                count(*) FILTER (WHERE contype = 'f'),
                (SELECT count(*) FROM pg_policy
-                WHERE polrelid = 'cigar_atom_projection'::regclass)
+                WHERE polrelid = 'public.cigar_atom_projection'::regclass)
              FROM pg_constraint
-             WHERE conrelid = 'cigar_atom_projection'::regclass",
+             WHERE conrelid = 'public.cigar_atom_projection'::regclass",
             &[],
         )
         .map_err(postgres_error)?;
@@ -3119,13 +3420,13 @@ fn verify_migrations(
     let rows = connection
         .query(
             "SELECT sequence, name, checksum,
-                    minimum_application_major, maximum_application_major
-             FROM schema_migrations
+                    minimum_application_major, maximum_application_major, online
+             FROM public.schema_migrations
              ORDER BY sequence",
             &[],
         )
         .map_err(postgres_error)?;
-    if rows.len() < MIGRATIONS.len() {
+    if rows.len() != MIGRATIONS.len() {
         return Err(StoreError::new(StoreErrorCode::Unavailable));
     }
     for (index, row) in rows.iter().enumerate() {
@@ -3133,16 +3434,29 @@ fn verify_migrations(
             .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?;
         let minimum: i32 = row.get(3);
         let maximum: i32 = row.get(4);
+        let online: bool = row.get(5);
         if row.get::<_, i32>(0) != expected_sequence
             || minimum <= 0
             || minimum > APPLICATION_MAJOR
             || maximum < APPLICATION_MAJOR
+            || row.get::<_, String>(1).is_empty()
+            || row.get::<_, String>(1).len() > 256
+            || row
+                .get::<_, String>(1)
+                .bytes()
+                .any(|byte| byte.is_ascii_control())
+            || !valid_checksum(&row.get::<_, String>(2))
         {
             return Err(StoreError::new(StoreErrorCode::Unavailable));
         }
-        if let Some((name, sql)) = MIGRATIONS.get(index)
-            && (row.get::<_, String>(1) != *name
-                || row.get::<_, String>(2) != checksum_bytes(sql.as_bytes()))
+        let Some(migration) = MIGRATIONS.get(index) else {
+            return Err(StoreError::new(StoreErrorCode::Unavailable));
+        };
+        if row.get::<_, String>(1) != migration.name
+            || row.get::<_, String>(2) != checksum_bytes(migration.sql.as_bytes())
+            || minimum != migration.minimum_application_major
+            || maximum != migration.maximum_application_major
+            || online != migration.online
         {
             return Err(StoreError::new(StoreErrorCode::Unavailable));
         }
@@ -3227,8 +3541,9 @@ fn pool_error<E>(_error: E) -> StoreError {
 #[cfg(test)]
 mod tests {
     use super::{
-        POSTGRES_BACKUP_ARCHIVE_FORMAT, PostgresConfiguration, PostgresDatabaseBackupArtifact,
-        checksum_bytes, verify_postgres_database_backup,
+        MIGRATIONS, POSTGRES_BACKUP_ARCHIVE_FORMAT, POSTGRES_FIXED_OPTIONS, PostgresConfiguration,
+        PostgresDatabaseBackupArtifact, PostgresMigrationBoundary, PostgresMigrationFailpoint,
+        checksum_bytes, valid_checksum, verify_postgres_database_backup,
     };
     use postgres::config::SslMode;
     use rcgen::{
@@ -3389,6 +3704,65 @@ mod tests {
     }
 
     #[test]
+    fn postgres_migration_sources_are_contiguous_rolling_and_self_describing() {
+        assert_eq!(MIGRATIONS.len(), 4);
+        for (index, migration) in MIGRATIONS.iter().enumerate() {
+            let sequence = index + 1;
+            let checksum = checksum_bytes(migration.sql.as_bytes());
+            assert!(valid_checksum(&checksum));
+            assert_eq!(migration.minimum_application_major, 1);
+            assert_eq!(migration.maximum_application_major, 2);
+            assert!(migration.online);
+            assert!(migration.sql.contains(&format!(
+                "-- sequence/name: {sequence} / {}",
+                migration.name
+            )));
+            assert!(
+                migration
+                    .sql
+                    .contains("-- application compatibility: major 1 through major 2")
+            );
+            assert!(migration.sql.contains("-- classification/lock: online /"));
+            assert!(migration.sql.contains("-- verification:"));
+            assert!(migration.sql.contains("-- rollback or restore:"));
+            assert!(!migration.sql.lines().any(|line| {
+                let statement = line.trim_start().to_ascii_uppercase();
+                let first = statement
+                    .split(|character: char| character.is_ascii_whitespace() || character == ';')
+                    .next()
+                    .unwrap_or_default();
+                !statement.starts_with("--")
+                    && ["BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE"].contains(&first)
+            }));
+        }
+    }
+
+    #[test]
+    fn postgres_migration_failpoint_catalog_covers_every_durable_boundary() {
+        let boundaries = [
+            PostgresMigrationBoundary::AfterLedgerBootstrap,
+            PostgresMigrationBoundary::AfterAdvisoryLock,
+            PostgresMigrationBoundary::AfterMigrationSql(1),
+            PostgresMigrationBoundary::AfterLedgerInsert(1),
+            PostgresMigrationBoundary::BeforeCommit,
+            PostgresMigrationBoundary::AfterCommit,
+        ];
+        let failpoints = boundaries.map(PostgresMigrationFailpoint::from);
+        assert_eq!(failpoints.len(), 6);
+        assert_eq!(
+            failpoints,
+            [
+                PostgresMigrationFailpoint::AfterLedgerBootstrap,
+                PostgresMigrationFailpoint::AfterAdvisoryLock,
+                PostgresMigrationFailpoint::AfterMigrationSql(1),
+                PostgresMigrationFailpoint::AfterLedgerInsert(1),
+                PostgresMigrationFailpoint::BeforeCommit,
+                PostgresMigrationFailpoint::AfterCommit,
+            ]
+        );
+    }
+
+    #[test]
     fn database_backup_verifier_streams_exact_bytes_and_rejects_drift() -> Result<(), Box<dyn Error>>
     {
         let bytes = b"PGDMP\0bounded-database-archive";
@@ -3422,6 +3796,21 @@ mod tests {
         )?;
         let parsed = configuration.connection_configuration()?;
         assert_eq!(parsed.get_ssl_mode(), SslMode::Require);
+        assert_eq!(parsed.get_options(), Some(POSTGRES_FIXED_OPTIONS));
+
+        assert!(
+            PostgresConfiguration::new(
+                "host=postgres.example user=cigar dbname=cigar \
+                 options='-c search_path=attacker'"
+            )
+            .is_err()
+        );
+        assert!(
+            PostgresConfiguration::new(
+                "postgresql://cigar@postgres.example/cigar?options=-csearch_path%3Dattacker"
+            )
+            .is_err()
+        );
 
         let mut wrong_name = configuration.clone();
         wrong_name.tls.server_name = "attacker.example".to_owned();

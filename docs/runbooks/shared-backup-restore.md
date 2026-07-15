@@ -3,10 +3,13 @@
 ## Backup
 
 Quiesce irreversible migrations and record the global repository revision. Use a dedicated
-`NOSUPERUSER`, data-read-only PostgreSQL backup/GC role with `BYPASSRLS` and explicit `EXECUTE` on
-`pg_control_system()` and `cigar_gc_lock_repository_revision()`, plus a separate writable backup
-object prefix; runtime and migrator identities are intentionally insufficient. The security-definer
-GC guard has a fixed system-only search path and grants no table mutation authority. Open one
+`NOSUPERUSER`, data-read-only PostgreSQL backup role with `BYPASSRLS` and explicit `EXECUTE` only on
+`pg_control_system()`, plus a separate writable backup object prefix. Use a distinct non-superuser,
+read-only `BYPASSRLS` GC role with explicit `EXECUTE` only on
+`cigar_gc_lock_repository_revision()`. Runtime, migrator, backup, and GC identities are
+non-interchangeable; CIGAR rejects a role with the wrong or combined capability before beginning the
+operation. The security-definer GC guard has a fixed system-only search path and grants no table
+mutation authority. Open one
 read-only repeatable-read transaction, derive the source
 identity from the cluster system identifier and database OID, enumerate the authoritative tenant set,
 call `pg_export_snapshot()`, and keep that transaction open while
@@ -26,7 +29,7 @@ physical backup/WAL recovery point. Qualify it with
 `pg_basebackup --wal-method=stream --manifest-checksums=SHA256` and `pg_verifybackup`; replication
 promotion/rejoin exercises are the restore proof for that physical path.
 
-Shared physical garbage collection uses the same PostgreSQL authority only to acquire the
+Shared physical garbage collection uses its dedicated PostgreSQL GC authority to acquire the
 security-definer revision guard after its exclusive backup/GC advisory lock. It scans every retained
 tenant state before issuing an opaque, store-owned deletion capability to the object adapter. Give a
 separate GC object identity delete authority over live object prefixes; never give the backup-copy
@@ -53,8 +56,9 @@ Store the content-free verification receipt separately from the backup bytes.
    historical key reference, AEAD decryption, and the exact final namespace.
 3. Run packaged migrations only if the target image explicitly supports the restored schema. Because
    `pg_restore --no-acl` intentionally omits source-cluster grants, reapply the target privilege
-   policy: revoke PUBLIC execution of `cigar_gc_lock_repository_revision()` and grant it only to the
-   dedicated backup/GC role before any repository process connects.
+   policy: revoke PUBLIC execution of `pg_control_system()` and
+   `cigar_gc_lock_repository_revision()`, grant the former only to backup and the latter only to GC,
+   and prove runtime has neither capability before any repository process connects.
 4. Run database integrity, forced-RLS, migration checksum, object existence/decryption samples,
    journal-chain, semantic-root, outbox, unknown-effect, and replay-completeness checks.
 5. Rebuild disposable indexes, then wait for their watermarks. Do not advance readiness while an

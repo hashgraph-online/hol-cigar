@@ -37,10 +37,12 @@ from release_lib import (
     load_json_bytes,
     matches,
     normalized_mode,
+    reject_evidence_directory,
     resolve_beneath,
     run_bounded,
     safe_relative_path,
     scan_payload,
+    selected_evidence_directory,
     sha256_bytes,
     sha256_file,
 )
@@ -558,7 +560,10 @@ def _git_object_digest(kind: str, payload: bytes, object_id_length: int) -> str:
         + payload
     )
     if object_id_length == 40:
-        return hashlib.sha1(framed, usedforsecurity=False).hexdigest()
+        # SHA-1 is required only to reproduce Git's legacy object identifier, never for trust.
+        return hashlib.sha1(
+            framed, usedforsecurity=False
+        ).hexdigest()  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
     if object_id_length == 64:
         return hashlib.sha256(framed).hexdigest()
     raise BetaArtifactError("Git blob uses an unsupported object format")
@@ -3457,7 +3462,10 @@ def _resolved_cargo_evidence(
 ) -> tuple[tuple[dict[str, object], ...], tuple[dict[str, object], ...]]:
     with tempfile.TemporaryDirectory(prefix="cigar-beta-metadata-") as raw:
         staging = Path(raw)
-        os.chmod(staging, 0o700)
+        # Hydrated dependency/tool material is unpublished and must remain owner-private.
+        os.chmod(
+            staging, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         cargo_source = _secure_executable(None, "cargo")
         rustc_source = _secure_executable(None, "rustc")
         cargo = _actual_rust_tool(cargo_source, "cargo", root)
@@ -4700,10 +4708,16 @@ def verify_beta_archive(
             require_declared_host()
             with tempfile.TemporaryDirectory(prefix="cigar-beta-verify-") as raw:
                 directory = Path(raw)
-                os.chmod(directory, 0o700)
+                # Extracted candidate bytes must not become accessible to another local user.
+                os.chmod(
+                    directory, 0o700
+                )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 binary = directory / "cigar"
                 _write_private(binary, binary_payload)
-                os.chmod(binary, 0o700)
+                # Qualification executes this private staged candidate as its owning user only.
+                os.chmod(
+                    binary, 0o700
+                )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 expected_help = _read_stable_file(
                     resolve_beneath(
                         root, "crates/cigar-cli/assets/cigar-help-beta.txt"
@@ -5034,7 +5048,10 @@ def _verified_source_freeze_payloads(
 
     with tempfile.TemporaryDirectory(prefix="cigar-beta-source-verify-") as raw:
         staging_parent = Path(raw).resolve()
-        os.chmod(staging_parent, 0o700)
+        # The reconstructed committed tree is a private verifier working copy.
+        os.chmod(
+            staging_parent, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         staged_source = staging_parent / "source"
         committed_identity = _materialize_committed_tree(staged_source, committed)
         beta_profile.validate(staged_source)
@@ -5985,7 +6002,10 @@ def freeze_beta_source(
 
     with tempfile.TemporaryDirectory(prefix="cigar-beta-source-freeze-") as raw:
         staging_parent = Path(raw).resolve()
-        os.chmod(staging_parent, 0o700)
+        # Source-freeze staging contains unpublished candidate material and must stay private.
+        os.chmod(
+            staging_parent, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         staged_source = staging_parent / "source"
         committed_identity = _materialize_committed_tree(
             staged_source, source_committed
@@ -6184,7 +6204,10 @@ def build_beta_candidate(
     final: dict[str, object] | None = None
     with tempfile.TemporaryDirectory(prefix="cigar-beta-stage-") as raw:
         staging_parent = Path(raw).resolve()
-        os.chmod(staging_parent, 0o700)
+        # Release assembly staging contains every candidate payload before publication.
+        os.chmod(
+            staging_parent, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         candidate = staging_parent / "candidate"
         candidate.mkdir(mode=0o700)
         staged_source = staging_parent / "committed-source"
@@ -6482,7 +6505,12 @@ def parse_arguments() -> argparse.Namespace:
         help="freeze and verify one clean deterministic beta source package",
     )
     freeze.add_argument("--root", type=Path, default=beta_profile.repo_root())
-    freeze.add_argument("--out", type=Path, required=True)
+    freeze.add_argument("--out", type=Path)
+    freeze.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external source-freeze workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     freeze.add_argument("--git", type=Path, required=True)
     verify_source = subparsers.add_parser(
         "verify-source",
@@ -6491,11 +6519,21 @@ def parse_arguments() -> argparse.Namespace:
     verify_source.add_argument("--root", type=Path, default=beta_profile.repo_root())
     verify_source.add_argument("--source-freeze", type=Path, required=True)
     verify_source.add_argument("--git", type=Path, required=True)
+    verify_source.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="reserved selector; source verification is stdout-only",
+    )
     build = subparsers.add_parser(
         "build", help="build and structurally verify a new unsigned beta candidate"
     )
     build.add_argument("--root", type=Path, default=beta_profile.repo_root())
-    build.add_argument("--out", type=Path, required=True)
+    build.add_argument("--out", type=Path)
+    build.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external candidate workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     build.add_argument("--source-freeze", type=Path, required=True)
     build.add_argument("--builder-id", required=True)
     build.add_argument("--python", type=Path, required=True)
@@ -6511,6 +6549,11 @@ def parse_arguments() -> argparse.Namespace:
     verify.add_argument("--root", type=Path, default=beta_profile.repo_root())
     verify.add_argument("--candidate", type=Path, required=True)
     verify.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="reserved selector; candidate verification is stdout-only",
+    )
+    verify.add_argument(
         "--recompute-cargo",
         action="store_true",
         help="optionally recompute the locked Cargo graph with a hydrated offline cache",
@@ -6519,15 +6562,34 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _selected_output(arguments: argparse.Namespace, operation: str) -> Path:
+    selected = selected_evidence_directory(arguments.evidence_dir)
+    legacy = arguments.out
+    if selected is not None and legacy is not None:
+        raise BetaArtifactError(
+            f"{operation} received both --out and an evidence-directory selector"
+        )
+    output = selected if selected is not None else legacy
+    if output is None:
+        raise BetaArtifactError(
+            f"{operation} requires --out, --evidence-dir, or CIGAR_EVIDENCE_DIR"
+        )
+    return output
+
+
 def main() -> int:
     arguments = parse_arguments()
     if arguments.command == "freeze-source":
         report = freeze_beta_source(
             root=arguments.root,
-            output=arguments.out,
+            output=_selected_output(arguments, "beta source freeze"),
             git_path=arguments.git,
         )
     elif arguments.command == "verify-source":
+        reject_evidence_directory(
+            arguments.evidence_dir,
+            "beta source-freeze verification",
+        )
         report = verify_beta_source_freeze(
             root=arguments.root,
             source_freeze=arguments.source_freeze,
@@ -6536,7 +6598,7 @@ def main() -> int:
     elif arguments.command == "build":
         report = build_beta_candidate(
             root=arguments.root,
-            output=arguments.out,
+            output=_selected_output(arguments, "beta candidate build"),
             source_freeze=arguments.source_freeze,
             builder_id=arguments.builder_id,
             python_path=arguments.python,
@@ -6547,6 +6609,10 @@ def main() -> int:
             crate_cache_path=arguments.crate_cache,
         )
     elif arguments.command == "verify":
+        reject_evidence_directory(
+            arguments.evidence_dir,
+            "beta candidate verification",
+        )
         report = verify_beta_candidate(
             root=arguments.root,
             candidate=arguments.candidate,

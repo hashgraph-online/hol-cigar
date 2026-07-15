@@ -1,0 +1,85 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "e2e",
+  "description": "macOS-local process and transport end-to-end gates for the API, full CLI, and MCP executable surfaces.",
+  "cases": [
+    {
+      "id": "E2E-API-001",
+      "title": "HTTP and gRPC transport processes preserve the generated operation contract end to end.",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--config-file",
+        ".config/nextest.toml",
+        "--user-config-file",
+        "none",
+        "-P",
+        "macos-qualification",
+        "--no-tests",
+        "fail",
+        "-p",
+        "cigar-api",
+        "--test",
+        "transport_conformance"
+      ],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["API-HTTP-E2E-001", "API-GRPC-E2E-001"]
+    },
+    {
+      "id": "E2E-CLI-PROCESS-001",
+      "title": "The full CLI binary preserves stable machine output and fails closed on unsafe process and filesystem state.",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--config-file",
+        ".config/nextest.toml",
+        "--user-config-file",
+        "none",
+        "-P",
+        "macos-qualification",
+        "--no-tests",
+        "fail",
+        "-p",
+        "cigar-cli",
+        "--test",
+        "process_ux"
+      ],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["CLI-PROCESS-E2E-001", "VER-JSON-OUTPUT-001"]
+    },
+    {
+      "id": "E2E-MCP-PROCESS-001",
+      "title": "The MCP executable completes schema, doctor, handshake, notification, and installed-CLI process flows.",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--config-file",
+        ".config/nextest.toml",
+        "--user-config-file",
+        "none",
+        "-P",
+        "macos-qualification",
+        "--no-tests",
+        "fail",
+        "-p",
+        "cigar-mcp",
+        "--test",
+        "process"
+      ],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["MCP-PROCESS-E2E-001", "MCP-STDIO-001"]
+    }
+  ]
+}

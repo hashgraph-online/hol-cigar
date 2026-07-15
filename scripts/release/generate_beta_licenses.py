@@ -13,7 +13,14 @@ from pathlib import Path
 
 import beta_artifacts
 import beta_profile
-from release_lib import ReleaseError, repo_root, run_bounded, write_bytes, write_json
+from release_lib import (
+    ReleaseError,
+    reject_evidence_directory,
+    repo_root,
+    run_bounded,
+    write_bytes,
+    write_json,
+)
 
 
 def _replace_generated_directory(root: Path, relative: str) -> None:
@@ -69,7 +76,10 @@ def generate(*, root: Path, crate_cache: Path, rustc: Path) -> None:
         raise ReleaseError("repository root is not a directory")
     with tempfile.TemporaryDirectory(prefix="cigar-beta-license-vendor-") as raw:
         staging = Path(raw)
-        os.chmod(staging, 0o700)
+        # License generation stages verified dependency sources in an owner-private directory.
+        os.chmod(
+            staging, 0o700
+        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         _vendor, _homes, entries, _identity, _materials = (
             beta_artifacts._prepare_verified_vendor(
                 root=root,
@@ -102,11 +112,20 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=repo_root())
     parser.add_argument("--crate-cache", type=Path, required=True)
     parser.add_argument("--rustc", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help=(
+            "reserved external evidence selector (or set CIGAR_EVIDENCE_DIR); "
+            "legal-source regeneration writes reviewed repository inputs, not release evidence"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    reject_evidence_directory(arguments.evidence_dir, "beta legal-source regeneration")
     generate(
         root=arguments.root,
         crate_cache=arguments.crate_cache,

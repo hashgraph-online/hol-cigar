@@ -5,7 +5,7 @@ use cigar_compiler::{
     BlockBodies, ByteTokenizer, CacheKey, CacheLayer, ConservativeEstimator, DeltaError,
     GovernedCache, MaterializerProfile, ProviderPresentObservation, ProviderPresentRegistry,
     ProviderPresentScope, TargetOverflowRepairRequest, UnicodeScalarTokenizer, acknowledge_delta,
-    apply_delta, generate_delta, materialize,
+    apply_delta, apply_delta_verified, generate_delta, materialize,
 };
 use cigar_protocol::{
     ContentDigest, ContextBlock, ContextBundle, ExtensionMap, LaneKind, RepresentationKind,
@@ -266,10 +266,20 @@ fn delta_round_trip_rejects_wrong_base_tamper_and_target_change()
         apply_delta(&base, &target, &tampered),
         Err(DeltaError::Tampered)
     );
-    let acknowledgement = acknowledge_delta("provider-session", content('6')?, &sealed, 44)
+    let applied = apply_delta_verified(&base, &target, &sealed)?;
+    assert_eq!(applied.bundle(), &target);
+    assert_eq!(applied.base_bundle_id(), &base.bundle_id);
+    assert_eq!(applied.target_bundle_id(), &target.bundle_id);
+    assert_eq!(applied.delta_digest(), &sealed.delta_digest);
+    assert!(!format!("{applied:?}").contains(target.bundle_id.as_str()));
+    let acknowledgement = acknowledge_delta("provider-session", content('6')?, &applied, 44)
         .ok_or("acknowledgement")?;
     assert_eq!(acknowledgement.target_bundle_id, target.bundle_id);
     assert_eq!(acknowledgement.delta_digest, sealed.delta_digest);
+    let acknowledgement_debug = format!("{acknowledgement:?}");
+    assert!(!acknowledgement_debug.contains("provider-session"));
+    assert!(!acknowledgement_debug.contains(target.bundle_id.as_str()));
+    assert!(acknowledge_delta("provider-session", content('6')?, &applied, 0).is_none());
     Ok(())
 }
 
@@ -279,7 +289,8 @@ fn present_state_invalidates_on_compaction_target_and_governance_changes()
     let target = content('a')?;
     let policy = content('b')?;
     let bundle_id = version('c')?;
-    let scope = ProviderPresentScope::new("session", target.clone()).ok_or("scope")?;
+    let provider_session = "provider-secret-canary";
+    let scope = ProviderPresentScope::new(provider_session, target.clone()).ok_or("scope")?;
     let observation = ProviderPresentObservation {
         bundle_id: bundle_id.clone(),
         policy_digest: policy.clone(),
@@ -288,11 +299,24 @@ fn present_state_invalidates_on_compaction_target_and_governance_changes()
         confidence_parts_per_million: 1_000_000,
     };
     let mut registry = ProviderPresentRegistry::new(4).ok_or("registry")?;
+    let mut zero_sequence = observation.clone();
+    zero_sequence.observed_sequence = 0;
+    assert!(!registry.observe(scope.clone(), zero_sequence));
     assert!(registry.observe(scope.clone(), observation.clone()));
+    let registry_debug = format!("{registry:?} {scope:?} {observation:?}");
+    assert!(!registry_debug.contains(provider_session));
+    assert!(!registry_debug.contains(bundle_id.as_str()));
+    assert!(!registry_debug.contains(policy.as_str()));
+    assert!(registry.observe(scope.clone(), observation.clone()));
+    let mut stale_observation = observation.clone();
+    stale_observation.bundle_id = version('d')?;
+    stale_observation.observed_sequence = 9;
+    assert!(!registry.observe(scope.clone(), stale_observation));
+    assert!(registry.contains(&scope, &bundle_id, &policy, 7));
     assert!(registry.contains(&scope, &bundle_id, &policy, 7));
     assert!(!registry.contains(&scope, &bundle_id, &content('d')?, 7));
     assert!(!registry.contains(&scope, &bundle_id, &policy, 8));
-    assert_eq!(registry.invalidate_session("session"), 1);
+    assert_eq!(registry.invalidate_session(provider_session), 1);
     assert!(!registry.contains(&scope, &bundle_id, &policy, 7));
     assert!(registry.observe(scope.clone(), observation));
     assert_eq!(registry.invalidate_target(&target), 1);
@@ -302,7 +326,11 @@ fn present_state_invalidates_on_compaction_target_and_governance_changes()
 
 #[test]
 fn overflow_repair_requires_actual_target_overflow() -> Result<(), Box<dyn std::error::Error>> {
-    assert!(TargetOverflowRepairRequest::new(version('a')?, content('b')?, 101, 100).is_some());
+    let repair =
+        TargetOverflowRepairRequest::new(version('a')?, content('b')?, 101, 100).ok_or("repair")?;
+    let repair_debug = format!("{repair:?}");
+    assert!(!repair_debug.contains(version('a')?.as_str()));
+    assert!(!repair_debug.contains(content('b')?.as_str()));
     assert!(TargetOverflowRepairRequest::new(version('a')?, content('b')?, 100, 100).is_none());
     assert!(TargetOverflowRepairRequest::new(version('a')?, content('b')?, 1, 0).is_none());
     Ok(())

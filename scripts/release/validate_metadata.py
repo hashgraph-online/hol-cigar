@@ -11,12 +11,21 @@ from pathlib import Path
 from typing import Any
 
 from beta_profile import validate as validate_beta_profile
+from development_macos_profile import validate as validate_development_macos_profile
+from development_protocol_baseline import (
+    validate as validate_development_protocol_baseline,
+)
+from post_beta_profile import validate as validate_post_beta_profile
+from product_version import VersionError as ProductVersionError
+from product_version import check as validate_product_version
 from release_lib import (
     ReleaseError,
     load_json,
+    reject_evidence_directory,
     repo_root,
     resolve_beneath,
     sha256_file,
+    validate_content_scan_exemptions,
     validate_qualification_policy,
     validate_release_policy_documents,
 )
@@ -30,6 +39,14 @@ def parse_arguments() -> argparse.Namespace:
         "--release",
         action="store_true",
         help="also require external candidate prerequisites",
+    )
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help=(
+            "reserved external evidence selector (or set CIGAR_EVIDENCE_DIR); "
+            "metadata validation is stdout-only and emits no candidate-bound report"
+        ),
     )
     return parser.parse_args()
 
@@ -55,7 +72,12 @@ def _unique(values: list[str], label: str) -> None:
 
 def main() -> int:
     arguments = parse_arguments()
+    reject_evidence_directory(arguments.evidence_dir, "metadata validation")
     root = arguments.root.resolve()
+    try:
+        validate_product_version(root)
+    except ProductVersionError as error:
+        raise ReleaseError(f"product version metadata is invalid: {error}") from error
     matrix = load_json(root / "packaging/artifact-matrix.v1.json")
     if matrix.get("schema_version") != "cigar.artifact-matrix.v1":
         raise ReleaseError("unsupported artifact matrix")
@@ -166,16 +188,12 @@ def main() -> int:
             raise ReleaseError(
                 f"non-OCI artifact {entry['id']} declares an OCI layer limit"
             )
-        exemptions = contract.get("content_scan_exemptions")
-        if not isinstance(exemptions, list) or any(
-            not isinstance(value, dict)
-            or set(value) != {"pattern", "reason"}
-            or not all(isinstance(item, str) and item for item in value.values())
-            for value in exemptions
-        ):
+        try:
+            validate_content_scan_exemptions(contract.get("content_scan_exemptions"))
+        except ReleaseError as error:
             raise ReleaseError(
                 f"artifact {entry['id']} contract has invalid content-scan exemptions"
-            )
+            ) from error
         platform = entry.get("platform")
         if entry.get("kind") == "binary-archive" and platform not in supported_targets:
             raise ReleaseError(
@@ -375,9 +393,12 @@ def main() -> int:
         "docs-check.v1.schema.json",
         "install-qualification.v1.schema.json",
         "installed-driver.v1.schema.json",
+        "locked-upstream-license-evidence.v1.schema.json",
         "operation-exercise-summary.v1.schema.json",
         "operation-exercise.v1.schema.json",
         "package-contract.v1.schema.json",
+        "post-beta-capability-ownership.v1.schema.json",
+        "post-beta-capability-profile.v1.schema.json",
         "provenance.v1.schema.json",
         "qualification-evidence.v1.schema.json",
         "release-build.v1.schema.json",
@@ -408,6 +429,9 @@ def main() -> int:
         ) != "https://json-schema.org/draft/2020-12/schema" or not schema.get("$id"):
             raise ReleaseError(f"release schema is missing draft/id metadata: {path}")
     validate_beta_profile(root)
+    validate_post_beta_profile(root)
+    validate_development_macos_profile(root)
+    validate_development_protocol_baseline(root)
     wp20_schema = load_json(
         root / "packaging/schemas/wp20-local-readiness.v1.schema.json"
     )
@@ -433,13 +457,28 @@ def main() -> int:
     ):
         raise ReleaseError("packaged Apache-2.0 license text is invalid")
     license_policy_path = root / "packaging/licenses/third-party-policy.v1.json"
+    upstream_license_evidence_path = (
+        root / "packaging/licenses/locked-upstream-license-evidence.v1.json"
+    )
+    upstream_license_evidence = load_json(upstream_license_evidence_path)
+    upstream_license_records = upstream_license_evidence.get("records")
     inventory = load_json(root / "packaging/licenses/third-party-inventory.v1.json")
-    if inventory.get(
-        "schema_version"
-    ) != "cigar.third-party-license-inventory.v1" or inventory.get(
-        "policy_sha256"
-    ) != sha256_file(license_policy_path):
+    if (
+        inventory.get("schema_version") != "cigar.third-party-license-inventory.v1"
+        or inventory.get("policy_sha256") != sha256_file(license_policy_path)
+        or inventory.get("upstream_evidence_sha256")
+        != sha256_file(upstream_license_evidence_path)
+    ):
         raise ReleaseError("third-party license inventory is missing or stale")
+    if (
+        upstream_license_evidence.get("schema_version")
+        != "cigar.locked-upstream-license-evidence.v1"
+        or not isinstance(upstream_license_records, list)
+        or not upstream_license_records
+        or inventory.get("upstream_evidence_record_count")
+        != len(upstream_license_records)
+    ):
+        raise ReleaseError("locked upstream license evidence is invalid")
     if (
         not isinstance(inventory.get("component_count"), int)
         or inventory["component_count"] <= 0

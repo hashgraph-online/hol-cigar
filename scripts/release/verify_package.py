@@ -7,6 +7,7 @@ import argparse
 import calendar
 import gzip
 import hashlib
+import os
 import re
 import stat
 import tarfile
@@ -15,6 +16,11 @@ import zlib
 from pathlib import Path
 from typing import Any, IO
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_relative_path,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -25,8 +31,12 @@ from release_lib import (
     safe_relative_path,
     scan_payload,
     sha256_file,
+    validate_content_scan_exemptions,
     write_json,
 )
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -37,7 +47,65 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--expected-abi")
     parser.add_argument("--source-date-epoch", type=int)
     parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external report directory (or set CIGAR_EVIDENCE_DIR)",
+    )
     return parser.parse_args()
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one external report root without resolving its path components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide only one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+def open_report_workspace(
+    arguments: argparse.Namespace,
+) -> tuple[EvidenceWorkspace | None, str | None]:
+    """Pin an optional external workspace and validate the report destination."""
+
+    selected = selected_evidence_directory(arguments)
+    if selected is None:
+        if arguments.report is not None:
+            require_distinct_output(
+                arguments.report.resolve(),
+                [arguments.archive, arguments.contract],
+                "package verification",
+            )
+        return None, None
+    if arguments.report is None:
+        raise ReleaseError("--evidence-dir requires a relative --report path")
+    try:
+        parts = safe_evidence_relative_path(os.fspath(arguments.report))
+        workspace = EvidenceWorkspace.create(selected, repository_root=REPOSITORY_ROOT)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+    relative = "/".join(parts)
+    try:
+        require_distinct_output(
+            workspace.root.joinpath(*parts),
+            [arguments.archive, arguments.contract],
+            "package verification",
+        )
+    except BaseException:
+        workspace.close()
+        raise
+    return workspace, relative
 
 
 def _archive_format(path: Path) -> str:
@@ -83,6 +151,7 @@ _TEXT_SUFFIXES = {
     ".proto",
     ".ps1",
     ".py",
+    ".rb",
     ".rs",
     ".sh",
     ".sql",
@@ -218,14 +287,7 @@ def _validate_contract(contract: Any) -> dict[str, Any]:
         or contract.get("content_scan") is not True
     ):
         raise ReleaseError("package contract weakens a mandatory content policy")
-    exemptions = contract.get("content_scan_exemptions")
-    if not isinstance(exemptions, list) or any(
-        not isinstance(entry, dict)
-        or set(entry) != {"pattern", "reason"}
-        or not all(isinstance(value, str) and value for value in entry.values())
-        for entry in exemptions
-    ):
-        raise ReleaseError("package contract content-scan exemptions are invalid")
+    validate_content_scan_exemptions(contract.get("content_scan_exemptions"))
     for binding_name in ("version_binding", "abi_binding"):
         if binding_name not in contract:
             continue
@@ -349,7 +411,7 @@ def _inspect_payload(
     name: str,
     retained_patterns: list[str],
     content_scan: bool,
-    exemptions: list[dict[str, str]],
+    exemptions: list[dict[str, Any]],
 ) -> tuple[bytes | None, str, bool, list[str]]:
     retain = matches(name, retained_patterns)
     if retain and expected_size > _MAX_RETAINED_MEMBER_BYTES:
@@ -394,7 +456,7 @@ def _read_tar(
     max_total: int,
     retained_patterns: list[str],
     content_scan: bool,
-    exemptions: list[dict[str, str]],
+    exemptions: list[dict[str, Any]],
 ) -> tuple[dict[str, bytes | None], dict[str, dict[str, Any]]]:
     payloads: dict[str, bytes | None] = {}
     attributes: dict[str, dict[str, Any]] = {}
@@ -477,7 +539,7 @@ def _read_zip(
     max_total: int,
     retained_patterns: list[str],
     content_scan: bool,
-    exemptions: list[dict[str, str]],
+    exemptions: list[dict[str, Any]],
 ) -> tuple[dict[str, bytes | None], dict[str, dict[str, Any]]]:
     payloads: dict[str, bytes | None] = {}
     attributes: dict[str, dict[str, Any]] = {}
@@ -680,7 +742,7 @@ def _validate_oci_layer_tar(
     maximum_member_bytes: int,
     maximum_uncompressed_bytes: int,
     allowed_modes: set[int],
-    content_scan_exemptions: list[dict[str, str]],
+    content_scan_exemptions: list[dict[str, Any]],
 ) -> None:
     names: set[str] = set()
     portable_names: dict[str, str] = {}
@@ -798,7 +860,7 @@ def _validate_oci_layout(
     maximum_entries: int,
     maximum_member_bytes: int,
     allowed_modes: set[int],
-    content_scan_exemptions: list[dict[str, str]],
+    content_scan_exemptions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     layout_payload = payloads.get("oci-layout")
     index_payload = payloads.get("index.json")
@@ -1057,14 +1119,9 @@ def verify(
         or contract.get("symlinks") != "forbid"
     ):
         raise ReleaseError("package contract mode or symlink policy is invalid")
-    exemptions = contract.get("content_scan_exemptions", [])
-    if not isinstance(exemptions, list) or any(
-        not isinstance(entry, dict)
-        or set(entry) != {"pattern", "reason"}
-        or not all(isinstance(value, str) and value for value in entry.values())
-        for entry in exemptions
-    ):
-        raise ReleaseError("content scan exemptions must be a list")
+    exemptions = validate_content_scan_exemptions(
+        contract.get("content_scan_exemptions", [])
+    )
     if contract.get("content_scan") is not True:
         raise ReleaseError("package contract must enable content scanning")
     retained_patterns = ["RELEASE-METADATA.json"]
@@ -1428,23 +1485,34 @@ def verify(
 
 def main() -> int:
     arguments = parse_arguments()
-    if arguments.report is not None:
-        require_distinct_output(
-            arguments.report.resolve(),
-            [arguments.archive, arguments.contract],
-            "package verification",
+    workspace, relative_report = open_report_workspace(arguments)
+    try:
+        report = verify(
+            arguments.archive.resolve(),
+            arguments.contract.resolve(),
+            arguments.expected_version,
+            arguments.expected_abi,
+            arguments.source_date_epoch,
         )
-    report = verify(
-        arguments.archive.resolve(),
-        arguments.contract.resolve(),
-        arguments.expected_version,
-        arguments.expected_abi,
-        arguments.source_date_epoch,
-    )
-    if arguments.report is not None:
-        write_json(arguments.report.resolve(), report)
-    print(canonical_json_bytes(report).decode("utf-8"), end="")
-    return 0
+        if arguments.report is not None:
+            if workspace is None:
+                write_json(arguments.report.resolve(), report)
+            else:
+                try:
+                    if relative_report is None:
+                        raise ReleaseError(
+                            "external report destination was not initialized"
+                        )
+                    workspace.write_json(relative_report, report)
+                except EvidenceWorkspaceError as error:
+                    raise ReleaseError(
+                        f"cannot publish package verification evidence: {error}"
+                    ) from error
+        print(canonical_json_bytes(report).decode("utf-8"), end="")
+        return 0
+    finally:
+        if workspace is not None:
+            workspace.close()
 
 
 if __name__ == "__main__":

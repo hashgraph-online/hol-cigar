@@ -27,6 +27,17 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+RELEASE_TOOLS = REPOSITORY_ROOT / "scripts" / "release"
+if str(RELEASE_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_TOOLS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
+
 
 SCHEMA_VERSION = "cigar.wp20-local-readiness.v1"
 DRY_RUN_SCHEMA_VERSION = "cigar.wp20-local-qualification.v1"
@@ -1957,28 +1968,66 @@ def _write_receipt(target: OutputTarget, payload: bytes) -> None:
         ) from error
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root", type=Path, default=Path(__file__).absolute().parents[2]
     )
     parser.add_argument("--out", required=True)
-    return parser.parse_args()
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    arguments = parse_arguments()
+def _selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment and Path(argument) != Path(environment):
+        raise ReadinessError("--evidence-dir conflicts with CIGAR_EVIDENCE_DIR")
+    selected = argument if argument is not None else environment
+    if selected is None or os.fspath(selected) == "":
+        return None
+    path = Path(selected)
+    _expect(path.is_absolute(), "evidence directory must be absolute")
+    return path
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = parse_arguments(argv)
     root = arguments.root.expanduser().absolute()
     root_fd = _open_absolute_directory(root)
     os.close(root_fd)
-    target = _open_output_target(root, arguments.out)
+    selected = _selected_evidence_directory(arguments)
+    target: OutputTarget | None = None
+    workspace: EvidenceWorkspace | None = None
     try:
+        if selected is None:
+            target = _open_output_target(root, arguments.out)
+        else:
+            try:
+                output = "/".join(safe_evidence_path(os.fspath(arguments.out)))
+                workspace = EvidenceWorkspace.create(selected, repository_root=root)
+            except EvidenceWorkspaceError as error:
+                raise ReadinessError("external evidence workspace is unsafe") from error
         suites = run_harness_tests(root)
         source = git_source_binding(root)
         receipt = build_receipt(root, source, suites)
-        _write_receipt(target, canonical_json(receipt))
+        if workspace is not None:
+            try:
+                workspace.write_json(output, receipt)
+            except EvidenceWorkspaceError as error:
+                raise ReadinessError("external evidence workspace is unsafe") from error
+        else:
+            assert target is not None
+            _write_receipt(target, canonical_json(receipt))
     finally:
-        target.close()
+        if target is not None:
+            target.close()
+        if workspace is not None:
+            workspace.close()
     print(
         f"WP20 local readiness passed {receipt['harness_test_evidence']['total_tests']} sanitized tests; WP20 exit satisfied=false"
     )
@@ -1988,5 +2037,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except ReadinessError as error:
+    except (EvidenceWorkspaceError, ReadinessError) as error:
         raise SystemExit(f"WP20 local readiness failed: {error}") from error

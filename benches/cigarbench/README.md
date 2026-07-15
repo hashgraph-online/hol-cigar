@@ -1,5 +1,47 @@
 # CIGARBench v1
 
+## macOS development tool package
+
+The Apple-silicon development projection includes a deterministic
+`cigarbench-1.0.0-dev.1-aarch64-apple-darwin.tar.gz` package. It contains the exact
+standard-library-only CIGARBench analyzer, performance analyzer, comparator-matrix validator,
+the native physical local-scale driver, its immutable profile and strict evidence schemas, nine
+synthetic dataset fixtures and their manifest, the comparator baseline manifest,
+deterministic-consumer pins, and the canary registry. The `cigarbench`,
+`cigarbench-performance`, and `cigarbench-matrix` launchers locate their immutable files relative
+to their installed `bin` and `libexec/cigarbench` layout. They require the reviewed
+`/opt/homebrew/bin/python3` at Python 3.11 or newer, clear shell/Python startup injection variables,
+and exec that fixed interpreter with `-B -I -S`; caller interpreter overrides are not supported.
+`cigarbench-local-scale` is instead a thin native arm64 Mach-O executable and does not invoke
+Python.
+
+The producer runs only bounded `--help` invocation probes; it does not execute a benchmark or
+convert the synthetic smoke corpus into efficacy evidence. Its receipt remains
+`built-unqualified`, with candidate, installed qualification, benchmark efficacy, signing,
+notarization, publication, support, and release claims false. Real outcome claims still require
+the independent seeds, evaluator keys, installed consumer bytes, raw measurements, pinned host,
+variance calibration, sample counts, and evidence bindings described below.
+
+The local-scale manifest shape is not proof that its counts were physically
+exercised. `local_scale.py` performs the native Apple-silicon capacity preflight
+documented in [PERFORMANCE.md](PERFORMANCE.md). It source-binds the normalized v4
+catalog, immutable `large_local` profile, exact fixture payload sizes, hard
+logical quotas, and the 300-GiB first-activation free-space requirement. A
+`passed-preflight` receipt is still not a physical scale result. The packaged
+`cigarbench-local-scale` driver is the separate physical gate: it admits only
+the exact 1M-atom/10M-edge/1,600-by-64-MiB profile, validates encrypted blob
+integrity and one-over-quota rejection, reopens state, and requires signed
+backup/restore semantic-root equality before publishing a result. Its presence
+and invocation-only package probe do not imply that the 100-GiB run occurred.
+
+All three installed Python launchers accept a global `--evidence-dir` before the
+subcommand or `CIGAR_EVIDENCE_DIR`. In that protected mode each `--output` is a
+safe relative path inside the canonical absolute external workspace. The tool
+stages output privately, publishes it create-new at mode `0400`, and emits a
+neighboring publication receipt. Stdout-only commands emit a command receipt.
+These receipts explicitly remain non-qualifying and source-descriptor-unbound;
+they prove safe publication, not benchmark efficacy or release qualification.
+
 CIGARBench compares a pinned baseline and CIGAR on the same hidden task as a
 paired experiment. It includes all nine required strata: LongRepo-Change,
 MultiProject-Switch, Agent-Handoff, Temporal-Truth, Needle-and-Distractor,
@@ -170,15 +212,16 @@ mkdir -p "$CIGAR_EVIDENCE_DIR"
 chmod 0700 "$CIGAR_EVIDENCE_DIR"
 test ! -e "$CIGAR_EVIDENCE_DIR/wp20-local-readiness.json"
 python3 benches/cigarbench/generate_wp20_readiness.py \
-  --out "$CIGAR_EVIDENCE_DIR/wp20-local-readiness.json"
+  --out wp20-local-readiness.json
 ```
 
 This receipt intentionally remains `passed-local-scope` with
 schema `cigar.wp20-local-readiness.v1`, `wp20_exit_satisfied=false`, and
-`release_ready=false`. The generator rejects repository-local or relative
-outputs, symlinked path components, non-private evidence directories, and any
-existing output. It creates the receipt once with mode `0600` and never
-overwrites it. A clean Git checkout does not promote the recorded
+`release_ready=false`. Protected mode rejects unsafe or absolute output names,
+repository-local evidence roots, symlinked path components, non-private roots,
+and existing output. It publishes once at mode `0400`; the legacy development
+mode requires an explicit absolute external `--out` and remains mode `0600`.
+Neither mode overwrites. A clean Git checkout does not promote the recorded
 fixtures into candidate-bound evidence: the input reports do not embed a source
 revision, and installed artifacts, independent adjudication, real comparator
 implementations, and pinned-host performance evidence remain separate WP20

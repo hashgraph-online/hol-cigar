@@ -1,13 +1,13 @@
 //! Repository-backed mandatory catalog index reconstruction and maintenance.
 
 use crate::{
-    AuthorityClock, LifecycleError, ProductionDomainMaintenance, ProductionIndexTarget,
-    ProductionStore, ProductionTenantProvider, WorkerJob, WorkerKind,
+    AuthorityClock, DaemonTelemetry, LifecycleError, ProductionDomainMaintenance,
+    ProductionIndexTarget, ProductionStore, ProductionTenantProvider, WorkerJob, WorkerKind,
 };
 use cigar_protocol::{ContentDigest, ContextAtomV1, ContextEdge, RecordId, UtcTimestamp};
 use cigar_retrieval::{
     InMemoryIndexManager, IndexBuild, IndexSnapshot, IndexSnapshotProvider, IndexWorker,
-    RetrievalContext, RetrievalError, RetrievalErrorCode,
+    RetrievalContext, RetrievalError, RetrievalErrorCode, VectorIndexBinding,
 };
 use cigar_store::{
     AccessContext, AtomSelector, CancellationToken, OutboxRecord, ReadTransaction, Repository,
@@ -20,7 +20,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const INDEX_PURPOSE: &str = "daemon.mandatory-index.v1";
-const CATALOG_TOPIC: &str = "catalog.committed";
+const CATALOG_COMMITTED_TOPIC: &str = "catalog.committed";
+const CATALOG_TOMBSTONED_TOPIC: &str = "catalog.atom-tombstoned";
 const MAX_CATALOG_OUTBOX_RECORDS: usize = 1_000_000;
 const MAX_INDEX_EDGE_FANOUT: usize = 1_000;
 const INDEX_DEADLINE: Duration = Duration::from_secs(120);
@@ -33,6 +34,9 @@ pub struct RepositoryCatalogIndex {
     worker: Arc<IndexWorker>,
     clock: Arc<dyn AuthorityClock>,
     configuration_digest: ContentDigest,
+    telemetry: Option<Arc<DaemonTelemetry>>,
+    #[cfg(target_os = "macos")]
+    local_vector: Option<Arc<crate::ProductionLocalVectorRuntime>>,
 }
 
 impl RepositoryCatalogIndex {
@@ -51,7 +55,28 @@ impl RepositoryCatalogIndex {
             worker,
             clock,
             configuration_digest: multihash(b"cigar.mandatory-index.configuration.v1")?,
+            telemetry: None,
+            #[cfg(target_os = "macos")]
+            local_vector: None,
         })
+    }
+
+    /// Attaches process telemetry to the index worker that owns invalidation fan-out counts.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
+    }
+
+    /// Installs the explicit macOS local-vector runtime before the first generation is built.
+    #[cfg(target_os = "macos")]
+    #[must_use]
+    pub fn with_local_vector_runtime(
+        mut self,
+        runtime: Arc<crate::ProductionLocalVectorRuntime>,
+    ) -> Self {
+        self.local_vector = Some(runtime);
+        self
     }
 
     /// Reconstructs and activates the complete mandatory generation from durable catalog outbox
@@ -81,13 +106,25 @@ impl RepositoryCatalogIndex {
                 self,
                 &self.manager,
                 self.configuration_digest.clone(),
-                None,
+                self.vector_binding(
+                    records
+                        .last()
+                        .map_or(StoreRevision(0), |record| record.causal_revision),
+                    &context,
+                )?,
                 now,
                 &context,
             )
             .map_err(retrieval_lifecycle)?;
         if receipt.active_generation.is_none() {
             return Err(LifecycleError::action_failed());
+        }
+        if receipt.claimed_messages > 0
+            && let Some(telemetry) = &self.telemetry
+        {
+            telemetry.record_invalidation_fanout(
+                u64::try_from(receipt.claimed_messages).unwrap_or(u64::MAX),
+            );
         }
         Ok(())
     }
@@ -140,7 +177,12 @@ impl RepositoryCatalogIndex {
                 read.outbox()
                     .map_err(|_error| LifecycleError::action_failed())?
                     .into_iter()
-                    .filter(|record| record.message.topic == CATALOG_TOPIC),
+                    .filter(|record| {
+                        matches!(
+                            record.message.topic.as_str(),
+                            CATALOG_COMMITTED_TOPIC | CATALOG_TOMBSTONED_TOPIC
+                        )
+                    }),
             );
             if records.len() > MAX_CATALOG_OUTBOX_RECORDS {
                 return Err(LifecycleError::action_failed());
@@ -164,9 +206,10 @@ impl RepositoryCatalogIndex {
             .map_err(|_error| RetrievalError::new(RetrievalErrorCode::IndexUnavailable))?;
         let mut atoms: BTreeMap<_, ContextAtomV1> = BTreeMap::new();
         let mut edges: BTreeMap<_, ContextEdge> = BTreeMap::new();
+        let mut tenant_watermarks = BTreeMap::new();
         for tenant in tenants {
             context.check()?;
-            let access = AccessContext::new(tenant, INDEX_PURPOSE)
+            let access = AccessContext::new(tenant.clone(), INDEX_PURPOSE)
                 .map_err(|_error| RetrievalError::new(RetrievalErrorCode::InvalidMetadata))?;
             let read = self
                 .store
@@ -176,6 +219,21 @@ impl RepositoryCatalogIndex {
                     context.cancellation.clone(),
                 )
                 .map_err(|_error| RetrievalError::new(RetrievalErrorCode::IndexUnavailable))?;
+            let tenant_watermark = read
+                .outbox()
+                .map_err(|_error| RetrievalError::new(RetrievalErrorCode::IndexUnavailable))?
+                .into_iter()
+                .filter(|record| {
+                    record.causal_revision <= revision
+                        && matches!(
+                            record.message.topic.as_str(),
+                            CATALOG_COMMITTED_TOPIC | CATALOG_TOMBSTONED_TOPIC
+                        )
+                })
+                .map(|record| record.causal_revision)
+                .max()
+                .unwrap_or(StoreRevision(0));
+            tenant_watermarks.insert(tenant, tenant_watermark);
             let mut cursor = None;
             loop {
                 context.check()?;
@@ -206,6 +264,7 @@ impl RepositoryCatalogIndex {
         Ok(IndexSnapshot {
             atoms: atoms.into_values().collect(),
             edges: edges.into_values().collect(),
+            tenant_watermarks,
         })
     }
 
@@ -214,6 +273,20 @@ impl RepositoryCatalogIndex {
         verified_at: UtcTimestamp,
         context: &RetrievalContext,
     ) -> Result<(), LifecycleError> {
+        let tenant_watermarks: BTreeMap<_, _> = self
+            .active_tenants()?
+            .into_iter()
+            .map(|tenant| (tenant, StoreRevision(0)))
+            .collect();
+        let vector_binding = self.vector_binding_for_snapshot(
+            &IndexSnapshot {
+                atoms: Vec::new(),
+                edges: Vec::new(),
+                tenant_watermarks: tenant_watermarks.clone(),
+            },
+            StoreRevision(0),
+            context,
+        );
         let descriptor = self
             .manager
             .build_generation(
@@ -221,9 +294,10 @@ impl RepositoryCatalogIndex {
                     atoms: Vec::new(),
                     edges: Vec::new(),
                     built_through_revision: StoreRevision(0),
+                    tenant_watermarks,
                     configuration_digest: self.configuration_digest.clone(),
                     verified_at,
-                    vector_fingerprint: None,
+                    vector_binding,
                 },
                 context,
             )
@@ -232,6 +306,36 @@ impl RepositoryCatalogIndex {
             .activate(&descriptor.generation_id, None)
             .map(|_active| ())
             .map_err(retrieval_lifecycle)
+    }
+
+    fn vector_binding(
+        &self,
+        revision: StoreRevision,
+        context: &RetrievalContext,
+    ) -> Result<Option<VectorIndexBinding>, LifecycleError> {
+        #[cfg(target_os = "macos")]
+        if self.local_vector.is_some() {
+            let snapshot = self
+                .load_snapshot(revision, context)
+                .map_err(retrieval_lifecycle)?;
+            return Ok(self.vector_binding_for_snapshot(&snapshot, revision, context));
+        }
+        let _ = (revision, context);
+        Ok(None)
+    }
+
+    fn vector_binding_for_snapshot(
+        &self,
+        snapshot: &IndexSnapshot,
+        revision: StoreRevision,
+        context: &RetrievalContext,
+    ) -> Option<VectorIndexBinding> {
+        #[cfg(target_os = "macos")]
+        if let Some(runtime) = &self.local_vector {
+            return runtime.rebuild(snapshot, revision, &self.manager, context);
+        }
+        let _ = (snapshot, revision, context);
+        None
     }
 
     fn verify_projection(&self) -> Result<(), LifecycleError> {
@@ -317,6 +421,7 @@ impl ProductionDomainMaintenance for RepositoryCatalogIndex {
             .clock
             .now()
             .map_err(|_error| LifecycleError::action_failed())?;
+        let vector_binding = self.vector_binding(next.causal_revision, &context)?;
         let receipt = self
             .worker
             .process(
@@ -324,7 +429,7 @@ impl ProductionDomainMaintenance for RepositoryCatalogIndex {
                 self,
                 &self.manager,
                 self.configuration_digest.clone(),
-                None,
+                vector_binding,
                 now,
                 &context,
             )
@@ -366,18 +471,27 @@ fn retrieval_lifecycle(_error: RetrievalError) -> LifecycleError {
 mod tests {
     use super::RepositoryCatalogIndex;
     use crate::{
-        AuthorityClock, AuthorityError, ProductionDomainMaintenance, ProductionIndexTarget,
-        ProductionTenantProvider,
+        AuthorityClock, AuthorityError, DaemonTelemetry, ProductionDomainMaintenance,
+        ProductionIndexTarget, ProductionTenantProvider,
     };
-    use cigar_protocol::{ContentDigest, ContextAtomV1, RecordId, UtcTimestamp};
-    use cigar_retrieval::{InMemoryIndexManager, IndexWorker};
+    use cigar_catalog::CatalogAtomService;
+    use cigar_policy::{CompiledPolicyEngine, PolicyProfile, PolicyRequest, PolicyResource};
+    use cigar_protocol::{
+        ContentDigest, ContextAtomV1, IdempotencyKey, Lifecycle, RecordId, UtcTimestamp,
+    };
+    use cigar_retrieval::{
+        AuthorizedPartition, InMemoryIndexManager, IndexWorker, RetrievalConsistency,
+        RetrievalContext, RetrievalRequest, RetrievalStage, Retriever,
+    };
     use cigar_store::{
         AccessContext, CancellationToken, OutboxMessage, Repository, SqliteStore, StoreRevision,
         WriteTransaction,
     };
     use cigar_testkit::deterministic_protocol_fixture;
+    use std::collections::BTreeSet;
     use std::error::Error;
     use std::sync::Arc;
+    use std::time::{Duration, Instant};
 
     struct Tenants(Vec<RecordId>);
 
@@ -432,6 +546,111 @@ mod tests {
         )?)
     }
 
+    fn retrieval_policy(atom: &ContextAtomV1) -> Result<Arc<CompiledPolicyEngine>, Box<dyn Error>> {
+        let policy = Arc::new(CompiledPolicyEngine::default());
+        policy.install(
+            PolicyProfile {
+                schema_version: "cigar.policy-profile.v1".to_owned(),
+                revision: 1,
+                protected: true,
+                rules: Vec::new(),
+            },
+            atom.temporal.observed_at,
+        )?;
+        Ok(policy)
+    }
+
+    fn authorized_partition_at(
+        policy: &Arc<CompiledPolicyEngine>,
+        atom: &ContextAtomV1,
+        instant: UtcTimestamp,
+    ) -> Result<AuthorizedPartition, Box<dyn Error>> {
+        let [project_id] = atom.scope.project_ids.as_slice() else {
+            return Err("production index fixture must have exactly one project".into());
+        };
+        let expires_at = UtcTimestamp::from_unix_nanos(
+            instant
+                .unix_nanos()
+                .checked_add(600_000_000_000)
+                .ok_or("authorization expiry overflow")?,
+        )?;
+        let authorization = policy.authorize_retrieval_partition(&[PolicyRequest {
+            resource: PolicyResource::Partition,
+            input_digest: atom.content_digest.clone(),
+            principal_id: record(99)?,
+            principal_active: true,
+            tenant_id: atom.scope.tenant_id.clone(),
+            authenticated_tenant_id: atom.scope.tenant_id.clone(),
+            project_id: Some(project_id.clone()),
+            allowed_project_ids: BTreeSet::from([project_id.clone()]),
+            purpose: "coding".to_owned(),
+            allowed_purposes: atom.governance.allowed_purposes.iter().cloned().collect(),
+            processor: Some("local".to_owned()),
+            allowed_processors: BTreeSet::from(["local".to_owned()]),
+            classification: atom.governance.classification,
+            maximum_classification: atom.governance.classification,
+            residency_allowed: true,
+            egress_allowed: true,
+            lifecycle: Lifecycle::Active,
+            integrity_verified: true,
+            valid_at: instant,
+            valid_from: atom.temporal.valid_from,
+            valid_until: Some(expires_at),
+            observed_at: instant,
+            observed_as_of: instant,
+            freshness_expires_at: None,
+            instruction_authority: atom.governance.instruction_authority,
+            maximum_instruction_authority: atom.governance.instruction_authority,
+            excluded: false,
+            modality_supported: true,
+            capability: None,
+            required_capability: None,
+            bound_policy_digest: None,
+            effect_risk: None,
+            effect_approved: false,
+            effect_constraints_satisfied: true,
+            fencing_required: false,
+            fencing_verified: false,
+            decision_expires_at: expires_at,
+        }])?;
+        Ok(AuthorizedPartition::from_policy_authorization(
+            authorization,
+        )?)
+    }
+
+    fn lineage_request(
+        partition: AuthorizedPartition,
+        atom: &ContextAtomV1,
+        revision: StoreRevision,
+    ) -> RetrievalRequest {
+        RetrievalRequest {
+            stage: RetrievalStage::Exact,
+            partition,
+            required_revision: revision,
+            consistency: RetrievalConsistency::Strong,
+            exact_versions: BTreeSet::new(),
+            atom_ids: BTreeSet::new(),
+            lineage_ids: BTreeSet::from([atom.lineage_id.clone()]),
+            content_digests: BTreeSet::new(),
+            canonical_uris: BTreeSet::new(),
+            source_revisions: BTreeSet::new(),
+            paths: BTreeSet::new(),
+            terms: BTreeSet::new(),
+            approved_vector: None,
+            graph_roots: BTreeSet::new(),
+            graph_depth: 0,
+            limit: 10,
+            allow_fallback: false,
+        }
+    }
+
+    fn retrieval_context() -> RetrievalContext {
+        RetrievalContext {
+            cancellation: CancellationToken::default(),
+            deadline: Instant::now() + Duration::from_secs(10),
+        }
+    }
+
     fn commit_catalog(
         store: &crate::ProductionStore,
         tenant: RecordId,
@@ -461,8 +680,21 @@ mod tests {
         )?));
         let fixture = atom()?;
         let tenant = fixture.scope.tenant_id.clone();
+        let policy = retrieval_policy(&fixture)?;
+        let historical_partition = authorized_partition_at(
+            &policy,
+            &fixture,
+            UtcTimestamp::parse_rfc3339("2027-07-11T11:59:59Z")?,
+        )?;
+        let current_partition = authorized_partition_at(
+            &policy,
+            &fixture,
+            UtcTimestamp::parse_rfc3339("2027-07-11T12:00:01Z")?,
+        )?;
 
-        let first = coordinator(Arc::clone(&store), tenant.clone())?;
+        let telemetry = Arc::new(DaemonTelemetry::local());
+        let first =
+            coordinator(Arc::clone(&store), tenant.clone())?.with_telemetry(Arc::clone(&telemetry));
         first.rebuild()?;
         let empty = first
             .manager()
@@ -486,15 +718,79 @@ mod tests {
             .active_generation()?
             .ok_or("missing active index")?;
         assert_eq!(active.built_through_revision, StoreRevision(1));
+        let active_root = active.semantic_root;
         assert_eq!(first.worker().watermark()?, StoreRevision(1));
+        assert_eq!(
+            first
+                .manager()
+                .retrieve(
+                    &lineage_request(current_partition.clone(), &fixture, revision),
+                    &retrieval_context(),
+                )?
+                .candidates
+                .len(),
+            1
+        );
         first.rebuild()?;
         assert_eq!(first.worker().watermark()?, StoreRevision(1));
+        assert!(
+            telemetry
+                .render_openmetrics(&[])
+                .lines()
+                .any(|line| line == "cigar_invalidation_fanout_total 1")
+        );
 
-        let second_revision = commit_catalog(&store, tenant.clone(), revision, Some(fixture), 11)?;
+        let second_revision = CatalogAtomService
+            .tombstone_atom(
+                store.as_ref(),
+                AccessContext::new(tenant.clone(), "test.index")?,
+                revision,
+                IdempotencyKey::new("production-index-tombstone")?,
+                fixture.atom_id.clone(),
+                UtcTimestamp::parse_rfc3339("2027-07-11T12:00:00Z")?,
+                record(11)?,
+                CancellationToken::default(),
+            )?
+            .revision;
         assert_eq!(second_revision, StoreRevision(2));
         assert!(first.verify_worker_cursors().is_err());
         first.rebuild()?;
         assert_eq!(first.worker().watermark()?, StoreRevision(2));
+        assert!(
+            telemetry
+                .render_openmetrics(&[])
+                .lines()
+                .any(|line| line == "cigar_invalidation_fanout_total 2")
+        );
+        assert_ne!(
+            first
+                .manager()
+                .active_generation()?
+                .ok_or("missing tombstone generation")?
+                .semantic_root,
+            active_root
+        );
+        assert!(
+            first
+                .manager()
+                .retrieve(
+                    &lineage_request(current_partition.clone(), &fixture, second_revision),
+                    &retrieval_context(),
+                )?
+                .candidates
+                .is_empty()
+        );
+        assert_eq!(
+            first
+                .manager()
+                .retrieve(
+                    &lineage_request(historical_partition.clone(), &fixture, second_revision,),
+                    &retrieval_context(),
+                )?
+                .candidates
+                .len(),
+            1
+        );
 
         let restarted = coordinator(store, tenant)?;
         restarted.rebuild()?;
@@ -510,6 +806,27 @@ mod tests {
                 .active_generation()?
                 .ok_or("missing first index")?
                 .semantic_root
+        );
+        assert!(
+            restarted
+                .manager()
+                .retrieve(
+                    &lineage_request(current_partition, &fixture, second_revision),
+                    &retrieval_context(),
+                )?
+                .candidates
+                .is_empty()
+        );
+        assert_eq!(
+            restarted
+                .manager()
+                .retrieve(
+                    &lineage_request(historical_partition, &fixture, second_revision),
+                    &retrieval_context(),
+                )?
+                .candidates
+                .len(),
+            1
         );
         assert!(restarted.verify_worker_cursors().is_ok());
         Ok(())

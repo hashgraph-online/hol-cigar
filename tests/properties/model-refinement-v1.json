@@ -1,0 +1,217 @@
+{
+  "schema_version": "cigar.loom-production-refinement.v1",
+  "platform": {
+    "os": "macos",
+    "architecture": "aarch64",
+    "target": "aarch64-apple-darwin"
+  },
+  "loom": {
+    "crate_version": "0.7.2",
+    "scheduler": "loom::model::Builder"
+  },
+  "evidence_class": "development_diagnostic",
+  "direct_race_guard": {
+    "model_side_serialization": false,
+    "snapshot_and_worker_iterations": 64,
+    "context_publication_iterations": 16
+  },
+  "models": [
+    {
+      "id": "MODEL-CACHE-PUBLICATION",
+      "test": "cache_publication_refines_production_governed_cache",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-compiler",
+          "source": "crates/cigar-compiler/src/cache.rs",
+          "symbols": ["pub struct GovernedCache", "pub fn insert(", "pub fn get("]
+        },
+        {
+          "crate_name": "cigar-daemon",
+          "source": "crates/cigar-daemon/src/compiler_control_plane.rs",
+          "symbols": ["cache: Arc<Mutex<Option<GovernedCache>>>", "GovernedCache::new("]
+        }
+      ],
+      "synchronization_refinement": "The Loom mutex owns the real GovernedCache in the same optional whole-cache critical section used by the daemon; readers can observe only absence or a production-validated complete entry.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 2,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 10,
+      "required_branches": ["read_before_publication", "read_after_publication"],
+      "divergence_mutants": ["partial_cache_entry_visible"]
+    },
+    {
+      "id": "MODEL-SNAPSHOT-VISIBILITY",
+      "test": "snapshot_visibility_refines_production_mvcc_store",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-store",
+          "source": "crates/cigar-store/src/memory.rs",
+          "symbols": ["pub struct InMemoryStore", "history: Mutex<Vec<Arc<CommittedState>>>", "fn service_get(", "fn service_commit(", "let mut history = self", "history.push(Arc::new(next.ok_or_else"]
+        }
+      ],
+      "synchronization_refinement": "Each schedule calls the Send + Sync production InMemoryStore service_commit and service_get paths without a model-side serialization lock; its whole-state mutex and immutable Arc publication must expose either no record or the exact revision/version/payload tuple, and the native barrier race guard overlaps the real operations.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 4,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 9,
+      "required_branches": ["prepublication_record_absent", "postpublication_record_complete"],
+      "divergence_mutants": ["snapshot_revision_payload_torn"]
+    },
+    {
+      "id": "MODEL-CONTEXT-REVISION",
+      "test": "context_revision_refines_production_space_publication",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-space",
+          "source": "crates/cigar-space/src/service.rs",
+          "symbols": ["pub struct ContextSpaceService", "spaces: Arc<RwLock", "pub fn publish(", "let mut spaces = self", "request.expected_head.0 != state.head.sequence"]
+        }
+      ],
+      "synchronization_refinement": "Two Send + Sync production ContextSpaceService publications race without a model-side serialization lock and with the same expected head under the production write lock; exactly one publishes sequence two and the other takes StaleRevision, with a native barrier race guard overlapping the real operations.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 4,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 23,
+      "required_branches": ["publication_accepted", "stale_revision_rejected"],
+      "divergence_mutants": ["two_context_writers_win"]
+    },
+    {
+      "id": "MODEL-OUTBOX-FENCING",
+      "test": "outbox_fencing_refines_production_worker_claim",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-store",
+          "source": "crates/cigar-store/src/memory.rs",
+          "symbols": ["fn worker_update(", "let mut history = self", "apply_worker_update", "history.push(Arc::new(next));"]
+        },
+        {
+          "crate_name": "cigar-store",
+          "source": "crates/cigar-store/src/service_repository.rs",
+          "symbols": ["fn transition_worker(", "WorkerUpdate::Claim", "let fencing_token = current.map_or"]
+        }
+      ],
+      "synchronization_refinement": "Two Send + Sync production worker_update claims race without a model-side serialization lock from ServiceExpectedVersion::Absent; the store publication mutex and transition_worker expected-version semantics admit one owner with fence one and reject the loser, with a native barrier race guard overlapping the real operations.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 4,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 23,
+      "required_branches": ["worker_claim_accepted", "revision_conflict_rejected"],
+      "divergence_mutants": ["zero_outbox_claim_winners"]
+    },
+    {
+      "id": "MODEL-SUBSCRIPTION-CURSOR",
+      "test": "subscription_cursor_refines_production_event_pages",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-space",
+          "source": "crates/cigar-space/src/contract.rs",
+          "symbols": ["pub struct EventCursor", "pub const fn advance_to"]
+        },
+        {
+          "crate_name": "cigar-space",
+          "source": "crates/cigar-space/src/service.rs",
+          "symbols": ["pub fn poll_events(", "after.advance_to(EventCursor"]
+        }
+      ],
+      "synchronization_refinement": "Concurrent acknowledgers consume resume cursors returned by production poll_events and use the same EventCursor::advance_to kernel now used by production page construction inside an AcqRel retry loop.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 2,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 27,
+      "required_branches": ["low_cursor_linearizes_first", "high_cursor_linearizes_first"],
+      "divergence_mutants": ["subscription_cursor_regresses"]
+    },
+    {
+      "id": "MODEL-INVALIDATION-QUEUE",
+      "test": "invalidation_queue_refines_production_dependency_worker",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-catalog",
+          "source": "crates/cigar-catalog/src/invalidation.rs",
+          "symbols": ["pub struct DependencyInvalidator", "impl InvalidationWorker", "batch.invalidated.insert"]
+        }
+      ],
+      "synchronization_refinement": "The Loom critical section advances a real production DependencyInvalidator batch and clears its modeled served value in the same publication; readers observe either live/unrevoked or revoked/absent.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 2,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 10,
+      "required_branches": ["read_before_invalidation", "read_after_invalidation"],
+      "divergence_mutants": ["revoked_entry_still_served"]
+    },
+    {
+      "id": "MODEL-SHUTDOWN-GATE",
+      "test": "shutdown_gate_refines_production_worker_admission",
+      "production_bindings": [
+        {
+          "crate_name": "cigar-daemon",
+          "source": "crates/cigar-daemon/src/worker.rs",
+          "symbols": ["pub fn try_enqueue", "if !self.accepting.load(Ordering::Acquire)", "pub fn stop_accepting", "self.accepting.store(false, Ordering::Release)"]
+        }
+      ],
+      "synchronization_refinement": "The model races the production WorkerQueue::try_enqueue path against production WorkerRuntime::stop_accepting and uses a Loom release/acquire witness to prove no enqueue succeeds after closure is observed.",
+      "configuration": {
+        "max_threads": 3,
+        "max_branches": 1000,
+        "max_permutations": null,
+        "max_duration_seconds": null,
+        "preemption_bound": 2,
+        "checkpointing": false,
+        "expect_explicit_explore": false,
+        "location_tracking": false,
+        "logging": false
+      },
+      "expected_schedules": 30,
+      "required_branches": ["enqueue_before_shutdown", "reject_after_shutdown"],
+      "divergence_mutants": ["enqueue_after_closed_observation"]
+    }
+  ]
+}

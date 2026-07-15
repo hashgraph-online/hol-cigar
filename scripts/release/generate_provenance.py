@@ -10,6 +10,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -39,7 +44,85 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--command", action="append", required=True)
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external provenance workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     return parser.parse_args()
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one external output root without resolving untrusted components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+class ProvenanceOutput:
+    """One pinned external or legacy development provenance destination."""
+
+    def __init__(
+        self,
+        *,
+        direct: Path | None,
+        workspace: EvidenceWorkspace | None,
+        relative: str | None,
+    ) -> None:
+        self.direct = direct
+        self.workspace = workspace
+        self.relative = relative
+
+    @classmethod
+    def open(
+        cls,
+        arguments: argparse.Namespace,
+        root: Path,
+        inputs: list[Path],
+    ) -> ProvenanceOutput:
+        selected = selected_evidence_directory(arguments)
+        if selected is None:
+            direct = arguments.out.resolve()
+            require_distinct_output(direct, inputs, "provenance")
+            return cls(direct=direct, workspace=None, relative=None)
+        try:
+            parts = safe_evidence_path(os.fspath(arguments.out))
+            relative = "/".join(parts)
+            workspace = EvidenceWorkspace.create(selected, repository_root=root)
+        except EvidenceWorkspaceError as error:
+            raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+        try:
+            require_distinct_output(
+                workspace.root.joinpath(*parts), inputs, "provenance"
+            )
+            return cls(direct=None, workspace=workspace, relative=relative)
+        except BaseException:
+            workspace.close()
+            raise
+
+    def publish(self, provenance: dict[str, Any]) -> None:
+        if self.workspace is None:
+            assert self.direct is not None
+            write_json(self.direct, provenance)
+            return
+        assert self.relative is not None
+        self.workspace.write_json(self.relative, provenance)
+
+    def close(self) -> None:
+        if self.workspace is not None:
+            self.workspace.close()
 
 
 def _subject(path: Path, name: str | None = None) -> dict[str, Any]:
@@ -108,10 +191,6 @@ def main() -> int:
     material_paths = {
         path.absolute() for path in (*standard_materials, *supplied_materials)
     }
-    output_path = arguments.out.resolve()
-    require_distinct_output(
-        output_path, [*arguments.artifact, *material_paths], "provenance"
-    )
     materials = []
     material_paths_by_name: dict[str, Path] = {}
     for path in sorted(material_paths, key=lambda item: item.as_posix()):
@@ -175,15 +254,27 @@ def main() -> int:
             },
         },
     }
-    for subject in subjects:
-        path = subject_paths[subject["name"]]
-        if sha256_file(path) != subject["digest"]["sha256"]:
-            raise ReleaseError(f"provenance subject changed during generation: {path}")
-    for material in materials:
-        path = material_paths_by_name[material["name"]]
-        if sha256_file(path) != material["digest"]["sha256"]:
-            raise ReleaseError(f"provenance material changed during generation: {path}")
-    write_json(output_path, provenance)
+    output = ProvenanceOutput.open(
+        arguments,
+        root,
+        [*arguments.artifact, *material_paths],
+    )
+    try:
+        for subject in subjects:
+            path = subject_paths[subject["name"]]
+            if sha256_file(path) != subject["digest"]["sha256"]:
+                raise ReleaseError(
+                    f"provenance subject changed during generation: {path}"
+                )
+        for material in materials:
+            path = material_paths_by_name[material["name"]]
+            if sha256_file(path) != material["digest"]["sha256"]:
+                raise ReleaseError(
+                    f"provenance material changed during generation: {path}"
+                )
+        output.publish(provenance)
+    finally:
+        output.close()
     print(f"wrote provenance for {len(subjects)} artifact(s)")
     return 0
 
@@ -191,5 +282,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except ReleaseError as error:
+    except (EvidenceWorkspaceError, ReleaseError) as error:
         raise SystemExit(f"provenance generation failed: {error}") from error

@@ -1,0 +1,120 @@
+{
+  "routes": {
+    "bench-efficacy": [],
+    "bench-macro-verify": [],
+    "bench-micro-verify": [],
+    "bootstrap-verify": [
+      "cargo",
+      "cargo-deny",
+      "cargo-llvm-cov",
+      "cargo-nextest",
+      "corepack",
+      "git",
+      "go",
+      "just",
+      "node",
+      "openssl",
+      "protoc",
+      "protoc-gen-es",
+      "protoc-gen-go",
+      "protoc-gen-go-grpc",
+      "protoc-gen-prost",
+      "python3",
+      "rustc",
+      "sqlite3",
+      "uv"
+    ],
+    "docs-check": ["cargo", "python3", "rustc", "rustdoc"],
+    "format-check": ["cargo", "cargo-fmt", "rustfmt"],
+    "fuzz-smoke": [],
+    "generate-check": [
+      "protoc",
+      "protoc-gen-es",
+      "protoc-gen-go",
+      "protoc-gen-go-grpc",
+      "protoc-gen-prost",
+      "python3"
+    ],
+    "lint": [
+      "cargo",
+      "cargo-clippy",
+      "cargo-deny",
+      "clippy-driver",
+      "rustc"
+    ],
+    "package-all": [],
+    "package-smoke": [],
+    "release-attest": [],
+    "release-reproduce": ["git", "python3"],
+    "release-sbom": [],
+    "release-sign": [],
+    "release-verify": [],
+    "test-chaos": [
+      "bash",
+      "cargo",
+      "cargo-nextest",
+      "docker",
+      "find",
+      "mkfifo",
+      "openssl",
+      "python3",
+      "rustc",
+      "shasum",
+      "sort",
+      "tee"
+    ],
+    "test-compatibility": [
+      "bash",
+      "cargo",
+      "cargo-nextest",
+      "corepack",
+      "go",
+      "node",
+      "python3",
+      "rustc",
+      "uv"
+    ],
+    "test-conformance": ["cargo", "cargo-nextest", "rustc"],
+    "test-coverage-verify": [
+      "cargo",
+      "cargo-llvm-cov",
+      "cargo-nextest",
+      "rustc",
+      "sandbox-exec"
+    ],
+    "test-e2e": ["cargo", "cargo-nextest", "python3", "rustc"],
+    "test-integration": ["cargo", "cargo-nextest", "python3", "rustc"],
+    "test-migrations": [
+      "bash",
+      "cargo",
+      "cargo-nextest",
+      "docker",
+      "kubectl",
+      "python3",
+      "rustc",
+      "shasum"
+    ],
+    "test-models": ["cargo", "cargo-nextest", "python3", "rustc"],
+    "test-mutations-verify": [
+      "cargo",
+      "cargo-mutants",
+      "cargo-nextest",
+      "rustc",
+      "sandbox-exec"
+    ],
+    "test-offline": ["cargo", "cargo-nextest", "python3", "rustc"],
+    "test-sanitizers": [],
+    "test-security": ["cargo", "cargo-nextest", "python3", "rustc"],
+    "test-unit": ["cargo", "cargo-nextest", "rustc"],
+    "test-vectors": [
+      "cargo",
+      "corepack",
+      "go",
+      "node",
+      "python3",
+      "rustc",
+      "uv"
+    ]
+  },
+  "schema_version": "cigar.xtask-route-tools.v1"
+}

@@ -12,11 +12,14 @@ publish = false
 workspace = true
 
 [dependencies]
+base64.workspace = true
+ciborium.workspace = true
 cigar-canon.workspace = true
 cigar-api.workspace = true
 cigar-catalog.workspace = true
 cigar-compiler.workspace = true
 cigar-crypto.workspace = true
+cigar-daemon = { path = "../../crates/cigar-daemon", version = "=1.0.0-dev.1" }
 cigar-effects.workspace = true
 cigar-mcp.workspace = true
 cigar-policy.workspace = true
@@ -27,6 +30,8 @@ cigar-space.workspace = true
 cigar-store.workspace = true
 getrandom.workspace = true
 prost.workspace = true
+rusqlite.workspace = true
+rustix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

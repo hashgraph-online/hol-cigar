@@ -26,6 +26,11 @@ python3 demos/sdk-clients/run.py \
   --output reports/sdk-recorded-workflow.json
 ```
 
+For protected external evidence, set `CIGAR_EVIDENCE_DIR` to a canonical
+absolute owner-only directory and make `--output` relative to it. Publication
+is create-new and mode `0400`; ambiguous selectors, unsafe paths, aliases, and
+overwrite are rejected.
+
 Individual languages may be selected with repeated `--language` flags. A
 partial run remains useful but sets `sdk_workflow_qualified` to false.
 

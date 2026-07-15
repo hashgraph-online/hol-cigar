@@ -15,6 +15,16 @@ from pathlib import Path
 from typing import Any, Never, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
+RELEASE_TOOLS = ROOT / "scripts" / "release"
+if str(RELEASE_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_TOOLS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
+
 DEMO_SCHEMA = "cigar.demo-manifest.v1"
 FIXTURE_SCHEMA = "cigar.demo-fixture.v1"
 RECORD_SCHEMA = "cigar.demo-record.v1"
@@ -26,6 +36,7 @@ MAX_CHECKS = 16
 IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]{0,95}$")
 MULTIHASH = re.compile(r"^1220[0-9a-f]{64}$")
 TEST_RESULT = re.compile(r"test result: ok\. ([0-9]+) passed;")
+GO_VERSION = re.compile(r"^go (1\.[0-9]+\.[0-9]+)$", re.MULTILINE)
 DRIVER_ITEM_KEYS = {"step", "status", "evidence_digest"}
 DRIVER_ASSERTION_KEYS = {"assertion_id", "status", "evidence_digest"}
 DRIVER_GRADES = {"product_observed", "fixture_observed", "not_observed"}
@@ -43,6 +54,8 @@ DRIVER_KEYS = {
     "result_digest",
 }
 _BUILT_PACKAGES: set[str] = set()
+DEFAULT_OUTPUT_DIRECTORY = ROOT / "demos" / "reports"
+DEFAULT_EVIDENCE_PREFIX = "demos/reports"
 
 
 class DemoError(Exception):
@@ -60,6 +73,25 @@ def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             fail("JSON contains duplicate object keys")
         result[key] = value
     return result
+
+
+def pinned_go_toolchain() -> str:
+    versions: set[str] = set()
+    for module in (
+        ROOT / "sdk" / "go" / "go.mod",
+        ROOT / "demos" / "sdk-clients" / "go-workflow" / "go.mod",
+    ):
+        try:
+            payload = module.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise DemoError("Go toolchain pin is unreadable") from error
+        matches = GO_VERSION.findall(payload)
+        if len(matches) != 1:
+            fail("Go toolchain pin is invalid")
+        versions.add(matches[0])
+    if len(versions) != 1:
+        fail("Go toolchain pins do not match")
+    return f"go{versions.pop()}"
 
 
 def canonical(value: Any) -> bytes:
@@ -468,8 +500,17 @@ def clean_environment(
             # infrastructure; product and user state remain temporary.
             "CARGO_HOME": os.environ.get("CARGO_HOME", str(Path.home() / ".cargo")),
             "RUSTUP_HOME": os.environ.get("RUSTUP_HOME", str(Path.home() / ".rustup")),
+            "GOMODCACHE": os.environ.get(
+                "GOMODCACHE", str(Path.home() / "go" / "pkg" / "mod")
+            ),
+            "GOCACHE": str(state / "go-build-cache"),
             "CARGO_NET_OFFLINE": "true",
             "UV_OFFLINE": "1",
+            "GOTOOLCHAIN": pinned_go_toolchain(),
+            "GOWORK": "off",
+            "GOPROXY": "off",
+            "GOSUMDB": "sum.golang.org",
+            "GONOSUMDB": "",
             "CIGAR_HOME": str(state / "cigar-home"),
             "CIGAR_CONFIG": str(state / "cigar.toml"),
             "NO_PROXY": "127.0.0.1,localhost,::1",
@@ -777,6 +818,9 @@ def run_demo(
     validate_only: bool,
     live: bool,
     registry: dict[str, bytes],
+    *,
+    evidence_workspace: EvidenceWorkspace | None = None,
+    evidence_prefix: str | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     driver: dict[str, Any] | None = None
@@ -887,9 +931,42 @@ def run_demo(
     record["record_digest"] = digest(canonical(record))
     payload = canonical(record)
     scan(payload, sorted(registry), registry)
-    output = output_directory / f"{manifest['demo_id']}.json"
-    write_record(output, record)
+    if evidence_workspace is None:
+        output = output_directory / f"{manifest['demo_id']}.json"
+        write_record(output, record)
+    else:
+        if evidence_prefix is None:
+            fail("demo evidence prefix is missing")
+        evidence_workspace.write_json(
+            f"{evidence_prefix}/{manifest['demo_id']}.json", record
+        )
     return record
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment and Path(argument) != Path(environment):
+        fail("--evidence-dir conflicts with CIGAR_EVIDENCE_DIR")
+    selected = argument if argument is not None else environment
+    if selected is None or os.fspath(selected) == "":
+        return None
+    path = Path(selected)
+    if not path.is_absolute():
+        fail("demo evidence directory must be absolute")
+    return path
+
+
+def selected_evidence_prefix(arguments: argparse.Namespace) -> str:
+    output = arguments.output_dir
+    if output == DEFAULT_OUTPUT_DIRECTORY:
+        return DEFAULT_EVIDENCE_PREFIX
+    if output.is_absolute():
+        fail("--output-dir must be relative when an evidence workspace is selected")
+    try:
+        return "/".join(safe_evidence_path(os.fspath(output)))
+    except EvidenceWorkspaceError as error:
+        raise DemoError("demo evidence output path is unsafe") from error
 
 
 def parser() -> argparse.ArgumentParser:
@@ -900,7 +977,12 @@ def parser() -> argparse.ArgumentParser:
         default=[],
         help="demo id; repeat to select several",
     )
-    result.add_argument("--output-dir", type=Path, default=ROOT / "demos" / "reports")
+    result.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     result.add_argument(
         "--validate-only",
         action="store_true",
@@ -917,8 +999,10 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    workspace: EvidenceWorkspace | None = None
     try:
         manifests = load_manifests()
+        selected_evidence = selected_evidence_directory(args)
         if args.list:
             for demo_id in manifests:
                 print(demo_id)
@@ -930,6 +1014,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             fail("demo selection is unknown or duplicated")
         registry = canaries()
         records = []
+        evidence_prefix: str | None = None
+        if selected_evidence is not None:
+            evidence_prefix = selected_evidence_prefix(args)
+            workspace = EvidenceWorkspace.create(
+                selected_evidence, repository_root=ROOT
+            )
         for demo_id in selected:
             path, manifest = manifests[demo_id]
             records.append(
@@ -940,31 +1030,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.validate_only,
                     args.live,
                     registry,
+                    evidence_workspace=workspace,
+                    evidence_prefix=evidence_prefix,
                 )
             )
         qualified = bool(records) and all(
             record["release_demo_qualified"] for record in records
         )
-        print(
-            json.dumps(
-                {
-                    "schema_version": "cigar.demo-run-summary.v1",
-                    "result_class": "validation_only"
-                    if args.validate_only
-                    else ("release_demo" if qualified else "mixed_fixture_evidence"),
-                    "completed": selected,
-                    "release_demo_qualified": qualified,
-                },
-                separators=(",", ":"),
-            )
-        )
+        summary = {
+            "schema_version": "cigar.demo-run-summary.v1",
+            "result_class": "validation_only"
+            if args.validate_only
+            else ("release_demo" if qualified else "mixed_fixture_evidence"),
+            "completed": selected,
+            "release_demo_qualified": qualified,
+        }
+        if workspace is not None:
+            assert evidence_prefix is not None
+            workspace.write_json(f"{evidence_prefix}/summary.json", summary)
+        print(json.dumps(summary, separators=(",", ":")))
         return 0
     except DemoError as error:
         print(f"cigar-demo: {error}", file=sys.stderr)
         return 2
-    except OSError:
+    except (EvidenceWorkspaceError, OSError):
         print("cigar-demo: local artifact operation failed", file=sys.stderr)
         return 2
+    finally:
+        if workspace is not None:
+            workspace.close()
 
 
 if __name__ == "__main__":

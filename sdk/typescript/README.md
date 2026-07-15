@@ -29,5 +29,12 @@ Bearer providers receive the call's abort signal. Supplying a custom `fetch` req
 maps contain their exact source text, including declaration maps, and the package has no
 postinstall hook.
 
+Remote HTTPS construction requires an explicit `bearerToken` value or provider. The SDK never
+discovers credentials from the URL, environment, project configuration, proxy settings, or a
+redirect target. Explicit cleartext loopback mode remains available only for local development.
+Node proxy environment variables are rejected when using the default fetch implementation. A
+caller that intentionally supplies a proxy-aware fetch must inject it and set `trustCustomFetch`;
+that explicit transport becomes the caller's channel-identity and redirect-policy boundary.
+
 Run `pnpm qualify:bundle` to verify the packaged cross-SDK fixture and print its semantic
 bundle ID.

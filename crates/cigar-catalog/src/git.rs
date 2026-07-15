@@ -4,8 +4,8 @@ use crate::ignore::{IgnorePatterns, IgnoreWorkBudget, MAX_IGNORE_BYTES, path_has
 use crate::{
     BoundedBytes, ByteRange, CatalogError, CatalogErrorCode, ChangeKind, ChangeWatermark,
     ConnectorContext, DiscoveryDisposition, DiscoveryEntry, DiscoveryPlan, DiscoveryReason,
-    DiscoveryRequest, SourceChange, SourceConnector, SourceHealth, SourceHealthState, SourceRecord,
-    SourceSnapshotBatch, scan_secrets_with_patterns,
+    DiscoveryRequest, GIT_CONNECTOR_ID, SourceChange, SourceConnector, SourceConnectorDescriptor,
+    SourceHealth, SourceHealthState, SourceRecord, SourceSnapshotBatch, scan_secrets_with_patterns,
 };
 use cigar_protocol::{
     ContentDigest, ExtensionMap, MediaType, RecordId, RelativePath, SourceSnapshot, SourceUri,
@@ -23,6 +23,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_GIT_OUTPUT_BYTES: usize = 67_108_864;
+const MAX_RETAINED_EVENTS: usize = 100_000;
 const GIT_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const CHILD_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
@@ -102,6 +103,9 @@ impl GitConnector {
             );
             change.watermark = state.watermark;
             state.events.push_back(change);
+            while state.events.len() > MAX_RETAINED_EVENTS {
+                let _expired = state.events.pop_front();
+            }
         }
         if state.commit.as_ref() != Some(&commit) {
             state.snapshot = None;
@@ -130,6 +134,7 @@ impl GitConnector {
         )?;
         let mut raw = parse_tree(&tree, context)?;
         raw.sort_by(|left, right| left.path.cmp(&right.path));
+        crate::connector::validate_source_paths(raw.iter().map(|entry| entry.path.as_slice()))?;
         let ignore_patterns = if let Some(entry) = raw.iter().find(|entry| {
             entry.path == b".cigarignore" && entry.regular_blob() && entry.size.is_some()
         }) {
@@ -144,7 +149,6 @@ impl GitConnector {
         } else {
             IgnorePatterns::default()
         };
-        let mut occurrence: BTreeMap<String, u64> = BTreeMap::new();
         let mut entries = Vec::with_capacity(raw.len());
         let mut included = BTreeMap::new();
         let mut total_bytes = 0_u64;
@@ -156,14 +160,9 @@ impl GitConnector {
             let path = RelativePath::new(entry.path.clone())
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidMetadata))?;
             let media_type = media_type(&entry.path)?;
-            let special =
-                !entry.regular_blob() || secret_path(&entry.path) || entry.path == b".cigarignore";
+            let special = !entry.regular_blob() || secret_path(&entry.path);
             let size_bytes = entry.size.unwrap_or_default();
-            let index = occurrence.entry(entry.object_id.clone()).or_default();
-            let record_id = format!("git:{}:{index}", entry.object_id);
-            *index = index
-                .checked_add(1)
-                .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+            let record_id = format!("git:path:{}", digest_bytes(&entry.path));
             let mut record = SourceRecord {
                 record_id: record_id.clone(),
                 relative_path: path.clone(),
@@ -275,6 +274,13 @@ impl fmt::Debug for GitConnector {
 }
 
 impl SourceConnector for GitConnector {
+    fn descriptor(&self) -> SourceConnectorDescriptor {
+        SourceConnectorDescriptor {
+            id: GIT_CONNECTOR_ID.to_owned(),
+            root: self.root_uri.clone(),
+        }
+    }
+
     fn discover(
         &self,
         request: &DiscoveryRequest,
@@ -331,6 +337,7 @@ impl SourceConnector for GitConnector {
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?,
             snapshot_id: RecordId::new(deterministic_uuid(&[
                 b"CIGAR-GIT-SNAPSHOT\0v1\0",
+                self.root_uri.as_str().as_bytes(),
                 commit.as_bytes(),
                 manifest_digest.as_str().as_bytes(),
             ]))
@@ -397,10 +404,23 @@ impl SourceConnector for GitConnector {
         if limit == 0 || limit > crate::MAX_CONNECTOR_ITEMS {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
         }
-        Ok(self
+        let state = self
             .state
             .lock()
-            .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+        if state
+            .events
+            .front()
+            .is_some_and(|first| watermark.0.saturating_add(1) < first.watermark.0)
+        {
+            return Ok(vec![SourceChange {
+                watermark: state.watermark,
+                kind: ChangeKind::Overflow,
+                record: None,
+                prior_path: None,
+            }]);
+        }
+        Ok(state
             .events
             .iter()
             .filter(|event| event.watermark > watermark)
@@ -474,7 +494,7 @@ fn parse_tree_with_limit(
         let size_field = utf8_field(fields.next())?;
         if fields.next().is_some()
             || !matches!(object_type.as_str(), "blob" | "commit")
-            || !object_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !valid_object_id(&object_id)
             || path.len() > cigar_protocol::limits::MAX_PATH_BYTES
         {
             return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
@@ -517,7 +537,7 @@ fn git_head(root: &Path, context: &ConnectorContext) -> Result<String, CatalogEr
     )?;
     let value = std::str::from_utf8(trim_line(&bytes))
         .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
-    if value.len() < 40 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if !valid_object_id(value) {
         return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
     }
     Ok(value.to_owned())
@@ -529,7 +549,7 @@ fn read_object(
     expected_size: u64,
     context: &ConnectorContext,
 ) -> Result<Vec<u8>, CatalogError> {
-    if object_id.len() < 40 || !object_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if !valid_object_id(object_id) {
         return Err(CatalogError::new(CatalogErrorCode::InvalidMetadata));
     }
     let limit = usize::try_from(expected_size)
@@ -551,11 +571,20 @@ fn run_git(
     context: &ConnectorContext,
 ) -> Result<Vec<u8>, CatalogError> {
     context.check()?;
-    let mut child = Command::new("git")
+    let mut child = Command::new(git_executable())
         .arg("-C")
         .arg(root)
         .args(arguments)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_ATTR_NOSYSTEM", "1")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -684,10 +713,25 @@ fn compare_git_records(
 }
 
 fn secret_path(path: &[u8]) -> bool {
-    let name = path.split(|byte| *byte == b'/').next_back().unwrap_or(path);
-    matches!(name, b".env" | b".npmrc" | b"id_rsa" | b"id_ed25519")
-        || name.ends_with(b".pem")
-        || name.ends_with(b".key")
+    crate::connector::sensitive_source_path(path)
+}
+
+fn valid_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn digest_bytes(bytes: &[u8]) -> String {
+    multihash(&Sha256::digest(bytes))
+}
+
+#[cfg(target_os = "macos")]
+fn git_executable() -> &'static str {
+    "/usr/bin/git"
+}
+
+#[cfg(not(target_os = "macos"))]
+fn git_executable() -> &'static str {
+    "git"
 }
 
 fn media_type(path: &[u8]) -> Result<MediaType, CatalogError> {
@@ -823,14 +867,37 @@ mod tests {
                 Err("git fixture command failed".into())
             }
         };
+        let revision = || -> Result<String, Box<dyn std::error::Error>> {
+            let output = Command::new("git")
+                .arg("-C")
+                .arg(root.path())
+                .args(["rev-parse", "HEAD"])
+                .output()?;
+            if !output.status.success() {
+                return Err("Git fixture revision failed".into());
+            }
+            Ok(std::str::from_utf8(&output.stdout)?.trim().to_owned())
+        };
         run(&["init", "-q"])?;
         run(&["config", "user.email", "fixture@example.invalid"])?;
         run(&["config", "user.name", "Fixture"])?;
         fs::write(root.path().join("safe.rs"), b"fn committed() {}")?;
+        fs::write(root.path().join(".ENV.PRODUCTION"), b"TOKEN=fixture")?;
+        fs::write(
+            root.path().join("application_default_credentials.json"),
+            b"{}",
+        )?;
         #[cfg(unix)]
         std::os::unix::fs::symlink("../outside", root.path().join("escape.txt"))?;
         run(&["add", "-A"])?;
         run(&["commit", "-qm", "fixture"])?;
+        let original = revision()?;
+        fs::write(root.path().join("safe.rs"), b"fn replacement() {}")?;
+        run(&["add", "safe.rs"])?;
+        run(&["commit", "-qm", "replacement fixture"])?;
+        let replacement = revision()?;
+        run(&["reset", "--hard", &original])?;
+        run(&["replace", &original, &replacement])?;
         fs::write(root.path().join("safe.rs"), b"password=dirty-secret-value")?;
         let uri = SourceUri::new("git+file:///fixture")?;
         let connector = GitConnector::new(root.path(), uri.clone())?;
@@ -856,6 +923,16 @@ mod tests {
             &context,
         )?;
         assert_eq!(plan.included_count, 1);
+        for sensitive_path in [
+            b".ENV.PRODUCTION".as_slice(),
+            b"application_default_credentials.json".as_slice(),
+        ] {
+            assert!(plan.entries.iter().any(|entry| {
+                entry.record.relative_path.as_bytes() == sensitive_path
+                    && entry.reason == crate::DiscoveryReason::HardExclusion
+                    && entry.disposition == crate::DiscoveryDisposition::Exclude
+            }));
+        }
         #[cfg(unix)]
         assert!(plan.entries.iter().any(|entry| {
             entry.reason == crate::DiscoveryReason::HardExclusion
@@ -865,6 +942,29 @@ mod tests {
         let record = snapshot.records.first().ok_or("missing Git record")?;
         let bytes = connector.read(record, ByteRange::new(0, record.size_bytes)?, &context)?;
         assert_eq!(bytes.as_slice(), b"fn committed() {}");
+        let second_uri = SourceUri::new("git+file:///other-fixture")?;
+        let second = GitConnector::new(root.path(), second_uri.clone())?;
+        second.discover(
+            &DiscoveryRequest {
+                root: second_uri,
+                policy: DiscoveryPolicy {
+                    max_items: 10,
+                    max_total_bytes: 1_000_000,
+                    max_record_bytes: 1_000_000,
+                    excluded_prefixes: Vec::new(),
+                    allowed_media_types: [MediaType::new("text/x-rust")?].into_iter().collect(),
+                    allow_user_broadening: false,
+                    follow_internal_symlinks: false,
+                    secret_patterns: Vec::new(),
+                },
+                include_overrides: BTreeSet::new(),
+            },
+            &context,
+        )?;
+        assert_ne!(
+            snapshot.snapshot.snapshot_id,
+            second.snapshot(None, &context)?.snapshot.snapshot_id
+        );
         Ok(())
     }
 

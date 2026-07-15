@@ -45,12 +45,13 @@ type ClientOptions struct {
 
 // Client is a goroutine-safe CIGAR v1 HTTP client.
 type Client struct {
-	baseURL        *url.URL
-	bearerToken    string
-	tokenProvider  TokenProvider
-	defaultTimeout time.Duration
-	maxAttempts    int
-	httpClient     *http.Client
+	baseURL               *url.URL
+	bearerToken           string
+	tokenProvider         TokenProvider
+	authorizationRequired bool
+	defaultTimeout        time.Duration
+	maxAttempts           int
+	httpClient            *http.Client
 }
 
 // NewClient validates transport security and returns a client.
@@ -69,6 +70,9 @@ func NewClient(options ClientOptions) (*Client, error) {
 	}
 	if baseURL.Scheme == "http" && (!loopback || !options.AllowInsecureLoopback) {
 		return nil, &ValidationError{Message: "cleartext HTTP requires explicit loopback opt-in"}
+	}
+	if baseURL.Scheme == "https" && options.BearerToken == "" && options.TokenProvider == nil {
+		return nil, &ValidationError{Message: "remote HTTPS requires an explicit bearer source"}
 	}
 	if options.BearerToken != "" && options.TokenProvider != nil {
 		return nil, &ValidationError{Message: "configure one bearer source"}
@@ -108,12 +112,13 @@ func NewClient(options ClientOptions) (*Client, error) {
 	}
 	baseURL.Path = ""
 	return &Client{
-		baseURL:        baseURL,
-		bearerToken:    options.BearerToken,
-		tokenProvider:  options.TokenProvider,
-		defaultTimeout: timeout,
-		maxAttempts:    attempts,
-		httpClient:     httpClient,
+		baseURL:               baseURL,
+		bearerToken:           options.BearerToken,
+		tokenProvider:         options.TokenProvider,
+		authorizationRequired: baseURL.Scheme == "https",
+		defaultTimeout:        timeout,
+		maxAttempts:           attempts,
+		httpClient:            httpClient,
 	}, nil
 }
 
@@ -397,6 +402,9 @@ func (client *Client) applyHeaders(
 			return &TransportError{Message: "bearer token provider failed", Cause: err}
 		}
 		token = resolved
+	}
+	if client.authorizationRequired && token == "" {
+		return &ValidationError{Message: "remote HTTPS requires a non-empty bearer credential"}
 	}
 	if token != "" {
 		if !boundedVisibleASCII(token, 8192) {

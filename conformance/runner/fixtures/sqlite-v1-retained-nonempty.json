@@ -1,0 +1,138 @@
+{
+  "schema_version": "cigar.sqlite-retained-v1-fixture.v1",
+  "revision": 7,
+  "tenant_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894",
+  "lineage_head_version_id": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "atoms": [
+    {
+      "schema_version": "cigar.atom.v1",
+      "atom_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7892",
+      "lineage_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+      "version_id": "12204444444444444444444444444444444444444444444444444444444444444444",
+      "content_digest": "12207777777777777777777777777777777777777777777777777777777777777777",
+      "kind": "documentation",
+      "payload": {
+        "type": "blob",
+        "value": {
+          "digest": "12207777777777777777777777777777777777777777777777777777777777777777",
+          "size_bytes": 65536,
+          "media_type": "application/octet-stream"
+        }
+      },
+      "source": {
+        "uri": "file:///fixture/blob.bin",
+        "revision": "retained-v1",
+        "snapshot_digest": "12206666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "scope": {
+        "tenant_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894",
+        "project_ids": [
+          "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895"
+        ]
+      },
+      "temporal": {
+        "valid_from": "2026-07-10T00:00:00Z",
+        "observed_at": "2026-07-10T00:00:01Z"
+      },
+      "governance": {
+        "classification": "internal",
+        "allowed_purposes": [
+          "coding"
+        ],
+        "processor_constraints": [],
+        "instruction_authority": "data"
+      },
+      "quality": {
+        "confidence": 900000,
+        "coverage": 800000,
+        "authority": 1
+      },
+      "retrieval": {
+        "exact_terms": [],
+        "lexical_enabled": false,
+        "embedding_eligible": false
+      },
+      "lifecycle": "superseded",
+      "superseded_by": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "extensions": {}
+    },
+    {
+      "schema_version": "cigar.atom.v1",
+      "atom_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7896",
+      "lineage_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7893",
+      "version_id": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "content_digest": "12208888888888888888888888888888888888888888888888888888888888888888",
+      "kind": "documentation",
+      "payload": {
+        "type": "inline_text",
+        "value": "safe retained v1 fixture"
+      },
+      "source": {
+        "uri": "file:///fixture/README.md",
+        "revision": "retained-v1",
+        "snapshot_digest": "12209999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "scope": {
+        "tenant_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7894",
+        "project_ids": [
+          "01890f47-8e7d-7b42-a1d2-3c4d5e6f7895"
+        ]
+      },
+      "temporal": {
+        "valid_from": "2026-07-10T00:00:00Z",
+        "observed_at": "2026-07-10T00:00:02Z"
+      },
+      "governance": {
+        "classification": "internal",
+        "allowed_purposes": [
+          "coding"
+        ],
+        "processor_constraints": [],
+        "instruction_authority": "data"
+      },
+      "quality": {
+        "confidence": 950000,
+        "coverage": 900000,
+        "authority": 2
+      },
+      "retrieval": {
+        "exact_terms": [
+          "cigar"
+        ],
+        "lexical_enabled": true,
+        "embedding_eligible": false
+      },
+      "lifecycle": "active",
+      "extensions": {}
+    }
+  ],
+  "edges": [
+    {
+      "schema_version": "cigar.edge.v1",
+      "edge_id": "01890f47-8e7d-7b42-a1d2-3c4d5e6f7891",
+      "from_version": "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "to_version": "12204444444444444444444444444444444444444444444444444444444444444444",
+      "kind": "depends_on",
+      "provenance_digest": "12203333333333333333333333333333333333333333333333333333333333333333",
+      "lifecycle": "active",
+      "extensions": {}
+    }
+  ],
+  "expected": {
+    "semantic_root": "1220f8d82461643a71e9f930d3ed4e1272e9d53c5679b74283f238b3290bb72a1061",
+    "residual_checksum": "1220e1b99c3fb9649d4a07b4fba8c9ee2f03a4caa0c3e7ce4968b7cb9b69acee9b69",
+    "catalog_root": "1220567cbb2cba860c68def823c56febab110d79f3cf51e4327a011f059db3055f0e",
+    "atom_count": 2,
+    "edge_count": 1,
+    "open_lineage_count": 1,
+    "referenced_blob_bytes": 65536,
+    "root_bucket_count": 3,
+    "atom_record_checksums": {
+      "12204444444444444444444444444444444444444444444444444444444444444444": "1220186a933ffd38b31ff3238b8a379fd647c34aca5c6fe17771aa4955ae32287d08",
+      "1220bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "12203f64e57471675a9f25af4bca645a79ae7f2354ea5c3531922dae739e2ef1a9c6"
+    },
+    "edge_record_checksums": {
+      "01890f47-8e7d-7b42-a1d2-3c4d5e6f7891": "1220c7d56ddc8b23da5c33dfca335fae5c6096e74a94e565470b568c0bc9e7c22ee8"
+    }
+  }
+}

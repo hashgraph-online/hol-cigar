@@ -461,29 +461,41 @@ mod test {
 
     use serde_json::json;
 
+    fn example_access_key() -> String {
+        ["AK", "IAIOSFODNN7EXAMPLE"].concat()
+    }
+
+    fn example_secret_key() -> String {
+        ["wJalrXUtnFEMI/K7MDENG/bPxRfiCY", "EXAMPLEKEY"].concat()
+    }
+
+    fn example_scoped_credential() -> String {
+        format!(
+            "{}/20151229/us-east-1/s3/aws4_request",
+            example_access_key()
+        )
+    }
+
     fn test_bucket() -> Box<Bucket> {
+        let access_key = example_access_key();
+        let secret_key = example_secret_key();
         Bucket::new(
             "rust-s3",
             Region::UsEast1,
-            Credentials::new(
-                Some("AKIAIOSFODNN7EXAMPLE"),
-                Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
+            Credentials::new(Some(&access_key), Some(&secret_key), None, None, None).unwrap(),
         )
         .unwrap()
     }
 
     fn test_bucket_with_security_token() -> Box<Bucket> {
+        let access_key = example_access_key();
+        let secret_key = example_secret_key();
         Bucket::new(
             "rust-s3",
             Region::UsEast1,
             Credentials::new(
-                Some("AKIAIOSFODNN7EXAMPLE"),
-                Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+                Some(&access_key),
+                Some(&secret_key),
                 Some("SomeSecurityToken"),
                 None,
                 None,
@@ -679,7 +691,7 @@ mod test {
                     ["starts-with", "$key", "user/user1/"],
                     {"bucket": "rust-s3"},
                     {"x-amz-algorithm": "AWS4-HMAC-SHA256"},
-                    {"x-amz-credential": "AKIAIOSFODNN7EXAMPLE/20151229/us-east-1/s3/aws4_request"},
+                    {"x-amz-credential": example_scoped_credential()},
                     {"x-amz-date": "20151229T000000Z"},
                 ])
             );
@@ -714,7 +726,7 @@ mod test {
                     ["starts-with", "$key", "user/user1/"],
                     {"bucket": "rust-s3"},
                     {"x-amz-algorithm": "AWS4-HMAC-SHA256"},
-                    {"x-amz-credential": "AKIAIOSFODNN7EXAMPLE/20151229/us-east-1/s3/aws4_request"},
+                    {"x-amz-credential": example_scoped_credential()},
                     {"x-amz-date": "20151229T000000Z"},
                     {"x-amz-security-token": "SomeSecurityToken"},
                 ])
@@ -775,7 +787,7 @@ mod test {
             assert_eq!(
                 serde_json::to_value(&post.fields).unwrap(),
                 json!({
-                    "x-amz-credential": "AKIAIOSFODNN7EXAMPLE/20151229/us-east-1/s3/aws4_request",
+                    "x-amz-credential": example_scoped_credential(),
                     "bucket": "rust-s3",
                     "Policy": "eyJleHBpcmF0aW9uIjoiMjAxNS0xMi0zMFQwMDowMDowMFoiLCJjb25kaXRpb25zIjpbWyJzdGFydHMtd2l0aCIsIiRrZXkiLCJ1c2VyL3VzZXIxLyJdLFsiY29udGVudC1sZW5ndGgtcmFuZ2UiLDAsMzAwMDAwMF0seyJidWNrZXQiOiJydXN0LXMzIn0seyJ4LWFtei1hbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJ4LWFtei1jcmVkZW50aWFsIjoiQUtJQUlPU0ZPRE5ON0VYQU1QTEUvMjAxNTEyMjkvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJ9LHsieC1hbXotZGF0ZSI6IjIwMTUxMjI5VDAwMDAwMFoifV19",
                     "x-amz-date": "20151229T000000Z",

@@ -3,6 +3,8 @@ name: cigar-shared-development
 services:
   postgres:
     image: postgres:18.2-bookworm
+    entrypoint: ["/bin/bash", "/cigar/postgres-tls-entrypoint.sh"]
+    command: ["postgres"]
     environment:
       POSTGRES_DB: cigar
       POSTGRES_USER: cigar_migrator
@@ -17,6 +19,8 @@ services:
     volumes:
       - postgres-shared:/var/lib/postgresql
       - ./postgres-shared-init.sql:/docker-entrypoint-initdb.d/10-cigar-roles.sql:ro
+      - ./postgres-shared-post-migration.sql:/cigar/postgres-shared-post-migration.sql:ro
+      - ./postgres-tls-entrypoint.sh:/cigar/postgres-tls-entrypoint.sh:ro
     security_opt:
       - no-new-privileges:true
 

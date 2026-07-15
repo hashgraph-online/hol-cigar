@@ -4,6 +4,7 @@ mod application;
 mod auth;
 mod authority;
 mod catalog_context_application;
+mod compiler_control_plane;
 mod composition;
 mod config;
 mod domain_identity;
@@ -21,6 +22,8 @@ mod production_application;
 mod production_authority;
 mod production_bootstrap;
 mod production_effect_authentication;
+#[cfg(target_os = "macos")]
+mod production_effect_transport;
 mod production_effects;
 mod production_index;
 mod production_runtime;
@@ -28,6 +31,8 @@ mod production_sources;
 mod production_store;
 #[cfg(test)]
 mod production_transport_differential;
+#[cfg(target_os = "macos")]
+mod production_vector;
 mod replay_jobs;
 mod repository_production_checks;
 mod server;
@@ -56,11 +61,15 @@ pub use production_application::*;
 pub use production_authority::*;
 pub use production_bootstrap::*;
 pub use production_effect_authentication::*;
+#[cfg(target_os = "macos")]
+pub use production_effect_transport::*;
 pub use production_effects::*;
 pub use production_index::*;
 pub use production_runtime::*;
 pub use production_sources::*;
 pub use production_store::*;
+#[cfg(target_os = "macos")]
+pub use production_vector::*;
 pub use replay_jobs::*;
 pub use repository_production_checks::*;
 pub use server::*;

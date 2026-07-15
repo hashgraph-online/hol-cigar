@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/development-protocol-baseline.v1.schema.json",
+  "title": "CIGAR development protocol drift baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "baseline_id",
+    "lifecycle",
+    "execution_scope",
+    "schema_binding",
+    "semantic_contract",
+    "binding_inventory",
+    "fail_closed"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.development-protocol-baseline.v1"},
+    "baseline_id": {"const": "cigar.development.protocol-baseline.v1"},
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "purpose", "release_claimed", "candidate_frozen"],
+      "properties": {
+        "state": {"const": "development"},
+        "purpose": {"const": "drift-detection-only"},
+        "release_claimed": {"const": false},
+        "candidate_frozen": {"const": false}
+      }
+    },
+    "execution_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_os",
+        "host_arch",
+        "target_triple",
+        "cross_platform_qualification_claimed"
+      ],
+      "properties": {
+        "host_os": {"const": "macos"},
+        "host_arch": {"const": "arm64"},
+        "target_triple": {"const": "aarch64-apple-darwin"},
+        "cross_platform_qualification_claimed": {"const": false}
+      }
+    },
+    "schema_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "packaging/development/schemas/protocol-baseline.v1.schema.json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "semantic_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_abi",
+        "protocol_min",
+        "protocol_max",
+        "operation_registry",
+        "nominal_payload_registry",
+        "error_registry",
+        "sdk_capability_registry",
+        "vectors"
+      ],
+      "properties": {
+        "context_abi": {"const": "cigar.context.v1"},
+        "protocol_min": {"const": "1.0"},
+        "protocol_max": {"const": "1.x"},
+        "operation_registry": {
+          "allOf": [
+            {"$ref": "#/$defs/registry"},
+            {"properties": {"count": {"const": 45}}}
+          ]
+        },
+        "nominal_payload_registry": {
+          "allOf": [
+            {"$ref": "#/$defs/registry"},
+            {"properties": {"count": {"const": 70}}}
+          ]
+        },
+        "error_registry": {
+          "allOf": [
+            {"$ref": "#/$defs/registry"},
+            {"properties": {"count": {"const": 34}}}
+          ]
+        },
+        "sdk_capability_registry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sdks", "operation_parity", "nominal_payload_parity"],
+          "properties": {
+            "sdks": {"const": ["go", "python", "rust", "typescript"]},
+            "operation_parity": {"const": true},
+            "nominal_payload_parity": {"const": true}
+          }
+        },
+        "vectors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "canonical_valid",
+            "canonical_invalid",
+            "canonical_differential_records",
+            "conformance_cases",
+            "conformance_profiles",
+            "replay_retained_inputs",
+            "replay_retained_artifacts"
+          ],
+          "properties": {
+            "canonical_valid": {"const": 348},
+            "canonical_invalid": {"const": 15},
+            "canonical_differential_records": {"const": 100000},
+            "conformance_cases": {"const": 24},
+            "conformance_profiles": {"const": 8},
+            "replay_retained_inputs": {"const": 3},
+            "replay_retained_artifacts": {"const": 11}
+          }
+        }
+      }
+    },
+    "binding_inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "total_bytes", "path_inventory_sha256", "groups"],
+      "properties": {
+        "file_count": {"const": 82},
+        "total_bytes": {"type": "integer", "minimum": 82, "maximum": 33554432},
+        "path_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "groups": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "protocol-authorities"}, "file_count": {"const": 7}, "files": {"minItems": 7, "maxItems": 7}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "generated-json-schemas"}, "file_count": {"const": 42}, "files": {"minItems": 42, "maxItems": 42}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "generated-error-registry"}, "file_count": {"const": 3}, "files": {"minItems": 3, "maxItems": 3}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "generated-api-contracts"}, "file_count": {"const": 5}, "files": {"minItems": 5, "maxItems": 5}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "interface-projections"}, "file_count": {"const": 6}, "files": {"minItems": 6, "maxItems": 6}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "generated-wire-bindings"}, "file_count": {"const": 11}, "files": {"minItems": 11, "maxItems": 11}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "sdk-capability-mappings"}, "file_count": {"const": 4}, "files": {"minItems": 4, "maxItems": 4}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "generated-schema-fixtures"}, "file_count": {"const": 1}, "files": {"minItems": 1, "maxItems": 1}}}]},
+            {"allOf": [{"$ref": "#/$defs/group"}, {"properties": {"id": {"const": "protocol-vectors"}, "file_count": {"const": 3}, "files": {"minItems": 3, "maxItems": 3}}}]}
+          ],
+          "items": false
+        }
+      }
+    },
+    "fail_closed": {"const": true}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "id_inventory_sha256"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1},
+        "id_inventory_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9._/-]+$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "file_count", "files"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9-]+$"},
+        "file_count": {"type": "integer", "minimum": 1, "maximum": 82},
+        "files": {"type": "array", "minItems": 1, "maxItems": 82, "items": {"$ref": "#/$defs/binding"}}
+      }
+    }
+  }
+}

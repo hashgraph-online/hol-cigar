@@ -33,6 +33,9 @@
   "content_scan": true,
   "content_scan_exemptions": [
     {"pattern": "crates/cigar-catalog/src/secret.rs", "reason": "audited synthetic secret-scanner fixtures"},
+    {"pattern": "crates/cigar-cli/src/beta_state_compat.rs", "reason": "audited synthetic legacy macOS path fixture", "findings": ["macos-developer-path"]},
+    {"pattern": "crates/cigar-cli/tests/fixtures/beta-state-v0.1.0-beta.1/*.json", "reason": "audited synthetic legacy macOS state fixtures", "findings": ["macos-developer-path"]},
+    {"pattern": "crates/cigar-daemon/src/telemetry.rs", "reason": "audited synthetic telemetry redaction canary", "findings": ["private-key"]},
     {"pattern": "scripts/release/release_lib.py", "reason": "the scanner contains its own detection signatures"},
     {"pattern": "vendor/**", "reason": "pinned upstream source contains documented example credentials"}
   ]

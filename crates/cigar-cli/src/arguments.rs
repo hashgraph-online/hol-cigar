@@ -377,6 +377,8 @@ pub(crate) fn parse(
     if (options.security || options.deep) && command.path() != "doctor" {
         return Err(CliError::invalid_command());
     }
+    #[cfg(feature = "full")]
+    validate_scoped_options(command, &options)?;
     if options.width.is_none() {
         options.width = terminal.width.filter(|width| (20..=1_000).contains(width));
     }
@@ -385,6 +387,20 @@ pub(crate) fn parse(
         positionals,
         options,
     })
+}
+
+#[cfg(feature = "full")]
+fn validate_scoped_options(command: CommandSpec, options: &GlobalOptions) -> Result<(), CliError> {
+    if (options.input.is_some() && !command.accepts_input())
+        || (options.idempotency_key.is_some() && !command.accepts_idempotency_key())
+        || (options.expected_revision.is_some() && !command.accepts_expected_revision())
+        || ((options.page_cursor.is_some() || options.page_size.is_some())
+            && !command.accepts_pagination())
+    {
+        Err(CliError::invalid_command())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(feature = "full")]
@@ -407,6 +423,7 @@ fn group_requires_subcommand(value: &str) -> bool {
             | "mcp"
             | "plugin"
             | "release"
+            | "state"
     )
 }
 
@@ -618,6 +635,37 @@ mod tests {
             &["status", "--secret-token", "do-not-echo"][..],
         ] {
             assert!(parse(args(values), TerminalContext::default()).is_err());
+        }
+    }
+
+    #[test]
+    fn operation_scoped_options_are_never_silently_ignored() {
+        for values in [
+            &["status", "--input", "/tmp/request.json"][..],
+            &["init", "--idempotency-key", "ignored-key"][..],
+            &["source", "list", "--expected-revision", "4"][..],
+            &["doctor", "--page-size", "10"][..],
+            &["catalog", "query", "--page-cursor", "ignored-cursor"][..],
+        ] {
+            assert!(
+                parse(args(values), TerminalContext::default()).is_err(),
+                "scoped option unexpectedly accepted for {values:?}"
+            );
+        }
+
+        for values in [
+            &["catalog", "query", "--input", "/tmp/request.json"][..],
+            &["context", "compile", "--idempotency-key", "compile-key"][..],
+            &["effect", "dispatch", "effect-1", "--expected-revision", "4"][..],
+            &["space", "log", "space-1", "--page-size", "10"][..],
+            &["effect", "list", "--page-cursor", "cursor"][..],
+            &["policy", "check", "--input", "/tmp/request.json"][..],
+            &["gc", "plan", "plan.json", "--input", "/tmp/policy.json"][..],
+        ] {
+            assert!(
+                parse(args(values), TerminalContext::default()).is_ok(),
+                "valid scoped option rejected for {values:?}"
+            );
         }
     }
 }

@@ -41,6 +41,51 @@ project_state_directory = "/absolute/project/.cigar"
 
 Unknown fields and any target other than `embedded` fail closed.
 
+### Frozen beta-state inspection and transition
+
+The full CLI can validate an owner-only `0.1.0-beta.1` `state.json` without importing it:
+
+```console
+cigar state inspect-beta /absolute/path/to/state.json --local --output json
+```
+
+This command accepts exactly one bounded regular file, rejects symlinks, hard links, unsafe
+permissions, duplicate JSON keys, unknown fields, malformed identifiers, unsafe stored paths, and
+invalid project links. Its content-free result binds the exact input with SHA-256 and reports only
+the generation and entry counts; it never emits stored identifiers or paths and never writes the
+input.
+
+On macOS, an operator can explicitly import those administrative records into a new full-only state
+directory. The configured `project_state_directory` and backup directory must not exist, and both
+parents must pass the owner and no-symlink checks. Review with `--dry-run`, then commit with `--yes`:
+
+```console
+cigar state import-beta /absolute/beta/state.json /absolute/new-transition-backup \
+  --config /absolute/cli.toml --local --dry-run
+cigar state import-beta /absolute/beta/state.json /absolute/new-transition-backup \
+  --config /absolute/cli.toml --local --yes
+```
+
+Import first atomically publishes an owner-private backup containing the exact source bytes and a
+content-free manifest, synchronizes it, reopens it without following symlinks, and verifies every
+digest and semantic count. Only then does it atomically publish the new state directory. The target
+uses `cigar.cli-administration.imported-beta.v1`, so the frozen beta decoder rejects in-place reuse;
+identifiers, paths, links, active selections, and generation are otherwise preserved exactly.
+Retries succeed only when the already-published backup and target are byte-identical.
+
+Recovery verifies the backup again and restores the exact beta bytes only into a distinct new empty
+directory. It never rewrites the configured active full directory:
+
+```console
+cigar state restore-beta /absolute/new-transition-backup /absolute/new-beta-recovery \
+  --config /absolute/cli.toml --local --yes
+```
+
+Transition output is content-free and does not contain any supplied path or stored identifier.
+Abandoned random staging directories from an actual process or machine crash are never trusted or
+automatically executed; operators may remove them after confirming they are not a final backup or
+state directory. This source-tested boundary does not claim installed crash/power-loss qualification.
+
 ## Configuration
 
 CLI configuration precedence is compiled defaults, `/etc/cigar/cli.toml`, user configuration, project `.cigar/cli.toml`, explicit `--config`, `CIGAR_*` environment overrides, then CLI flags. `--explain-config` reports the winning source for every field and redacts authorization material. Because project configuration is loaded implicitly, it cannot select a credential file or retarget an inherited credential; using a project-sourced HTTP endpoint with authorization requires an explicit config, environment, or CLI credential override.
@@ -52,7 +97,43 @@ daemon_config = "/absolute/path/to/cigard.toml"
 project_state_directory = "/absolute/project/.cigar"
 ```
 
-For local IPC, select exactly one of `local_socket`, `windows_named_pipe`, or `local_endpoint`. `local_endpoint` additionally requires `authorization_file`. Remote endpoints must be HTTPS.
+For local IPC, select exactly one of `local_socket`, `windows_named_pipe`, or `local_endpoint`. `local_endpoint` additionally requires `authorization_file`. Remote endpoints require both HTTPS and an explicit `authorization_file`.
+
+## Governed full-profile embedded workflow
+
+The default `full` build can execute the local catalog and context pipeline without starting
+`cigard` or opening a socket. Select `target = "embedded"` and provide an explicit validated local
+daemon configuration. That production configuration—not `cigar source add`—owns the approved
+filesystem/Git source registry, tenant/project authority, protected policy, encrypted keystore,
+SQLite database, and blob roots. Every command reconstructs the production application over the
+same durable state, invokes the frozen operation through `ProductionFacade`, then performs ordered
+shutdown.
+
+The offline sequence is:
+
+1. `cigar source refresh --input discover.json` previews an already approved source and returns the
+   exact `plan_digest` without returning source contents.
+2. `cigar ingest --input ingest.json --yes` binds that digest, rechecks the source snapshot, and
+   atomically publishes atoms, provenance, lineage, and index work.
+3. `cigar catalog query --input query.json` returns authorized version identities only.
+4. `cigar context plan --input plan.json --dry-run` previews a deterministic governed plan; repeat
+   with `--yes` to persist its bundle and manifest.
+5. `cigar context compile`, `explain`, `revalidate`, `materialize`, and `diff` consume retained exact
+   identities. Each state-changing operation accepts an explicit idempotency key for restart-safe
+   replay.
+
+Ingestion handles only bounded internal compare-and-swap conflicts, rechecking the retained
+discovery plan on every attempt. Strong reads use the tenant's catalog outbox causal watermark
+rather than unrelated global service-record revisions, while all writes still compare against the
+global store revision. The macOS source-tree process test runs this sequence in separate processes,
+checks content-free policy denial and provenance, and proves that embedded mode never binds the
+configured socket. Packaged installed-byte qualification remains a separate open release gate.
+
+Operation inputs are the strict generated request DTOs documented by the JSON schemas. The embedded
+target accepts no endpoint or authorization file, performs no remote fetch, and opens no listener.
+An authority or policy denial occurs before catalog-derived body reads and is returned as a stable,
+content-free public error. This full-profile workflow does not change the separately compiled
+`beta-embedded` command table, help text, dependency graph, or capability policy.
 
 ## Operation input and safety
 
@@ -64,9 +145,9 @@ JSON output is one versioned line on stdout. Human progress appears only on an i
 
 Administrative source/project/focus state is written atomically beneath `project_state_directory`.
 
-`cigar backup create <archive>` uses the explicit local daemon configuration to take a consistent SQLite snapshot, inventory encrypted blobs and key references, sign the canonical manifest with the single unambiguous active production operator, and verify the published archive. `cigar backup verify <archive>` performs offline signature, checksum, schema, revision, and database-integrity checks against the signer identity embedded in the archive. Retired signing keys remain valid for signatures made during their active lifetime, while current principal and key revocations fail closed. `cigar backup restore <archive> <empty-target>` applies the same current trust policy, verifies first, and atomically restores only into a nonexistent or exactly empty target.
+`cigar backup create <archive>` uses the explicit local daemon configuration to take a consistent SQLite snapshot, inventory encrypted blobs and key references, and capture the external monotonic effect checkpoint while the SQLite writer exclusion and checkpoint lock are both held. The single unambiguous active production operator signs the complete format-two inventory, and the command verifies both cryptographic integrity and the exact one-to-one database/checkpoint relationship after publication. `cigar backup verify <archive>` repeats those checks against current trust policy. Retired signing keys remain valid for signatures made during their active lifetime, while current principal and key revocations fail closed. `cigar backup restore <archive> <empty-target>` verifies first, requires the archived checkpoint to equal current external truth exactly, holds that lock through restore, and atomically restores only into a nonexistent or exactly empty target. It rejects legacy format-one, newer, older, or substituted checkpoint state and never rewrites the live checkpoint; stop effect writers before activating the recovery target.
 
-`cigar gc plan` evaluates repository-owned live roots and reports tenant-qualified encrypted-blob candidates plus retention, legal-hold, and backup blockers. `cigar gc run` requires `--yes` and a strict input document such as:
+`cigar gc plan <new-plan.json> --input <gc-policy.json> --yes` evaluates repository-owned live roots under a locked SQLite revision and creates an owner-private, no-clobber signed plan. The signature binds the exact ordered tenant-qualified candidate set, candidate root, repository revision, file bound, retention decision, legal-hold decision, and backup-completeness decision. `cigar gc run <plan.json> --yes` verifies the current production trust policy, rejects a stale revision or any same-revision candidate drift before the first deletion, durably marks the exact database-and-plan execution boundary, and deletes only the authenticated candidates. Interrupted retries require that exact owner-private marker; newly discovered orphans are never substituted into the signed set. A policy document has this strict form:
 
 ```json
 {"schema_version":"cigar.gc-policy.v1","retention_satisfied":true,"legal_hold":false,"backup_complete":true,"max_files":1000}

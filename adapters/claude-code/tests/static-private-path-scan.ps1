@@ -32,7 +32,7 @@ if ($null -ne $hooks.hooks.PSObject.Properties["WorktreeCreate"]) {
 foreach ($property in $hooks.hooks.PSObject.Properties) {
     foreach ($group in @($property.Value)) {
         foreach ($handler in @($group.hooks)) {
-            if ($handler.type -ne "command" -or $handler.command -ne "cigar-claude-hook") {
+            if ($handler.type -ne "command" -or $handler.command -ne '${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook') {
                 Fail "non-command or shell-indirect hook: $($property.Name)"
             }
             if (-not (@($handler.args) -contains '${CLAUDE_PLUGIN_ROOT}') -or -not (@($handler.args) -contains '${CLAUDE_PLUGIN_DATA}')) {
@@ -43,7 +43,7 @@ foreach ($property in $hooks.hooks.PSObject.Properties) {
 }
 
 $mcp = Get-Content -Raw (Join-Path $Root ".mcp.json") | ConvertFrom-Json
-if ($mcp.mcpServers.cigar.command -ne "cigar-mcp") {
+if ($mcp.mcpServers.cigar.command -ne '${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp') {
     Fail "MCP must invoke only the signed installed cigar-mcp binary"
 }
 Write-Output "CIGAR Claude plugin PowerShell private-path scan passed"

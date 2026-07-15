@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/spec/compatibility/compatibility-policy-v1.schema.json",
+  "title": "CIGAR development protocol compatibility policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "policy_id",
+    "policy_schema_sha256",
+    "status",
+    "claim_scope",
+    "protocol_line",
+    "directions",
+    "domains"
+  ],
+  "properties": {
+    "$schema": { "const": "compatibility-policy-v1.schema.json" },
+    "policy_id": { "const": "cigar.protocol-compatibility-policy.v1" },
+    "policy_schema_sha256": { "$ref": "#/$defs/sha256" },
+    "status": { "const": "development-source-policy" },
+    "claim_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "development_source_only",
+        "release_frozen",
+        "migration_qualified",
+        "cross_platform_qualified"
+      ],
+      "properties": {
+        "development_source_only": { "const": true },
+        "release_frozen": { "const": false },
+        "migration_qualified": { "const": false },
+        "cross_platform_qualified": { "const": false }
+      }
+    },
+    "protocol_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor", "protocol_min", "protocol_max", "context_abi"],
+      "properties": {
+        "major": { "const": 1 },
+        "minor": { "const": 0 },
+        "protocol_min": { "const": "1.0" },
+        "protocol_max": { "const": "1.x" },
+        "context_abi": { "const": "cigar.context.v1" }
+      }
+    },
+    "directions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backward_reader", "forward_reader", "reader_definition", "writer_definition"],
+      "properties": {
+        "backward_reader": { "const": "candidate-reader-accepts-all-baseline-writer-output" },
+        "forward_reader": { "const": "baseline-reader-accepts-candidate-writer-output" },
+        "reader_definition": { "const": "accepted-input-language-and-observable-semantics" },
+        "writer_definition": { "const": "possible-output-language-not-merely-current-fixtures" }
+      }
+    },
+    "domains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_schemas",
+        "operations",
+        "interface_projections",
+        "errors",
+        "payloads",
+        "cursor_stream",
+        "extensions",
+        "claude_plugin",
+        "stored_records"
+      ],
+      "properties": {
+        "public_schemas": { "$ref": "#/$defs/publicSchemas" },
+        "operations": { "$ref": "#/$defs/operations" },
+        "interface_projections": { "$ref": "#/$defs/interfaceProjections" },
+        "errors": { "$ref": "#/$defs/errors" },
+        "payloads": { "$ref": "#/$defs/payloads" },
+        "cursor_stream": { "$ref": "#/$defs/cursorStream" },
+        "extensions": { "$ref": "#/$defs/extensions" },
+        "claude_plugin": { "$ref": "#/$defs/claudePlugin" },
+        "stored_records": { "$ref": "#/$defs/storedRecords" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![-/])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\u0000-\\u001f\\u007f])[^/]+(?:/[^/]+)*$"
+    },
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "total_bytes", "inventory_sha256"],
+      "properties": {
+        "file_count": { "$ref": "#/$defs/positiveInteger" },
+        "total_bytes": { "$ref": "#/$defs/positiveInteger" },
+        "inventory_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "additive_minor",
+        "breaking_major",
+        "candidate_reader_of_baseline_writer",
+        "baseline_reader_of_candidate_writer"
+      ],
+      "properties": {
+        "additive_minor": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        },
+        "breaking_major": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        },
+        "candidate_reader_of_baseline_writer": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "baseline_reader_of_candidate_writer": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "publicSchemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "manifest_path", "path_prefix", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "manifest_path": { "const": "schemas/generated-manifest.json" },
+        "path_prefix": { "const": "schemas/" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "path", "service_count", "operation_count", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "path": { "const": "spec/api/operations-v1.json" },
+        "service_count": { "$ref": "#/$defs/positiveInteger" },
+        "operation_count": { "$ref": "#/$defs/positiveInteger" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "interfaceProjections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "source_path", "paths", "cli_mapping_count", "mcp_mapping_count", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "source_path": { "const": "spec/api/interface-projections-v1.json" },
+        "paths": { "$ref": "#/$defs/paths" },
+        "cli_mapping_count": { "$ref": "#/$defs/positiveInteger" },
+        "mcp_mapping_count": { "$ref": "#/$defs/positiveInteger" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "paths", "error_count", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "paths": { "$ref": "#/$defs/paths" },
+        "error_count": { "$ref": "#/$defs/positiveInteger" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "payloads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding",
+        "paths",
+        "operation_count",
+        "envelope_field_count",
+        "payload_type_count",
+        "rules"
+      ],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "paths": { "$ref": "#/$defs/paths" },
+        "operation_count": { "$ref": "#/$defs/positiveInteger" },
+        "envelope_field_count": { "$ref": "#/$defs/positiveInteger" },
+        "payload_type_count": { "$ref": "#/$defs/positiveInteger" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "cursorStream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "paths", "cursor_wire_version", "stream_operations", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "paths": { "$ref": "#/$defs/paths" },
+        "cursor_wire_version": { "const": 1 },
+        "stream_operations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" }
+        },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "paths", "abi_package", "manifest_schema", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "paths": { "$ref": "#/$defs/paths" },
+        "abi_package": { "const": "cigar:extension@1.0.0" },
+        "manifest_schema": { "const": "cigar.extension-manifest.v1" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "claudePlugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "path", "rules"],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "path": { "const": "adapters/claude-code/compatibility.json" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    },
+    "storedRecords": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding",
+        "migration_paths",
+        "codec_paths",
+        "sqlite_migration_count",
+        "postgres_migration_count",
+        "rules"
+      ],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "migration_paths": { "$ref": "#/$defs/paths" },
+        "codec_paths": { "$ref": "#/$defs/paths" },
+        "sqlite_migration_count": { "$ref": "#/$defs/positiveInteger" },
+        "postgres_migration_count": { "$ref": "#/$defs/positiveInteger" },
+        "rules": { "$ref": "#/$defs/rules" }
+      }
+    }
+  }
+}

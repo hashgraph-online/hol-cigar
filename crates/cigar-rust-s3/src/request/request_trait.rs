@@ -460,7 +460,7 @@ pub trait Request {
         let url = Url::parse(&format!(
             "{}{}{}",
             self.url()?,
-            &signing::authorization_query_params_no_sig(
+            signing::authorization_query_params_no_sig(
                 &self.bucket().access_key().await?.unwrap_or_default(),
                 &self.datetime(),
                 &self.bucket().region(),
@@ -468,7 +468,7 @@ pub trait Request {
                 custom_headers,
                 token.as_ref()
             )?,
-            &signing::flatten_queries(custom_queries)?,
+            signing::flatten_queries(custom_queries)?,
         ))?;
 
         Ok(url)
@@ -490,7 +490,7 @@ pub trait Request {
         let url = Url::parse(&format!(
             "{}{}{}",
             self.url()?,
-            &signing::authorization_query_params_no_sig(
+            signing::authorization_query_params_no_sig(
                 &self.bucket().access_key()?.unwrap_or_default(),
                 &self.datetime(),
                 &self.bucket().region(),
@@ -498,7 +498,7 @@ pub trait Request {
                 custom_headers,
                 token.as_ref()
             )?,
-            &signing::flatten_queries(custom_queries)?,
+            signing::flatten_queries(custom_queries)?,
         ))?;
 
         Ok(url)
@@ -934,10 +934,7 @@ mod tests {
         // Create a stream that returns an error
         let chunks: Vec<Result<Bytes, S3Error>> = vec![
             Ok(Bytes::from("Some data")),
-            Err(S3Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Test error",
-            ))),
+            Err(S3Error::Io(std::io::Error::other("Test error"))),
         ];
 
         let stream = stream::iter(chunks);

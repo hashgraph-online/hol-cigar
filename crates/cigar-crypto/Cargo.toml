@@ -25,3 +25,6 @@ keyring.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 zeroize.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }

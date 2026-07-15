@@ -1,0 +1,246 @@
+{
+  "schema_version": "cigar.conformance.fault-registry.v1",
+  "adapter": {
+    "id": "cigar-conformance-faulty",
+    "source": "conformance/runner/src/bin/cigar-conformance-faulty.rs",
+    "source_sha256": "sha256:03abe3cbf494829d73e0d47ab9d799f944f720d157e5957102262c8d19ea75f0"
+  },
+  "faults": [
+    {
+      "id": "FAULT-ADAPTER-CRASH-001",
+      "mode": "crash",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"crash\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "first_required",
+        "diagnostic": "adapter_crash"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-FAULT-DETECTION-001",
+          "proof_test": "RUN-X001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-ESCAPE-001",
+      "mode": "escape",
+      "classification": "adversarial_probe",
+      "source_selector": "mode.contains(\"escape\")",
+      "detection": {
+        "kind": "isolation_blocked",
+        "case_scope": "first_required",
+        "diagnostic": null
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-ISOLATION-001",
+          "proof_test": "RUN-C001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-FLOOD-001",
+      "mode": "flood",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"flood\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "first_required",
+        "diagnostic": "output_limit"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-FAULT-DETECTION-001",
+          "proof_test": "RUN-X001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-MALFORMED-001",
+      "mode": "malformed",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"malformed\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "first_required",
+        "diagnostic": "malformed_response"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-RESULT-SCHEMA-001",
+          "proof_test": "RUN-X001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-SKIPPED-001",
+      "mode": "skipped",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"skipped\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "all_required",
+        "diagnostic": "malformed_response"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-catalog-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-CATALOG-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-compiler-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-COMPILER-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CORE-CANONICAL-V1",
+          "intended_requirement": "CONF-REQUIRED-NOSKIP-001",
+          "proof_test": "CONF-N001"
+        },
+        {
+          "profile": "cigar-effect-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-EFFECT-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-handoff-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-HANDOFF-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-replay-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-REPLAY-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-runtime-claude-code-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-RUNTIME-CLAUDE-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-service-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-SERVICE-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-STATEFUL-001",
+      "mode": "stateful",
+      "classification": "adversarial_probe",
+      "source_selector": "mode.contains(\"stateful\")",
+      "detection": {
+        "kind": "fresh_namespace",
+        "case_scope": "all_required",
+        "diagnostic": null
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-FRESH-NAMESPACE-001",
+          "proof_test": "RUN-X002"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-TIMEOUT-001",
+      "mode": "timeout",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"timeout\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "first_required",
+        "diagnostic": "timeout"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CONFORMANCE-RUNNER-V1",
+          "intended_requirement": "CONF-FAULT-DETECTION-001",
+          "proof_test": "RUN-X001"
+        }
+      ]
+    },
+    {
+      "id": "FAULT-ADAPTER-WRONG-001",
+      "mode": "wrong",
+      "classification": "injected_failure",
+      "source_selector": "mode.contains(\"wrong\")",
+      "detection": {
+        "kind": "case_failure",
+        "case_scope": "all_required",
+        "diagnostic": "public_result_mismatch"
+      },
+      "bindings": [
+        {
+          "profile": "cigar-catalog-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-CATALOG-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-compiler-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-COMPILER-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-core-v1",
+          "intended_invariant": "INV-CORE-CANONICAL-V1",
+          "intended_requirement": "VER-CANON-DIGEST-001",
+          "proof_test": "CONF-N001"
+        },
+        {
+          "profile": "cigar-effect-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-EFFECT-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-handoff-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-HANDOFF-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-replay-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-REPLAY-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-runtime-claude-code-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-RUNTIME-CLAUDE-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        },
+        {
+          "profile": "cigar-service-v1",
+          "intended_invariant": "INV-PRODUCTION-PROFILES-V1",
+          "intended_requirement": "CONF-SERVICE-FAILCLOSED-001",
+          "proof_test": "PROFILES-N001"
+        }
+      ]
+    }
+  ]
+}

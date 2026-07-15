@@ -2,6 +2,7 @@
 
 mod digest;
 mod model;
+mod prd_traceability;
 mod traceability;
 mod transport;
 mod vectors;
@@ -168,7 +169,7 @@ pub fn run_suite(configuration: &RunConfiguration) -> Result<ConformanceResult, 
 
 /// Verifies a passing result against this exact runner and vector tree.
 pub fn verify_result(result: &ConformanceResult, vectors_root: &Path) -> Result<(), String> {
-    validate_result_structure(result, vectors_root)?;
+    validate_result_structure(result, vectors_root, true)?;
     if result.overall != OverallResult::Passed {
         return Err("conformance result is structurally valid but did not pass".to_owned());
     }
@@ -181,6 +182,20 @@ pub fn verify_result_file(path: &Path, vectors_root: &Path) -> Result<Conformanc
     let result: ConformanceResult = serde_json::from_slice(&bytes)
         .map_err(|error| format!("invalid conformance result JSON: {error}"))?;
     verify_result(&result, vectors_root)?;
+    Ok(result)
+}
+
+pub(crate) fn verify_result_file_detached(
+    path: &Path,
+    vectors_root: &Path,
+) -> Result<ConformanceResult, String> {
+    let bytes = read_bounded_regular_file(path, MAX_RESULT_BYTES)?;
+    let result: ConformanceResult = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid conformance result JSON: {error}"))?;
+    validate_result_structure(&result, vectors_root, false)?;
+    if result.overall != OverallResult::Passed {
+        return Err("conformance result is structurally valid but did not pass".to_owned());
+    }
     Ok(result)
 }
 
@@ -219,6 +234,7 @@ pub fn write_json_artifact(path: &Path, value: &impl Serialize) -> Result<(), St
 fn validate_result_structure(
     result: &ConformanceResult,
     vectors_root: &Path,
+    require_current_runner: bool,
 ) -> Result<(), String> {
     if result.schema_version != RESULT_SCHEMA
         || !valid_implementation_name(&result.implementation)
@@ -238,10 +254,12 @@ fn validate_result_structure(
     if result.result_digest != result_digest(result)? {
         return Err("conformance result self-digest mismatch".to_owned());
     }
-    let current_executable = std::env::current_exe()
-        .map_err(|error| format!("cannot resolve verifier executable: {error}"))?;
-    if result.runner_digest != hash_file(&current_executable)? {
-        return Err("result was produced by a different runner binary".to_owned());
+    if require_current_runner {
+        let current_executable = std::env::current_exe()
+            .map_err(|error| format!("cannot resolve verifier executable: {error}"))?;
+        if result.runner_digest != hash_file(&current_executable)? {
+            return Err("result was produced by a different runner binary".to_owned());
+        }
     }
     let snapshot = snapshot_directory(vectors_root)?;
     if result.vector_digest != snapshot.digest {

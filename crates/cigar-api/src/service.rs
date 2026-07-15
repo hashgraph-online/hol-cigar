@@ -530,6 +530,25 @@ pub trait ServiceFacade: Send + Sync {
     ) -> ServiceFuture<'a, Result<FacadeEventStream, ApiError>>;
 }
 
+/// Closed, content-free transport events exposed to an owning metrics implementation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransportMetricEvent {
+    /// An authenticated request failed validation, dispatch, or response validation.
+    ApiFailure,
+    /// A governed server stream opened successfully.
+    StreamOpened,
+    /// A transport producer encountered a full bounded subscriber buffer.
+    StreamBlocked,
+    /// A subscriber closed a stream before its producer completed.
+    StreamCancelled,
+}
+
+/// Optional content-free observer implemented by the process that owns transport telemetry.
+pub trait TransportMetricsObserver: Send + Sync {
+    /// Records one closed transport event without request, tenant, or content attributes.
+    fn record_transport_metric(&self, event: TransportMetricEvent);
+}
+
 /// Redacted transport inputs passed to an injected authenticator and context builder.
 #[derive(Clone)]
 pub struct ContextInput {
@@ -755,6 +774,7 @@ pub struct ServiceKernel {
     facade: Arc<dyn ServiceFacade>,
     authority: Arc<dyn RequestAuthority>,
     config: TransportConfig,
+    metrics: Option<Arc<dyn TransportMetricsObserver>>,
 }
 
 impl ServiceKernel {
@@ -769,13 +789,31 @@ impl ServiceKernel {
             facade,
             authority,
             config,
+            metrics: None,
         }
+    }
+
+    /// Attaches the process-owned content-free transport metrics observer.
+    #[must_use]
+    pub fn with_metrics_observer(mut self, metrics: Arc<dyn TransportMetricsObserver>) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     /// Returns the shared transport configuration.
     #[must_use]
     pub const fn config(&self) -> TransportConfig {
         self.config
+    }
+
+    pub(crate) fn metrics_observer(&self) -> Option<Arc<dyn TransportMetricsObserver>> {
+        self.metrics.clone()
+    }
+
+    fn observe(&self, event: TransportMetricEvent) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_transport_metric(event);
+        }
     }
 
     pub(crate) fn public_error(&self, code: ErrorCode) -> ApiError {
@@ -816,31 +854,38 @@ impl ServiceKernel {
         context: RequestContext,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, ApiError> {
-        if contract.stream_kind != StreamKind::Unary
-            || context.operation().as_str() != contract.operation_id
-        {
-            return Err(self.public_error(ErrorCode::InvalidArgument));
-        }
-        request
-            .validate_contract(contract)
-            .map_err(|failure| self.public_error(failure.error_code()))?;
-        let Some(remaining) = remaining_until(context.deadline()) else {
-            context.cancellation().cancel();
-            return Err(self.public_error(ErrorCode::DeadlineExceeded));
-        };
-        let mut cancellation = CancelOnDrop::new(context.cancellation().clone());
-        let response =
-            match tokio::time::timeout(remaining, self.facade.call(context, request)).await {
-                Ok(result) => {
-                    cancellation.disarm();
-                    result?
-                }
-                Err(_) => return Err(self.public_error(ErrorCode::DeadlineExceeded)),
+        let result = async {
+            if contract.stream_kind != StreamKind::Unary
+                || context.operation().as_str() != contract.operation_id
+            {
+                return Err(self.public_error(ErrorCode::InvalidArgument));
+            }
+            request
+                .validate_contract(contract)
+                .map_err(|failure| self.public_error(failure.error_code()))?;
+            let Some(remaining) = remaining_until(context.deadline()) else {
+                context.cancellation().cancel();
+                return Err(self.public_error(ErrorCode::DeadlineExceeded));
             };
-        if response.operation_id().as_str() != contract.operation_id {
-            return Err(self.public_error(ErrorCode::Internal));
+            let mut cancellation = CancelOnDrop::new(context.cancellation().clone());
+            let response =
+                match tokio::time::timeout(remaining, self.facade.call(context, request)).await {
+                    Ok(result) => {
+                        cancellation.disarm();
+                        result?
+                    }
+                    Err(_) => return Err(self.public_error(ErrorCode::DeadlineExceeded)),
+                };
+            if response.operation_id().as_str() != contract.operation_id {
+                return Err(self.public_error(ErrorCode::Internal));
+            }
+            Ok(response)
         }
-        Ok(response)
+        .await;
+        if result.is_err() {
+            self.observe(TransportMetricEvent::ApiFailure);
+        }
+        result
     }
 
     /// Opens an authenticated stream with transport-equivalent validation and cancellation.
@@ -850,47 +895,56 @@ impl ServiceKernel {
         context: RequestContext,
         request: RequestEnvelope,
     ) -> Result<FacadeEventStream, ApiError> {
-        if contract.stream_kind != StreamKind::ServerStream
-            || context.operation().as_str() != contract.operation_id
-        {
-            return Err(self.public_error(ErrorCode::InvalidArgument));
-        }
-        request
-            .validate_contract(contract)
-            .map_err(|failure| self.public_error(failure.error_code()))?;
-        let Some(open_timeout) = remaining_until(context.deadline()) else {
-            context.cancellation().cancel();
-            return Err(self.public_error(ErrorCode::DeadlineExceeded));
-        };
-        let deadline = context.deadline();
-        let token = context.cancellation().clone();
-        let mut cancellation = CancelOnDrop::new(token.clone());
-        let stream =
-            match tokio::time::timeout(open_timeout, self.facade.subscribe(context, request)).await
+        let result = async {
+            if contract.stream_kind != StreamKind::ServerStream
+                || context.operation().as_str() != contract.operation_id
             {
-                Ok(result) => {
-                    cancellation.disarm();
-                    result?
-                }
-                Err(_) => return Err(self.public_error(ErrorCode::DeadlineExceeded)),
+                return Err(self.public_error(ErrorCode::InvalidArgument));
+            }
+            request
+                .validate_contract(contract)
+                .map_err(|failure| self.public_error(failure.error_code()))?;
+            let Some(open_timeout) = remaining_until(context.deadline()) else {
+                context.cancellation().cancel();
+                return Err(self.public_error(ErrorCode::DeadlineExceeded));
             };
-        let Some(stream_timeout) = remaining_until(deadline) else {
-            token.cancel();
-            return Err(self.public_error(ErrorCode::DeadlineExceeded));
-        };
-        let deadline_cancellation = token.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(stream_timeout).await;
-            deadline_cancellation.cancel();
-        });
-        Ok(Box::pin(ValidatedEventStream {
-            inner: stream,
-            expected_operation: contract.operation_id,
-            authority: Arc::clone(&self.authority),
-            cancellation: token,
-            deadline: Box::pin(tokio::time::sleep(stream_timeout)),
-            ended: false,
-        }))
+            let deadline = context.deadline();
+            let token = context.cancellation().clone();
+            let mut cancellation = CancelOnDrop::new(token.clone());
+            let stream =
+                match tokio::time::timeout(open_timeout, self.facade.subscribe(context, request))
+                    .await
+                {
+                    Ok(result) => {
+                        cancellation.disarm();
+                        result?
+                    }
+                    Err(_) => return Err(self.public_error(ErrorCode::DeadlineExceeded)),
+                };
+            let Some(stream_timeout) = remaining_until(deadline) else {
+                token.cancel();
+                return Err(self.public_error(ErrorCode::DeadlineExceeded));
+            };
+            let deadline_cancellation = token.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(stream_timeout).await;
+                deadline_cancellation.cancel();
+            });
+            Ok(Box::pin(ValidatedEventStream {
+                inner: stream,
+                expected_operation: contract.operation_id,
+                authority: Arc::clone(&self.authority),
+                cancellation: token,
+                deadline: Box::pin(tokio::time::sleep(stream_timeout)),
+                ended: false,
+            }) as FacadeEventStream)
+        }
+        .await;
+        match &result {
+            Ok(_stream) => self.observe(TransportMetricEvent::StreamOpened),
+            Err(_error) => self.observe(TransportMetricEvent::ApiFailure),
+        }
+        result
     }
 }
 
@@ -913,6 +967,10 @@ impl fmt::Debug for ServiceKernel {
             .field("facade", &"[INJECTED]")
             .field("authority", &"[INJECTED]")
             .field("config", &self.config)
+            .field(
+                "metrics",
+                &self.metrics.as_ref().map(|_metrics| "[INJECTED]"),
+            )
             .finish()
     }
 }

@@ -8,8 +8,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use cigar_api::generated::HttpMethod;
 use cigar_api::{
-    CapabilitiesResponse, EmptyRequest, EventEnvelope, MetricsResponse, ResponseEnvelope,
-    VersionResponse, encode_operation_payload,
+    CapabilitiesResponse, EmptyRequest, EventEnvelope, MetricsResponse, ReadinessResponse,
+    ResponseEnvelope, VersionResponse, decode_operation_payload, encode_operation_payload,
 };
 use cigar_protocol::{Problem, RetryClass};
 use futures_util::StreamExt as _;
@@ -18,6 +18,9 @@ use reqwest::header::{
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
@@ -44,11 +47,12 @@ pub struct AuthorizationValue(String);
 impl AuthorizationValue {
     /// Creates one bounded visible-ASCII authorization value.
     pub fn new(value: impl Into<String>) -> Result<Self, SdkError> {
-        let value = value.into();
+        let mut value = value.into();
         if value.is_empty()
             || value.len() > MAX_AUTHORIZATION_BYTES
             || value.bytes().any(|byte| !matches!(byte, 0x20..=0x7e))
         {
+            value.zeroize();
             return Err(configuration_error());
         }
         Ok(Self(value))
@@ -73,7 +77,10 @@ impl Drop for AuthorizationValue {
 
 /// Object-safe dynamic credential source called for each daemon exchange.
 pub trait AuthorizationProvider: Send + Sync {
-    /// Returns a fresh authorization value, or `None` for anonymous/local authority.
+    /// Returns a fresh authorization value, or `None` only for explicit cleartext loopback use.
+    ///
+    /// Remote HTTPS clients reject a missing provider during construction and reject a provider
+    /// that later returns `None` before any request is sent.
     fn authorization<'a>(&'a self) -> SdkFuture<'a, Result<Option<AuthorizationValue>, SdkError>>;
 }
 
@@ -88,6 +95,16 @@ impl StaticAuthorization {
     pub const fn new(value: AuthorizationValue) -> Self {
         Self { value }
     }
+
+    /// Loads one exact authorization header from a descriptor-bound owner-only file.
+    ///
+    /// A single trailing LF or CRLF is removed. The remaining bytes must be the complete visible
+    /// ASCII header value, for example `Bearer <token>`; the value and path are never included in
+    /// diagnostics or `Debug` output.
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, SdkError> {
+        let value = read_authorization_file(path.as_ref())?;
+        Ok(Self { value })
+    }
 }
 
 impl AuthorizationProvider for StaticAuthorization {
@@ -100,6 +117,187 @@ impl fmt::Debug for StaticAuthorization {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("StaticAuthorization([REDACTED])")
     }
+}
+
+fn read_authorization_file(path: &Path) -> Result<AuthorizationValue, SdkError> {
+    if !path.is_absolute() {
+        return Err(configuration_error());
+    }
+    let link = std::fs::symlink_metadata(path).map_err(|_failure| configuration_error())?;
+    if link.file_type().is_symlink()
+        || !link.is_file()
+        || link.len() == 0
+        || link.len() > MAX_AUTHORIZATION_BYTES as u64
+    {
+        return Err(configuration_error());
+    }
+    let mut file = open_bounded_read(path).map_err(|_failure| configuration_error())?;
+    let opened = file.metadata().map_err(|_failure| configuration_error())?;
+    if !opened.is_file()
+        || !same_authorization_file(&link, &opened)
+        || !safe_authorization_metadata(&opened)
+    {
+        return Err(configuration_error());
+    }
+    let capacity = usize::try_from(opened.len()).map_err(|_failure| configuration_error())?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take((MAX_AUTHORIZATION_BYTES as u64).saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_failure| configuration_error())?;
+    let after_read = file.metadata().map_err(|_failure| configuration_error())?;
+    let final_link = std::fs::symlink_metadata(path).map_err(|_failure| configuration_error())?;
+    if final_link.file_type().is_symlink()
+        || !same_authorization_file(&opened, &after_read)
+        || !same_authorization_file(&after_read, &final_link)
+        || !stable_authorization_file(&opened, &after_read)
+        || u64::try_from(bytes.len()).ok() != Some(after_read.len())
+    {
+        bytes.zeroize();
+        return Err(configuration_error());
+    }
+    if bytes.ends_with(b"\r\n") {
+        bytes.truncate(bytes.len().saturating_sub(2));
+    } else if bytes.ends_with(b"\n") {
+        bytes.truncate(bytes.len().saturating_sub(1));
+    }
+    let result = String::from_utf8(bytes).map_err(|failure| {
+        let mut invalid = failure.into_bytes();
+        invalid.zeroize();
+        configuration_error()
+    })?;
+    AuthorizationValue::new(result)
+}
+
+#[cfg(unix)]
+fn same_authorization_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_authorization_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.is_file() == right.is_file()
+}
+
+#[cfg(unix)]
+fn stable_authorization_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+        && left.mode() == right.mode()
+        && left.uid() == right.uid()
+        && left.nlink() == right.nlink()
+}
+
+#[cfg(not(unix))]
+fn stable_authorization_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.modified().ok() == right.modified().ok()
+}
+
+fn safe_authorization_metadata(metadata: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        metadata.uid() == rustix::process::geteuid().as_raw()
+            && metadata.nlink() == 1
+            && metadata.mode() & 0o077 == 0
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.is_file()
+    }
+}
+
+#[cfg(unix)]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    open_bounded_read_before_final(path, || Ok(()))
+}
+
+#[cfg(unix)]
+fn open_bounded_read_before_final(
+    path: &Path,
+    before_final: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<File> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+    use std::path::Component;
+
+    let mut absolute = false;
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir if names.is_empty() && !absolute => absolute = true,
+            Component::Normal(name) => names.push(name),
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::ParentDir => return Err(invalid_read_path()),
+        }
+    }
+    if !absolute {
+        return Err(invalid_read_path());
+    }
+    let (file_name, ancestors) = names.split_last().ok_or_else(invalid_read_path)?;
+    let mut directory = open(
+        "/",
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)?;
+    validate_read_ancestor(&directory.metadata()?)?;
+    for ancestor in ancestors {
+        directory = openat(
+            &directory,
+            *ancestor,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+            Mode::empty(),
+        )
+        .map(File::from)
+        .map_err(std::io::Error::from)?;
+        validate_read_ancestor(&directory.metadata()?)?;
+    }
+    before_final()?;
+    openat(
+        &directory,
+        *file_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(std::io::Error::from)
+}
+
+#[cfg(unix)]
+fn validate_read_ancestor(metadata: &std::fs::Metadata) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let owner = metadata.uid();
+    let mode = metadata.mode();
+    let writable_by_others = mode & 0o022 != 0;
+    let protected_sticky_root = owner == 0 && mode & 0o1000 != 0;
+    if metadata.is_dir()
+        && (owner == 0 || owner == rustix::process::geteuid().as_raw())
+        && (!writable_by_others || protected_sticky_root)
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "unsafe file ancestor",
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn invalid_read_path() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid file path")
+}
+
+#[cfg(not(unix))]
+fn open_bounded_read(path: &Path) -> std::io::Result<File> {
+    File::open(path)
 }
 
 /// Required server API and protocol line accepted during connection negotiation.
@@ -217,6 +415,10 @@ impl RemoteClientBuilder {
     pub async fn connect(self) -> Result<(Client, ServerCompatibility), SdkError> {
         self.compatibility.validate()?;
         validate_endpoint(&self.endpoint, self.allow_insecure_loopback)?;
+        let authorization_required = requires_authorization(&self.endpoint);
+        if authorization_required && self.authorization.is_none() {
+            return Err(configuration_error());
+        }
         let _provider_result = rustls::crypto::ring::default_provider().install_default();
         let http = reqwest::Client::builder()
             .connect_timeout(self.connect_timeout)
@@ -230,6 +432,7 @@ impl RemoteClientBuilder {
             endpoint: self.endpoint,
             http,
             authorization: self.authorization,
+            authorization_required,
         });
         let client = Client::from_transport(transport);
         let compatibility = client.negotiate(&self.compatibility).await?;
@@ -305,6 +508,7 @@ struct DaemonHttpTransport {
     endpoint: reqwest::Url,
     http: reqwest::Client,
     authorization: Option<Arc<dyn AuthorizationProvider>>,
+    authorization_required: bool,
 }
 
 impl ClientTransport for DaemonHttpTransport {
@@ -376,9 +580,14 @@ impl DaemonHttpTransport {
             .request(method, url)
             .header(HEADER_OPERATION_ID, call.contract().operation_id)
             .header(HEADER_TIMEOUT_MS, timeout_ms.to_string());
-        if let Some(provider) = &self.authorization
-            && let Some(value) = provider.authorization().await?
-        {
+        let authorization = match &self.authorization {
+            Some(provider) => provider.authorization().await?,
+            None => None,
+        };
+        if self.authorization_required && authorization.is_none() {
+            return Err(configuration_error());
+        }
+        if let Some(value) = authorization {
             request = request.header(AUTHORIZATION, value.header_value()?);
         }
         if stream && let Some(cursor) = call.envelope().page_cursor() {
@@ -494,7 +703,8 @@ async fn decode_unary_response(
         return Err(decode_problem_response(response, call).await?);
     }
     let bytes = collect_bounded(response, cigar_api::MAX_HTTP_BODY_BYTES, call).await?;
-    if call.contract().operation_id == "getMetrics"
+    if status.is_success()
+        && call.contract().operation_id == "getMetrics"
         && media_type.eq_ignore_ascii_case(OPENMETRICS_CONTENT_TYPE)
     {
         let text = String::from_utf8(bytes).map_err(|_failure| crate::client::protocol_error())?;
@@ -506,7 +716,9 @@ async fn decode_unary_response(
         return ResponseEnvelope::new("getMetrics", payload, None, None)
             .map_err(|_failure| crate::client::protocol_error());
     }
-    if !status.is_success() || !is_json_content_type(&media_type) {
+    let typed_unhealthy_readiness = call.contract().operation_id == "getReadiness"
+        && status == reqwest::StatusCode::SERVICE_UNAVAILABLE;
+    if (!status.is_success() && !typed_unhealthy_readiness) || !is_json_content_type(&media_type) {
         return Err(crate::client::protocol_error());
     }
     strict_json(&bytes)?;
@@ -516,6 +728,21 @@ async fn decode_unary_response(
         return Err(crate::client::protocol_error());
     }
     let payload = decode_base64url(&wire.payload_cbor, cigar_api::MAX_OPERATION_PAYLOAD_BYTES)?;
+    if call.contract().operation_id == "getReadiness" {
+        let readiness = decode_operation_payload::<ReadinessResponse>(
+            &payload,
+            cigar_api::MAX_OPERATION_PAYLOAD_BYTES,
+        )
+        .map_err(|_failure| crate::client::protocol_error())?;
+        let status_matches_payload = match status {
+            reqwest::StatusCode::OK => readiness.ready,
+            reqwest::StatusCode::SERVICE_UNAVAILABLE => !readiness.ready,
+            _ => false,
+        };
+        if !status_matches_payload {
+            return Err(crate::client::protocol_error());
+        }
+    }
     let etag = reconcile_header(&headers, &ETAG, wire.semantic_etag)?;
     let cursor = reconcile_header(&headers, &HEADER_NEXT_PAGE_CURSOR, wire.next_page_cursor)?;
     ResponseEnvelope::new(wire.operation_id, payload, etag, cursor)
@@ -621,10 +848,7 @@ fn sse_stream(response: reqwest::Response, call: TransportCall) -> TransportEven
                 break;
             }
             buffered.extend_from_slice(&chunk);
-            loop {
-                let Some((frame_end, delimiter_length)) = find_sse_frame(&buffered) else {
-                    break;
-                };
+            while let Some((frame_end, delimiter_length)) = find_sse_frame(&buffered) {
                 let Some(frame) = buffered.get(..frame_end).map(<[u8]>::to_vec) else {
                     let _ignored = sender.send(Err(crate::client::protocol_error())).await;
                     return;
@@ -735,7 +959,7 @@ fn validate_endpoint(endpoint: &reqwest::Url, allow_loopback: bool) -> Result<()
         && endpoint.query().is_none()
         && endpoint.fragment().is_none()
         && root_path;
-    let secure = endpoint.scheme() == "https";
+    let secure = endpoint.scheme() == "https" && endpoint.host_str().is_some();
     let loopback_http = endpoint.scheme() == "http"
         && allow_loopback
         && endpoint.host_str().is_some_and(is_loopback_host);
@@ -744,6 +968,10 @@ fn validate_endpoint(endpoint: &reqwest::Url, allow_loopback: bool) -> Result<()
     } else {
         Err(configuration_error())
     }
+}
+
+fn requires_authorization(endpoint: &reqwest::Url) -> bool {
+    endpoint.scheme() == "https"
 }
 
 fn is_loopback_host(host: &str) -> bool {
@@ -879,7 +1107,41 @@ const fn configuration_error() -> SdkError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_protocol_selector, ranges_overlap};
+    #[cfg(unix)]
+    use super::open_bounded_read_before_final;
+    use super::{
+        parse_protocol_selector, ranges_overlap, requires_authorization, validate_endpoint,
+    };
+
+    #[test]
+    fn remote_endpoint_authority_is_one_closed_https_origin()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let valid = reqwest::Url::parse("https://service.example:8443/")?;
+        assert!(validate_endpoint(&valid, false).is_ok());
+        assert!(requires_authorization(&valid));
+
+        let loopback = reqwest::Url::parse("http://127.0.0.1:4317/")?;
+        assert!(validate_endpoint(&loopback, true).is_ok());
+        assert!(validate_endpoint(&loopback, false).is_err());
+        assert!(!requires_authorization(&loopback));
+
+        for value in [
+            "http://service.example/",
+            "https://user@service.example/",
+            "https://user:password@service.example/",
+            "https://service.example/v1",
+            "https://service.example/?tenant=other",
+            "https://service.example/#fragment",
+            "file:///private/socket",
+        ] {
+            let endpoint = reqwest::Url::parse(value)?;
+            assert!(
+                validate_endpoint(&endpoint, true).is_err(),
+                "endpoint {value:?} must fail closed"
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn protocol_ranges_require_a_real_overlap() -> Result<(), Box<dyn std::error::Error>> {
@@ -893,6 +1155,40 @@ mod tests {
         assert!(!ranges_overlap(one_zero, one_one, one_two, one_x));
         assert!(!ranges_overlap(one_zero, one_x, two_zero, two_x));
         assert!(parse_protocol_selector("1.2.3").is_none());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn authorization_reads_reject_symlinked_ancestors_and_pin_open_directories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Read as _;
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir()?;
+        let root = std::fs::canonicalize(directory.path())?;
+        let trusted = root.join("trusted");
+        let replacement = root.join("replacement");
+        std::fs::create_dir(&trusted)?;
+        std::fs::create_dir(&replacement)?;
+        std::fs::write(trusted.join("value"), b"trusted")?;
+        std::fs::write(replacement.join("value"), b"substituted")?;
+
+        let alias = root.join("alias");
+        symlink(&trusted, &alias)?;
+        assert!(open_bounded_read_before_final(&alias.join("value"), || Ok(())).is_err());
+
+        let moved = root.join("moved");
+        let requested = trusted.join("value");
+        let mut opened = open_bounded_read_before_final(&requested, || {
+            std::fs::rename(&trusted, &moved)?;
+            std::fs::rename(&replacement, &trusted)?;
+            Ok(())
+        })?;
+        let mut value = String::new();
+        opened.read_to_string(&mut value)?;
+        assert_eq!(value, "trusted");
+        assert_eq!(std::fs::read_to_string(&requested)?, "substituted");
         Ok(())
     }
 }

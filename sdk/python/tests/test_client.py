@@ -6,9 +6,11 @@ import json
 import time
 import unittest
 from collections.abc import Iterator, Mapping
-from pathlib import Path
+from importlib import resources
 
 from cigar_sdk import (
+    OPERATION_COUNT,
+    OPERATIONS,
     AsyncCigarClient,
     CallOptions,
     CigarApiError,
@@ -23,7 +25,10 @@ from cigar_sdk import (
 from cigar_sdk.digest import _deterministic_cbor
 from cigar_sdk.transport import HttpResponse, StreamResponse
 
-_PROBLEM = (Path(__file__).resolve().parents[2] / "fixtures/problem-index-unavailable-v1.json").read_bytes()
+_PROBLEM = resources.files("cigar_sdk.fixtures").joinpath("problem-index-unavailable-v1.json").read_bytes()
+_CAPABILITY_AUTHORITY = json.loads(
+    resources.files("cigar_sdk").joinpath("capabilities-v1.json").read_text(encoding="utf-8")
+)
 
 
 _UUID = "01900000-0000-7000-8000-000000000001"
@@ -56,6 +61,10 @@ def ok(operation_id: str, cursor: str | None = None, payload: object | None = No
         {"content-type": "application/json", "x-cigar-api-version": "1"},
         json.dumps(body).encode(),
     )
+
+
+def python_method_name(operation_id: str) -> str:
+    return "".join(f"_{character.lower()}" if character.isupper() else character for character in operation_id)
 
 
 def retryable() -> HttpResponse:
@@ -91,6 +100,7 @@ class FakeTransport:
         self.responses: list[HttpResponse] = []
         self.streams: list[FakeStream] = []
         self.requests: list[tuple[str, str, Mapping[str, str], bytes | None]] = []
+        self.timeouts: list[float] = []
         self.stream_headers: list[Mapping[str, str]] = []
 
     def request(
@@ -101,8 +111,8 @@ class FakeTransport:
         body: bytes | None,
         timeout: float,
     ) -> HttpResponse:
-        del timeout
         self.requests.append((method, url, dict(headers), body))
+        self.timeouts.append(timeout)
         return self.responses.pop(0)
 
     def stream(
@@ -124,8 +134,22 @@ class ClientTests(unittest.TestCase):
         client = CigarClient(
             "http://localhost", allow_insecure_loopback=True, transport=FakeTransport(), trust_custom_transport=True
         )
-        for name in ("compile_context_bundle", "accept_handoff", "reconcile_effect", "run_observational_replay"):
-            self.assertTrue(callable(getattr(client, name)))
+        async_client = AsyncCigarClient(
+            "http://localhost", allow_insecure_loopback=True, transport=FakeTransport(), trust_custom_transport=True
+        )
+        self.assertEqual(OPERATION_COUNT, 45)
+        self.assertEqual(len(OPERATIONS), OPERATION_COUNT)
+        authority_ids = [operation["operation_id"] for operation in _CAPABILITY_AUTHORITY["operations"]]
+        python_capability = _CAPABILITY_AUTHORITY["sdks"]["python"]
+        self.assertEqual(_CAPABILITY_AUTHORITY["operation_count"], OPERATION_COUNT)
+        self.assertEqual(python_capability["operation_count"], OPERATION_COUNT)
+        self.assertEqual(list(OPERATIONS), authority_ids)
+        self.assertEqual(list(OPERATIONS), python_capability["operations"])
+        self.assertEqual(python_capability["transport"], ["http"])
+        for operation_id in OPERATIONS:
+            name = python_method_name(operation_id)
+            self.assertTrue(callable(getattr(client, name)), operation_id)
+            self.assertTrue(callable(getattr(async_client, name)), operation_id)
 
         self.assertEqual(len(models.PAYLOAD_SCHEMAS), 70)
         for model_name in models.PAYLOAD_SCHEMAS:
@@ -169,6 +193,48 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(transport.requests[0][2]["idempotency-key"], "fixed-key")
         self.assertEqual(transport.requests[0][2]["idempotency-key"], transport.requests[1][2]["idempotency-key"])
         self.assertEqual(transport.requests[0][3], transport.requests[1][3])
+
+    def test_safe_read_retry_preserves_request_identity_and_deadline(self) -> None:
+        transport = FakeTransport()
+        transport.responses = [
+            retryable(),
+            ok(
+                "getVersion",
+                payload={
+                    "version": "0.1.0",
+                    "source_revision": "revision",
+                    "protocol_min": "1",
+                    "protocol_max": "1",
+                    "build_profile": "test",
+                    "enabled_features": [],
+                },
+            ),
+        ]
+        client = CigarClient(
+            "http://localhost",
+            allow_insecure_loopback=True,
+            max_attempts=2,
+            transport=transport,
+            trust_custom_transport=True,
+        )
+        response = client.get_version(
+            TypedOperationRequest(models.EmptyRequest()),
+            options=CallOptions(timeout=2.0),
+        )
+        self.assertEqual(response.operation_id, "getVersion")
+        self.assertEqual(len(transport.requests), 2)
+        self.assertEqual(
+            [
+                (request[0], request[1], request[2]["x-cigar-operation-id"], request[3])
+                for request in transport.requests
+            ],
+            [
+                ("GET", "http://localhost/v1/version", "getVersion", None),
+                ("GET", "http://localhost/v1/version", "getVersion", None),
+            ],
+        )
+        self.assertGreater(transport.timeouts[0], transport.timeouts[1])
+        self.assertGreater(transport.timeouts[1], 0)
 
     def test_dispatch_is_never_retried(self) -> None:
         transport = FakeTransport()
@@ -357,6 +423,8 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_transport_security_and_exact_problem_contract(self) -> None:
         with self.assertRaises(ValidationError):
             CigarClient("http://example.com")
+        with self.assertRaises(ValidationError):
+            CigarClient("https://example.com")
         with self.assertRaises(ValidationError):
             CigarClient("https://example.com/prefix")
 

@@ -51,7 +51,7 @@
           </div>
         </header>
 
-        <main id="main">
+        <main id="main" tabindex="-1">
           <section class="hero" id="overview" aria-labelledby="overview-title">
             <div>
               <span class="eyebrow">Live protocol posture</span>
@@ -68,7 +68,7 @@
             </article>
             <article>
               <span class="rail-icon verification" aria-hidden="true">✓</span>
-              <div><span class="eyebrow">Verification</span><strong id="verification-state">Not run</strong><small id="verification-detail">No persisted dashboard run</small></div>
+              <div><span class="eyebrow">Verification</span><strong id="verification-state">Not run</strong><small id="verification-detail">No persisted dashboard run</small><button class="rail-action" id="cancel-run" type="button" hidden>Cancel reviewed run</button></div>
             </article>
             <article>
               <span class="rail-icon release" aria-hidden="true">◇</span>
@@ -118,18 +118,18 @@
               <div class="panel-head"><span><span class="eyebrow">Daemon</span><h2>Readiness</h2></span><span class="mini-badge neutral" id="readiness-badge">Awaiting observation</span></div>
               <div class="metric-value"><span id="readiness-count">—</span> <small>components</small></div>
               <p id="readiness-detail">Health remains unknown until a typed daemon observation is available.</p>
-              <div class="component-dots" id="component-dots" aria-label="Readiness components awaiting observation"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="component-dots" id="component-dots" role="img" aria-label="Readiness components awaiting observation"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
             </article>
             <article class="panel metric-panel">
               <div class="panel-head"><span><span class="eyebrow">Workers</span><h2>Queue utilization</h2></span><span class="mini-badge neutral" id="queue-badge">Awaiting observation</span></div>
               <div class="metric-value"><span id="queue-utilization">—</span> <small>capacity used</small></div>
               <p id="queue-detail">Typed diagnostics and closed metrics have not been observed.</p>
-              <div class="component-dots" id="queue-dots" aria-label="Worker queues awaiting observation"></div>
+              <div class="component-dots" id="queue-dots" role="img" aria-label="Worker queues awaiting observation"></div>
             </article>
             <article class="panel metric-panel">
               <div class="panel-head"><span><span class="eyebrow">Control plane</span><h2>Reviewed runs</h2></span><span class="mini-badge neutral" id="control-badge">Disabled</span></div>
               <div class="metric-value">9 <small>profiles</small></div>
-              <p>Profiles are visible but fail closed until the isolated supervisor is complete.</p>
+              <p>Only macOS profiles with fixed argv and independently verified receipts can run. Soak remains unavailable.</p>
               <a class="text-link" href="#tests">Inspect availability <span aria-hidden="true">→</span></a>
             </article>
           </section>
@@ -137,7 +137,7 @@
           <section class="panel flow-panel" id="protocol" aria-labelledby="flow-title">
             <div class="panel-head">
               <div><span class="eyebrow">Protocol map</span><h2 id="flow-title">Context lifecycle</h2></div>
-              <span class="mini-badge neutral">Fixture topology</span>
+              <span class="mini-badge neutral" id="protocol-badge">Generated registry</span>
             </div>
             <div class="flow" role="img" aria-label="Discover flows to ingest, compile, bundle, and delta">
               <div><span>01</span><strong>Discover</strong><small>Sources</small></div><b>→</b>
@@ -149,6 +149,17 @@
             <div class="flow-table" aria-label="Context lifecycle text alternative">
               <span>Discover sources</span><span>Ingest atoms</span><span>Compile plan</span><span>Build bundle</span><span>Verify delta</span>
             </div>
+            <div class="protocol-toolbar">
+              <label for="protocol-search"><span class="eyebrow">Find an operation</span><input id="protocol-search" type="search" maxlength="128" autocomplete="off" placeholder="ID, route, service, auth…"></label>
+              <span id="protocol-count" aria-live="polite">Awaiting generated catalog</span>
+            </div>
+            <div class="protocol-services" id="protocol-services" role="list" aria-label="Generated protocol services"></div>
+            <div class="protocol-table-wrap" tabindex="0" role="region" aria-label="Generated CIGAR operation contracts">
+              <table class="protocol-table">
+                <thead><tr><th scope="col">Operation</th><th scope="col">Route</th><th scope="col">Contract</th></tr></thead>
+                <tbody id="protocol-operations"><tr><td colspan="3" class="empty-copy">Authenticate to load the generated protocol registry.</td></tr></tbody>
+              </table>
+            </div>
           </section>
 
           <section id="tests" aria-labelledby="tests-title">
@@ -157,9 +168,9 @@
               <p>Exact commands, bounded resources, structured receipts. No terminal surface.</p>
             </div>
             <div class="profile-grid" id="profile-grid">
-              <article class="profile-card"><div><span class="profile-kind">Check</span><span class="mini-badge neutral">Unavailable</span></div><h3>Conformance smoke</h3><p>Frozen contracts and bounded runner behavior.</p><dl><div><dt>Expected</dt><dd>5 min</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Supervisor not implemented</button></article>
-              <article class="profile-card"><div><span class="profile-kind">Matrix</span><span class="mini-badge neutral">Unavailable</span></div><h3>Security matrix</h3><p>Fail-closed authorization, storage, replay, and transport gates.</p><dl><div><dt>Expected</dt><dd>40 min</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Supervisor not implemented</button></article>
-              <article class="profile-card accent" id="soak"><div><span class="profile-kind">Soak</span><span class="mini-badge neutral">Unavailable</span></div><h3>Two-minute soak smoke</h3><p>Isolated lifecycle, evidence, and dashboard integration smoke.</p><dl><div><dt>Sessions</dt><dd>1 → 2</dd></div><div><dt>Claim</dt><dd>None</dd></div></dl><button disabled type="button">Driver not implemented</button></article>
+              <article class="profile-card"><div><span class="profile-kind">Check</span><span class="mini-badge neutral">Pending session</span></div><h3>Dashboard contracts</h3><p>Strict schema and local-reference verification with an independent receipt.</p><dl><div><dt>Expected</dt><dd>2 sec</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Authenticate to inspect availability</button></article>
+              <article class="profile-card"><div><span class="profile-kind">Matrix</span><span class="mini-badge neutral">Pending session</span></div><h3>Security matrix</h3><p>Fail-closed authorization, storage, replay, and transport gates.</p><dl><div><dt>Expected</dt><dd>40 min</dd></div><div><dt>Network</dt><dd>Offline</dd></div></dl><button disabled type="button">Authenticate to inspect availability</button></article>
+              <article class="profile-card accent" id="soak"><div><span class="profile-kind">Soak</span><span class="mini-badge neutral">Unavailable</span></div><h3>Two-minute soak smoke</h3><p>The workload driver is not implemented; no soak can be launched.</p><dl><div><dt>Sessions</dt><dd>1 → 2</dd></div><div><dt>Claim</dt><dd>None</dd></div></dl><button disabled type="button">Command not implemented</button></article>
             </div>
           </section>
 

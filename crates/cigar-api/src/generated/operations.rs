@@ -49,7 +49,7 @@ pub enum AuthClass {
     Anonymous,
 }
 
-/// One generated binding shared by embedded, HTTP, gRPC, SDK, CLI, and audit surfaces.
+/// One authoritative generated binding used by transports and checked interface projections.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OperationContract {
     /// Protobuf service name.
@@ -76,6 +76,100 @@ pub struct OperationContract {
 
 /// Number of frozen v1 operations.
 pub const OPERATION_COUNT: usize = 45;
+
+/// Stable operation identifiers for audit records, telemetry, and internal dispatch.
+pub mod operation_ids {
+    /// `discoverSources`.
+    pub const DISCOVER_SOURCES: &str = "discoverSources";
+    /// `ingestCatalog`.
+    pub const INGEST_CATALOG: &str = "ingestCatalog";
+    /// `getSourceStatus`.
+    pub const GET_SOURCE_STATUS: &str = "getSourceStatus";
+    /// `queryCatalog`.
+    pub const QUERY_CATALOG: &str = "queryCatalog";
+    /// `batchAtoms`.
+    pub const BATCH_ATOMS: &str = "batchAtoms";
+    /// `tombstoneAtom`.
+    pub const TOMBSTONE_ATOM: &str = "tombstoneAtom";
+    /// `createContextPlan`.
+    pub const CREATE_CONTEXT_PLAN: &str = "createContextPlan";
+    /// `compileContextBundle`.
+    pub const COMPILE_CONTEXT_BUNDLE: &str = "compileContextBundle";
+    /// `compileContextDelta`.
+    pub const COMPILE_CONTEXT_DELTA: &str = "compileContextDelta";
+    /// `getContextBundle`.
+    pub const GET_CONTEXT_BUNDLE: &str = "getContextBundle";
+    /// `getContextBundleManifest`.
+    pub const GET_CONTEXT_BUNDLE_MANIFEST: &str = "getContextBundleManifest";
+    /// `explainContextBundle`.
+    pub const EXPLAIN_CONTEXT_BUNDLE: &str = "explainContextBundle";
+    /// `materializeContextBundle`.
+    pub const MATERIALIZE_CONTEXT_BUNDLE: &str = "materializeContextBundle";
+    /// `revalidateContextBundle`.
+    pub const REVALIDATE_CONTEXT_BUNDLE: &str = "revalidateContextBundle";
+    /// `createSpace`.
+    pub const CREATE_SPACE: &str = "createSpace";
+    /// `forkSpace`.
+    pub const FORK_SPACE: &str = "forkSpace";
+    /// `publishSpace`.
+    pub const PUBLISH_SPACE: &str = "publishSpace";
+    /// `getSpaceLog`.
+    pub const GET_SPACE_LOG: &str = "getSpaceLog";
+    /// `subscribeSpaceEvents`.
+    pub const SUBSCRIBE_SPACE_EVENTS: &str = "subscribeSpaceEvents";
+    /// `createSpaceCheckpoint`.
+    pub const CREATE_SPACE_CHECKPOINT: &str = "createSpaceCheckpoint";
+    /// `listSpaceConflicts`.
+    pub const LIST_SPACE_CONFLICTS: &str = "listSpaceConflicts";
+    /// `resolveSpaceConflict`.
+    pub const RESOLVE_SPACE_CONFLICT: &str = "resolveSpaceConflict";
+    /// `createHandoff`.
+    pub const CREATE_HANDOFF: &str = "createHandoff";
+    /// `previewHandoff`.
+    pub const PREVIEW_HANDOFF: &str = "previewHandoff";
+    /// `acceptHandoff`.
+    pub const ACCEPT_HANDOFF: &str = "acceptHandoff";
+    /// `revokeHandoff`.
+    pub const REVOKE_HANDOFF: &str = "revokeHandoff";
+    /// `recordHandoffResult`.
+    pub const RECORD_HANDOFF_RESULT: &str = "recordHandoffResult";
+    /// `mergeHandoff`.
+    pub const MERGE_HANDOFF: &str = "mergeHandoff";
+    /// `prepareEffect`.
+    pub const PREPARE_EFFECT: &str = "prepareEffect";
+    /// `authorizeEffect`.
+    pub const AUTHORIZE_EFFECT: &str = "authorizeEffect";
+    /// `dispatchEffect`.
+    pub const DISPATCH_EFFECT: &str = "dispatchEffect";
+    /// `getEffectStatus`.
+    pub const GET_EFFECT_STATUS: &str = "getEffectStatus";
+    /// `reconcileEffect`.
+    pub const RECONCILE_EFFECT: &str = "reconcileEffect";
+    /// `compensateEffect`.
+    pub const COMPENSATE_EFFECT: &str = "compensateEffect";
+    /// `createReplay`.
+    pub const CREATE_REPLAY: &str = "createReplay";
+    /// `runObservationalReplay`.
+    pub const RUN_OBSERVATIONAL_REPLAY: &str = "runObservationalReplay";
+    /// `compareLiveReplay`.
+    pub const COMPARE_LIVE_REPLAY: &str = "compareLiveReplay";
+    /// `getReplayCompleteness`.
+    pub const GET_REPLAY_COMPLETENESS: &str = "getReplayCompleteness";
+    /// `getLiveness`.
+    pub const GET_LIVENESS: &str = "getLiveness";
+    /// `getReadiness`.
+    pub const GET_READINESS: &str = "getReadiness";
+    /// `getVersion`.
+    pub const GET_VERSION: &str = "getVersion";
+    /// `getCapabilities`.
+    pub const GET_CAPABILITIES: &str = "getCapabilities";
+    /// `getConfiguration`.
+    pub const GET_CONFIGURATION: &str = "getConfiguration";
+    /// `getDiagnostics`.
+    pub const GET_DIAGNOSTICS: &str = "getDiagnostics";
+    /// `getMetrics`.
+    pub const GET_METRICS: &str = "getMetrics";
+}
 
 /// Complete frozen v1 operation registry.
 pub const OPERATIONS: &[OperationContract] = &[
@@ -624,7 +718,58 @@ pub const OPERATIONS: &[OperationContract] = &[
 /// Finds a frozen v1 operation by its shared operation identifier.
 #[must_use]
 pub fn operation_by_id(operation_id: &str) -> Option<&'static OperationContract> {
-    OPERATIONS
-        .iter()
-        .find(|operation| operation.operation_id == operation_id)
+    match operation_id {
+        operation_ids::DISCOVER_SOURCES => OPERATIONS.first(),
+        operation_ids::INGEST_CATALOG => OPERATIONS.get(1),
+        operation_ids::GET_SOURCE_STATUS => OPERATIONS.get(2),
+        operation_ids::QUERY_CATALOG => OPERATIONS.get(3),
+        operation_ids::BATCH_ATOMS => OPERATIONS.get(4),
+        operation_ids::TOMBSTONE_ATOM => OPERATIONS.get(5),
+        operation_ids::CREATE_CONTEXT_PLAN => OPERATIONS.get(6),
+        operation_ids::COMPILE_CONTEXT_BUNDLE => OPERATIONS.get(7),
+        operation_ids::COMPILE_CONTEXT_DELTA => OPERATIONS.get(8),
+        operation_ids::GET_CONTEXT_BUNDLE => OPERATIONS.get(9),
+        operation_ids::GET_CONTEXT_BUNDLE_MANIFEST => OPERATIONS.get(10),
+        operation_ids::EXPLAIN_CONTEXT_BUNDLE => OPERATIONS.get(11),
+        operation_ids::MATERIALIZE_CONTEXT_BUNDLE => OPERATIONS.get(12),
+        operation_ids::REVALIDATE_CONTEXT_BUNDLE => OPERATIONS.get(13),
+        operation_ids::CREATE_SPACE => OPERATIONS.get(14),
+        operation_ids::FORK_SPACE => OPERATIONS.get(15),
+        operation_ids::PUBLISH_SPACE => OPERATIONS.get(16),
+        operation_ids::GET_SPACE_LOG => OPERATIONS.get(17),
+        operation_ids::SUBSCRIBE_SPACE_EVENTS => OPERATIONS.get(18),
+        operation_ids::CREATE_SPACE_CHECKPOINT => OPERATIONS.get(19),
+        operation_ids::LIST_SPACE_CONFLICTS => OPERATIONS.get(20),
+        operation_ids::RESOLVE_SPACE_CONFLICT => OPERATIONS.get(21),
+        operation_ids::CREATE_HANDOFF => OPERATIONS.get(22),
+        operation_ids::PREVIEW_HANDOFF => OPERATIONS.get(23),
+        operation_ids::ACCEPT_HANDOFF => OPERATIONS.get(24),
+        operation_ids::REVOKE_HANDOFF => OPERATIONS.get(25),
+        operation_ids::RECORD_HANDOFF_RESULT => OPERATIONS.get(26),
+        operation_ids::MERGE_HANDOFF => OPERATIONS.get(27),
+        operation_ids::PREPARE_EFFECT => OPERATIONS.get(28),
+        operation_ids::AUTHORIZE_EFFECT => OPERATIONS.get(29),
+        operation_ids::DISPATCH_EFFECT => OPERATIONS.get(30),
+        operation_ids::GET_EFFECT_STATUS => OPERATIONS.get(31),
+        operation_ids::RECONCILE_EFFECT => OPERATIONS.get(32),
+        operation_ids::COMPENSATE_EFFECT => OPERATIONS.get(33),
+        operation_ids::CREATE_REPLAY => OPERATIONS.get(34),
+        operation_ids::RUN_OBSERVATIONAL_REPLAY => OPERATIONS.get(35),
+        operation_ids::COMPARE_LIVE_REPLAY => OPERATIONS.get(36),
+        operation_ids::GET_REPLAY_COMPLETENESS => OPERATIONS.get(37),
+        operation_ids::GET_LIVENESS => OPERATIONS.get(38),
+        operation_ids::GET_READINESS => OPERATIONS.get(39),
+        operation_ids::GET_VERSION => OPERATIONS.get(40),
+        operation_ids::GET_CAPABILITIES => OPERATIONS.get(41),
+        operation_ids::GET_CONFIGURATION => OPERATIONS.get(42),
+        operation_ids::GET_DIAGNOSTICS => OPERATIONS.get(43),
+        operation_ids::GET_METRICS => OPERATIONS.get(44),
+        _ => None,
+    }
+}
+
+/// Returns whether an audit or telemetry identity is a frozen v1 operation.
+#[must_use]
+pub fn is_known_operation_id(operation_id: &str) -> bool {
+    operation_by_id(operation_id).is_some()
 }

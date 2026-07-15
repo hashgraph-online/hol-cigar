@@ -1,0 +1,10 @@
+{
+  "schema_version": "cigar.problem.v1",
+  "code": "INDEX_UNAVAILABLE",
+  "http_status": 503,
+  "retry": "after_backoff",
+  "message": "required index is unavailable",
+  "remediation": "restore the index or select an authorized fallback",
+  "correlation_id": "01900000-0000-7000-8000-000000000001",
+  "details": {}
+}

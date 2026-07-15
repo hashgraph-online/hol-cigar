@@ -2,12 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { CigarApiError, CigarClient, TransportError, ValidationError, encodeOperationPayload } from "../index.js";
+import {
+  CigarApiError,
+  CigarClient,
+  OPERATION_COUNT,
+  OPERATIONS,
+  TransportError,
+  ValidationError,
+  encodeOperationPayload,
+} from "../index.js";
 
 const problemFixture = readFileSync(
   new URL("../../../fixtures/problem-index-unavailable-v1.json", import.meta.url),
   "utf8",
 );
+const capabilityAuthority = JSON.parse(readFileSync(
+  new URL("../../../capabilities-v1.json", import.meta.url),
+  "utf8",
+)) as {
+  operation_count: number;
+  operations: Array<{ operation_id: string }>;
+  sdks: { typescript: { operation_count: number; operations: string[]; transport: string[] } };
+};
 const local = { allowInsecureLoopback: true, trustCustomFetch: true } as const;
 const uuid = "01900000-0000-7000-8000-000000000001";
 const digest = `1220${"1".repeat(64)}`;
@@ -32,11 +48,27 @@ const retryable = (): Response => new Response(problemFixture, {
 
 test("all 45 generated methods are installed", () => {
   const client = new CigarClient({ baseUrl: "http://localhost", ...local, fetch: async () => ok("unused") });
-  const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client));
-  assert.equal(methods.includes("compileContextBundle"), true);
-  assert.equal(methods.includes("acceptHandoff"), true);
-  assert.equal(methods.includes("reconcileEffect"), true);
-  assert.equal(methods.includes("runObservationalReplay"), true);
+  const prototype = Object.getPrototypeOf(client) as object;
+  const operationIds = Object.keys(OPERATIONS).sort();
+  const authorityIds = capabilityAuthority.operations.map((operation) => operation.operation_id).sort();
+  const installed = Object.getOwnPropertyNames(prototype)
+    .filter((name) => Object.hasOwn(OPERATIONS, name))
+    .sort();
+  assert.equal(OPERATION_COUNT, 45);
+  assert.equal(capabilityAuthority.operation_count, OPERATION_COUNT);
+  assert.equal(capabilityAuthority.sdks.typescript.operation_count, OPERATION_COUNT);
+  assert.equal(operationIds.length, OPERATION_COUNT);
+  assert.deepEqual(operationIds, authorityIds);
+  assert.deepEqual(operationIds, [...capabilityAuthority.sdks.typescript.operations].sort());
+  assert.deepEqual(capabilityAuthority.sdks.typescript.transport, ["http"]);
+  assert.deepEqual(installed, operationIds);
+  for (const operationId of operationIds) {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, operationId);
+    assert.equal(typeof (client as unknown as Record<string, unknown>)[operationId], "function");
+    assert.equal(descriptor?.configurable, false);
+    assert.equal(descriptor?.enumerable, false);
+    assert.equal(descriptor?.writable, false);
+  }
 });
 
 test("idempotency-bound mutation retries preserve bytes and key", async () => {
@@ -61,6 +93,36 @@ test("idempotency-bound mutation retries preserve bytes and key", async () => {
   assert.equal(calls, 2);
   assert.deepEqual(keys, ["fixed-key", "fixed-key"]);
   assert.equal(bodies[0], bodies[1]);
+});
+
+test("safe-read retry preserves request identity and one absolute deadline", async () => {
+  const urls: string[] = [];
+  const operations: string[] = [];
+  const remainingTimeouts: number[] = [];
+  const bodies: Array<BodyInit | null | undefined> = [];
+  let calls = 0;
+  const client = new CigarClient({
+    baseUrl: "http://localhost",
+    ...local,
+    maxAttempts: 2,
+    fetch: async (input, init) => {
+      calls += 1;
+      urls.push(String(input));
+      const headers = new Headers(init?.headers);
+      operations.push(headers.get("x-cigar-operation-id") ?? "");
+      remainingTimeouts.push(Number(headers.get("x-cigar-timeout-ms")));
+      bodies.push(init?.body);
+      return calls === 1 ? retryable() : ok("getVersion");
+    },
+  });
+  const response = await client.invokeOperation("getVersion", { payloadCbor: new Uint8Array() }, { timeoutMs: 2_000 });
+  assert.equal(response.operationId, "getVersion");
+  assert.equal(calls, 2);
+  assert.deepEqual(urls, ["http://localhost/v1/version", "http://localhost/v1/version"]);
+  assert.deepEqual(operations, ["getVersion", "getVersion"]);
+  assert.deepEqual(bodies, [undefined, undefined]);
+  assert.ok((remainingTimeouts[0] ?? 0) > (remainingTimeouts[1] ?? 0));
+  assert.ok((remainingTimeouts[1] ?? 0) > 0);
 });
 
 test("effect dispatch is never retried automatically", async () => {
@@ -259,10 +321,38 @@ test("typed bundle responses reject missing transform evidence", async () => {
 
 test("transport security and exact problem contract fail closed", async () => {
   assert.throws(() => new CigarClient({ baseUrl: "http://example.com" }), ValidationError);
+  assert.throws(() => new CigarClient({ baseUrl: "https://example.com" }), ValidationError);
   assert.throws(
     () => new CigarClient({ baseUrl: "https://example.com/prefix" }),
     ValidationError,
   );
+  assert.throws(
+    () => new CigarClient({ baseUrl: "https://example.com", bearerToken: "" }),
+    ValidationError,
+  );
+  const previousProxy = process.env["HTTPS_PROXY"];
+  process.env["HTTPS_PROXY"] = "http://ambient-proxy.invalid:8080";
+  try {
+    assert.throws(
+      () => new CigarClient({ baseUrl: "https://example.com", bearerToken: "explicit" }),
+      ValidationError,
+    );
+  } finally {
+    if (previousProxy === undefined) delete process.env["HTTPS_PROXY"];
+    else process.env["HTTPS_PROXY"] = previousProxy;
+  }
+  let remoteCalls = 0;
+  const emptyDynamicToken = new CigarClient({
+    baseUrl: "https://example.com",
+    bearerToken: async () => "",
+    fetch: async () => {
+      remoteCalls += 1;
+      return ok("getVersion");
+    },
+    trustCustomFetch: true,
+  });
+  await assert.rejects(emptyDynamicToken.getVersion({ payload: {} }), ValidationError);
+  assert.equal(remoteCalls, 0);
   const missingContentType = new CigarClient({
     baseUrl: "http://localhost",
     ...local,
@@ -280,11 +370,10 @@ test("transport security and exact problem contract fail closed", async () => {
   });
   await assert.rejects(wrongProblem.getVersion({ payload: {} }), TransportError);
 
-  const token = new CigarClient({
+  assert.throws(() => new CigarClient({
     baseUrl: "http://localhost",
     ...local,
     bearerToken: "x".repeat(8193),
     fetch: async () => ok("getVersion"),
-  });
-  await assert.rejects(token.getVersion({ payload: {} }), ValidationError);
+  }), ValidationError);
 });

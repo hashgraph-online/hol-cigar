@@ -192,6 +192,11 @@ fn reference_all_production_profiles_pass_positive_and_negative_cases() -> Resul
 fn every_profile_rejects_wrong_and_skipped_adapters() -> Result<(), Box<dyn Error>> {
     let temporary = tempfile::tempdir()?;
     for mode in ["wrong", "skipped"] {
+        let expected_diagnostic = match mode {
+            "wrong" => "public_result_mismatch",
+            "skipped" => "malformed_response",
+            _ => return Err("unregistered profile fault mode".into()),
+        };
         let executable = copy_faulty(mode, temporary.path())?;
         for profile in all_profiles() {
             let configuration =
@@ -206,7 +211,8 @@ fn every_profile_rejects_wrong_and_skipped_adapters() -> Result<(), Box<dyn Erro
                 result
                     .cases
                     .iter()
-                    .all(|case| case.status == CaseStatus::Failed),
+                    .all(|case| case.status == CaseStatus::Failed
+                        && case.redacted_diagnostic.as_deref() == Some(expected_diagnostic)),
                 "mode {mode}, profile {profile}"
             );
         }
@@ -239,6 +245,11 @@ fn all_profile_result_verifier_rejects_case_tamper() -> Result<(), Box<dyn Error
 fn intentionally_faulty_implementations_fail_hard_invariants() -> Result<(), Box<dyn Error>> {
     let temporary = tempfile::tempdir()?;
     for mode in ["wrong", "skipped"] {
+        let expected_diagnostic = match mode {
+            "wrong" => "public_result_mismatch",
+            "skipped" => "malformed_response",
+            _ => return Err("unregistered core fault mode".into()),
+        };
         let executable = copy_faulty(mode, temporary.path())?;
         let configuration = configuration(executable, vectors()?);
         let result = run_suite(&configuration)?;
@@ -247,7 +258,8 @@ fn intentionally_faulty_implementations_fail_hard_invariants() -> Result<(), Box
             result
                 .cases
                 .iter()
-                .any(|case| case.status == CaseStatus::Failed),
+                .all(|case| case.status == CaseStatus::Failed
+                    && case.redacted_diagnostic.as_deref() == Some(expected_diagnostic)),
             "mode {mode}"
         );
     }
@@ -333,6 +345,11 @@ fn every_case_uses_a_fresh_process_and_namespace() -> Result<(), Box<dyn Error>>
     let result = run_suite(&configuration)?;
     assert_eq!(result.overall, OverallResult::Passed);
     assert_eq!(result.cases.len(), 10);
+    assert!(
+        result.cases.iter().all(|case| {
+            case.status == CaseStatus::Passed && case.redacted_diagnostic.is_none()
+        })
+    );
     Ok(())
 }
 
@@ -352,6 +369,11 @@ fn timeout_crash_malformed_and_output_flood_are_distinct_failures() -> Result<()
         let configuration = configuration(executable, vector_root.clone());
         let result = run_suite(&configuration)?;
         assert_eq!(result.overall, OverallResult::Failed, "mode {mode}");
+        assert_eq!(
+            result.cases.first().map(|case| case.status),
+            Some(CaseStatus::Failed),
+            "mode {mode}"
+        );
         assert_eq!(
             result
                 .cases
@@ -419,6 +441,11 @@ fn strict_sandbox_blocks_network_and_filesystem_escape() -> Result<(), Box<dyn E
         .and_then(|case| case.redacted_diagnostic.as_deref())
         == Some("isolation_unavailable")
     {
+        assert_ne!(
+            std::env::consts::OS,
+            "macos",
+            "the registered macOS escape proof requires Seatbelt isolation"
+        );
         assert_eq!(result.overall, OverallResult::Failed);
         assert!(!result.release_qualified);
         return Ok(());

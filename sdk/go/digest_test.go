@@ -13,7 +13,7 @@ import (
 const sdkTestDigest = "12201111111111111111111111111111111111111111111111111111111111111111"
 
 func TestSharedSemanticBundleAndDelta(t *testing.T) {
-	fixtureBytes, err := os.ReadFile("../fixtures/semantic-bundle-v1.json")
+	fixtureBytes, err := os.ReadFile("fixtures/semantic-bundle-v1.json")
 	if err != nil {
 		t.Fatal(err)
 	}

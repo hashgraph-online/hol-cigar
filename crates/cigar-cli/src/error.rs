@@ -258,6 +258,16 @@ impl CliError {
         )
     }
 
+    #[cfg(feature = "full")]
+    pub(crate) const fn beta_state_invalid() -> Self {
+        Self::new(
+            "CLI_BETA_STATE_INVALID",
+            "the frozen beta state failed strict read-only validation",
+            "keep the input unchanged and inspect its ownership, permissions, and 0.1.0-beta.1 schema",
+            65,
+        )
+    }
+
     #[cfg(all(feature = "beta-embedded", not(feature = "full")))]
     pub(crate) const fn state_corrupt() -> Self {
         Self::new(

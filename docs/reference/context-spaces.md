@@ -26,16 +26,22 @@ required typed-decision or exact-base resolver. Canonical state never uses seman
 
 ## Events, leases, and focus branches
 
-Every durable event has an immutable protocol identity and project disclosure scope. Polling filters
-before assigning a visibility-relative cursor, so an A-only subscriber cannot infer Project B event
-counts from cursor gaps. Pages are bounded and contiguous. Reconnecting from the last acknowledged
-cursor resumes without a semantic gap; reconnecting from an older cursor safely repeats events.
-Invalidation, revocation, and policy events sort ahead of ordinary events within an atomic batch.
+Every durable event has an immutable protocol identity and project disclosure scope. The kernel scans
+a contiguous private storage position and filters by the caller's current project set; that numeric
+position never crosses the typed API boundary. The typed stream exposes the last disclosure-visible
+immutable event ID as its opaque resume token and resolves it only within the caller's current scope.
+Consequently an A-only subscriber neither receives nor can resolve a Project B event ID, and no
+numeric gap discloses Project B event counts. Pages are bounded. Reconnecting from the last
+acknowledged visible event resumes without a semantic gap; reconnecting from an older visible event
+safely repeats events. Invalidation, revocation, and policy events sort ahead of ordinary events
+within an atomic batch.
 
 Leases are advisory coordination records, not authorization. Each resource acquisition increments a
 monotonic fencing token. Renewal and release require the exact holder, live token, current lease
 revision, and unexpired interval. A released, expired, superseded, or wrong-holder token cannot pass
-fence verification.
+fence verification. Lease records, the latest monotonic fence, event history, and resume positions
+are included in the authenticated durable snapshot; SQLite reopen tests require expired fences to
+stay invalid and replacement fences to remain current.
 
 Focus branches retain their fork commit, optional checkpoint, and offline state. Task switching only
 changes the active focus; it never deletes another branch. Resuming clears offline state while

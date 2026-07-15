@@ -356,7 +356,8 @@ def write_request(state: Path, name: str, value: dict[str, Any]) -> Path:
     directory.mkdir(exist_ok=True)
     if directory.is_symlink() or not directory.is_dir():
         fail("recorded API request directory is unsafe")
-    os.chmod(directory, 0o700)
+    # Recorded requests can contain governed inputs and must deny group/world traversal.
+    os.chmod(directory, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     path = directory / f"{name}.json"
     _write_private_new(path, canonical(value) + b"\n")
     return path

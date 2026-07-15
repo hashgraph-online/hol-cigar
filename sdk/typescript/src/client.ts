@@ -260,6 +260,27 @@ function validateTimeout(value: number): number {
   return value;
 }
 
+const AMBIENT_PROXY_ENVIRONMENT = [
+  "ALL_PROXY",
+  "HTTPS_PROXY",
+  "HTTP_PROXY",
+  "NODE_USE_ENV_PROXY",
+  "all_proxy",
+  "https_proxy",
+  "http_proxy",
+] as const;
+
+function ambientProxyConfigured(): boolean {
+  const runtime = globalThis as typeof globalThis & {
+    process?: { env?: Readonly<Record<string, string | undefined>> };
+  };
+  const environment = runtime.process?.env;
+  return environment !== undefined && AMBIENT_PROXY_ENVIRONMENT.some((name) => {
+    const value = environment[name];
+    return value !== undefined && value.trim() !== "" && value.trim() !== "0";
+  });
+}
+
 function pathParameters(parameters: readonly PathParameter[] | undefined): readonly PathParameter[] {
   const sorted = [...(parameters ?? [])].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
   if (sorted.length > 8) throw new ValidationError("at most eight path parameters are allowed");
@@ -390,6 +411,12 @@ export class CigarClient {
     if (this.#baseUrl.protocol === "http:" && (!loopback || options.allowInsecureLoopback !== true)) {
       throw new ValidationError("cleartext HTTP requires explicit allowInsecureLoopback for a loopback host");
     }
+    if (this.#baseUrl.protocol === "https:" && options.bearerToken === undefined) {
+      throw new ValidationError("remote HTTPS requires an explicit bearer token provider");
+    }
+    if (typeof options.bearerToken === "string" && !/^[\x21-\x7e]{1,8192}$/u.test(options.bearerToken)) {
+      throw new ValidationError("bearer token must be 1..8192 visible ASCII bytes");
+    }
     this.#baseUrl.pathname = "";
     this.#token = options.bearerToken;
     this.#timeoutMs = validateTimeout(options.defaultTimeoutMs ?? 30_000);
@@ -399,6 +426,9 @@ export class CigarClient {
     }
     if (options.fetch !== undefined && options.trustCustomFetch !== true) {
       throw new ValidationError("custom fetch requires explicit trustCustomFetch acknowledgement");
+    }
+    if (options.fetch === undefined && ambientProxyConfigured()) {
+      throw new ValidationError("ambient proxy configuration requires an explicitly trusted custom fetch");
     }
     this.#fetch = options.fetch ?? globalThis.fetch;
     if (options.apiVersion !== undefined && options.apiVersion !== "1") {

@@ -6,7 +6,7 @@ use crate::{
 };
 use cigar_protocol::{
     ContentDigest, ContextAtomV1, ContextEdge, IdempotencyKey, Lifecycle, LineageId, RecordId,
-    RelativePath, VersionId,
+    RelativePath, Validate, VersionId,
 };
 use cigar_store::{
     AccessContext, AtomSelector, IdempotencyIdentity, OutboxMessage, ReadTransaction, Repository,
@@ -100,7 +100,7 @@ impl IngestionService {
         connector: &dyn SourceConnector,
         atomizers: &[&dyn Atomizer],
         context: &ConnectorContext,
-        batch: SourceSnapshotBatch,
+        mut batch: SourceSnapshotBatch,
     ) -> Result<IngestionReceipt, CatalogError> {
         if !batch.snapshot.complete {
             return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
@@ -109,6 +109,14 @@ impl IngestionService {
             repository,
             &request.access,
             request.expected_revision,
+            context,
+        )?;
+        advance_source_observation(&mut batch.snapshot, &existing)?;
+        let prior_snapshot = load_snapshot(
+            repository,
+            &request.access,
+            request.expected_revision,
+            &batch.snapshot.snapshot_id,
             context,
         )?;
         let active_by_lineage = latest_active_by_lineage(&existing);
@@ -130,6 +138,7 @@ impl IngestionService {
                 return Err(CatalogError::new(CatalogErrorCode::Denied));
             }
             let atomizer = select_atomizer(atomizers, record, bytes.len())?;
+            let descriptor = atomizer.descriptor();
             let output = atomizer.atomize(
                 crate::AtomizationRequest {
                     record,
@@ -138,7 +147,14 @@ impl IngestionService {
                 },
                 context,
             )?;
-            validate_output(record, &batch.snapshot.manifest_digest, &output.atoms)?;
+            validate_output(
+                record,
+                &batch.snapshot,
+                &descriptor,
+                &request.access,
+                &output.atoms,
+                &output.edges,
+            )?;
             atoms.extend(output.atoms);
             edges.extend(output.edges);
         }
@@ -188,8 +204,13 @@ impl IngestionService {
             &edges,
             context,
         )?;
-        let publication_digest =
-            publication_digest(&batch.snapshot.manifest_digest, &atoms, &edges)?;
+        let publication_digest = publication_digest(
+            request.access.tenant_id(),
+            &batch.snapshot.snapshot_id,
+            &batch.snapshot.manifest_digest,
+            &atoms,
+            &edges,
+        )?;
         let idempotency = IdempotencyIdentity::new(
             "catalog.ingest.v1",
             request.idempotency_key,
@@ -199,6 +220,22 @@ impl IngestionService {
         let snapshot_id = batch.snapshot.snapshot_id.clone();
         let published_atoms = u64::try_from(atoms.len())
             .map_err(|_error| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+        if atoms.is_empty() && edges.is_empty() {
+            if let Some(existing_snapshot) = prior_snapshot {
+                if !same_snapshot_capture(&existing_snapshot, &batch.snapshot) {
+                    return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
+                }
+                return Ok(IngestionReceipt {
+                    revision: request.expected_revision,
+                    snapshot_id,
+                    published_atoms: 0,
+                    tombstoned_atoms: 0,
+                    publication_digest,
+                });
+            }
+        } else if atoms.is_empty() {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
+        }
         let mut write = repository
             .begin_write(
                 request.access,
@@ -209,7 +246,9 @@ impl IngestionService {
         write
             .stage_snapshot(batch.snapshot)
             .map_err(map_store_error)?;
-        write.publish_atoms(atoms, edges).map_err(map_store_error)?;
+        if !atoms.is_empty() {
+            write.publish_atoms(atoms, edges).map_err(map_store_error)?;
+        }
         write
             .enqueue_outbox(OutboxMessage {
                 message_id: RecordId::new(deterministic_uuid(&[
@@ -231,6 +270,65 @@ impl IngestionService {
             publication_digest,
         })
     }
+}
+
+fn advance_source_observation(
+    snapshot: &mut cigar_protocol::SourceSnapshot,
+    existing: &[ContextAtomV1],
+) -> Result<(), CatalogError> {
+    let Some(latest) = existing
+        .iter()
+        .filter(|atom| atom.source.uri == snapshot.source_uri)
+        .map(|atom| atom.temporal.observed_at)
+        .max()
+    else {
+        return Ok(());
+    };
+    snapshot.captured_at = monotonic_source_observation(snapshot.captured_at, latest)?;
+    Ok(())
+}
+
+fn monotonic_source_observation(
+    captured_at: cigar_protocol::UtcTimestamp,
+    latest: cigar_protocol::UtcTimestamp,
+) -> Result<cigar_protocol::UtcTimestamp, CatalogError> {
+    if captured_at > latest {
+        return Ok(captured_at);
+    }
+    cigar_protocol::UtcTimestamp::from_unix_nanos(
+        latest
+            .unix_nanos()
+            .checked_add(1)
+            .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?,
+    )
+    .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidMetadata))
+}
+
+fn load_snapshot<R: Repository>(
+    repository: &R,
+    access: &AccessContext,
+    revision: StoreRevision,
+    snapshot_id: &RecordId,
+    context: &ConnectorContext,
+) -> Result<Option<cigar_protocol::SourceSnapshot>, CatalogError> {
+    repository
+        .begin_read(
+            access.clone(),
+            SnapshotSelection::Revision(revision),
+            context.cancellation(),
+        )
+        .map_err(map_store_error)?
+        .get_snapshot(snapshot_id)
+        .map_err(map_store_error)
+}
+
+fn same_snapshot_capture(
+    existing: &cigar_protocol::SourceSnapshot,
+    current: &cigar_protocol::SourceSnapshot,
+) -> bool {
+    let mut normalized = current.clone();
+    normalized.captured_at = existing.captured_at;
+    existing == &normalized
 }
 
 fn load_current_atoms<R: Repository>(
@@ -316,18 +414,47 @@ fn select_atomizer<'a>(
 
 fn validate_output(
     record: &SourceRecord,
-    manifest_digest: &ContentDigest,
+    snapshot: &cigar_protocol::SourceSnapshot,
+    descriptor: &crate::AtomizerDescriptor,
+    access: &AccessContext,
     atoms: &[ContextAtomV1],
+    edges: &[ContextEdge],
 ) -> Result<(), CatalogError> {
     for atom in atoms {
         if atom.lifecycle != Lifecycle::Active
             || atom.superseded_by.is_some()
+            || atom.source.uri != snapshot.source_uri
             || atom.source.relative_path.as_ref() != Some(&record.relative_path)
             || atom.source.revision != record.revision
-            || &atom.source.snapshot_digest != manifest_digest
+            || atom.source.snapshot_digest != snapshot.manifest_digest
+            || atom.scope.tenant_id != *access.tenant_id()
+            || atom.scope != descriptor.scope
+            || atom.governance != descriptor.governance
+            || atom.quality != descriptor.quality
+            || atom.retrieval.lexical_enabled != descriptor.lexical_enabled
+            || atom.retrieval.embedding_eligible != descriptor.embedding_eligible
+            || atom
+                .governance
+                .allowed_purposes
+                .binary_search_by(|purpose| purpose.as_str().cmp(access.purpose()))
+                .is_err()
+            || atom.governance.instruction_authority > descriptor.authority_ceiling
+            || !descriptor.produced_kinds.contains(&atom.kind)
         {
             return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
         }
+        atom.validate()
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
+    }
+    for edge in edges {
+        if edge.lifecycle != Lifecycle::Active
+            || edge.superseded_by.is_some()
+            || edge.provenance_digest != snapshot.manifest_digest
+        {
+            return Err(CatalogError::new(CatalogErrorCode::InvalidRecord));
+        }
+        edge.validate()
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::InvalidRecord))?;
     }
     Ok(())
 }
@@ -381,12 +508,18 @@ fn validate_edge_targets<R: Repository>(
 }
 
 fn publication_digest(
+    tenant_id: &RecordId,
+    snapshot_id: &RecordId,
     manifest: &ContentDigest,
     atoms: &[ContextAtomV1],
     edges: &[ContextEdge],
 ) -> Result<ContentDigest, CatalogError> {
     let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-INGESTION-PUBLICATION\0v1\0");
+    hasher.update(b"CIGAR-INGESTION-PUBLICATION\0v2\0");
+    hasher.update(tenant_id.as_str().as_bytes());
+    hasher.update([0]);
+    hasher.update(snapshot_id.as_str().as_bytes());
+    hasher.update([0]);
     hasher.update(manifest.as_str().as_bytes());
     for atom in atoms {
         hasher.update(atom.version_id.as_str().as_bytes());
@@ -439,15 +572,45 @@ fn map_store_error(error: StoreError) -> CatalogError {
 
 #[cfg(test)]
 mod tests {
-    use super::publication_digest;
-    use cigar_protocol::ContentDigest;
+    use super::{monotonic_source_observation, publication_digest};
+    use cigar_protocol::{ContentDigest, UtcTimestamp};
 
     #[test]
     fn publication_digest_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+        let tenant = cigar_protocol::RecordId::new("01890f47-8e7d-7b42-a1d2-000000000001")?;
+        let other_tenant = cigar_protocol::RecordId::new("01890f47-8e7d-7b42-a1d2-000000000002")?;
+        let snapshot = cigar_protocol::RecordId::new("01890f47-8e7d-7b42-a1d2-000000000003")?;
+        let other_snapshot = cigar_protocol::RecordId::new("01890f47-8e7d-7b42-a1d2-000000000004")?;
         let manifest = ContentDigest::new(format!("1220{}", "a".repeat(64)))?;
-        let first = publication_digest(&manifest, &[], &[])?;
-        let second = publication_digest(&manifest, &[], &[])?;
+        let first = publication_digest(&tenant, &snapshot, &manifest, &[], &[])?;
+        let second = publication_digest(&tenant, &snapshot, &manifest, &[], &[])?;
         assert_eq!(first, second);
+        assert_ne!(
+            first,
+            publication_digest(&other_tenant, &snapshot, &manifest, &[], &[])?
+        );
+        assert_ne!(
+            first,
+            publication_digest(&tenant, &other_snapshot, &manifest, &[], &[])?
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn source_observation_uses_a_monotonic_logical_successor_when_wall_clock_regresses()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let captured_at = UtcTimestamp::parse_rfc3339("2020-01-01T00:00:00Z")?;
+        let latest = UtcTimestamp::parse_rfc3339("2026-07-10T00:00:01Z")?;
+        let observed_at = monotonic_source_observation(captured_at, latest)?;
+        assert_eq!(
+            observed_at.unix_nanos(),
+            latest
+                .unix_nanos()
+                .checked_add(1)
+                .ok_or("fixture timestamp overflow")?
+        );
+        let future = UtcTimestamp::parse_rfc3339("2027-01-01T00:00:00Z")?;
+        assert_eq!(monotonic_source_observation(future, latest)?, future);
         Ok(())
     }
 }

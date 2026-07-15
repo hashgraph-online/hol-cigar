@@ -18,6 +18,7 @@ use crate::replay_jobs::{
 use crate::worker::{
     BlockingPool, BlockingPoolError, BlockingPoolErrorCode, WorkerJob, WorkerKind,
 };
+use crate::{DaemonTelemetry, ReconciliationOutcome as TelemetryReconciliationOutcome};
 use cigar_api::{
     ApiError, AuthorizeEffectOperation, AuthorizeEffectRequest, CompareLiveReplayOperation,
     CompareLiveReplayRequest, CompensateEffectOperation, CompensateEffectRequest,
@@ -286,6 +287,7 @@ pub struct EffectWorkerProcessor<R: Repository> {
     argument_vault: Arc<dyn EffectArgumentVault>,
     connectors: Vec<Arc<dyn EffectConnector>>,
     descriptors: BTreeMap<String, ConnectorDescriptor>,
+    telemetry: Option<Arc<DaemonTelemetry>>,
 }
 
 impl<R: Repository> fmt::Debug for EffectWorkerProcessor<R> {
@@ -342,7 +344,15 @@ impl<R: Repository> EffectWorkerProcessor<R> {
             argument_vault: dependencies.argument_vault,
             connectors: dependencies.connectors,
             descriptors,
+            telemetry: None,
         })
+    }
+
+    /// Attaches the process telemetry authority used by production composition.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
     }
 
     fn id(&self) -> Result<RecordId, EffectWorkerError> {
@@ -366,6 +376,22 @@ impl<R: Repository> EffectWorkerProcessor<R> {
                 .map_err(|_error| EffectWorkerError)?;
         }
         Ok(engine)
+    }
+
+    fn observe_record(&self, record: &DurableEffectRecord) {
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_effect_state(record.state);
+            if record.state == EffectState::Unknown
+                && let (Some(attempt), Ok(now)) = (record.attempts.last(), self.clock.now())
+            {
+                let age_nanos = now
+                    .unix_nanos()
+                    .saturating_sub(attempt.started_at.unix_nanos());
+                telemetry.observe_unknown_effect_age(
+                    u64::try_from(age_nanos / 1_000_000_000).unwrap_or(u64::MAX),
+                );
+            }
+        }
     }
 
     /// Returns whether shutdown still permits discovery of new effect connector work.
@@ -416,6 +442,7 @@ impl<R: Repository> EffectWorkerProcessor<R> {
     ) -> Result<EffectWorkerOutcome, EffectWorkerError> {
         let engine = self.engine(tenant_id.clone())?;
         let record = engine.get(effect_id).map_err(|_error| EffectWorkerError)?;
+        self.observe_record(&record);
         if record.state != EffectState::Dispatching {
             return Ok(EffectWorkerOutcome::AlreadyComplete);
         }
@@ -439,7 +466,10 @@ impl<R: Repository> EffectWorkerProcessor<R> {
         if !dispatch_can_enter_connector(&record, &authorization)? {
             return engine
                 .dispatch(permit, self.id()?, self.id()?, &authorization)
-                .map(|_record| EffectWorkerOutcome::Advanced)
+                .map(|record| {
+                    self.observe_record(&record);
+                    EffectWorkerOutcome::Advanced
+                })
                 .map_err(|_error| EffectWorkerError);
         }
         self.argument_vault
@@ -466,7 +496,10 @@ impl<R: Repository> EffectWorkerProcessor<R> {
         if !dispatch_can_enter_connector(&record, &current_authorization)? {
             return engine
                 .dispatch(permit, self.id()?, self.id()?, &current_authorization)
-                .map(|_record| EffectWorkerOutcome::Advanced)
+                .map(|record| {
+                    self.observe_record(&record);
+                    EffectWorkerOutcome::Advanced
+                })
                 .map_err(|_error| EffectWorkerError);
         }
         if !self.dispatch_gate.begin_dispatch_send() {
@@ -474,7 +507,10 @@ impl<R: Repository> EffectWorkerProcessor<R> {
         }
         engine
             .dispatch(permit, self.id()?, self.id()?, &current_authorization)
-            .map(|_record| EffectWorkerOutcome::Advanced)
+            .map(|record| {
+                self.observe_record(&record);
+                EffectWorkerOutcome::Advanced
+            })
             .map_err(|_error| EffectWorkerError)
     }
 
@@ -487,6 +523,7 @@ impl<R: Repository> EffectWorkerProcessor<R> {
     ) -> Result<EffectWorkerOutcome, EffectWorkerError> {
         let engine = self.engine(tenant_id.clone())?;
         let record = engine.get(effect_id).map_err(|_error| EffectWorkerError)?;
+        self.observe_record(&record);
         if record.state != EffectState::Unknown {
             return Ok(EffectWorkerOutcome::AlreadyComplete);
         }
@@ -548,7 +585,18 @@ impl<R: Repository> EffectWorkerProcessor<R> {
                 self.id()?,
                 &current_authorization,
             )
-            .map(|_record| EffectWorkerOutcome::Advanced)
+            .map(|record| {
+                self.observe_record(&record);
+                if let Some(telemetry) = &self.telemetry {
+                    let outcome = if record.state == EffectState::Unknown {
+                        TelemetryReconciliationOutcome::Unresolved
+                    } else {
+                        TelemetryReconciliationOutcome::Resolved
+                    };
+                    telemetry.record_reconciliation(outcome);
+                }
+                EffectWorkerOutcome::Advanced
+            })
             .map_err(|_error| EffectWorkerError)
     }
 }
@@ -656,6 +704,7 @@ pub struct EffectServiceHandlers<R: Repository> {
     connectors: Vec<Arc<dyn EffectConnector>>,
     descriptors: BTreeMap<String, ConnectorDescriptor>,
     errors: Arc<dyn FacadeErrorFactory>,
+    telemetry: Option<Arc<DaemonTelemetry>>,
 }
 
 impl<R: Repository + 'static> EffectServiceHandlers<R> {
@@ -706,7 +755,15 @@ impl<R: Repository + 'static> EffectServiceHandlers<R> {
             connectors: dependencies.connectors,
             descriptors,
             errors: dependencies.errors,
+            telemetry: None,
         })
+    }
+
+    /// Attaches the process telemetry authority used by production composition.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
     }
 
     fn public_error(&self, code: ErrorCode) -> ApiError {
@@ -830,11 +887,30 @@ impl<R: Repository + 'static> EffectServiceHandlers<R> {
         &self,
         record: &DurableEffectRecord,
     ) -> Result<TypedResponse<EffectStatusResponse>, ApiError> {
+        if record.state == EffectState::Unknown
+            && let (Some(telemetry), Some(attempt), Ok(now)) = (
+                self.telemetry.as_ref(),
+                record.attempts.last(),
+                self.clock.now(),
+            )
+        {
+            let age_nanos = now
+                .unix_nanos()
+                .saturating_sub(attempt.started_at.unix_nanos());
+            let age_seconds = u64::try_from(age_nanos / 1_000_000_000).unwrap_or(u64::MAX);
+            telemetry.observe_unknown_effect_age(age_seconds);
+        }
         Ok(TypedResponse {
             payload: self.project(record)?,
             semantic_etag: Some(format!("\"{}\"", record.effect_version)),
             next_page_cursor: None,
         })
+    }
+
+    fn observe_status(&self, response: &TypedResponse<EffectStatusResponse>) {
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_effect_state(response.payload.state);
+        }
     }
 
     fn map_effect_error(&self, error: EffectError, existence_hidden: bool) -> ApiError {
@@ -1493,7 +1569,13 @@ impl<R: Repository + 'static> TypedUnaryService<PrepareEffectOperation>
         context: RequestContext,
         request: TypedRequest<PrepareEffectRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.prepare_effect(context, request).await })
+        Box::pin(async move {
+            let result = self.prepare_effect(context, request).await;
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 
@@ -1505,7 +1587,13 @@ impl<R: Repository + 'static> TypedUnaryService<AuthorizeEffectOperation>
         context: RequestContext,
         request: TypedRequest<AuthorizeEffectRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.authorize_effect(context, request).await })
+        Box::pin(async move {
+            let result = self.authorize_effect(context, request).await;
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 
@@ -1517,7 +1605,13 @@ impl<R: Repository + 'static> TypedUnaryService<DispatchEffectOperation>
         context: RequestContext,
         request: TypedRequest<EffectIdRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.dispatch_effect(context, request).await })
+        Box::pin(async move {
+            let result = self.dispatch_effect(context, request).await;
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 
@@ -1529,7 +1623,13 @@ impl<R: Repository + 'static> TypedUnaryService<GetEffectStatusOperation>
         context: RequestContext,
         request: TypedRequest<EffectIdRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.get_effect_status(context, request).await })
+        Box::pin(async move {
+            let result = self.get_effect_status(context, request).await;
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 
@@ -1541,7 +1641,26 @@ impl<R: Repository + 'static> TypedUnaryService<ReconcileEffectOperation>
         context: RequestContext,
         request: TypedRequest<EffectIdRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.reconcile_effect(context, request).await })
+        Box::pin(async move {
+            let result = self.reconcile_effect(context, request).await;
+            if let Some(telemetry) = &self.telemetry {
+                match &result {
+                    Ok(response) if response.payload.state == EffectState::Unknown => {
+                        telemetry.record_reconciliation(TelemetryReconciliationOutcome::Unresolved);
+                    }
+                    Ok(_response) => {
+                        telemetry.record_reconciliation(TelemetryReconciliationOutcome::Resolved);
+                    }
+                    Err(_error) => {
+                        telemetry.record_reconciliation(TelemetryReconciliationOutcome::Failed);
+                    }
+                }
+            }
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 
@@ -1553,7 +1672,13 @@ impl<R: Repository + 'static> TypedUnaryService<CompensateEffectOperation>
         context: RequestContext,
         request: TypedRequest<CompensateEffectRequest>,
     ) -> ServiceFuture<'a, Result<TypedResponse<EffectStatusResponse>, ApiError>> {
-        Box::pin(async move { self.compensate_effect(context, request).await })
+        Box::pin(async move {
+            let result = self.compensate_effect(context, request).await;
+            if let Ok(response) = &result {
+                self.observe_status(response);
+            }
+            result
+        })
     }
 }
 

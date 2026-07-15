@@ -72,7 +72,7 @@
     {
       "id": "WP16-GO",
       "result": "pass",
-      "go": "1.26.3",
+      "go": "1.26.5",
       "top_level_tests": 18,
       "race": "pass",
       "vet": "pass",

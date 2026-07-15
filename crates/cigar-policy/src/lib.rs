@@ -9,6 +9,7 @@ pub use capability::{CapabilityAuthority, EffectiveCapabilities, SignedCapabilit
 pub use contract::*;
 pub use engine::{
     CompiledPolicyEngine, MAX_POLICY_CACHE_ENTRIES, MAX_POLICY_CACHE_ENTRIES_PER_TENANT,
-    PolicyCacheStatistics, PolicyEngine,
+    MAX_RETRIEVAL_AUTHORIZATION_TTL, PolicyCacheStatistics, PolicyEngine, RetrievalAuthorization,
+    RetrievalAuthorizationClaims, RetrievalResourceAuthorizationRequest,
 };
 pub use redaction::{RedactedValue, StructuralRedactor};

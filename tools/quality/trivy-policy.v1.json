@@ -1,0 +1,186 @@
+{
+  "candidate_dispositions": [],
+  "distribution_reachability": {
+    "artifact_dependency_classes": {
+      "non_rust_payload": [
+        "docs",
+        "schemas",
+        "conformance",
+        "benchmarks",
+        "licenses",
+        "typescript-sdk",
+        "python-sdk-sdist",
+        "python-sdk-wheel",
+        "go-sdk"
+      ],
+      "root_cargo_graph_bound": [
+        "cli-daemon-macos-aarch64",
+        "cigar-conformance-macos-aarch64",
+        "cigarbench-macos-aarch64",
+        "macos-installer-arm64",
+        "rust-sdk-crate",
+        "claude-code-plugin"
+      ],
+      "root_cargo_graph_reference_only": [
+        "macos-homebrew-formula-arm64"
+      ],
+      "source_projection": [
+        "source"
+      ]
+    },
+    "artifact_matrix": {
+      "path": "packaging/artifact-matrix.v1.json"
+    },
+    "development_profile": {
+      "path": "packaging/development/local-macos-aarch64.v1.json",
+      "profile_id": "cigar.development.local.macos-aarch64.v1",
+      "selected_artifact_ids": [
+        "source",
+        "docs",
+        "schemas",
+        "conformance",
+        "benchmarks",
+        "licenses",
+        "cli-daemon-macos-aarch64",
+        "cigar-conformance-macos-aarch64",
+        "cigarbench-macos-aarch64",
+        "macos-homebrew-formula-arm64",
+        "macos-installer-arm64",
+        "typescript-sdk",
+        "rust-sdk-crate",
+        "python-sdk-sdist",
+        "python-sdk-wheel",
+        "go-sdk",
+        "claude-code-plugin"
+      ],
+      "target_triple": "aarch64-apple-darwin"
+    },
+    "sbom": {
+      "component_functions": [
+        "_cargo_components",
+        "_npm_components",
+        "_python_components",
+        "_go_components"
+      ],
+      "generator_path": "scripts/release/generate_sbom.py",
+      "generator_sha256": "5bad087d44a40c689bad2dc800a5b5f18b0fceb1bd35cd496bf85fe87788d6b6"
+    },
+    "source_archive": {
+      "artifact_id": "source",
+      "builder_path": "scripts/release/build_archives.py",
+      "builder_sha256": "45e121b3babe882f1ec336a1c88da16ca21a902655f0fecd26296899025ac567",
+      "manifest_path": "packaging/local-archives.v1.json"
+    },
+    "stale_lock_path": "vendor/aws-creds-0.39.1/Cargo.lock"
+  },
+  "required_scan_targets": [
+    {
+      "class": "lang-pkgs",
+      "path": "Cargo.lock",
+      "type": "cargo"
+    },
+    {
+      "class": "lang-pkgs",
+      "path": "sdk/go/go.mod",
+      "type": "gomod"
+    },
+    {
+      "class": "lang-pkgs",
+      "path": "demos/sdk-clients/go-workflow/go.mod",
+      "type": "gomod"
+    },
+    {
+      "class": "lang-pkgs",
+      "path": "pnpm-lock.yaml",
+      "type": "pnpm"
+    },
+    {
+      "class": "lang-pkgs",
+      "path": "sdk/python/uv.lock",
+      "type": "uv"
+    }
+  ],
+  "scan": {
+    "detection_priority": "precise",
+    "ignore_unfixed": false,
+    "include_development_dependencies": false,
+    "offline_dependency_resolution": true,
+    "scanners": [
+      "vuln"
+    ],
+    "severities": [
+      "HIGH",
+      "CRITICAL"
+    ],
+    "skip_directories": [],
+    "skip_files": [],
+    "timeout_seconds": 600
+  },
+  "scanner": {
+    "max_database_age_hours": 48,
+    "name": "trivy",
+    "version": "0.69.2"
+  },
+  "schema_version": "cigar.trivy-policy.v1",
+  "source_reachability": {
+    "beta_source_contract": {
+      "path": "packaging/beta/contracts/source-archive.v1.json",
+      "snapshot_must_be_excluded": true
+    },
+    "development_source_manifest": {
+      "path": "packaging/local-archives.v1.json",
+      "snapshot_must_be_included": true
+    },
+    "patched_package": {
+      "manifest": "crates/cigar-aws-creds/Cargo.toml",
+      "name": "cigar-aws-creds",
+      "version": "0.39.1-cigar.1"
+    },
+    "resolved_lock": {
+      "forbidden_package_versions": [
+        {
+          "name": "aws-creds",
+          "version": "0.39.1"
+        },
+        {
+          "name": "aws-lc-sys",
+          "version": "0.31.0"
+        },
+        {
+          "name": "openssl",
+          "version": "0.10.66"
+        },
+        {
+          "name": "rustls-webpki",
+          "version": "0.103.6"
+        }
+      ],
+      "path": "Cargo.lock",
+      "required_package_versions": [
+        {
+          "name": "cigar-aws-creds",
+          "version": "0.39.1-cigar.1"
+        },
+        {
+          "name": "openssl",
+          "version": "0.10.80"
+        },
+        {
+          "name": "rustls-webpki",
+          "version": "0.103.13"
+        }
+      ]
+    },
+    "snapshot": {
+      "manifest_bytes": 1967,
+      "manifest_path": "vendor/aws-creds-0.39.1/Cargo.toml",
+      "manifest_sha256": "2749cdd89e9450b79bbe5874083917c5bb08fd6a92ce2bed6deb0f63e109329a",
+      "package_name": "aws-creds",
+      "package_version": "0.39.1"
+    },
+    "workspace_manifest": {
+      "excluded_path": "vendor/aws-creds-0.39.1",
+      "path": "Cargo.toml"
+    }
+  }
+}

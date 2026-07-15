@@ -1,16 +1,17 @@
 //! Closed production repository composition over local and shared durable profiles.
 
 use cigar_protocol::{
-    ContextAtomV1, ContextBundle, ContextCommit, ContextEdge, EffectJournalEvent, RecordId,
-    SourceSnapshot,
+    ContentDigest, ContextAtomV1, ContextBundle, ContextCommit, ContextEdge, ContextSpaceId,
+    EdgeKind, EffectJournalEvent, RecordId, SourceSnapshot, VersionId,
 };
 use cigar_store::{
-    AccessContext, BlobRecord, CancellationToken, CommitReceipt, EffectRecordEnvelope,
-    EffectRecoveryPage, EffectRecoveryQuery, IdempotencyIdentity, InMemoryReadTransaction,
-    OutboxMessage, OutboxRecoveryPage, OutboxRecoveryQuery, PostgresStore,
-    PostgresWriteTransaction, Repository, ServiceBatch, ServiceBatchReceipt, ServiceError,
-    ServiceListPage, ServiceListQuery, ServiceRecord, ServiceRecordLocator, ServiceRecordSelection,
-    ServiceRepository, SnapshotSelection, SqliteStore, SqliteWriteTransaction, StoreError,
+    AccessContext, AtomCursor, AtomPage, AtomSelector, BlobRecord, CancellationToken,
+    CommitReceipt, EffectRecordEnvelope, EffectRecoveryPage, EffectRecoveryQuery,
+    IdempotencyIdentity, InMemoryReadTransaction, OutboxMessage, OutboxRecord, OutboxRecoveryPage,
+    OutboxRecoveryQuery, PostgresStore, PostgresWriteTransaction, ReadTransaction, Repository,
+    ServiceBatch, ServiceBatchReceipt, ServiceError, ServiceListPage, ServiceListQuery,
+    ServiceRecord, ServiceRecordLocator, ServiceRecordSelection, ServiceRepository,
+    SnapshotSelection, SqliteReadTransaction, SqliteStore, SqliteWriteTransaction, StoreError,
     StoreRevision, WorkerLocator, WorkerState, WorkerUpdate, WriteTransaction,
 };
 use std::fmt;
@@ -78,6 +79,145 @@ impl fmt::Debug for ProductionStore {
         match self {
             Self::Local(_store) => formatter.write_str("ProductionStore::Local"),
             Self::Shared(_store) => formatter.write_str("ProductionStore::Shared"),
+        }
+    }
+}
+
+/// Closed immutable transaction for the selected production repository.
+pub enum ProductionReadTransaction {
+    /// Snapshot-pinned normalized SQLite reader.
+    Local(SqliteReadTransaction),
+    /// Snapshot-pinned shared PostgreSQL reader.
+    Shared(InMemoryReadTransaction),
+}
+
+impl fmt::Debug for ProductionReadTransaction {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Local(transaction) => transaction.fmt(formatter),
+            Self::Shared(transaction) => transaction.fmt(formatter),
+        }
+    }
+}
+
+impl ReadTransaction for ProductionReadTransaction {
+    fn revision(&self) -> StoreRevision {
+        match self {
+            Self::Local(transaction) => transaction.revision(),
+            Self::Shared(transaction) => transaction.revision(),
+        }
+    }
+
+    fn get_atom(&self, version: &VersionId) -> Result<Option<ContextAtomV1>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_atom(version),
+            Self::Shared(transaction) => transaction.get_atom(version),
+        }
+    }
+
+    fn get_atoms_by_id(
+        &self,
+        atom_ids: &[RecordId],
+    ) -> Result<Vec<Option<ContextAtomV1>>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_atoms_by_id(atom_ids),
+            Self::Shared(transaction) => transaction.get_atoms_by_id(atom_ids),
+        }
+    }
+
+    fn get_active_atom_by_id(
+        &self,
+        atom_id: &RecordId,
+    ) -> Result<Option<ContextAtomV1>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_active_atom_by_id(atom_id),
+            Self::Shared(transaction) => transaction.get_active_atom_by_id(atom_id),
+        }
+    }
+
+    fn query_atoms(
+        &self,
+        selector: AtomSelector,
+        limit: usize,
+        cursor: Option<&AtomCursor>,
+    ) -> Result<AtomPage, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.query_atoms(selector, limit, cursor),
+            Self::Shared(transaction) => transaction.query_atoms(selector, limit, cursor),
+        }
+    }
+
+    fn edges_from(
+        &self,
+        version: &VersionId,
+        kind: Option<EdgeKind>,
+        limit: usize,
+    ) -> Result<Vec<ContextEdge>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.edges_from(version, kind, limit),
+            Self::Shared(transaction) => transaction.edges_from(version, kind, limit),
+        }
+    }
+
+    fn get_bundle(&self, bundle: &VersionId) -> Result<Option<ContextBundle>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_bundle(bundle),
+            Self::Shared(transaction) => transaction.get_bundle(bundle),
+        }
+    }
+
+    fn get_snapshot(&self, snapshot: &RecordId) -> Result<Option<SourceSnapshot>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_snapshot(snapshot),
+            Self::Shared(transaction) => transaction.get_snapshot(snapshot),
+        }
+    }
+
+    fn context_commits(&self, space: &ContextSpaceId) -> Result<Vec<ContextCommit>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.context_commits(space),
+            Self::Shared(transaction) => transaction.context_commits(space),
+        }
+    }
+
+    fn get_effect(&self, effect: &RecordId) -> Result<Vec<EffectJournalEvent>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_effect(effect),
+            Self::Shared(transaction) => transaction.get_effect(effect),
+        }
+    }
+
+    fn get_effect_record(
+        &self,
+        effect: &RecordId,
+    ) -> Result<Option<EffectRecordEnvelope>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_effect_record(effect),
+            Self::Shared(transaction) => transaction.get_effect_record(effect),
+        }
+    }
+
+    fn get_blob(&self, digest: &ContentDigest) -> Result<Option<BlobRecord>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.get_blob(digest),
+            Self::Shared(transaction) => transaction.get_blob(digest),
+        }
+    }
+
+    fn outbox(&self) -> Result<Vec<OutboxRecord>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.outbox(),
+            Self::Shared(transaction) => transaction.outbox(),
+        }
+    }
+
+    fn idempotent_result(
+        &self,
+        identity: &IdempotencyIdentity,
+    ) -> Result<Option<CommitReceipt>, StoreError> {
+        match self {
+            Self::Local(transaction) => transaction.idempotent_result(identity),
+            Self::Shared(transaction) => transaction.idempotent_result(identity),
         }
     }
 }
@@ -170,7 +310,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
 
 impl Repository for ProductionStore {
     type Read<'store>
-        = InMemoryReadTransaction
+        = ProductionReadTransaction
     where
         Self: 'store;
     type Write<'store>
@@ -185,8 +325,12 @@ impl Repository for ProductionStore {
         cancellation: CancellationToken,
     ) -> Result<Self::Read<'_>, StoreError> {
         match self {
-            Self::Local(store) => store.begin_read(context, selection, cancellation),
-            Self::Shared(store) => store.begin_read(context, selection, cancellation),
+            Self::Local(store) => store
+                .begin_read(context, selection, cancellation)
+                .map(ProductionReadTransaction::Local),
+            Self::Shared(store) => store
+                .begin_read(context, selection, cancellation)
+                .map(ProductionReadTransaction::Shared),
         }
     }
 

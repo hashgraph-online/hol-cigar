@@ -12,15 +12,21 @@ publish = false
 workspace = true
 
 [dependencies]
+cap-fs-ext.workspace = true
+cap-std.workspace = true
 cigar-canon.workspace = true
 cigar-crypto.workspace = true
 cigar-protocol.workspace = true
 getrandom.workspace = true
+rustix = { workspace = true, features = ["fs"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 wasmtime.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+sysinfo = "=0.37.2"
+
 [dev-dependencies]
-tempfile.workspace = true
 wat.workspace = true

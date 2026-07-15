@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -10,9 +11,16 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from build_archives import _write_archive
+from build_archives import SourceSnapshot, _write_archive
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
+    ReleaseError,
     canonical_json_bytes,
+    child_environment_without_evidence,
     file_reference,
     load_json,
     process_failure_summary,
@@ -20,10 +28,11 @@ from release_lib import (
     run_bounded,
     sha256_file,
     tree_digest,
+    selected_evidence_directory,
     write_bytes,
     write_json,
 )
-from signatures import public_key_id, sign
+from signatures import _secure_openssl, openssl_sha256, public_key_id, sign
 
 
 EPOCH = 1_700_000_000
@@ -40,7 +49,7 @@ def _run(
     raw = run_bounded(
         arguments,
         cwd=cwd,
-        env=environment,
+        env=child_environment_without_evidence(environment),
         timeout=120,
         max_stdout=8 * 1024 * 1024,
         max_stderr=8 * 1024 * 1024,
@@ -91,6 +100,8 @@ def _signature(
     signature_directory: Path,
     private_key: Path,
     public_key: Path,
+    openssl_path: Path,
+    openssl_digest: str,
 ) -> Path:
     output = signature_directory / f"{purpose}-{payload.name}.sig.json"
     sign(
@@ -102,17 +113,22 @@ def _signature(
         purpose=purpose,
         signed_at=EPOCH,
         expires_at=EPOCH + 86_400,
+        openssl_path=openssl_path,
+        openssl_sha256=openssl_digest,
     )
     return output
 
 
-def main() -> int:
-    repository = repo_root()
+def _execute_selftest(repository: Path) -> dict[str, Any]:
     python = sys.executable
+    reviewed_openssl = _secure_openssl(None)
+    reviewed_openssl_sha256 = openssl_sha256(reviewed_openssl)
     with tempfile.TemporaryDirectory(
         prefix="cigar-release-verifier-selftest-"
     ) as directory:
-        root = Path(directory).resolve(strict=True)
+        temporary_root = Path(directory).resolve(strict=True)
+        root = temporary_root / "fixture"
+        root.mkdir(mode=0o700)
         packaging = root / "packaging"
         contracts = packaging / "contracts"
         contracts.mkdir(parents=True)
@@ -216,7 +232,17 @@ def main() -> int:
         }
         artifact = dist / matrix["artifacts"][0]["filename"]
         _write_archive(
-            artifact, [("payload.txt", payload_path)], metadata, EPOCH, False
+            artifact,
+            [
+                SourceSnapshot(
+                    relative="payload.txt",
+                    payload=payload_path.read_bytes(),
+                    mode=0o644,
+                )
+            ],
+            metadata,
+            EPOCH,
+            False,
         )
         write_bytes(
             dist / "SHA256SUMS",
@@ -450,13 +476,20 @@ def main() -> int:
         private_key = key_directory / "private.pem"
         public_key = key_directory / "public.pem"
         _run(
-            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)],
+            [
+                str(reviewed_openssl),
+                "genpkey",
+                "-algorithm",
+                "ED25519",
+                "-out",
+                str(private_key),
+            ],
             root,
         )
         os.chmod(private_key, 0o600)
         _run(
             [
-                "openssl",
+                str(reviewed_openssl),
                 "pkey",
                 "-in",
                 str(private_key),
@@ -482,7 +515,11 @@ def main() -> int:
                 "schema_version": "cigar.release-trust-policy.v1",
                 "keys": [
                     {
-                        "key_id": public_key_id(public_key),
+                        "key_id": public_key_id(
+                            public_key,
+                            openssl_path=reviewed_openssl,
+                            openssl_sha256=reviewed_openssl_sha256,
+                        ),
                         "public_key": "public.pem",
                         "public_key_sha256": sha256_file(public_key),
                         "signer_principal": SIGNER,
@@ -507,7 +544,15 @@ def main() -> int:
             (attachment_paths["benchmark"], "release-benchmark"),
         ]
         _ = [
-            _signature(payload, purpose, signature_directory, private_key, public_key)
+            _signature(
+                payload,
+                purpose,
+                signature_directory,
+                private_key,
+                public_key,
+                reviewed_openssl,
+                reviewed_openssl_sha256,
+            )
             for payload, purpose in signature_payloads
         ]
         valid_build_manifest = load_json(build_manifest_path)
@@ -556,9 +601,12 @@ def main() -> int:
             purpose="release-evidence",
             signed_at=EPOCH,
             expires_at=EPOCH + 86_400,
+            openssl_path=reviewed_openssl,
+            openssl_sha256=reviewed_openssl_sha256,
         )
 
-        report = root / "verification-report.json"
+        report_directory = temporary_root / "verification-evidence"
+        report = report_directory / "verification-report.json"
         _run(
             [
                 python,
@@ -568,15 +616,45 @@ def main() -> int:
                 str(root),
                 "--trust-policy",
                 str(trust_policy),
+                "--openssl",
+                str(reviewed_openssl),
+                "--openssl-sha256",
+                reviewed_openssl_sha256,
                 "--verification-time",
                 str(EPOCH + 1),
+                "--evidence-dir",
+                str(report_directory),
                 "--report",
-                str(report),
+                report.name,
             ],
             root,
         )
         if not report.is_file():
             raise RuntimeError("release verifier self-test did not emit its report")
+
+        failed = _run(
+            [
+                python,
+                str(repository / "scripts/release/verify_release.py"),
+                str(dist),
+                "--root",
+                str(root),
+                "--trust-policy",
+                str(trust_policy),
+                "--openssl",
+                str(reviewed_openssl),
+                "--openssl-sha256",
+                "0" * 64,
+                "--verification-time",
+                str(EPOCH + 1),
+            ],
+            root,
+            expected=1,
+        )
+        if "no reviewed OpenSSL matches the pinned SHA-256" not in failed.stderr:
+            raise RuntimeError(
+                "substituted OpenSSL digest failed for an unexpected reason"
+            )
 
         original = artifact.read_bytes()
         write_bytes(artifact, original + b"tampered")
@@ -589,6 +667,10 @@ def main() -> int:
                 str(root),
                 "--trust-policy",
                 str(trust_policy),
+                "--openssl",
+                str(reviewed_openssl),
+                "--openssl-sha256",
+                reviewed_openssl_sha256,
                 "--verification-time",
                 str(EPOCH + 1),
             ],
@@ -610,6 +692,10 @@ def main() -> int:
                 str(root),
                 "--trust-policy",
                 str(trust_policy),
+                "--openssl",
+                str(reviewed_openssl),
+                "--openssl-sha256",
+                reviewed_openssl_sha256,
                 "--verification-time",
                 str(EPOCH + 1),
             ],
@@ -634,6 +720,10 @@ def main() -> int:
                 str(root),
                 "--trust-policy",
                 str(trust_policy),
+                "--openssl",
+                str(reviewed_openssl),
+                "--openssl-sha256",
+                reviewed_openssl_sha256,
                 "--verification-time",
                 str(EPOCH + 1),
             ],
@@ -643,6 +733,68 @@ def main() -> int:
         if "attachment digest or size mismatch" not in failed.stderr:
             raise RuntimeError("tampered raw report failed for an unexpected reason")
 
+    return {
+        "schema_version": "cigar.release-verifier-selftest-result.v1",
+        "status": "passed",
+        "release_ready": False,
+        "checks": [
+            {"id": "mismatched-build-contract-rejected", "status": "passed"},
+            {"id": "substituted-openssl-rejected", "status": "passed"},
+            {"id": "tampered-artifact-rejected", "status": "passed"},
+            {"id": "tampered-raw-report-rejected", "status": "passed"},
+            {"id": "unreferenced-payload-rejected", "status": "passed"},
+        ],
+    }
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external self-test report workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="safe relative self-test report path (requires an evidence directory)",
+    )
+    return parser.parse_args()
+
+
+def _open_report_workspace(
+    arguments: argparse.Namespace,
+    repository: Path,
+) -> tuple[EvidenceWorkspace | None, str | None]:
+    selected = selected_evidence_directory(arguments.evidence_dir)
+    if selected is None:
+        if arguments.report is not None:
+            raise ReleaseError("--report requires --evidence-dir or CIGAR_EVIDENCE_DIR")
+        return None, None
+    if arguments.report is None:
+        raise ReleaseError("--evidence-dir requires a safe relative --report path")
+    try:
+        parts = safe_evidence_path(os.fspath(arguments.report))
+        workspace = EvidenceWorkspace.create(selected, repository_root=repository)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+    return workspace, "/".join(parts)
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    repository = repo_root()
+    workspace, relative = _open_report_workspace(arguments, repository)
+    try:
+        result = _execute_selftest(repository)
+        if workspace is not None:
+            assert relative is not None
+            workspace.write_json(relative, result)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"cannot publish self-test evidence: {error}") from error
+    finally:
+        if workspace is not None:
+            workspace.close()
     print(
         "signed release verifier self-test passed; mismatched build contract, tampered artifact/raw report, "
         "and unreferenced payload were rejected"
@@ -651,4 +803,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except ReleaseError as error:
+        raise SystemExit(f"release verifier self-test failed: {error}") from error

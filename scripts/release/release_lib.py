@@ -15,7 +15,7 @@ import tempfile
 import threading
 import unicodedata
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 class ReleaseError(RuntimeError):
@@ -35,6 +35,70 @@ _MAX_JSON_INTEGER = (1 << 63) - 1
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def selected_evidence_directory(
+    argument_value: Path | None,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> Path | None:
+    """Select one absolute external-evidence root without resolving it.
+
+    Path resolution and repository-alias checks belong to ``EvidenceWorkspace``;
+    this helper only makes command-line/environment selection uniform.  Keeping
+    the path lexical here is important because resolving an attacker-controlled
+    selector before the workspace opens it would follow links outside the pinned
+    directory-descriptor traversal.
+    """
+
+    selected_environment = os.environ if environment is None else environment
+    environment_value = selected_environment.get("CIGAR_EVIDENCE_DIR")
+    if environment_value == "":
+        environment_value = None
+    if argument_value is not None and environment_value is not None:
+        if os.fspath(argument_value) != os.fspath(Path(environment_value)):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; "
+                "provide one evidence directory"
+            )
+    raw: Path | str | None = (
+        argument_value if argument_value is not None else environment_value
+    )
+    if raw is None:
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+def reject_evidence_directory(
+    argument_value: Path | None,
+    operation: str,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> None:
+    """Reject evidence selection for a source mutation or stdout-only check."""
+
+    selected = selected_evidence_directory(
+        argument_value,
+        environment=environment,
+    )
+    if selected is not None:
+        raise ReleaseError(
+            f"{operation} has no evidence artifact; "
+            "CIGAR_EVIDENCE_DIR/--evidence-dir is inapplicable"
+        )
+
+
+def child_environment_without_evidence(
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Return a child environment isolated from the parent's output selector."""
+
+    child = dict(os.environ if environment is None else environment)
+    child.pop("CIGAR_EVIDENCE_DIR", None)
+    return child
 
 
 def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -467,10 +531,10 @@ _PROHIBITED_RELEASE_STATUSES = frozenset(
     {"failed", "skipped", "waived", "quarantined", "unknown"}
 )
 _RELEASE_REQUIREMENTS_V1_SHA256 = (
-    "5452202ea3c258d2ebb551ba0352433bcf820cac625c9cf95b9451608338739f"
+    "76c9b45ead8c8fc13d1624e559ad27fb6005aa0ca237ca2398d0ba86481b765c"
 )
 _QUALIFICATION_CATEGORY_MAP_V1_SHA256 = (
-    "23b8f288415d5a5c1be5da67a78e94812114f9fb2a6037f34f271e6988a82f32"
+    "4b5a677ab88ff1e5072c0506fd99303c4b0830731653766fe929a625e1ed3537"
 )
 
 
@@ -536,6 +600,9 @@ def validate_release_policy_documents(
         "producer",
         "platform",
         "ecosystem",
+        "signature_purpose",
+        "install_target",
+        "evidence_map",
     }
     for artifact in artifacts:
         if (
@@ -584,6 +651,33 @@ def validate_release_policy_documents(
             raise ReleaseError(
                 f"artifact matrix qualifications are invalid: {identifier}"
             )
+        signature_purpose = artifact.get("signature_purpose")
+        if signature_purpose is not None and (
+            not isinstance(signature_purpose, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9-]*", signature_purpose) is None
+        ):
+            raise ReleaseError(
+                f"artifact matrix signature purpose is invalid: {identifier}"
+            )
+        install_target = artifact.get("install_target")
+        if install_target is not None:
+            if not isinstance(install_target, str):
+                raise ReleaseError(
+                    f"artifact matrix install target is invalid: {identifier}"
+                )
+            safe_relative_path(install_target)
+        evidence_map = artifact.get("evidence_map")
+        if evidence_map is not None and (
+            not isinstance(evidence_map, list)
+            or not evidence_map
+            or not all(
+                isinstance(value, str)
+                and re.fullmatch(r"[a-z0-9][a-z0-9-]*", value) is not None
+                for value in evidence_map
+            )
+            or len(set(evidence_map)) != len(evidence_map)
+        ):
+            raise ReleaseError(f"artifact matrix evidence map is invalid: {identifier}")
         identifiers.add(identifier)
         filenames.add(filename)
         portable_filenames.add(filename.casefold())
@@ -860,15 +954,59 @@ _DEVELOPER_PATH_PATTERNS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
         re.compile(rb"[A-Za-z]:\\Users\\[A-Za-z0-9._ -]{1,255}\\"),
     ),
 )
+CONTENT_SCAN_FINDINGS = frozenset(
+    name for name, _pattern in (*_SECRET_PATTERNS, *_DEVELOPER_PATH_PATTERNS)
+)
+
+
+def validate_content_scan_exemptions(value: Any) -> list[dict[str, Any]]:
+    """Validate path-wide or finding-scoped package scan exemptions."""
+
+    if not isinstance(value, list):
+        raise ReleaseError("package contract content-scan exemptions are invalid")
+    for entry in value:
+        if (
+            not isinstance(entry, dict)
+            or set(entry)
+            not in (
+                {"pattern", "reason"},
+                {"pattern", "reason", "findings"},
+            )
+            or not isinstance(entry.get("pattern"), str)
+            or not entry["pattern"]
+            or not isinstance(entry.get("reason"), str)
+            or not entry["reason"]
+        ):
+            raise ReleaseError("package contract content-scan exemptions are invalid")
+        findings = entry.get("findings")
+        if findings is not None and (
+            not isinstance(findings, list)
+            or not findings
+            or not all(isinstance(item, str) and item for item in findings)
+            or len(set(findings)) != len(findings)
+            or not set(findings).issubset(CONTENT_SCAN_FINDINGS)
+        ):
+            raise ReleaseError("package contract content-scan exemptions are invalid")
+    return value
 
 
 def scan_payload(
-    relative: str, payload: bytes, exemptions: list[dict[str, str]]
+    relative: str, payload: bytes, exemptions: list[dict[str, Any]]
 ) -> list[str]:
-    if any(matches(relative, [entry["pattern"]]) for entry in exemptions):
+    matching_exemptions = [
+        entry for entry in exemptions if matches(relative, [entry["pattern"]])
+    ]
+    if any("findings" not in entry for entry in matching_exemptions):
         return []
+    scoped_findings = {
+        finding
+        for entry in matching_exemptions
+        for finding in entry.get("findings", [])
+    }
     findings: list[str] = []
     for name, pattern in (*_SECRET_PATTERNS, *_DEVELOPER_PATH_PATTERNS):
+        if name in scoped_findings:
+            continue
         match = pattern.search(payload)
         if match is None:
             continue

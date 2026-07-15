@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.local-scale-profile.v1",
+  "id": "large_local",
+  "platform": "aarch64-apple-darwin",
+  "capacity_profile": "large_local",
+  "atoms": 1000000,
+  "edges": 10000000,
+  "blob_objects": 1600,
+  "blob_bytes_each": 67108864,
+  "referenced_blob_bytes": 107374182400,
+  "atom_batch_size": 1000,
+  "edge_batch_size": 10000,
+  "maximum_database_bytes": 68719476736,
+  "minimum_initial_available_bytes": 322122547200,
+  "minimum_runtime_reserve_bytes": 17179869184,
+  "maximum_atoms": 1250000,
+  "maximum_edges": 12500000,
+  "maximum_referenced_blob_bytes": 137438953472
+}

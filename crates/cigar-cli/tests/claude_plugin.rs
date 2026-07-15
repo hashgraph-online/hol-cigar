@@ -7,6 +7,7 @@ mod unix {
     use sha2::{Digest as _, Sha256};
     use std::fs;
     use std::os::unix::fs::PermissionsExt as _;
+    use std::os::unix::fs::symlink;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
 
@@ -120,6 +121,7 @@ mod unix {
             let bin = directory.path().join("bin with spaces");
             fs::create_dir_all(home.join(".claude"))?;
             fs::create_dir_all(&cigar_home)?;
+            fs::set_permissions(&cigar_home, fs::Permissions::from_mode(0o700))?;
             fs::create_dir_all(&bin)?;
             let provider_sentinel =
                 b"{\n  \"unrelated\": [\"byte preserving\", \"honeybee\"]\n}\n".to_vec();
@@ -151,7 +153,17 @@ mod unix {
         }
 
         fn run(&self, arguments: &[&str]) -> Result<Output, Box<dyn std::error::Error>> {
-            self.run_with_source(arguments, &workspace())
+            Ok(Command::new(env!("CARGO_BIN_EXE_cigar"))
+                .args(arguments)
+                .env("HOME", &self.home)
+                .env("CIGAR_HOME", &self.cigar_home)
+                .env_remove("CIGAR_CLAUDE_PLUGIN_SOURCE")
+                .env("CIGAR_CLAUDE_BINARY", &self.claude)
+                .env("CIGAR_MCP_BINARY", &self.component)
+                .env("CIGAR_CLAUDE_HOOK_BINARY", &self.component)
+                .env("CIGAR_CLAUDE_DAEMON_CHECK_BINARY", &self.component)
+                .env("CIGAR_TEST_CLAUDE_LOG", &self.log)
+                .output()?)
         }
 
         fn run_with_source(
@@ -435,8 +447,117 @@ printf '{"ok":true}\n'
         )?)?;
         assert_eq!(
             installed.pointer("/mcpServers/cigar/command"),
-            Some(&serde_json::Value::String("cigar-mcp".to_owned()))
+            Some(&serde_json::Value::String(
+                "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp".to_owned()
+            ))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn install_rejects_symlinked_managed_ancestor_without_touching_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new("2.1.207")?;
+        let outside = fixture.directory.path().join("outside-managed-root");
+        fs::create_dir_all(&outside)?;
+        let sentinel = outside.join("must-survive.txt");
+        fs::write(&sentinel, b"outside bytes\n")?;
+        symlink(&outside, fixture.cigar_home.join("claude-code"))?;
+
+        let output = fixture.run(&[
+            "plugin",
+            "install",
+            "claude-code",
+            "--yes",
+            "--output",
+            "json",
+            "--deadline",
+            "10s",
+        ])?;
+        assert!(!output.status.success());
+        assert_eq!(fs::read(&sentinel)?, b"outside bytes\n");
+        assert!(fixture.cigar_home.join("claude-code").is_symlink());
+        Ok(())
+    }
+
+    #[test]
+    fn install_rejects_user_owned_cigar_home_ancestor_symlink()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new("2.1.207")?;
+        let outside = fixture.directory.path().join("outside-cigar-home");
+        fs::create_dir_all(&outside)?;
+        fs::set_permissions(&outside, fs::Permissions::from_mode(0o700))?;
+        let sentinel = outside.join("must-survive.txt");
+        fs::write(&sentinel, b"ancestor target bytes\n")?;
+        let linked_ancestor = fixture.directory.path().join("linked-ancestor");
+        symlink(&outside, &linked_ancestor)?;
+        let redirected_home = linked_ancestor.join("new-cigar-home");
+
+        let output = Command::new(env!("CARGO_BIN_EXE_cigar"))
+            .args([
+                "plugin",
+                "install",
+                "claude-code",
+                "--yes",
+                "--output",
+                "json",
+                "--deadline",
+                "10s",
+            ])
+            .env("HOME", &fixture.home)
+            .env("CIGAR_HOME", &redirected_home)
+            .env_remove("CIGAR_CLAUDE_PLUGIN_SOURCE")
+            .env("CIGAR_CLAUDE_BINARY", &fixture.claude)
+            .env("CIGAR_MCP_BINARY", &fixture.component)
+            .env("CIGAR_CLAUDE_HOOK_BINARY", &fixture.component)
+            .env("CIGAR_CLAUDE_DAEMON_CHECK_BINARY", &fixture.component)
+            .env("CIGAR_TEST_CLAUDE_LOG", &fixture.log)
+            .output()?;
+        assert!(!output.status.success());
+        assert_eq!(fs::read(&sentinel)?, b"ancestor target bytes\n");
+        assert!(!outside.join("new-cigar-home").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn uninstall_rejects_noncanonical_receipt_root_without_deleting_it()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new("2.1.207")?;
+        let install = fixture.run(&[
+            "plugin",
+            "install",
+            "claude-code",
+            "--yes",
+            "--output",
+            "json",
+            "--deadline",
+            "10s",
+        ])?;
+        assert!(install.status.success());
+
+        let outside = fixture
+            .cigar_home
+            .join("claude-code/not-the-managed-marketplace");
+        fs::create_dir_all(&outside)?;
+        let sentinel = outside.join("must-survive.txt");
+        fs::write(&sentinel, b"receipt target bytes\n")?;
+        let receipt_path = fixture.cigar_home.join("claude-code/install.json");
+        let mut receipt: serde_json::Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        receipt["marketplace_root"] = outside.to_string_lossy().into_owned().into();
+        fs::write(&receipt_path, serde_json::to_vec(&receipt)?)?;
+
+        let uninstall = fixture.run(&[
+            "plugin",
+            "uninstall",
+            "claude-code",
+            "--yes",
+            "--output",
+            "json",
+            "--deadline",
+            "10s",
+        ])?;
+        assert!(!uninstall.status.success());
+        assert_eq!(fs::read(&sentinel)?, b"receipt target bytes\n");
         Ok(())
     }
 }

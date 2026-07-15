@@ -209,7 +209,10 @@ impl Bucket {
     ///    "attachment; filename=\"test.png\"".into(),
     /// );
     ///
+    /// #[cfg(not(feature = "sync"))]
     /// let url = bucket.presign_get("/test.file", 86400, Some(custom_queries)).await.unwrap();
+    /// #[cfg(feature = "sync")]
+    /// let url = bucket.presign_get("/test.file", 86400, Some(custom_queries)).unwrap();
     /// println!("Presigned url: {}", url);
     /// }
     /// ```
@@ -255,7 +258,10 @@ impl Bucket {
     ///     PostPolicyValue::StartsWith(Cow::from("user/user1/"))
     /// ).unwrap();
     ///
+    /// #[cfg(not(feature = "sync"))]
     /// let presigned_post = bucket.presign_post(post_policy).await.unwrap();
+    /// #[cfg(feature = "sync")]
+    /// let presigned_post = bucket.presign_post(post_policy).unwrap();
     /// println!("Presigned url: {}, fields: {:?}", presigned_post.url, presigned_post.fields);
     /// }
     /// ```
@@ -291,7 +297,10 @@ impl Bucket {
     ///    "custom_value".parse().unwrap(),
     /// );
     ///
+    /// #[cfg(not(feature = "sync"))]
     /// let url = bucket.presign_put("/test.file", 86400, Some(custom_headers), None).await.unwrap();
+    /// #[cfg(feature = "sync")]
+    /// let url = bucket.presign_put("/test.file", 86400, Some(custom_headers), None).unwrap();
     /// println!("Presigned url: {}", url);
     /// }
     /// ```
@@ -333,7 +342,10 @@ impl Bucket {
     /// let credentials = Credentials::default().unwrap();
     /// let bucket = Bucket::new(bucket_name, region, credentials).unwrap();
     ///
+    /// #[cfg(not(feature = "sync"))]
     /// let url = bucket.presign_delete("/test.file", 86400).await.unwrap();
+    /// #[cfg(feature = "sync")]
+    /// let url = bucket.presign_delete("/test.file", 86400).unwrap();
     /// println!("Presigned url: {}", url);
     /// }
     /// ```
@@ -365,6 +377,7 @@ impl Bucket {
     /// let config = BucketConfiguration::default();
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let create_bucket_response = Bucket::create(bucket_name, region, credentials, config).await?;
     ///
     /// // `sync` fature will produce an identical method
@@ -430,7 +443,8 @@ impl Bucket {
     /// let credentials = Credentials::default()?;
     ///
     /// // Async variant with `tokio` or `async-std` features
-    /// let response = Bucket::list_buckets(region, credentials).await?;
+    /// #[cfg(not(feature = "sync"))]
+    /// let response = Bucket::list_buckets(region.clone(), credentials.clone()).await?;
     ///
     /// // `sync` feature will produce an identical method
     /// #[cfg(feature = "sync")]
@@ -483,6 +497,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let exists = bucket.exists().await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -527,6 +542,7 @@ impl Bucket {
     /// let config = BucketConfiguration::default();
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let create_bucket_response = Bucket::create_with_path_style(bucket_name, region, credentials, config).await?;
     ///
     /// // `sync` fature will produce an identical method
@@ -592,6 +608,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials).unwrap();
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// bucket.delete().await.unwrap();
     /// // `sync` fature will produce an identical method
     ///
@@ -898,6 +915,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let code = bucket.copy_object_internal("/from.file", "/to.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -953,6 +971,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.get_object("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -1011,6 +1030,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let exists = bucket.object_exists("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -1129,6 +1149,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.get_object_torrent("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -1170,6 +1191,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.get_object_range("/test.file", 0, Some(31)).await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -1429,7 +1451,7 @@ impl Bucket {
     /// // Blocking variant, generated with `blocking` feature in combination
     /// // with `tokio` or `async-std` features.
     /// #[cfg(feature = "blocking")]
-    /// let status_code = bucket.put_object_stream_blocking(&mut path, "/path")?;
+    /// let status_code = bucket.put_object_stream_blocking(&mut async_output_file, "/path")?;
     /// #
     /// # Ok(())
     /// # }
@@ -1546,7 +1568,7 @@ impl Bucket {
     /// // with `tokio` or `async-std` features.
     /// #[cfg(feature = "blocking")]
     /// let status_code = bucket
-    ///     .put_object_stream_with_content_type_blocking(&mut path, "/path", "application/octet-stream")?;
+    ///     .put_object_stream_with_content_type_blocking(&mut async_output_file, "/path", "application/octet-stream")?;
     /// #
     /// # Ok(())
     /// # }
@@ -2042,6 +2064,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let (region, status_code) = bucket.location().await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2101,6 +2124,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.delete_object("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2151,7 +2175,8 @@ impl Bucket {
     /// ];
     ///
     /// // Async variant with `tokio` or `async-std` features
-    /// let response = bucket.delete_objects(objects).await?;
+    /// #[cfg(not(feature = "sync"))]
+    /// let response = bucket.delete_objects(objects.clone()).await?;
     ///
     /// // `sync` feature will produce an identical method
     /// #[cfg(feature = "sync")]
@@ -2226,6 +2251,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let (head_object_result, code) = bucket.head_object("/test.png").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2271,6 +2297,7 @@ impl Bucket {
     /// let content = "I want to go to S3".as_bytes();
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.put_object_with_content_type("/test.file", content, "text/plain").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2327,8 +2354,9 @@ impl Bucket {
     /// );
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket
-    ///     .put_object_with_content_type_and_headers("/test.file", content, "text/plain", Some(headers)).await?;
+    ///     .put_object_with_content_type_and_headers("/test.file", content, "text/plain", Some(headers.clone())).await?;
     ///
     /// // `sync` feature will produce an identical method
     /// #[cfg(feature = "sync")]
@@ -2339,7 +2367,7 @@ impl Bucket {
     /// // with `tokio` or `async-std` features.
     /// #[cfg(feature = "blocking")]
     /// let response_data = bucket
-    ///     .put_object_with_content_type_and_headers("/test.file", content, "text/plain", Some(headers))?;
+    ///     .put_object_with_content_type_and_headers_blocking("/test.file", content, "text/plain", Some(headers))?;
     /// #
     /// # Ok(())
     /// # }
@@ -2387,7 +2415,8 @@ impl Bucket {
     /// );
     ///
     /// // Async variant with `tokio` or `async-std` features
-    /// let response_data = bucket.put_object_with_headers("/test.file", content, Some(headers)).await?;
+    /// #[cfg(not(feature = "sync"))]
+    /// let response_data = bucket.put_object_with_headers("/test.file", content, Some(headers.clone())).await?;
     ///
     /// // `sync` feature will produce an identical method
     /// #[cfg(feature = "sync")]
@@ -2396,7 +2425,7 @@ impl Bucket {
     /// // Blocking variant, generated with `blocking` feature in combination
     /// // with `tokio` or `async-std` features.
     /// #[cfg(feature = "blocking")]
-    /// let response_data = bucket.put_object_with_headers("/test.file", content, Some(headers))?;
+    /// let response_data = bucket.put_object_with_headers_blocking("/test.file", content, Some(headers))?;
     /// #
     /// # Ok(())
     /// # }
@@ -2436,6 +2465,7 @@ impl Bucket {
     /// let content = "I want to go to S3".as_bytes();
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.put_object("/test.file", content).await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2478,12 +2508,19 @@ impl Bucket {
     /// let bucket = Bucket::new("my-bucket", "us-east-1".parse()?, Credentials::default()?)?;
     ///
     /// // Upload with custom headers using builder pattern
+    /// #[cfg(not(feature = "sync"))]
     /// let response = bucket.put_object_builder("/my-file.txt", b"Hello, World!")
     ///     .with_content_type("text/plain")
     ///     .with_cache_control("public, max-age=3600")?
     ///     .with_metadata("author", "john-doe")?
     ///     .execute()
     ///     .await?;
+    /// #[cfg(feature = "sync")]
+    /// let response = bucket.put_object_builder("/my-file.txt", b"Hello, World!")
+    ///     .with_content_type("text/plain")
+    ///     .with_cache_control("public, max-age=3600")?
+    ///     .with_metadata("author", "john-doe")?
+    ///     .execute()?;
     /// #
     /// # Ok(())
     /// # }
@@ -2535,6 +2572,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.put_object_tagging("/test.file", &[("Tag1", "Value1"), ("Tag2", "Value2")]).await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2579,6 +2617,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.delete_object_tagging("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2621,6 +2660,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let response_data = bucket.get_object_tagging("/test.file").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2740,6 +2780,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let results = bucket.list("/".to_string(), Some("/".to_string())).await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2825,6 +2866,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let results = bucket.list_multiparts_uploads(Some("/"), Some("/")).await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2886,6 +2928,7 @@ impl Bucket {
     /// let bucket = Bucket::new(bucket_name, region, credentials)?;
     ///
     /// // Async variant with `tokio` or `async-std` features
+    /// #[cfg(not(feature = "sync"))]
     /// let results = bucket.abort_upload("/some/file.txt", "ZDFjM2I0YmEtMzU3ZC00OTQ1LTlkNGUtMTgxZThjYzIwNjA2").await?;
     ///
     /// // `sync` feature will produce an identical method
@@ -2941,8 +2984,7 @@ impl Bucket {
     /// requests, or no (infinity) timeout if `None`.  Defaults to
     /// 30 seconds.
     ///
-    /// Only the [`attohttpc`] and the [`hyper`] backends obey this option;
-    /// async code may instead await with a timeout.
+    /// Both the `attohttpc` and async HTTP backends obey this option.
     pub fn set_request_timeout(&mut self, timeout: Option<Duration>) {
         self.request_timeout = timeout;
     }
@@ -3226,6 +3268,11 @@ mod test {
         .unwrap()
     }
 
+    #[cfg(any(
+        feature = "sync",
+        feature = "blocking",
+        all(feature = "with-tokio", not(feature = "tokio-rustls-tls"))
+    ))]
     fn test_gc_credentials() -> Credentials {
         Credentials::new(
             Some(&env::var("GC_ACCESS_KEY_ID").unwrap()),
@@ -3299,6 +3346,11 @@ mod test {
         .unwrap()
     }
 
+    #[cfg(any(
+        feature = "sync",
+        feature = "blocking",
+        all(feature = "with-tokio", not(feature = "tokio-rustls-tls"))
+    ))]
     fn test_gc_bucket() -> Box<Bucket> {
         let mut bucket = Bucket::new(
             "rust-s3",
@@ -3479,7 +3531,7 @@ mod test {
     )]
     async fn test_tagging_aws() {
         let bucket = test_aws_bucket();
-        let _target_tags = vec![
+        let _target_tags = [
             Tag {
                 key: "Tag1".to_string(),
                 value: "Value1".to_string(),
@@ -3520,7 +3572,7 @@ mod test {
     )]
     async fn test_tagging_minio() {
         let bucket = test_minio_bucket();
-        let _target_tags = vec![
+        let _target_tags = [
             Tag {
                 key: "Tag1".to_string(),
                 value: "Value1".to_string(),
@@ -3843,11 +3895,11 @@ mod test {
 
         // cleanup (and test Delete)
         let response_data = bucket.delete_object_blocking(s3_path).unwrap();
-        assert_eq!(code, 200);
+        assert_eq!(response_data.status_code(), 200);
         let response_data = bucket.delete_object_blocking(s3_path_2).unwrap();
-        assert_eq!(code, 200);
+        assert_eq!(response_data.status_code(), 200);
         let response_data = bucket.delete_object_blocking(s3_path_3).unwrap();
-        assert_eq!(code, 200);
+        assert_eq!(response_data.status_code(), 200);
     }
 
     #[ignore]
@@ -4312,14 +4364,20 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_builder_composition() {
         use std::time::Duration;
 
         let bucket = Bucket::new(
             "test-bucket",
             "eu-central-1".parse().unwrap(),
-            test_aws_credentials(),
+            Credentials::new(
+                Some("test-access-key"),
+                Some("test-secret-key"),
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
         )
         .unwrap()
         .with_request_timeout(Duration::from_secs(10))

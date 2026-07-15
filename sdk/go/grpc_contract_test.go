@@ -111,16 +111,14 @@ func TestGeneratedGRPCUnaryAndClosableStream(t *testing.T) {
 
 type highLevelOperationsGRPCServer struct {
 	cigarv1.UnimplementedOperationsServiceServer
-	attempts atomic.Int32
+	attempts       atomic.Int32
+	firstRemaining atomic.Int64
 }
 
 func (server *highLevelOperationsGRPCServer) GetVersion(
 	ctx context.Context,
 	request *cigarv1.OperationRequest,
 ) (*cigarv1.OperationResponse, error) {
-	if server.attempts.Add(1) == 1 {
-		return nil, status.Error(codes.Unavailable, "transient")
-	}
 	if request.OperationId != "getVersion" || len(request.PayloadCbor) != 0 {
 		return nil, status.Error(codes.InvalidArgument, "invalid request")
 	}
@@ -128,6 +126,19 @@ func (server *highLevelOperationsGRPCServer) GetVersion(
 	authorization := metadata.ValueFromIncomingContext(ctx, "authorization")
 	if len(values) != 1 || values[0] != "getVersion" || len(authorization) != 1 || authorization[0] != "Bearer test-token" {
 		return nil, status.Error(codes.InvalidArgument, "invalid metadata")
+	}
+	deadline, present := ctx.Deadline()
+	if !present {
+		return nil, status.Error(codes.InvalidArgument, "missing deadline")
+	}
+	remaining := time.Until(deadline)
+	attempt := server.attempts.Add(1)
+	if attempt == 1 {
+		server.firstRemaining.Store(remaining.Nanoseconds())
+		return nil, status.Error(codes.Unavailable, "transient")
+	}
+	if remaining <= 0 || remaining >= time.Duration(server.firstRemaining.Load()) {
+		return nil, status.Error(codes.InvalidArgument, "deadline was reset across retry")
 	}
 	payload, err := deterministicCBOR(map[string]any{
 		"version": "0.1.0", "source_revision": "test", "protocol_min": "1.0",
@@ -231,6 +242,11 @@ func TestHighLevelGRPCUnaryResumeCancellationAndUnsafeRetry(t *testing.T) {
 	if _, err := NewGRPCClient(GRPCClientOptions{Connection: connection}); err == nil {
 		t.Fatal("custom gRPC connection was accepted without no-retry acknowledgement")
 	}
+	if _, err := NewGRPCClient(GRPCClientOptions{
+		Connection: connection, TrustCustomConnectionNoRetries: true,
+	}); err == nil {
+		t.Fatal("remote gRPC was accepted without explicit authorization authority")
+	}
 	client, err := NewGRPCClient(GRPCClientOptions{
 		Connection: connection, TrustCustomConnectionNoRetries: true,
 		BearerToken: "test-token", DefaultTimeout: 2 * time.Second, MaxAttempts: 3,
@@ -287,7 +303,7 @@ func TestHighLevelGRPCUnaryResumeCancellationAndUnsafeRetry(t *testing.T) {
 }
 
 func TestGRPCProblemDetailsMapToStableTypedError(t *testing.T) {
-	fixture, err := os.ReadFile("../fixtures/problem-index-unavailable-v1.json")
+	fixture, err := os.ReadFile("fixtures/problem-index-unavailable-v1.json")
 	if err != nil {
 		t.Fatal(err)
 	}

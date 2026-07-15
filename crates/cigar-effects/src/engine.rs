@@ -156,6 +156,37 @@ struct AuthenticatedEffectRecord {
     seal: EffectRecordSeal,
 }
 
+/// Content-free fields that must exactly match the external monotonic checkpoint for one record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EffectCheckpointObservation {
+    /// Logical effect identity.
+    pub effect_id: RecordId,
+    /// Immutable digest of the first durable intent.
+    pub intent_digest: ContentDigest,
+    /// Latest durable effect projection version.
+    pub effect_version: u64,
+    /// Digest of the exact tenant signature authenticating this projection.
+    pub authenticator: ContentDigest,
+}
+
+/// Decodes and validates one protected envelope for backup/checkpoint completeness comparison.
+///
+/// This validates the envelope digest, closed record shape, semantic journal, and seal shape. The
+/// caller must separately verify the tenant signature or compare its authenticator against a
+/// trusted external checkpoint; protected record bytes are never returned.
+pub fn persisted_effect_checkpoint_observation(
+    envelope: &EffectRecordEnvelope,
+) -> Result<EffectCheckpointObservation, EffectError> {
+    let authenticated = decode_authenticated_effect_record(envelope)?;
+    verify_record(&authenticated.record)?;
+    Ok(EffectCheckpointObservation {
+        effect_id: authenticated.record.intent.effect_id,
+        intent_digest: authenticated.record.intent_digest,
+        effect_version: authenticated.record.effect_version,
+        authenticator: authenticated.seal.authenticator().clone(),
+    })
+}
+
 /// Read-only verification of one latest persisted effect envelope, including its semantic journal,
 /// tenant-key seal, and production external rollback checkpoint when the authenticator supports it.
 pub fn verify_persisted_effect_record(

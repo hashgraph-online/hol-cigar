@@ -14,6 +14,10 @@ include = ["src/**", "migrations/**", "Cargo.toml", "LICENSE", "NOTICE", "releas
 [lints]
 workspace = true
 
+[features]
+migration-fault-injection = []
+projection-fault-injection = []
+
 [dependencies]
 ciborium.workspace = true
 cigar-crypto.workspace = true
@@ -31,10 +35,11 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 tokio-postgres-rustls.workspace = true
+url = "=2.5.8"
 webpki-roots.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-rustix.workspace = true
+rustix = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 cigar-testkit.workspace = true

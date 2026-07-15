@@ -1,0 +1,128 @@
+name: macos-development-diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: macos-development-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+# This workflow deliberately does not upload or publish its output. It proves
+# only that the current committed development source can produce a contract-valid
+# unsigned archive; it does not sign, notarize, install-qualify, or support it.
+jobs:
+  unsigned-development-archive:
+    name: unsigned, unqualified archive diagnostic / macOS 15 arm64
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Verify the native diagnostic host and toolchain
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          command -v protoc >/dev/null
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Hydrate the locked native dependency cache
+        run: cargo fetch --locked --target aarch64-apple-darwin
+
+      - name: Build and verify the non-publishing development archive offline
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          umask 077
+          canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+          evidence_root="${canonical_temp}/cigar-macos-development-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          stdout_receipt="${canonical_temp}/cigar-macos-development-stdout-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          test ! -e "${evidence_root}"
+          export CIGAR_EVIDENCE_DIR="${evidence_root}"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          python3 scripts/release/build_macos_aarch64_archive.py >"${stdout_receipt}"
+          python3 - "${evidence_root}" "${stdout_receipt}" "${GITHUB_SHA}" <<'PY'
+          import hashlib
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          def require(condition: bool, message: str) -> None:
+              if not condition:
+                  raise SystemExit(message)
+
+          root = Path(sys.argv[1])
+          stdout_path = Path(sys.argv[2])
+          revision = sys.argv[3]
+          receipt_path = root / "macos-aarch64-development-build.json"
+          receipt = json.loads(receipt_path.read_bytes())
+          require(json.loads(stdout_path.read_bytes()) == receipt, "stdout receipt mismatch")
+          require(
+              receipt["schema_version"] == "cigar.development-native-archive-build.v1",
+              "unexpected development receipt schema",
+          )
+          require(receipt["status"] == "built-unqualified", "unsafe build status")
+          require(receipt["target"] == "aarch64-apple-darwin", "unexpected target")
+          require(receipt["source"]["committed"] is True, "source is not committed")
+          require(receipt["source"]["clean"] is True, "source is not clean")
+          require(receipt["source"]["revision"] == revision, "event SHA mismatch")
+          require(receipt["package_verification"]["status"] == "passed", "package verification failed")
+          require(
+              receipt["claims"] == {
+                  "development_build": True,
+                  "distribution_signed": False,
+                  "notarized": False,
+                  "qualified": False,
+                  "published": False,
+                  "release": False,
+                  "supported": False,
+              },
+              "development receipt contains unsafe claims",
+          )
+          archive_reference = receipt["archive"]
+          archive_path = root / archive_reference["path"]
+          archive_payload = archive_path.read_bytes()
+          require(len(archive_payload) == archive_reference["bytes"], "archive size mismatch")
+          require(
+              hashlib.sha256(archive_payload).hexdigest() == archive_reference["sha256"],
+              "archive digest mismatch",
+          )
+          require(
+              {path.name for path in root.iterdir()} == {archive_path.name, receipt_path.name},
+              "development evidence workspace contains unexpected files",
+          )
+          require(stat.S_IMODE(root.stat().st_mode) == 0o700, "unsafe evidence root mode")
+          require(stat.S_IMODE(archive_path.stat().st_mode) == 0o400, "unsafe archive mode")
+          require(stat.S_IMODE(receipt_path.stat().st_mode) == 0o400, "unsafe receipt mode")
+          PY
+          printf '%s\n' \
+            'Built and contract-verified an unsigned, unqualified development archive. No artifact was uploaded or published.' \
+            >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Assert the diagnostic left the checkout clean
+        if: ${{ always() }}
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

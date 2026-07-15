@@ -11,6 +11,7 @@ use cigar_store::{RepositoryBlobStore, StoreErrorCode};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::net::IpAddr;
 use std::path::{Component, PathBuf};
 use std::sync::Arc;
 
@@ -101,8 +102,62 @@ pub struct ProductionEffectConnectorConfiguration {
     pub root_directory: Option<PathBuf>,
     /// Immutable HTTPS endpoint, required only by `idempotent_http`.
     pub endpoint: Option<String>,
+    /// Explicit stock HTTPS and scoped-credential settings, required only by `idempotent_http`.
+    pub https_transport: Option<ProductionHttpsEffectTransportConfiguration>,
     /// Mandatory opaque argument-vault provider selector for enabled connectors.
     pub argument_vault_provider: Option<String>,
+}
+
+/// Explicit, secret-safe configuration for the macOS stock HTTPS effect transport.
+///
+/// The credential bytes never appear here. `credential_handle` names the exact owner-private
+/// credential document at `credential_file`; the transport revalidates that document's origin,
+/// project, resource, validity window, and bearer token at every dispatch and lookup.
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionHttpsEffectTransportConfiguration {
+    /// Exact remote protocol contract implemented by the configured endpoint.
+    pub provider_protocol: String,
+    /// Opaque handle that must match the owner-private credential document.
+    pub credential_handle: String,
+    /// Absolute owner-private credential-document path.
+    pub credential_file: PathBuf,
+    /// Sorted unique public IP addresses dialed directly without ambient DNS.
+    pub pinned_addresses: Vec<IpAddr>,
+    /// Maximum TCP/TLS establishment time.
+    pub connect_timeout_ms: u64,
+    /// Maximum complete request and bounded-response time.
+    pub request_timeout_ms: u64,
+    /// Maximum accepted response bytes.
+    pub maximum_response_bytes: usize,
+}
+
+impl fmt::Debug for ProductionHttpsEffectTransportConfiguration {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProductionHttpsEffectTransportConfiguration")
+            .field("provider_protocol", &self.provider_protocol)
+            .field("credential_handle", &"[OPAQUE]")
+            .field("credential_file", &"[OWNER-PRIVATE]")
+            .field("pinned_address_count", &self.pinned_addresses.len())
+            .field("connect_timeout_ms", &self.connect_timeout_ms)
+            .field("request_timeout_ms", &self.request_timeout_ms)
+            .field("maximum_response_bytes", &self.maximum_response_bytes)
+            .finish()
+    }
+}
+
+/// Constructs one endpoint-bound HTTPS transport for each configured HTTP connector.
+///
+/// A factory is injected only by the qualified local macOS bootstrap. Omitting it keeps live HTTP
+/// effects unavailable even if a registry document attempts to configure one.
+pub trait ProductionHttpTransportFactory: Send + Sync {
+    /// Constructs a transport fixed to `endpoint` and the exact scoped credential settings.
+    fn build(
+        &self,
+        endpoint: &str,
+        configuration: ProductionHttpsEffectTransportConfiguration,
+    ) -> Result<Arc<dyn HttpTransport>, ProductionEffectRegistryError>;
 }
 
 /// Explicit effect capability profile. Disabled effects are supported only when stated here.
@@ -151,6 +206,14 @@ impl ProductionEffectRegistry {
         !self.effects_enabled
     }
 
+    /// Returns whether composition requires the explicitly qualified live HTTPS factory.
+    #[must_use]
+    pub(crate) fn requires_live_http(&self) -> bool {
+        self.connectors
+            .iter()
+            .any(|connector| connector.kind == ProductionEffectConnectorKind::IdempotentHttp)
+    }
+
     /// Constructs the exact configured built-in connectors and their shared tenant-scoped vault.
     ///
     /// HTTP connectors require an explicitly injected bounded HTTPS transport. Disabled profiles
@@ -158,7 +221,7 @@ impl ProductionEffectRegistry {
     pub fn compose(
         &self,
         blobs: Arc<dyn RepositoryBlobStore>,
-        http_transport: Option<Arc<dyn HttpTransport>>,
+        http_transports: Option<Arc<dyn ProductionHttpTransportFactory>>,
     ) -> Result<ProductionEffectComponents, ProductionEffectRegistryError> {
         self.validate()?;
         let mut connectors: Vec<Arc<dyn EffectConnector>> = Vec::new();
@@ -195,10 +258,14 @@ impl ProductionEffectRegistry {
                         .endpoint
                         .as_ref()
                         .ok_or(ProductionEffectRegistryError::InvalidConfiguration)?;
-                    let transport = http_transport
+                    let transport_configuration = configuration
+                        .https_transport
+                        .clone()
+                        .ok_or(ProductionEffectRegistryError::InvalidConfiguration)?;
+                    let transport = http_transports
                         .as_ref()
-                        .cloned()
-                        .ok_or(ProductionEffectRegistryError::ConnectorUnavailable)?;
+                        .ok_or(ProductionEffectRegistryError::ConnectorUnavailable)?
+                        .build(endpoint, transport_configuration)?;
                     let connector = Arc::new(
                         IdempotentHttpConnector::new(
                             configuration.name.clone(),
@@ -393,10 +460,13 @@ impl ProductionEffectConnectorConfiguration {
         }
         match self.kind {
             ProductionEffectConnectorKind::DemoIssue => {
-                self.root_directory.is_none() && self.endpoint.is_none()
+                self.root_directory.is_none()
+                    && self.endpoint.is_none()
+                    && self.https_transport.is_none()
             }
             ProductionEffectConnectorKind::Filesystem => {
                 self.endpoint.is_none()
+                    && self.https_transport.is_none()
                     && self.root_directory.as_ref().is_some_and(|root| {
                         root.is_absolute()
                             && !root.components().any(|component| {
@@ -405,13 +475,21 @@ impl ProductionEffectConnectorConfiguration {
                     })
             }
             ProductionEffectConnectorKind::IdempotentHttp => {
-                self.root_directory.is_none()
-                    && self.endpoint.as_ref().is_some_and(|endpoint| {
-                        endpoint.starts_with("https://")
-                            && endpoint.len() <= 2_048
-                            && !endpoint.bytes().any(|byte| byte.is_ascii_control())
-                            && !endpoint.contains('@')
-                    })
+                #[cfg(target_os = "macos")]
+                {
+                    self.root_directory.is_none()
+                        && self
+                            .endpoint
+                            .as_deref()
+                            .zip(self.https_transport.as_ref())
+                            .is_some_and(|(endpoint, transport)| {
+                                transport.validate_for_endpoint(endpoint).is_ok()
+                            })
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    false
+                }
             }
         }
     }
@@ -458,9 +536,14 @@ fn map_argument_error(error: EffectError) -> EffectArgumentVaultError {
 mod tests {
     use super::{
         EFFECT_REGISTRY_SCHEMA, EffectArgumentVaultError, PROTECTED_EFFECT_ARGUMENT_MEDIA_TYPE,
-        ProductionEffectRegistry, ProductionEffectRegistryError,
+        ProductionEffectRegistry, ProductionEffectRegistryError, ProductionHttpTransportFactory,
+        ProductionHttpsEffectTransportConfiguration,
     };
-    use cigar_effects::reference::DemoIssueRequest;
+    use cigar_effects::reference::{
+        DemoIssueRequest, HttpLookupObservation, HttpResourceBindingRequest, HttpTransport,
+        HttpTransportObservation, HttpTransportQuery, HttpTransportRequest, HttpTransportSecurity,
+    };
+    use cigar_effects::{EffectError, EffectErrorCode};
     use cigar_protocol::{
         BlobRef, Capability, ContentDigest, EffectIntent, ExtensionMap, IdempotencyKey, MediaType,
         RecordId, RetryPolicy, RiskLevel, SchemaVersion, UtcTimestamp, VersionId,
@@ -468,7 +551,8 @@ mod tests {
     use cigar_store::{BlobRecord, RepositoryBlobStore, StoreError};
     use sha2::{Digest as _, Sha256};
     use std::collections::{BTreeMap, BTreeSet};
-    use std::sync::Arc;
+    use std::net::Ipv4Addr;
+    use std::sync::{Arc, Mutex};
 
     struct StaticBlobs {
         tenant: RecordId,
@@ -504,6 +588,95 @@ mod tests {
             _live: &BTreeMap<String, BTreeSet<ContentDigest>>,
         ) -> Result<(), StoreError> {
             Ok(())
+        }
+    }
+
+    struct EmptyBlobs;
+
+    impl RepositoryBlobStore for EmptyBlobs {
+        fn put(&self, _tenant: &RecordId, _blob: &BlobRecord) -> Result<(), StoreError> {
+            Ok(())
+        }
+
+        fn get(
+            &self,
+            _tenant: &RecordId,
+            _reference: &BlobRef,
+        ) -> Result<Option<BlobRecord>, StoreError> {
+            Ok(None)
+        }
+
+        fn readiness_probe(
+            &self,
+            _tenant: &RecordId,
+            _blob: &BlobRecord,
+        ) -> Result<(), StoreError> {
+            Ok(())
+        }
+
+        fn reconcile(
+            &self,
+            _live: &BTreeMap<String, BTreeSet<ContentDigest>>,
+        ) -> Result<(), StoreError> {
+            Ok(())
+        }
+    }
+
+    struct TestHttpTransport {
+        endpoint: String,
+    }
+
+    impl HttpTransport for TestHttpTransport {
+        fn security(&self) -> Result<HttpTransportSecurity, EffectError> {
+            HttpTransportSecurity::new(
+                self.endpoint.clone(),
+                [Ipv4Addr::new(93, 184, 216, 34).into()],
+                true,
+                true,
+                true,
+            )
+        }
+
+        fn validate_resource_binding(
+            &self,
+            _request: &HttpResourceBindingRequest<'_>,
+        ) -> Result<(), EffectError> {
+            Ok(())
+        }
+
+        fn send(
+            &self,
+            _request: &HttpTransportRequest<'_>,
+        ) -> Result<HttpTransportObservation, EffectError> {
+            Err(EffectError::new(EffectErrorCode::Unavailable))
+        }
+
+        fn lookup(
+            &self,
+            _query: &HttpTransportQuery<'_>,
+        ) -> Result<HttpLookupObservation, EffectError> {
+            Err(EffectError::new(EffectErrorCode::Unavailable))
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingHttpFactory {
+        builds: Mutex<Vec<(String, String)>>,
+    }
+
+    impl ProductionHttpTransportFactory for RecordingHttpFactory {
+        fn build(
+            &self,
+            endpoint: &str,
+            configuration: ProductionHttpsEffectTransportConfiguration,
+        ) -> Result<Arc<dyn HttpTransport>, ProductionEffectRegistryError> {
+            self.builds
+                .lock()
+                .map_err(|_error| ProductionEffectRegistryError::ConnectorUnavailable)?
+                .push((endpoint.to_owned(), configuration.credential_handle));
+            Ok(Arc::new(TestHttpTransport {
+                endpoint: endpoint.to_owned(),
+            }))
         }
     }
 
@@ -612,6 +785,92 @@ mod tests {
         assert_eq!(
             vault.validate(&tenant, &drifted),
             Err(EffectArgumentVaultError::InvalidArguments)
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn http_connectors_require_explicit_settings_and_build_one_transport_per_origin()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry_document = serde_json::json!({
+            "schema_version": EFFECT_REGISTRY_SCHEMA,
+            "effects_enabled": true,
+            "connectors": [
+                {
+                    "name": "http-a",
+                    "kind": "idempotent_http",
+                    "endpoint": "https://a.example.invalid/v1/effects",
+                    "https_transport": {
+                        "provider_protocol": "cigar.idempotent-effect-http.v1",
+                        "credential_handle": "credential-a",
+                        "credential_file": "/private/tmp/cigar-effect-a.json",
+                        "pinned_addresses": ["93.184.216.34"],
+                        "connect_timeout_ms": 1_000,
+                        "request_timeout_ms": 2_000,
+                        "maximum_response_bytes": 16_384
+                    },
+                    "argument_vault_provider": "repository_blob_json.v1"
+                },
+                {
+                    "name": "http-b",
+                    "kind": "idempotent_http",
+                    "endpoint": "https://b.example.invalid/v1/effects",
+                    "https_transport": {
+                        "provider_protocol": "cigar.idempotent-effect-http.v1",
+                        "credential_handle": "credential-b",
+                        "credential_file": "/private/tmp/cigar-effect-b.json",
+                        "pinned_addresses": ["93.184.216.35"],
+                        "connect_timeout_ms": 1_000,
+                        "request_timeout_ms": 2_000,
+                        "maximum_response_bytes": 16_384
+                    },
+                    "argument_vault_provider": "repository_blob_json.v1"
+                }
+            ]
+        });
+        let bytes = serde_json::to_vec(&registry_document)?;
+        let registry = ProductionEffectRegistry::from_json(&bytes)?;
+        assert!(registry.requires_live_http());
+        let blobs: Arc<dyn RepositoryBlobStore> = Arc::new(EmptyBlobs);
+        assert_eq!(
+            registry.compose(Arc::clone(&blobs), None).err(),
+            Some(ProductionEffectRegistryError::ConnectorUnavailable)
+        );
+
+        let recording = Arc::new(RecordingHttpFactory::default());
+        let factory: Arc<dyn ProductionHttpTransportFactory> = recording.clone();
+        let components = registry.compose(blobs, Some(factory))?;
+        assert_eq!(components.connectors().len(), 2);
+        let builds = recording
+            .builds
+            .lock()
+            .map_err(|_error| "recording factory lock was poisoned")?;
+        assert_eq!(
+            builds.as_slice(),
+            [
+                (
+                    "https://a.example.invalid/v1/effects".to_owned(),
+                    "credential-a".to_owned()
+                ),
+                (
+                    "https://b.example.invalid/v1/effects".to_owned(),
+                    "credential-b".to_owned()
+                )
+            ]
+        );
+
+        let mut missing_transport = registry_document;
+        missing_transport
+            .get_mut("connectors")
+            .and_then(serde_json::Value::as_array_mut)
+            .and_then(|connectors| connectors.get_mut(0))
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or("connector must be an object")?
+            .remove("https_transport");
+        assert_eq!(
+            ProductionEffectRegistry::from_json(&serde_json::to_vec(&missing_transport)?),
+            Err(ProductionEffectRegistryError::InvalidConfiguration)
         );
         Ok(())
     }

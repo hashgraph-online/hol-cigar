@@ -25,12 +25,38 @@ try {
 Require $rejected "malformed fixture unexpectedly parsed"
 
 $plugin = Get-Content -Raw (Join-Path $Root ".claude-plugin/plugin.json") | ConvertFrom-Json
-Require ($plugin.name -eq "cigar" -and $plugin.version -eq "0.1.0") "plugin identity mismatch"
+Require ($plugin.name -eq "cigar" -and $plugin.version -eq "1.0.0-dev.1") "plugin identity mismatch"
 foreach ($name in @("skills", "agents", "hooks", "mcpServers", "commands")) {
     Require ($null -eq $plugin.PSObject.Properties[$name]) "redundant default component path: $name"
 }
 
+$readme = Get-Content -Raw (Join-Path $Root "README.md")
+foreach ($heading in @(
+    "## Development compatibility target",
+    "## What is registered",
+    "## Limitations",
+    "## Development qualification procedure"
+)) {
+    Require ($readme.Contains($heading)) "README section missing: $heading"
+}
+foreach ($statement in @(
+    "unpublished, unsupported development package",
+    "define a future qualification scope only",
+    "not evidence of installed compatibility, signing, release qualification, publication, or support",
+    "These commands are qualification inputs, not release installation instructions."
+)) {
+    Require ($readme.Contains($statement)) "README development disclaimer missing: $statement"
+}
+foreach ($forbidden in @(
+    "This package is qualified",
+    "runs signed CIGAR executables",
+    'The signed `cigar` installer embeds'
+)) {
+    Require (-not $readme.Contains($forbidden)) "README contains a premature claim: $forbidden"
+}
+
 $compatibility = Get-Content -Raw (Join-Path $Root "compatibility.json") | ConvertFrom-Json
+Require ($compatibility.context_abi -eq "cigar.context.v1") "context ABI mismatch"
 Require ($compatibility.claude_code.minimum_inclusive -eq "2.1.207") "minimum Claude version mismatch"
 Require ($compatibility.claude_code.maximum_exclusive -eq "2.1.208") "maximum Claude version mismatch"
 Require ($compatibility.public_surfaces_only -eq $true) "private compatibility surface declared"
@@ -50,7 +76,7 @@ foreach ($property in $hookDocument.hooks.PSObject.Properties) {
     $handlers = @($groups[0].hooks)
     Require ($handlers.Count -eq 1) "hook handler count invalid: $($property.Name)"
     $handler = $handlers[0]
-    Require ($handler.type -eq "command" -and $handler.command -eq "cigar-claude-hook") "non-command hook: $($property.Name)"
+    Require ($handler.type -eq "command" -and $handler.command -eq '${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook') "non-command hook: $($property.Name)"
     Require ($handler.timeout -eq 1) "unbounded hook: $($property.Name)"
     $args = @($handler.args)
     Require ($args.Count -eq 5) "hook argument count invalid: $($property.Name)"

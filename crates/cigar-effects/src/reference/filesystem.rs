@@ -9,9 +9,9 @@ use cigar_protocol::ContentDigest;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write as _};
-use std::path::{Path, PathBuf};
+use std::fs::{self, File};
+use std::io::{Read, Write as _};
+use std::path::Path;
 use std::sync::RwLock;
 
 const WRITE_FILE: &str = "write_file";
@@ -137,10 +137,24 @@ impl fmt::Debug for FilesystemWriteRequest {
 /// Atomic write-only effect connector confined to one canonical directory root.
 pub struct FilesystemEffectConnector {
     connector_name: String,
-    root: PathBuf,
     #[cfg(unix)]
-    write_fence: PathBuf,
+    root_descriptor: File,
+    #[cfg(unix)]
+    write_fence_identity: FilesystemIdentity,
     requests: RwLock<BTreeMap<ContentDigest, FilesystemWriteRequest>>,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FilesystemIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+struct PinnedFilesystemTarget {
+    parent: File,
+    name: String,
 }
 
 impl fmt::Debug for FilesystemEffectConnector {
@@ -176,17 +190,16 @@ impl FilesystemEffectConnector {
             return Err(EffectError::new(EffectErrorCode::Unavailable));
         }
         #[cfg(unix)]
-        let write_fence = {
-            let path = root.join(".cigar-effect-write.lock");
-            let descriptor = open_write_fence(&path)?;
-            drop(descriptor);
-            path
-        };
+        let root_descriptor = open_root_directory(&root)?;
+        #[cfg(unix)]
+        let write_fence_identity =
+            open_write_fence(&root_descriptor).and_then(|descriptor| file_identity(&descriptor))?;
         Ok(Self {
             connector_name,
-            root,
             #[cfg(unix)]
-            write_fence,
+            root_descriptor,
+            #[cfg(unix)]
+            write_fence_identity,
             requests: RwLock::new(BTreeMap::new()),
         })
     }
@@ -256,55 +269,109 @@ impl FilesystemEffectConnector {
         Ok(request)
     }
 
-    fn resolve_target(&self, relative_path: &str) -> Result<PathBuf, EffectError> {
+    #[cfg(unix)]
+    fn resolve_target(&self, relative_path: &str) -> Result<PinnedFilesystemTarget, EffectError> {
+        use rustix::fs::{Mode, OFlags, openat};
+
         validate_relative_path(relative_path)?;
-        let target = self.root.join(relative_path);
-        let Some(parent) = target.parent() else {
-            return Err(EffectError::new(EffectErrorCode::InvalidInput));
-        };
-        reject_symlink_ancestors(&self.root, parent)?;
-        let canonical_parent = fs::canonicalize(parent)
+        let mut components = relative_path.split('/').collect::<Vec<_>>();
+        let name = components
+            .pop()
+            .ok_or_else(|| EffectError::new(EffectErrorCode::InvalidInput))?
+            .to_owned();
+        let mut parent = self
+            .root_descriptor
+            .try_clone()
             .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-        if !canonical_parent.starts_with(&self.root) {
-            return Err(EffectError::new(EffectErrorCode::Unauthorized));
+        for component in components {
+            parent = openat(
+                &parent,
+                component,
+                OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+                Mode::empty(),
+            )
+            .map(File::from)
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unauthorized))?;
+            validate_owned_directory(
+                &parent
+                    .metadata()
+                    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?,
+            )?;
         }
-        match fs::symlink_metadata(&target) {
-            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
-                Err(EffectError::new(EffectErrorCode::Unauthorized))
-            }
-            Ok(_metadata) => Ok(target),
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(target),
-            Err(_error) => Err(EffectError::new(EffectErrorCode::Unavailable)),
-        }
+        Ok(PinnedFilesystemTarget { parent, name })
     }
 
-    fn current_digest(&self, target: &Path) -> Result<ContentDigest, EffectError> {
-        match fs::metadata(target) {
-            Ok(metadata) => {
-                if metadata.len() > MAX_REFERENCE_BODY_BYTES as u64 {
-                    return Err(EffectError::new(EffectErrorCode::LimitExceeded));
-                }
-                let bytes = fs::read(target)
-                    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-                Self::content_digest(&bytes)
+    #[cfg(unix)]
+    fn current_digest(
+        &self,
+        target: &PinnedFilesystemTarget,
+    ) -> Result<ContentDigest, EffectError> {
+        use rustix::fs::{Mode, OFlags, openat};
+
+        let mut file = match openat(
+            &target.parent,
+            target.name.as_str(),
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+            Mode::empty(),
+        ) {
+            Ok(descriptor) => File::from(descriptor),
+            Err(error) if error == rustix::io::Errno::NOENT => {
+                return Self::absent_content_digest();
             }
-            Err(error) if error.kind() == ErrorKind::NotFound => Self::absent_content_digest(),
-            Err(_error) => Err(EffectError::new(EffectErrorCode::Unavailable)),
+            Err(error)
+                if error == rustix::io::Errno::LOOP || error == rustix::io::Errno::NOTDIR =>
+            {
+                return Err(EffectError::new(EffectErrorCode::Unauthorized));
+            }
+            Err(_error) => return Err(EffectError::new(EffectErrorCode::Unavailable)),
+        };
+        let before = file
+            .metadata()
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+        validate_owned_regular(&before)?;
+        if before.len() > MAX_REFERENCE_BODY_BYTES as u64 {
+            return Err(EffectError::new(EffectErrorCode::LimitExceeded));
         }
+        let capacity = usize::try_from(before.len())
+            .map_err(|_error| EffectError::new(EffectErrorCode::LimitExceeded))?;
+        let mut bytes = Vec::with_capacity(capacity);
+        Read::by_ref(&mut file)
+            .take(MAX_REFERENCE_BODY_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+        let after = file
+            .metadata()
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+        validate_owned_regular(&after)?;
+        if file_identity_from_metadata(&before) != file_identity_from_metadata(&after)
+            || before.len() != after.len()
+            || u64::try_from(bytes.len()).ok() != Some(after.len())
+        {
+            return Err(EffectError::new(EffectErrorCode::Unavailable));
+        }
+        Self::content_digest(&bytes)
     }
 
     fn precondition_report(
         &self,
         intent: &cigar_protocol::EffectIntent,
     ) -> Result<PreconditionReport, EffectError> {
-        let request = self.validate_intent(intent)?;
-        let target = self.resolve_target(&request.relative_path)?;
-        let current = self.current_digest(&target)?;
-        let satisfied = Self::precondition_satisfied(&request, &current)?;
-        Ok(PreconditionReport {
-            satisfied,
-            evidence: BTreeSet::from([current]),
-        })
+        #[cfg(not(unix))]
+        {
+            let _intent = intent;
+            return Err(EffectError::new(EffectErrorCode::Unavailable));
+        }
+        #[cfg(unix)]
+        {
+            let request = self.validate_intent(intent)?;
+            let target = self.resolve_target(&request.relative_path)?;
+            let current = self.current_digest(&target)?;
+            let satisfied = Self::precondition_satisfied(&request, &current)?;
+            Ok(PreconditionReport {
+                satisfied,
+                evidence: BTreeSet::from([current]),
+            })
+        }
     }
 
     fn precondition_satisfied(
@@ -317,12 +384,15 @@ impl FilesystemEffectConnector {
         )
     }
 
+    #[cfg(unix)]
     fn write_atomically(
         &self,
         context: &DispatchContext<'_>,
         request: &FilesystemWriteRequest,
-        target: &Path,
+        target: &PinnedFilesystemTarget,
     ) -> Result<DispatchObservation, EffectError> {
+        use rustix::fs::{AtFlags, Mode, OFlags, openat, renameat, unlinkat};
+
         let content_digest = Self::content_digest(&request.bytes)?;
         let initial = self.current_digest(target)?;
         if !Self::precondition_satisfied(request, &initial)? {
@@ -336,58 +406,74 @@ impl FilesystemEffectConnector {
         if initial == content_digest {
             return filesystem_success(&request.relative_path, content_digest);
         }
-        let Some(parent) = target.parent() else {
-            return Err(EffectError::new(EffectErrorCode::InvalidInput));
-        };
-        let temporary = parent.join(format!(
+        let temporary = format!(
             ".cigar-{}-{}.tmp",
             context.attempt_id.as_str(),
             context.fencing_token
-        ));
-        match fs::symlink_metadata(&temporary) {
-            Ok(_metadata) => {
-                return Ok(DispatchObservation::Unknown {
-                    evidence_digest: stable_evidence(b"filesystem-temp-collision", context.intent)?,
-                    remote_operation_id: None,
-                });
-            }
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(_error) => return Err(EffectError::new(EffectErrorCode::Unavailable)),
-        }
+        );
+        let mut temporary_created = false;
         let result = (|| {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+            let mut file = match openat(
+                &target.parent,
+                temporary.as_str(),
+                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+                Mode::RUSR | Mode::WUSR,
+            ) {
+                Ok(descriptor) => File::from(descriptor),
+                Err(error) if error == rustix::io::Errno::EXIST => {
+                    return Err(EffectError::new(EffectErrorCode::IdempotencyCollision));
+                }
+                Err(_error) => return Err(EffectError::new(EffectErrorCode::Unavailable)),
+            };
+            temporary_created = true;
+            validate_owned_regular(
+                &file
+                    .metadata()
+                    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?,
+            )?;
             file.write_all(&request.bytes)
                 .and_then(|()| file.sync_all())
                 .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-            reject_symlink_ancestors(&self.root, parent)?;
             let current = self.current_digest(target)?;
             if !Self::precondition_satisfied(request, &current)? {
                 return Ok::<bool, EffectError>(false);
             }
-            fs::rename(&temporary, target)
-                .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-            let directory = OpenOptions::new()
-                .read(true)
-                .open(parent)
-                .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-            directory
+            renameat(
+                &target.parent,
+                temporary.as_str(),
+                &target.parent,
+                target.name.as_str(),
+            )
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+            target
+                .parent
                 .sync_all()
                 .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
             Ok::<bool, EffectError>(true)
         })();
         if result.is_err() {
-            let _remove_result = fs::remove_file(&temporary);
-            return result.map(|_renamed| DispatchObservation::Unknown {
-                evidence_digest: content_digest.clone(),
-                remote_operation_id: None,
-            });
+            return match result {
+                Err(error) if error.code() == EffectErrorCode::IdempotencyCollision => {
+                    Ok(DispatchObservation::Unknown {
+                        evidence_digest: stable_evidence(
+                            b"filesystem-temp-collision",
+                            context.intent,
+                        )?,
+                        remote_operation_id: None,
+                    })
+                }
+                Err(error) => {
+                    if temporary_created {
+                        let _remove_result =
+                            unlinkat(&target.parent, temporary.as_str(), AtFlags::empty());
+                    }
+                    Err(error)
+                }
+                Ok(_renamed) => unreachable!(),
+            };
         }
         if result == Ok(false) {
-            let _remove_result = fs::remove_file(&temporary);
+            let _remove_result = unlinkat(&target.parent, temporary.as_str(), AtFlags::empty());
             return Ok(DispatchObservation::Failed {
                 evidence_digest: stable_evidence(
                     b"filesystem-precondition-changed-under-fence",
@@ -409,10 +495,13 @@ impl FilesystemEffectConnector {
     }
 
     #[cfg(unix)]
-    fn try_acquire_write_fence(&self) -> Result<Option<std::os::fd::OwnedFd>, EffectError> {
+    fn try_acquire_write_fence(&self) -> Result<Option<File>, EffectError> {
         use rustix::fs::{FlockOperation, flock};
 
-        let descriptor = open_write_fence(&self.write_fence)?;
+        let descriptor = open_write_fence(&self.root_descriptor)?;
+        if file_identity(&descriptor)? != self.write_fence_identity {
+            return Err(EffectError::new(EffectErrorCode::Unauthorized));
+        }
         match flock(&descriptor, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => Ok(Some(descriptor)),
             Err(error)
@@ -449,36 +538,41 @@ impl EffectConnector for FilesystemEffectConnector {
 
     fn dispatch(&self, context: &DispatchContext<'_>) -> Result<DispatchObservation, EffectError> {
         let request = self.validate_intent(context.intent)?;
-        #[cfg(unix)]
-        let _write_fence = match self.try_acquire_write_fence()? {
-            Some(fence) => fence,
-            None => {
-                return Ok(DispatchObservation::ProvenNotSent {
-                    evidence_digest: stable_evidence(
-                        b"filesystem-write-fence-contended",
-                        context.intent,
-                    )?,
-                });
-            }
-        };
         #[cfg(not(unix))]
-        return Ok(DispatchObservation::ProvenNotSent {
-            evidence_digest: stable_evidence(
-                b"filesystem-write-fence-unavailable",
-                context.intent,
-            )?,
-        });
-        let report = self.precondition_report(context.intent)?;
-        if !report.satisfied {
-            return Ok(DispatchObservation::Failed {
+        {
+            let _request = request;
+            return Ok(DispatchObservation::ProvenNotSent {
                 evidence_digest: stable_evidence(
-                    b"filesystem-precondition-failed",
+                    b"filesystem-write-fence-unavailable",
                     context.intent,
                 )?,
             });
         }
-        let target = self.resolve_target(&request.relative_path)?;
-        self.write_atomically(context, &request, &target)
+        #[cfg(unix)]
+        {
+            let _write_fence = match self.try_acquire_write_fence()? {
+                Some(fence) => fence,
+                None => {
+                    return Ok(DispatchObservation::ProvenNotSent {
+                        evidence_digest: stable_evidence(
+                            b"filesystem-write-fence-contended",
+                            context.intent,
+                        )?,
+                    });
+                }
+            };
+            let report = self.precondition_report(context.intent)?;
+            if !report.satisfied {
+                return Ok(DispatchObservation::Failed {
+                    evidence_digest: stable_evidence(
+                        b"filesystem-precondition-failed",
+                        context.intent,
+                    )?,
+                });
+            }
+            let target = self.resolve_target(&request.relative_path)?;
+            self.write_atomically(context, &request, &target)
+        }
     }
 
     fn reconcile(
@@ -486,32 +580,115 @@ impl EffectConnector for FilesystemEffectConnector {
         context: &DispatchContext<'_>,
     ) -> Result<ReconcileObservation, EffectError> {
         let request = self.validate_intent(context.intent)?;
-        let target = self.resolve_target(&request.relative_path)?;
-        let current = self.current_digest(&target)?;
-        let requested = Self::content_digest(&request.bytes)?;
-        if current == requested {
-            Ok(ReconcileObservation::ConfirmedSuccess(current))
-        } else if current == Self::absent_content_digest()? {
-            Ok(ReconcileObservation::ProvenNotExecuted(current))
-        } else {
-            Ok(ReconcileObservation::Inconclusive {
-                evidence_digest: current,
-                certainty_window_end: context.deadline,
-            })
+        #[cfg(not(unix))]
+        {
+            let _request = request;
+            return Err(EffectError::new(EffectErrorCode::Unavailable));
+        }
+        #[cfg(unix)]
+        {
+            let target = self.resolve_target(&request.relative_path)?;
+            let current = self.current_digest(&target)?;
+            let requested = Self::content_digest(&request.bytes)?;
+            if current == requested {
+                Ok(ReconcileObservation::ConfirmedSuccess(current))
+            } else if current == Self::absent_content_digest()? {
+                Ok(ReconcileObservation::ProvenNotExecuted(current))
+            } else {
+                Ok(ReconcileObservation::Inconclusive {
+                    evidence_digest: current,
+                    certainty_window_end: context.deadline,
+                })
+            }
         }
     }
 }
 
 #[cfg(unix)]
-fn open_write_fence(path: &Path) -> Result<std::os::fd::OwnedFd, EffectError> {
+fn open_root_directory(path: &Path) -> Result<File, EffectError> {
     use rustix::fs::{Mode, OFlags, open};
 
-    open(
+    let directory = open(
         path,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .map(File::from)
+    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+    validate_owned_directory(
+        &directory
+            .metadata()
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?,
+    )?;
+    Ok(directory)
+}
+
+#[cfg(unix)]
+fn open_write_fence(root: &File) -> Result<File, EffectError> {
+    use rustix::fs::{Mode, OFlags, openat};
+
+    let file = openat(
+        root,
+        ".cigar-effect-write.lock",
         OFlags::CREATE | OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOFOLLOW,
         Mode::RUSR | Mode::WUSR,
     )
-    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))
+    .map(File::from)
+    .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+    validate_owned_regular(
+        &file
+            .metadata()
+            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?,
+    )?;
+    Ok(file)
+}
+
+#[cfg(unix)]
+fn validate_owned_directory(metadata: &fs::Metadata) -> Result<(), EffectError> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    if !metadata.is_dir()
+        || metadata.uid() != rustix::process::geteuid().as_raw()
+        || metadata.mode() & 0o022 != 0
+    {
+        Err(EffectError::new(EffectErrorCode::Unauthorized))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn validate_owned_regular(metadata: &fs::Metadata) -> Result<(), EffectError> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    if !metadata.is_file()
+        || metadata.uid() != rustix::process::geteuid().as_raw()
+        || metadata.nlink() != 1
+        || metadata.mode() & 0o022 != 0
+    {
+        Err(EffectError::new(EffectErrorCode::Unauthorized))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn file_identity(file: &File) -> Result<FilesystemIdentity, EffectError> {
+    let metadata = file
+        .metadata()
+        .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
+    validate_owned_regular(&metadata)?;
+    Ok(file_identity_from_metadata(&metadata))
+}
+
+#[cfg(unix)]
+fn file_identity_from_metadata(metadata: &fs::Metadata) -> FilesystemIdentity {
+    use std::os::unix::fs::MetadataExt as _;
+
+    FilesystemIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    }
 }
 
 fn validate_relative_path(value: &str) -> Result<(), EffectError> {
@@ -532,22 +709,6 @@ fn validate_relative_path(value: &str) -> Result<(), EffectError> {
     } else {
         Ok(())
     }
-}
-
-fn reject_symlink_ancestors(root: &Path, parent: &Path) -> Result<(), EffectError> {
-    let relative = parent
-        .strip_prefix(root)
-        .map_err(|_error| EffectError::new(EffectErrorCode::Unauthorized))?;
-    let mut current = root.to_path_buf();
-    for component in relative.components() {
-        current.push(component);
-        let metadata = fs::symlink_metadata(&current)
-            .map_err(|_error| EffectError::new(EffectErrorCode::Unavailable))?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            return Err(EffectError::new(EffectErrorCode::Unauthorized));
-        }
-    }
-    Ok(())
 }
 
 fn filesystem_success(

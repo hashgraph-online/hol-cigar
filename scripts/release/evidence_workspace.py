@@ -912,12 +912,39 @@ class EvidenceWorkspace:
         return self._publish(relative, payload, read_only=read_only)
 
     def attach_file(
-        self, source: Path, relative: str, *, read_only: bool = True
+        self,
+        source: Path,
+        relative: str,
+        *,
+        read_only: bool = True,
+        expected_sha256: str | None = None,
+        expected_bytes: int | None = None,
     ) -> Attachment:
-        """Copy a stable private source file into a create-new evidence path."""
+        """Copy a stable private source file into a create-new evidence path.
+
+        Optional expected content bindings are checked after the stable read and
+        before any destination is created.
+        """
 
         if not isinstance(read_only, bool):
             raise EvidenceWorkspaceError("read_only must be boolean")
+        if expected_sha256 is not None and (
+            not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in expected_sha256)
+        ):
+            raise EvidenceWorkspaceError(
+                "expected attachment SHA-256 must be 64 lowercase hexadecimal characters"
+            )
+        if expected_bytes is not None and (
+            isinstance(expected_bytes, bool)
+            or not isinstance(expected_bytes, int)
+            or expected_bytes < 0
+            or expected_bytes > self.limits.max_file_bytes
+        ):
+            raise EvidenceWorkspaceError(
+                "expected attachment byte count is invalid or exceeds the file limit"
+            )
         self._refresh_inventory()
         file_fd, before = _open_absolute_regular(source, self.limits.max_file_bytes)
         try:
@@ -936,5 +963,14 @@ class EvidenceWorkspace:
         ):
             raise EvidenceWorkspaceError(
                 f"attachment source changed while reading: {source}"
+            )
+        if expected_bytes is not None and len(payload) != expected_bytes:
+            raise EvidenceWorkspaceError(
+                f"attachment source byte count differs from validated content: {source}"
+            )
+        digest = hashlib.sha256(payload).hexdigest()
+        if expected_sha256 is not None and digest != expected_sha256:
+            raise EvidenceWorkspaceError(
+                f"attachment source SHA-256 differs from validated content: {source}"
             )
         return self._publish(relative, payload, read_only=read_only)

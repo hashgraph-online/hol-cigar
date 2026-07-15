@@ -588,6 +588,7 @@ impl ProductionDomainAuthority {
                 .chain([purpose.as_str(), processor.as_str()]),
         )
         .map_err(|_error| CatalogContextAuthorizationError::InvalidDecision)?;
+        let mut retrieval_requests = Vec::with_capacity(requested_projects.len());
         for project in &requested_projects {
             let request = self
                 .policy_request(
@@ -610,12 +611,21 @@ impl ProductionDomainAuthority {
             require_allow(self.policy.authorize_partition(&request))
                 .map_err(map_catalog_decision)?;
             if require_processor_gate {
-                let mut processor_request = request;
+                let mut processor_request = request.clone();
                 processor_request.resource = PolicyResource::Processor;
                 require_allow(self.policy.authorize_processor(&processor_request))
                     .map_err(map_catalog_decision)?;
             }
+            retrieval_requests.push(request);
         }
+        let retrieval_authorization = self
+            .policy
+            .authorize_retrieval_partition(&retrieval_requests)
+            .map_err(map_catalog_policy_failure)?;
+        let policy_vector_allowed = retrieval_authorization
+            .revalidate()
+            .map_err(map_catalog_policy_failure)?
+            .vector_allowed();
         Ok(CatalogContextAuthorization {
             project_ids: requested_projects,
             purpose,
@@ -623,7 +633,8 @@ impl ProductionDomainAuthority {
             maximum_classification: principal.maximum_classification,
             maximum_instruction_authority: principal.maximum_instruction_authority,
             policy_digest: snapshot.policy_digest,
-            vector_allowed: principal.vector_allowed,
+            vector_allowed: principal.vector_allowed && policy_vector_allowed,
+            retrieval_authorization,
         })
     }
 
@@ -2548,7 +2559,7 @@ mod tests {
 
         let catalog = fixture.authority.authorize_catalog(&identity, time(100)?)?;
         assert_eq!(catalog.project_ids, [record(2)?].into_iter().collect());
-        assert!(catalog.vector_allowed);
+        assert!(!catalog.vector_allowed);
         assert_eq!(
             failure(fixture.authority.authorize_catalog(
                 &ResolvedDomainIdentity {

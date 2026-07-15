@@ -125,12 +125,25 @@ def validate_text() -> None:
         )
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for heading in [
-        "## Qualified host",
+        "## Development compatibility target",
         "## What is registered",
         "## Limitations",
-        "## Qualification",
+        "## Development qualification procedure",
     ]:
         require(heading in readme, f"README section missing: {heading}")
+    for statement in [
+        "unpublished, unsupported development package",
+        "define a future qualification scope only",
+        "not evidence of installed compatibility, signing, release qualification, publication, or support",
+        "These commands are qualification inputs, not release installation instructions.",
+    ]:
+        require(statement in readme, f"README development disclaimer missing: {statement}")
+    for forbidden in [
+        "This package is qualified",
+        "runs signed CIGAR executables",
+        "The signed `cigar` installer embeds",
+    ]:
+        require(forbidden not in readme, f"README contains a premature claim: {forbidden}")
 
 
 def validate_json_files() -> None:
@@ -152,7 +165,7 @@ def validate_plugin() -> None:
     require(metadata == ["plugin.json"], ".claude-plugin must contain only plugin.json")
     plugin = load_json(ROOT / ".claude-plugin/plugin.json")
     require(plugin.get("name") == "cigar", "plugin name mismatch")
-    require(plugin.get("version") == "0.1.0", "plugin version mismatch")
+    require(plugin.get("version") == "1.0.0-dev.1", "plugin version mismatch")
     for redundant in ["skills", "agents", "hooks", "mcpServers", "commands"]:
         require(
             redundant not in plugin,
@@ -164,6 +177,7 @@ def validate_plugin() -> None:
         compatibility
         == {
             "schema_version": "cigar.claude-code-compatibility.v1",
+            "context_abi": "cigar.context.v1",
             "claude_code": {
                 "minimum_inclusive": "2.1.207",
                 "maximum_exclusive": "2.1.208",
@@ -171,7 +185,7 @@ def validate_plugin() -> None:
             "platforms": ["macos-aarch64", "macos-arm64"],
             "public_surfaces_only": True,
         },
-        "compatibility matrix is not the qualified range",
+        "compatibility matrix is not the development target",
     )
 
     mcp = load_json(ROOT / ".mcp.json")
@@ -179,7 +193,7 @@ def validate_plugin() -> None:
     require(set(mcp["mcpServers"]) == {"cigar"}, "unexpected MCP server")
     server = mcp["mcpServers"]["cigar"]
     require(
-        server.get("command") == "cigar-mcp",
+        server.get("command") == "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp",
         "MCP must use the installed long-lived MCP executable",
     )
     require(server.get("args") == ["serve"], "MCP arguments mismatch")
@@ -221,7 +235,7 @@ def validate_hooks_and_fixtures() -> None:
             handler
             == {
                 "type": "command",
-                "command": "cigar-claude-hook",
+                "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook",
                 "args": HOOK_ARGS,
                 "timeout": 1,
             },

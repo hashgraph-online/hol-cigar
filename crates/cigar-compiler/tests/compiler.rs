@@ -15,6 +15,7 @@ use cigar_protocol::{
 use cigar_retrieval::CandidateFeatures;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::process::Command;
 use std::thread;
 
 fn digest(value: u8) -> Result<ContentDigest, Box<dyn Error>> {
@@ -471,6 +472,280 @@ fn every_disposition_reason_and_redacted_explanation_are_bounded() -> Result<(),
         Some(CandidateDisposition::Excluded { .. })
     ));
     assert!(!format!("{view:?}").contains(version(41)?.as_str()));
+    Ok(())
+}
+
+#[test]
+fn closure_and_local_repair_preserve_item_caps_and_blocking_roots() -> Result<(), Box<dyn Error>> {
+    let blocking_contract = contract(
+        BTreeMap::from([(LaneKind::Evidence, 10)]),
+        vec![requirement(true, "required evidence")?],
+    )?;
+    let mut required = candidate(60, LaneKind::Evidence, 6, 10_000)?;
+    required.requirement_indices.insert(0);
+    let alternative_a = candidate(61, LaneKind::Evidence, 5, 7_000)?;
+    let alternative_b = candidate(62, LaneKind::Evidence, 5, 7_000)?;
+    let repaired = DeterministicCompiler.compile(request(
+        blocking_contract,
+        CompilerProfile {
+            local_swap_passes: 2,
+            local_swap_alternatives: 4,
+            ..CompilerProfile::default()
+        },
+        vec![
+            required.clone(),
+            alternative_a.clone(),
+            alternative_b.clone(),
+        ],
+    )?)?;
+    let repaired_versions: BTreeSet<_> = repaired
+        .bundle
+        .blocks
+        .iter()
+        .flat_map(|block| block.provenance.iter().cloned())
+        .collect();
+    assert!(repaired_versions.contains(&required.version_id));
+    assert!(!repaired_versions.contains(&alternative_a.version_id));
+    assert!(!repaired_versions.contains(&alternative_b.version_id));
+
+    let capped_contract = contract(BTreeMap::from([(LaneKind::Evidence, 10)]), Vec::new())?;
+    let mut capped_primary = required;
+    capped_primary.requirement_indices.clear();
+    let capped = DeterministicCompiler.compile(request(
+        capped_contract,
+        CompilerProfile {
+            maximum_items: BTreeMap::from([(LaneKind::Evidence, 1)]),
+            local_swap_passes: 2,
+            local_swap_alternatives: 4,
+            ..CompilerProfile::default()
+        },
+        vec![capped_primary, alternative_a, alternative_b],
+    )?)?;
+    assert_eq!(capped.bundle.blocks.len(), 1);
+
+    let dependency_contract = contract(
+        BTreeMap::from([(LaneKind::Rules, 20), (LaneKind::Evidence, 20)]),
+        Vec::new(),
+    )?;
+    let mut root = candidate(63, LaneKind::Evidence, 5, 10_000)?;
+    root.mandatory = true;
+    let dependency_a = candidate(64, LaneKind::Rules, 5, 8_000)?;
+    let dependency_b = candidate(65, LaneKind::Rules, 5, 8_000)?;
+    root.dependencies = BTreeSet::from([
+        dependency_a.version_id.clone(),
+        dependency_b.version_id.clone(),
+    ]);
+    let closure_error = DeterministicCompiler
+        .compile(request(
+            dependency_contract,
+            CompilerProfile {
+                maximum_items: BTreeMap::from([(LaneKind::Rules, 1)]),
+                ..CompilerProfile::default()
+            },
+            vec![root, dependency_a, dependency_b],
+        )?)
+        .err()
+        .ok_or("dependency closure exceeded its item cap without failing")?;
+    assert_eq!(closure_error.code(), CompilerErrorCode::BudgetUnsatisfiable);
+
+    let absent_lane_contract = contract(BTreeMap::from([(LaneKind::Evidence, 20)]), Vec::new())?;
+    let absent_lane = DeterministicCompiler.compile(request(
+        absent_lane_contract,
+        CompilerProfile {
+            minimum_items: BTreeMap::from([(LaneKind::Tools, 1)]),
+            ..CompilerProfile::default()
+        },
+        vec![candidate(66, LaneKind::Evidence, 5, 5_000)?],
+    )?)?;
+    assert_eq!(absent_lane.bundle.blocks.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn conflict_order_and_candidate_requirement_indices_fail_closed() -> Result<(), Box<dyn Error>> {
+    let contract_with_requirement = contract(
+        BTreeMap::from([(LaneKind::Evidence, 100)]),
+        vec![requirement(false, "bounded")?],
+    )?;
+    let mut invalid_index = candidate(70, LaneKind::Evidence, 10, 5_000)?;
+    invalid_index.requirement_indices.insert(1);
+    assert_eq!(
+        DeterministicCompiler
+            .compile(request(
+                contract_with_requirement,
+                CompilerProfile::default(),
+                vec![invalid_index],
+            )?)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+
+    let conflict_contract = contract(
+        BTreeMap::from([(LaneKind::Rules, 100), (LaneKind::Evidence, 100)]),
+        Vec::new(),
+    )?;
+    let mut evidence = candidate(71, LaneKind::Evidence, 10, 10_000)?;
+    let mut rule = candidate(72, LaneKind::Rules, 10, 1_000)?;
+    let rank = CandidateClaim {
+        key: "policy.mode".to_owned(),
+        value_digest: digest(71)?,
+        valid_at: time("2026-07-10T00:00:02Z")?,
+        observed_at: time("2026-07-10T00:00:03Z")?,
+        authority: 10,
+        verified: true,
+    };
+    evidence.claim = Some(rank.clone());
+    rule.claim = Some(CandidateClaim {
+        value_digest: digest(72)?,
+        ..rank
+    });
+    assert_eq!(
+        DeterministicCompiler
+            .compile(request(
+                conflict_contract,
+                CompilerProfile::default(),
+                vec![evidence, rule],
+            )?)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::UnresolvedCriticalConflict)
+    );
+
+    let temporal_contract = contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?;
+    let mut older_high_authority = candidate(73, LaneKind::Evidence, 10, 8_000)?;
+    older_high_authority.claim = Some(CandidateClaim {
+        key: "fact.mode".to_owned(),
+        value_digest: digest(73)?,
+        valid_at: time("2026-07-10T00:00:01Z")?,
+        observed_at: time("2026-07-10T00:00:01Z")?,
+        authority: 100,
+        verified: true,
+    });
+    let mut newer_lower_authority = candidate(74, LaneKind::Evidence, 10, 7_000)?;
+    newer_lower_authority.claim = Some(CandidateClaim {
+        key: "fact.mode".to_owned(),
+        value_digest: digest(74)?,
+        valid_at: time("2026-07-10T00:00:02Z")?,
+        observed_at: time("2026-07-10T00:00:02Z")?,
+        authority: 1,
+        verified: false,
+    });
+    let temporal = DeterministicCompiler.compile(request(
+        temporal_contract,
+        CompilerProfile::default(),
+        vec![older_high_authority.clone(), newer_lower_authority.clone()],
+    )?)?;
+    assert!(matches!(
+        temporal
+            .plan
+            .dispositions
+            .iter()
+            .find_map(
+                |(version, disposition)| (version == &older_high_authority.version_id)
+                    .then_some(disposition)
+            ),
+        Some(CandidateDisposition::Excluded {
+            reason: DispositionReason::ConflictLost
+        })
+    ));
+    assert!(matches!(
+        temporal
+            .plan
+            .dispositions
+            .iter()
+            .find_map(
+                |(version, disposition)| (version == &newer_lower_authority.version_id)
+                    .then_some(disposition)
+            ),
+        Some(CandidateDisposition::Selected { .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn process_determinism_child() -> Result<(), Box<dyn Error>> {
+    if std::env::var("CIGAR_COMPILER_PROCESS_CHILD")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        return Ok(());
+    }
+    let mut input = baseline_request()?;
+    let permutation = std::env::var("CIGAR_COMPILER_PERMUTATION")
+        .map_err(|_| "compiler child permutation is absent")?
+        .parse::<usize>()?;
+    let orders = [
+        [0_usize, 1_usize, 2_usize],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ];
+    let order = orders
+        .get(permutation)
+        .ok_or("compiler child permutation is outside the closed matrix")?;
+    let original = input.candidates;
+    input.candidates = order
+        .iter()
+        .map(|index| {
+            original
+                .get(*index)
+                .cloned()
+                .ok_or("compiler child permutation is invalid")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let output = DeterministicCompiler.compile(input)?;
+    println!(
+        "CIGAR_COMPILER_IDENTITIES={}|{}|{}",
+        output.plan.plan_id.as_str(),
+        output.manifest.manifest_id.as_str(),
+        output.bundle.bundle_id.as_str()
+    );
+    Ok(())
+}
+
+#[test]
+fn semantic_identities_are_stable_across_process_locale_timezone_and_input_order()
+-> Result<(), Box<dyn Error>> {
+    let executable = std::env::current_exe()?;
+    let variants = [
+        ("C", "UTC", "0"),
+        ("en_US.UTF-8", "America/Denver", "1"),
+        ("tr_TR.UTF-8", "Pacific/Kiritimati", "0"),
+    ];
+    let mut identities = BTreeSet::new();
+    for repeat in 0..2_usize {
+        for permutation in 0..6_usize {
+            let (locale, timezone, seed) = variants
+                .get((repeat + permutation) % variants.len())
+                .ok_or("compiler process variant is absent")?;
+            let output = Command::new(&executable)
+                .args(["--exact", "process_determinism_child", "--nocapture"])
+                .env("CIGAR_COMPILER_PROCESS_CHILD", "1")
+                .env("CIGAR_COMPILER_PERMUTATION", permutation.to_string())
+                .env("LC_ALL", locale)
+                .env("TZ", timezone)
+                .env("RUST_HASH_SEED", format!("qualification-{seed}-{repeat}"))
+                .output()?;
+            assert!(
+                output.status.success(),
+                "child compiler failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stdout = String::from_utf8(output.stdout)?;
+            let identity = stdout
+                .lines()
+                .find_map(|line| line.strip_prefix("CIGAR_COMPILER_IDENTITIES="))
+                .ok_or("child compiler omitted semantic identities")?;
+            identities.insert(identity.to_owned());
+        }
+    }
+    assert_eq!(identities.len(), 1);
+    assert_eq!(
+        identities.into_iter().next().ok_or("missing identity")?,
+        "89c22906-ee10-723b-9ce2-fa1b019c2f18|122078ff8edd59dc1df3ae28f591de9058b9eaab4562d92fcc7529213822d2bfdad8|12205febd5bb06ffbc44147cf0126543ded08d3b90c9169a16d992c3b14c59074e85"
+    );
     Ok(())
 }
 

@@ -1,47 +1,65 @@
 {
-  "schema_version": "cigar.dashboard-asset-manifest.v1",
   "files": [
     {
+      "media_type": "text/css; charset=utf-8",
       "path": "app.20260713.css",
-      "sha256": "eb4416e70d9d7d44242e0b48b3b8bdb7044bc5b698786b253b519dfba7b72b93",
-      "size": 18124,
-      "media_type": "text/css; charset=utf-8"
+      "sha256": "775640488abc5003c0efd4f3f45f668244df0449b135fc42ea3764f780ff304d",
+      "size": 21645
     },
     {
+      "media_type": "text/javascript; charset=utf-8",
       "path": "app.20260713.js",
-      "sha256": "dfd53bb90db469dad61c5e1c94e309d1ff3a485a0026cdfc7a80e775c038f19a",
-      "size": 24806,
-      "media_type": "text/javascript; charset=utf-8"
+      "sha256": "ce19448849344b316729cbb95f88fc36929ddb2180f94f6bdc1dbc6e0efa13d4",
+      "size": 30172
     },
     {
+      "media_type": "text/javascript; charset=utf-8",
+      "path": "browser-security.20260714.js",
+      "sha256": "7d489ac374188d4b13f77b86e58bb62de732af6dcc33bc76d0b6c25d5053e72b",
+      "size": 1257
+    },
+    {
+      "media_type": "text/javascript; charset=utf-8",
+      "path": "controls.20260714.js",
+      "sha256": "381b4148953c3e184259df0b862f44c8a118096e82d0eda006376507fed4522f",
+      "size": 1248
+    },
+    {
+      "media_type": "text/javascript; charset=utf-8",
       "path": "health-details.20260713.js",
       "sha256": "87ffd79c00af18de8eb73d07e68e24c95063677db1f6847b757efcc53ddfc7a4",
-      "size": 1574,
-      "media_type": "text/javascript; charset=utf-8"
+      "size": 1574
     },
     {
+      "media_type": "text/html; charset=utf-8",
       "path": "index.html",
-      "sha256": "1e47c89b43c10361877ea605cd7e354f3e303e44e95ac2ad794d26d11b6ff731",
-      "size": 13132,
-      "media_type": "text/html; charset=utf-8"
+      "sha256": "956b1c1cd71cd314c5079e3661cc1edd62e7141b006f6b02b459d450204712c9",
+      "size": 14365
     },
     {
+      "media_type": "text/javascript; charset=utf-8",
       "path": "live-updates.20260713.js",
       "sha256": "b9c115769cac60c1d7c09e6c29d0f2c07047940bb9c71e110fc2162b9fbb3b47",
-      "size": 427,
-      "media_type": "text/javascript; charset=utf-8"
+      "size": 427
     },
     {
+      "media_type": "text/javascript; charset=utf-8",
       "path": "preferences.20260713.js",
       "sha256": "9465208e6fbab749cffd39d6e153088cd642595b24ab42c3d01f31b896268258",
-      "size": 1892,
-      "media_type": "text/javascript; charset=utf-8"
+      "size": 1892
     },
     {
+      "media_type": "text/javascript; charset=utf-8",
+      "path": "protocol-catalog.20260713.js",
+      "sha256": "2abdf938b6659f8c121e0df5ad56502c6ce0d91e2431468572175375156b05e7",
+      "size": 7118
+    },
+    {
+      "media_type": "text/css; charset=utf-8",
       "path": "theme.20260713.css",
-      "sha256": "67abb839b9499c672d07333f9fecb55719623fd65158f2a318dc2d58ba0e980a",
-      "size": 2882,
-      "media_type": "text/css; charset=utf-8"
+      "sha256": "2e034f4cc574c6403860c0c60e6260651c846d8689dbaa83fc8cf8995b7221fc",
+      "size": 2882
     }
-  ]
+  ],
+  "schema_version": "cigar.dashboard-asset-manifest.v1"
 }

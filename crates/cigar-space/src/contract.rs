@@ -255,6 +255,18 @@ pub struct SpaceView {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct EventCursor(pub u64);
 
+impl EventCursor {
+    /// Advances to the greatest acknowledged cursor without permitting regression.
+    #[must_use]
+    pub const fn advance_to(self, candidate: Self) -> Self {
+        if candidate.0 > self.0 {
+            candidate
+        } else {
+            self
+        }
+    }
+}
+
 /// One ordered durable event with project disclosure scope.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

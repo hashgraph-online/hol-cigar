@@ -8,12 +8,15 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
 use crate::json::{self, Value};
+use crate::operation_mappings::MCP_OPERATION_MAPPINGS;
 
 const DEFAULT_DAEMON_URL: &str = "http://127.0.0.1:8080/v1/mcp";
 const MAX_BACKEND_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
@@ -104,6 +107,8 @@ pub enum BackendError {
     ResponseTooLarge,
     /// The daemon returned malformed or unsupported transport data.
     InvalidResponse,
+    /// The caller cancelled the request before an authoritative result was available.
+    Cancelled,
 }
 
 impl fmt::Display for BackendError {
@@ -113,16 +118,59 @@ impl fmt::Display for BackendError {
             Self::Rejected => "authoritative backend rejected request",
             Self::ResponseTooLarge => "authoritative backend response exceeded limit",
             Self::InvalidResponse => "authoritative backend returned an invalid response",
+            Self::Cancelled => "authoritative backend request was cancelled",
         })
     }
 }
 
 impl std::error::Error for BackendError {}
 
+/// Cloneable cancellation signal shared with one in-flight backend invocation.
+#[derive(Clone, Debug, Default)]
+pub struct CancellationToken {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl CancellationToken {
+    /// Creates a signal in the active state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Requests cancellation. Calling this more than once is harmless.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, AtomicOrdering::Release);
+    }
+
+    /// Returns whether cancellation has been requested.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(AtomicOrdering::Acquire)
+    }
+}
+
 /// Injectable authority boundary used by the stdio protocol server.
 pub trait Backend {
     /// Executes one bounded request without returning transport or host details in errors.
     fn call(&mut self, request: BackendRequest<'_>) -> Result<BackendResponse, BackendError>;
+
+    /// Executes one bounded request while observing an MCP cancellation notification.
+    ///
+    /// Implementations that can interrupt I/O should override this method. The default preserves
+    /// source compatibility for injected backends and fails before delegation when already
+    /// cancelled.
+    fn call_cancellable(
+        &mut self,
+        request: BackendRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<BackendResponse, BackendError> {
+        if cancellation.is_cancelled() {
+            Err(BackendError::Cancelled)
+        } else {
+            self.call(request)
+        }
+    }
 }
 
 /// Installed CIGAR CLI authority boundary used by the packaged stdio server.
@@ -150,7 +198,8 @@ impl CliBackend {
     /// Performs a real bounded `cigar status` handshake.
     #[must_use]
     pub fn is_available(&mut self) -> bool {
-        self.invoke(&["status"], None, None).is_ok()
+        self.invoke(&["status"], None, None, &CancellationToken::new())
+            .is_ok()
     }
 
     fn invoke(
@@ -158,7 +207,11 @@ impl CliBackend {
         command: &[&str],
         payload: Option<&Value>,
         idempotency_key: Option<&str>,
+        cancellation: &CancellationToken,
     ) -> Result<BackendResponse, BackendError> {
+        if cancellation.is_cancelled() {
+            return Err(BackendError::Cancelled);
+        }
         let temporary = payload.map(write_cli_input).transpose()?;
         let mut process = Command::new(&self.binary);
         process.args(command);
@@ -180,14 +233,18 @@ impl CliBackend {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let result = run_cli_process(process);
+        let result = run_cli_process(process, cancellation);
         if let Some(path) = temporary {
             let _ignored = std::fs::remove_file(path);
         }
         decode_cli_output(&result?)
     }
 
-    fn tool(&self, request: BackendRequest<'_>) -> Result<BackendResponse, BackendError> {
+    fn tool(
+        &self,
+        request: BackendRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<BackendResponse, BackendError> {
         let arguments = json::parse_with_limits(
             request.arguments_json,
             BACKEND_MAX_DEPTH,
@@ -211,7 +268,12 @@ impl CliBackend {
                     )
                 });
                 require_nonempty_object(&payload)?;
-                self.invoke(&["context", "plan"], Some(&payload), idempotency_key)
+                self.invoke(
+                    &["context", "plan"],
+                    Some(&payload),
+                    idempotency_key,
+                    cancellation,
+                )
             }
             "materializeContextBundle" => {
                 let payload = exact.unwrap_or_else(|| {
@@ -234,6 +296,7 @@ impl CliBackend {
                     &["context", "materialize", bundle],
                     Some(&payload),
                     idempotency_key,
+                    cancellation,
                 )
             }
             "explainContextBundle" => {
@@ -258,12 +321,18 @@ impl CliBackend {
                     &["context", "explain", bundle],
                     Some(&payload),
                     idempotency_key,
+                    cancellation,
                 )
             }
             "queryCatalog" => {
                 let payload = exact.ok_or(BackendError::Rejected)?;
                 require_nonempty_object(&payload)?;
-                self.invoke(&["catalog", "query"], Some(&payload), idempotency_key)
+                self.invoke(
+                    &["catalog", "query"],
+                    Some(&payload),
+                    idempotency_key,
+                    cancellation,
+                )
             }
             "createSpaceCheckpoint" => {
                 let payload = exact.ok_or(BackendError::Rejected)?;
@@ -272,12 +341,18 @@ impl CliBackend {
                     &["focus", "checkpoint", space],
                     Some(&payload),
                     idempotency_key,
+                    cancellation,
                 )
             }
             "createHandoff" => {
                 let payload = exact.ok_or(BackendError::Rejected)?;
                 require_nonempty_object(&payload)?;
-                self.invoke(&["handoff", "create"], Some(&payload), idempotency_key)
+                self.invoke(
+                    &["handoff", "create"],
+                    Some(&payload),
+                    idempotency_key,
+                    cancellation,
+                )
             }
             "acceptHandoff" => {
                 let payload = exact.ok_or(BackendError::Rejected)?;
@@ -286,6 +361,7 @@ impl CliBackend {
                     &["handoff", "accept", handoff],
                     Some(&payload),
                     idempotency_key,
+                    cancellation,
                 )
             }
             "prepareEffect" => {
@@ -293,7 +369,12 @@ impl CliBackend {
                     .or_else(|| arguments.object_field("intent").cloned())
                     .ok_or(BackendError::Rejected)?;
                 require_nonempty_object(&payload)?;
-                self.invoke(&["effect", "prepare"], Some(&payload), idempotency_key)
+                self.invoke(
+                    &["effect", "prepare"],
+                    Some(&payload),
+                    idempotency_key,
+                    cancellation,
+                )
             }
             "dispatchEffect" => {
                 let payload = exact.unwrap_or_else(|| {
@@ -310,6 +391,7 @@ impl CliBackend {
                     &["effect", "dispatch", effect],
                     Some(&payload),
                     idempotency_key,
+                    cancellation,
                 )
             }
             "getEffectStatus" => {
@@ -323,13 +405,17 @@ impl CliBackend {
                     )])
                 });
                 let effect = field_text(&payload, "effect_id")?;
-                self.invoke(&["effect", "inspect", effect], None, None)
+                self.invoke(&["effect", "inspect", effect], None, None, cancellation)
             }
             _ => Err(BackendError::Rejected),
         }
     }
 
-    fn resource(&self, request: BackendRequest<'_>) -> Result<BackendResponse, BackendError> {
+    fn resource(
+        &self,
+        request: BackendRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<BackendResponse, BackendError> {
         let arguments = json::parse(request.arguments_json).map_err(|_| BackendError::Rejected)?;
         let uri = arguments
             .object_field("uri")
@@ -356,10 +442,15 @@ impl CliBackend {
                         Value::String("canonical_json".to_owned()),
                     ),
                 ]);
-                self.invoke(&["context", "materialize", identity], Some(&payload), None)
+                self.invoke(
+                    &["context", "materialize", identity],
+                    Some(&payload),
+                    None,
+                    cancellation,
+                )
             }
-            "handoff" => self.invoke(&["handoff", "preview", identity], None, None),
-            "effect" => self.invoke(&["effect", "inspect", identity], None, None),
+            "handoff" => self.invoke(&["handoff", "preview", identity], None, None, cancellation),
+            "effect" => self.invoke(&["effect", "inspect", identity], None, None, cancellation),
             _ => Err(BackendError::Rejected),
         }
     }
@@ -367,10 +458,25 @@ impl CliBackend {
 
 impl Backend for CliBackend {
     fn call(&mut self, request: BackendRequest<'_>) -> Result<BackendResponse, BackendError> {
+        self.call_cancellable(request, &CancellationToken::new())
+    }
+
+    fn call_cancellable(
+        &mut self,
+        request: BackendRequest<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<BackendResponse, BackendError> {
         match request.kind {
-            BackendRequestKind::Health => self.invoke(&["status"], None, None),
-            BackendRequestKind::Tool => self.tool(request),
-            BackendRequestKind::Resource => self.resource(request),
+            BackendRequestKind::Health if request.operation == "ping" => {
+                self.invoke(&["status"], None, None, cancellation)
+            }
+            BackendRequestKind::Tool => self.tool(request, cancellation),
+            BackendRequestKind::Resource if request.operation == "read" => {
+                self.resource(request, cancellation)
+            }
+            BackendRequestKind::Health | BackendRequestKind::Resource => {
+                Err(BackendError::Rejected)
+            }
         }
     }
 }
@@ -411,22 +517,57 @@ fn write_cli_input(value: &Value) -> Result<PathBuf, BackendError> {
         options.mode(0o600);
     }
     let mut file = options.open(&path).map_err(|_| BackendError::Unavailable)?;
-    file.write_all(value.render().as_bytes())
+    if file
+        .write_all(value.render().as_bytes())
         .and_then(|()| file.sync_all())
-        .map_err(|_| BackendError::Unavailable)?;
+        .is_err()
+    {
+        drop(file);
+        let _ignored = std::fs::remove_file(&path);
+        return Err(BackendError::Unavailable);
+    }
     Ok(path)
 }
 
-fn run_cli_process(mut command: Command) -> Result<Vec<u8>, BackendError> {
+fn run_cli_process(
+    mut command: Command,
+    cancellation: &CancellationToken,
+) -> Result<Vec<u8>, BackendError> {
+    if cancellation.is_cancelled() {
+        return Err(BackendError::Cancelled);
+    }
     let mut child = command.spawn().map_err(|_| BackendError::Unavailable)?;
-    let stdout = child.stdout.take().ok_or(BackendError::Unavailable)?;
-    let stderr = child.stderr.take().ok_or(BackendError::Unavailable)?;
+    let Some(stdout) = child.stdout.take() else {
+        let _ignored = child.kill();
+        let _ignored = child.wait();
+        return Err(BackendError::Unavailable);
+    };
+    let Some(stderr) = child.stderr.take() else {
+        let _ignored = child.kill();
+        let _ignored = child.wait();
+        return Err(BackendError::Unavailable);
+    };
     let output_reader = thread::spawn(move || read_limited(stdout));
     let error_reader = thread::spawn(move || read_limited(stderr));
     let started = Instant::now();
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(|_| BackendError::Unavailable)? {
-            break status;
+        if cancellation.is_cancelled() {
+            let _ignored = child.kill();
+            let _ignored = child.wait();
+            let _output = output_reader.join();
+            let _error = error_reader.join();
+            return Err(BackendError::Cancelled);
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(_) => {
+                let _ignored = child.kill();
+                let _ignored = child.wait();
+                let _output = output_reader.join();
+                let _error = error_reader.join();
+                return Err(BackendError::Unavailable);
+            }
         }
         if started.elapsed() >= CLI_DEADLINE {
             let _ignored = child.kill();
@@ -586,17 +727,21 @@ impl HttpBackend {
     }
 
     fn request_path(&self, request: BackendRequest<'_>) -> Result<String, BackendError> {
-        if !request
-            .operation
-            .chars()
-            .all(|value| value.is_ascii_alphanumeric() || value == '_')
-        {
-            return Err(BackendError::Rejected);
-        }
         let suffix = match request.kind {
-            BackendRequestKind::Tool => format!("/tools/{}", request.operation),
-            BackendRequestKind::Resource => "/resources/read".to_owned(),
-            BackendRequestKind::Health => "/health".to_owned(),
+            BackendRequestKind::Tool
+                if MCP_OPERATION_MAPPINGS
+                    .iter()
+                    .any(|mapping| mapping.operation_id == request.operation) =>
+            {
+                format!("/tools/{}", request.operation)
+            }
+            BackendRequestKind::Resource if request.operation == "read" => {
+                "/resources/read".to_owned()
+            }
+            BackendRequestKind::Health if request.operation == "ping" => "/health".to_owned(),
+            BackendRequestKind::Tool
+            | BackendRequestKind::Resource
+            | BackendRequestKind::Health => return Err(BackendError::Rejected),
         };
         Ok(format!("{}{suffix}", self.base_path))
     }
@@ -605,11 +750,16 @@ impl HttpBackend {
 impl Backend for HttpBackend {
     fn call(&mut self, request: BackendRequest<'_>) -> Result<BackendResponse, BackendError> {
         let path = self.request_path(request)?;
-        let address = format!("{}:{}", self.host, self.port);
+        let connect_host = if self.host == "localhost" {
+            "127.0.0.1"
+        } else {
+            &self.host
+        };
+        let address = format!("{connect_host}:{}", self.port);
         let socket = address
             .to_socket_addrs()
             .map_err(|_| BackendError::Unavailable)?
-            .next()
+            .find(|candidate| candidate.ip().is_loopback())
             .ok_or(BackendError::Unavailable)?;
         let mut stream = TcpStream::connect_timeout(&socket, CONNECT_TIMEOUT)
             .map_err(|_| BackendError::Unavailable)?;
@@ -870,10 +1020,20 @@ mod tests {
         let backend = HttpBackend::from_url("http://127.0.0.1:9999/v1/mcp")?;
         let tool = backend.request_path(BackendRequest {
             kind: BackendRequestKind::Tool,
-            operation: "compileContextBundle",
+            operation: "createContextPlan",
             arguments_json: r#"{"path":"../../private"}"#,
         })?;
-        assert_eq!(tool, "/v1/mcp/tools/compileContextBundle");
+        assert_eq!(tool, "/v1/mcp/tools/createContextPlan");
+        assert_eq!(
+            backend
+                .request_path(BackendRequest {
+                    kind: BackendRequestKind::Tool,
+                    operation: "unlistedAdministrativeOperation",
+                    arguments_json: "{}",
+                })
+                .err(),
+            Some(BackendError::Rejected)
+        );
         assert_eq!(
             backend.request_path(BackendRequest {
                 kind: BackendRequestKind::Resource,
@@ -891,6 +1051,32 @@ mod tests {
             "/v1/mcp/health"
         );
         Ok(())
+    }
+
+    #[test]
+    fn cli_backend_rejects_unlisted_route_kinds_before_process_spawn() {
+        let mut backend = CliBackend {
+            binary: "/definitely/not/a/cigar-binary".into(),
+        };
+        for request in [
+            BackendRequest {
+                kind: BackendRequestKind::Health,
+                operation: "administrativeEscape",
+                arguments_json: "{}",
+            },
+            BackendRequest {
+                kind: BackendRequestKind::Resource,
+                operation: "write",
+                arguments_json: r#"{"uri":"cigar://bundle/b1"}"#,
+            },
+            BackendRequest {
+                kind: BackendRequestKind::Tool,
+                operation: "administrativeEscape",
+                arguments_json: "{}",
+            },
+        ] {
+            assert_eq!(backend.call(request).err(), Some(BackendError::Rejected));
+        }
     }
 
     #[test]

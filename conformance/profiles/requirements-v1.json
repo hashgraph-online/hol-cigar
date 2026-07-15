@@ -1,7 +1,2310 @@
 {
-  "schema_version": "cigar.invariant-requirements.v1",
-  "source": "prd.md sections 18.1-18.6, 19.1, 20.1-20.3, and WP19 conformance/traceability lane",
+  "schema_version": "cigar.invariant-requirements.v2",
+  "source": {
+    "path": "prd.md",
+    "extraction_version": "cigar.prd-requirement-extraction.v1",
+    "surface_sha256": "sha256:8d3a8f7a8b47e833db2808708da0749bdebf0298aa12a19c367228b001cc5701",
+    "source_requirement_count": 142,
+    "normative_occurrence_count": 30,
+    "release_gate_count": 62,
+    "security_invariant_count": 76
+  },
   "requirements": [
+    {
+      "id": "PRD-NORM-0001",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 54,
+        "end_line": 54,
+        "section": "Document control / Source-of-truth precedence",
+        "text": "Any unresolved contradiction SHALL block the dependent work packet and be recorded in IMPLEMENTATION\\_STATUS.md with a minimal reproduction, affected contract, and proposed resolution. Codex SHALL not invent a silent compatibility behavior.",
+        "text_sha256": "sha256:5014eb22ca32d3d37dfb03a034813bc3aec96c47247620c9fadfdb97a91889a2",
+        "normative_token_count": 2
+      }
+    },
+    {
+      "id": "PRD-NORM-0002",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 554,
+        "end_line": 554,
+        "section": "1. Execution mandate / 1.1 How Codex SHALL execute this specification",
+        "text": "Codex SHALL treat the repository as a durable engineering program rather than a one-shot code-generation task. At the beginning of execution it creates IMPLEMENTATION\\_STATUS.md from the template in Appendix A. It records every work packet as not\\_started, in\\_progress, blocked, or complete, along with commit or patch identity, commands run, tests passed, performance results, and remaining risks.",
+        "text_sha256": "sha256:d6303fe4c3617adaa0b75321768ba85a637492c673b911de6d6ab1c9999ec5f8",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0003",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 556,
+        "end_line": 556,
+        "section": "1. Execution mandate / 1.1 How Codex SHALL execute this specification",
+        "text": "Only one critical-path work packet may be in\\_progress per working branch. Independent packages may run in parallel branches or agents after their shared contract is frozen. Parallel work MUST NOT edit the same schema, migration, generated artifact, lockfile, or compatibility vector without an explicit integration owner.",
+        "text_sha256": "sha256:1760bdb4fa928b8ffb3e3f5719e4619826e195c7dce4e6417c12e0cbe0d57b83",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0004",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 558,
+        "end_line": 568,
+        "section": "1. Execution mandate / 1.1 How Codex SHALL execute this specification",
+        "text": "For every work packet Codex SHALL:\n\n1. Verify prerequisites and read the named public contracts.\n2. Enumerate files to create or modify and record the scope.\n3. Add a failing unit, integration, contract, or end-to-end test for each behavior before or with the implementation.\n4. Implement production behavior, including negative paths, cancellation, resource limits, and typed errors.\n5. Run package-local format, lint, unit, and property tests.\n6. Run dependent contract and integration suites.\n7. Run the packet's scripted demo or observable acceptance scenario.\n8. Update generated schemas, fixtures, API references, and user documentation in the same packet.\n9. Record results in IMPLEMENTATION\\_STATUS.md and produce a clean packet boundary.",
+        "text_sha256": "sha256:b4b0b39788870e4242de80ce46fd2a7c0c55abc1b8dbcf99b49632fdc7953856",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0005",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 570,
+        "end_line": 570,
+        "section": "1. Execution mandate / 1.1 How Codex SHALL execute this specification",
+        "text": "Codex SHALL stop and surface a blocker when it encounters an authorization ambiguity, schema incompatibility, data-loss path, nondeterministic canonical result, unsafe effect retry, failed migration, or a release-gate regression. It SHALL not make a permissive assumption to continue.",
+        "text_sha256": "sha256:0cb73bfb098ab3a4bf2ae535a4980c4ca0dd990ddf8cce63b5ec250ef98b6068",
+        "normative_token_count": 2
+      }
+    },
+    {
+      "id": "PRD-NORM-0006",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 589,
+        "end_line": 589,
+        "section": "1. Execution mandate / 1.3 Product outcome to preserve",
+        "text": "CIGAR compiles the smallest sufficient governed context for a job, records why every item was included or excluded, hands task state to another agent without transferring the parent transcript by default, and journals any resulting external effect. The implementation MUST optimize cost per verified successful job, not token count alone.",
+        "text_sha256": "sha256:568be2c84b96f7343c46c5960961daa91667d9e00ec40c0a8edda89ef85b19d9",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0007",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 631,
+        "end_line": 631,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "The beta does not discover, ingest, atomize, query, index, retrieve, plan, compile context, run a daemon, expose an API or MCP server, dispatch effects, load extensions, export OTLP, use vector backends, support remote/shared operation, or distribute SDK/plugin/OCI/installer artifacts. The closed excluded capability identifiers are `catalog-discovery`, `catalog-ingest`, `catalog-query`, `context`, `retrieval`, `handoff`, `space`, `replay`, `policy`, `daemon`, `effects`, `extensions`, `installers`, `macos`, `mcp`, `oci`, `otlp`, `plugin`, `remote`, `sdk`, `shared`, `vector`, `windows`, `arm`, `backup`, `garbage-collection`, `diagnostics`, `serving`, and `completion-man`, as pinned by `packaging/beta/capability-policy.v1.json`. Unknown or excluded commands, options, and feature selections MUST fail closed.",
+        "text_sha256": "sha256:cc70076787896f94de12de41341075585ebffc510a66582b3b53b302a6adee38",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0008",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 642,
+        "end_line": 642,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "Beta evidence MUST use `cigar.beta.qualification-evidence.v1` and `cigar.beta.release-evidence.v1`, with purpose `cigar-beta-qualification-evidence-v1`. Beta signatures MUST use the qualification-evidence purpose or the reserved `cigar-beta-release-*` purposes pinned in `packaging/beta/release-profile.v1.json`, according to the signed payload type. GA evidence schemas and GA signature purposes are forbidden in this lane; beta receipts cannot be relabeled or counted as GA evidence.",
+        "text_sha256": "sha256:22f22eb9b0ce05bad33661021c188e9f4141cf737d7d0f265cb852c3d74be5a2",
+        "normative_token_count": 2
+      }
+    },
+    {
+      "id": "PRD-GATE-0001",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 646,
+        "end_line": 646,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [x] The pinned beta profile/schema generator and fail-closed checker execute successfully, including their eight-test unit suite.",
+        "text_sha256": "sha256:096c53b210ef32cd56d76576293d7db5385fc7cc9909869c3b5c004dd7c79166",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0002",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 647,
+        "end_line": 647,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [x] Compile-time feature-isolation tests pass: full and beta selections are mutually exclusive, neither/both selections fail closed, and the beta dependency graph excludes the out-of-scope service/effect/plugin families asserted by the tests.",
+        "text_sha256": "sha256:2c54a95561ad2660d1c96849b45781fc39277a87d2b97bf83aa683cd623352c3",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0003",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 648,
+        "end_line": 648,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [x] The beta CLI test suite executes successfully in the development workspace (22 tests: 10 unit and 12 integration).",
+        "text_sha256": "sha256:2051f49279ced528b42d7326db3323cffedccb8ac37964a09ea80a92a5eb5b77",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0004",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 649,
+        "end_line": 649,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [x] The capability description matches the administration-only surface; undocumented metadata/confirmation aliases are rejected; descriptor-relative state locking and restrictive state/configuration checks regress directory replacement, link, permission, concurrency, cancellation, and deadline behavior.",
+        "text_sha256": "sha256:414952107f80755d7ab7595b63072945a01d03c1e37d3d45f632357214376cf1",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0005",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 650,
+        "end_line": 650,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [x] Freeze a clean committed beta candidate and bind its full commit, tree, deterministic source archive, source-archive digest, and `SOURCE_DATE_EPOCH` to every receipt.",
+        "text_sha256": "sha256:6fcf625864f70f1eada677b659c03b47961974d64bc7623d343bc63e991797bb",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0006",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 651,
+        "end_line": 651,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [ ] Produce all six allowlisted artifacts on a qualified native Ubuntu 24.04 x86_64/glibc 2.39 builder with Rust 1.92.0 and Python 3.14.6; prove archive contracts, deterministic rebuilds, exact file modes, no extra files, and path/symlink safety.",
+        "text_sha256": "sha256:70100552109ce6330e0eb0e2e3035eac6db9d1191245892928e52ec114e668fa",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0007",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 652,
+        "end_line": 652,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [ ] Install the exact binary archive as an unprivileged user in a clean no-compiler environment; enforce no-egress offline operation and pass positive and excluded-surface smoke tests.",
+        "text_sha256": "sha256:d31824a46bf45ea3e6407fe4285cf286d0ef8d1ff4eff43d9c765f0fa11e7fdf",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0008",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 653,
+        "end_line": 653,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [ ] Pass final-byte vulnerability, malware-indicator, secret, endpoint, developer-path, license, SBOM, and provenance gates with the required artifact bindings.",
+        "text_sha256": "sha256:cceb0bf6b88f1f459a372e9a6d4bbe7b96b306439dfbfa89db83fb73cf9c5498",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0009",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 654,
+        "end_line": 654,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [ ] Sign every qualification receipt and attachment plus artifacts, checksums, SBOM, provenance, and beta release evidence through the approved isolated signer; verify the complete set offline against independent trusted roots.",
+        "text_sha256": "sha256:7f6ea122f2657369677a2926ec70e357e2b95226e08e3862267c428a95408f90",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0010",
+      "kinds": [
+        "normative",
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 655,
+        "end_line": 655,
+        "section": "1. Execution mandate / 1.4A Initial beta release lane",
+        "text": "* [ ] Obtain publisher approval, publish the already-qualified exact bytes under the prerelease tag without rebuilding, and read every public byte back by digest. The beta MUST NOT update a stable or `latest` channel.",
+        "text_sha256": "sha256:8cbcd0f572febd208cc21202efad0abb1a09d6ec7960822bef55818daee5e3f8",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0009",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 671,
+        "end_line": 671,
+        "section": "2. Fixed architecture and technical decisions / 2.1 System architecture",
+        "text": "One semantic core supports embedded, local-daemon, and shared-service modes. Public record identity, canonical bytes, hashes, policy order, compilation results, state-machine transitions, and error codes MUST remain identical across modes.",
+        "text_sha256": "sha256:d9a093e578069fefabc6a8fab1de68e1afa057c4095cef7eb7f98917c31d0583",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0010",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 718,
+        "end_line": 718,
+        "section": "2. Fixed architecture and technical decisions / 2.2 Fixed technology choices",
+        "text": "Dependency versions SHALL be pinned by lockfiles for binaries and exact package-manager locks for SDKs and docs. Renovation occurs through tested update changes, not floating CI installs.",
+        "text_sha256": "sha256:c8a81c544f2884d0998bc8c46fe89a3753700755441d724abce76987784a8b0a",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0011",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 732,
+        "end_line": 732,
+        "section": "2. Fixed architecture and technical decisions / 2.4 Feature policy",
+        "text": "Every feature combination compiled for release has a named profile. CI tests default, minimal-local, shared-service, and all-features. Unnamed arbitrary combinations are unsupported and the code MUST fail configuration validation rather than partially initialize.",
+        "text_sha256": "sha256:0fa78344c38648bbd70858f1dc679af5b8d6b22e129296556f26c974b05e8927",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0012",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 860,
+        "end_line": 860,
+        "section": "3. Repository and build layout / 3.2 Workspace package rules",
+        "text": "Each Rust crate SHALL have one clear responsibility, a README.md with stability level, crate-level documentation, unit tests, and no undeclared feature behavior. Shared dependency versions, license, repository, rust-version, and lint configuration live in workspace metadata.",
+        "text_sha256": "sha256:1325853bbf117df835a8f056e5ede35ea3ba9aae090d19ca89648dc11455c792",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0013",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 884,
+        "end_line": 884,
+        "section": "3. Repository and build layout / 3.3 Authoritative commands",
+        "text": "just recipes may call these commands but SHALL contain no independent build logic. CI calls cargo xtask directly.",
+        "text_sha256": "sha256:2b03d4fd453c9d22a3112c5c90644284c2d45897e81615641f37cb9db94f9fe8",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0014",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 936,
+        "end_line": 936,
+        "section": "4. Protocol types, schemas, and canonicalization / 4.1 Protocol crate responsibilities",
+        "text": "Every record SHALL derive or implement schema validation, secret-safe debug formatting, canonical serialization where applicable, and a deterministic fixture constructor in cigar-testkit.",
+        "text_sha256": "sha256:0b086c84643c57abc7d084ee2b3bb4fa6e064ba37b25ff23572a47652883d7a7",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0015",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 976,
+        "end_line": 976,
+        "section": "4. Protocol types, schemas, and canonicalization / 4.4 Context contract schema",
+        "text": "ContextContractV1 SHALL require a non-empty job goal, operation class, principal, purpose, context-space or project scope, target profile, total input budget, output reserve, and consistency mode. Required context selectors identify semantic type, exact or query selector, minimum authority, maximum age, minimum coverage, and whether missing data blocks compilation.",
+        "text_sha256": "sha256:c7c1f72c5364d25dd377ee60b1bb65631ca47e8ee029008e60e5beb663380347",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0016",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1042,
+        "end_line": 1042,
+        "section": "4. Protocol types, schemas, and canonicalization / 4.8 Identity generation",
+        "text": "Source URIs are normalized by scheme-specific code. Filesystem identity records platform, volume or device identity where available, canonical root, relative path bytes, case-sensitivity mode, and source revision. Generic URI normalization MUST NOT lowercase or percent-decode path content beyond the relevant URI standard.",
+        "text_sha256": "sha256:56f84af1590f9facabaa7f2b7ed8c1207f000739dfb2fbe4a54bcfa64af658d1",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-SEC-0001",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1108,
+        "end_line": 1108,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| tenants | tenant ID | Immutable identity; deletion is staged |",
+        "text_sha256": "sha256:87d9e944f683c45775688d84424c71064891a0f2947154fd97723bfed2b3b5c1",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0002",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1109,
+        "end_line": 1109,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| principals | principal ID | Status and authentication mapping versioned |",
+        "text_sha256": "sha256:2998ffecc1d84eab630f747125e2229d91d2b623c57dd9b3b14470a8ad978c29",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0003",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1110,
+        "end_line": 1110,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| source\\_snapshots | snapshot ID | State is staged, published, failed, or tombstoned |",
+        "text_sha256": "sha256:682eebf800e1355b7eda807622867d3c83a020343c8ce9bf5872992e4c5b997b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0004",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1111,
+        "end_line": 1111,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| atoms | atom version ID | Immutable semantic envelope and digest |",
+        "text_sha256": "sha256:19cc9dc402361224103a43f73b1b854722d23c2486e2e79ed2f2d094580b4a7b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0005",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1112,
+        "end_line": 1112,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| atom\\_lineages | lineage ID | Current version is explicit, never inferred by timestamp |",
+        "text_sha256": "sha256:e7fe1e2ff611517f37b67e9a060ff9fff0543b914ce7e1de77eace9810423f9f",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0006",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1113,
+        "end_line": 1113,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| edges | edge ID | Immutable; derivation acyclicity validated before commit |",
+        "text_sha256": "sha256:d5c2693f88f9bb45de8723a76d595afa777a6a87f2dc6ac908e037c250607f63",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0007",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1114,
+        "end_line": 1114,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| blobs | blinded storage key | Size, digest, encryption, retention, and reference count |",
+        "text_sha256": "sha256:a0af054e6dfb33b24a9d87f5f1134f76a2aeb649f0a3462b46402dc24ba1ac07",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0008",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1115,
+        "end_line": 1115,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| context\\_commits | space and sequence | Monotonic sequence and parent revision |",
+        "text_sha256": "sha256:3bffc3ddfb5bbcce81b2f3768164d17e643631809b4f4ff16eb81111bb230ccd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0009",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1116,
+        "end_line": 1116,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| context\\_events | commit and ordinal | Ordered, immutable events |",
+        "text_sha256": "sha256:0a389576bba9a11aca5fca9b26ae817a38238aee62a3393e7454417b424bedf9",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0010",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1117,
+        "end_line": 1117,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| policies | policy version | Immutable compiled profile and source digest |",
+        "text_sha256": "sha256:df69e22ee5344054ceda986b5346dd29e38606140436fd048b3348f6e2fd3c7f",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0011",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1118,
+        "end_line": 1118,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| index\\_watermarks | index and partition | Never advances beyond committed source sequence |",
+        "text_sha256": "sha256:25cd1a112513949272b3152964f80798b678ee956ae80ca88b391b29ad06e881",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0012",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1119,
+        "end_line": 1119,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| plans | plan ID | Immutable normalized plan and fingerprints |",
+        "text_sha256": "sha256:27ac2f6214ff50b3dfbc766ef9d69f9250f92511ffbf849029453b3f9f39f0f5",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0013",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1120,
+        "end_line": 1120,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| bundles | bundle ID | Ordered blocks and dependency root |",
+        "text_sha256": "sha256:44d1cb2b7d17638a8da7efd6b71a873bf0c98a97252cbc4b988c4a2c7f444522",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0014",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1121,
+        "end_line": 1121,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| manifests | manifest ID | Candidate-log reference and exact compiler inputs |",
+        "text_sha256": "sha256:455556c335e9b5bccdb8231fdbc41b997cb6839b44b7f0e885ac2aee3f1a7f1d",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0015",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1122,
+        "end_line": 1122,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| materializations | materialization ID | Target adapter, exact bytes or protected reference, token count |",
+        "text_sha256": "sha256:8a943553d0360266c7be0874d03fac2b91cc1b16f1ada51925256fc49b3af4bb",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0016",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1123,
+        "end_line": 1123,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| handoffs | handoff ID | Snapshot, recipient, capability root, expiry, nonce |",
+        "text_sha256": "sha256:bb6e999c82ce37dad299bea5aa5450e1bfa00f65158790fab086dd1228bf8766",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0017",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1124,
+        "end_line": 1124,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| handoff\\_acceptances | handoff and recipient | One immutable acceptance version per attempt |",
+        "text_sha256": "sha256:7267729cfdce9b02899a94972857b1e67ee6f6ae89974879f5bbd96c722226fc",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0018",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1125,
+        "end_line": 1125,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| decision\\_records | decision ID | Bundle and output integrity links |",
+        "text_sha256": "sha256:9b383b2c1b52c6b1885d980faa73fa9608f93b5c4838fbd3beabd0c908c3d84e",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0019",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1126,
+        "end_line": 1126,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| effect\\_intents | effect ID | Prepared before any attempt exists |",
+        "text_sha256": "sha256:479977f7ecc11eba1cf891559b8c703f06b9d51441b7298210d3387b83f3b6f6",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0020",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1127,
+        "end_line": 1127,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| effect\\_attempts | attempt ID | Monotonic number per effect |",
+        "text_sha256": "sha256:449b4eb17f084c0b7b2d31cc9d47f73491075d19e6e550dc30c65df43ca18c53",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0021",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1128,
+        "end_line": 1128,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| effect\\_receipts | receipt ID | Immutable evidence; outcome does not overwrite attempts |",
+        "text_sha256": "sha256:b0af5c657764b0c020e65e740ed903cd28e1fe1badf3d1a8b095b849fb45ee64",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0022",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1129,
+        "end_line": 1129,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| effect\\_events | effect and sequence | Valid state transition and hash chain |",
+        "text_sha256": "sha256:048e444eb7ef87bf70fa174ea289ad0772cd57a4902d8a1251bdcaf00e2a8b40",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0023",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1130,
+        "end_line": 1130,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| outbox | message ID | Written in the same transaction as causal state |",
+        "text_sha256": "sha256:23e714aac1a488ae176d2ce8be06029ee5cf46a3e682ae0f715363bf26444be7",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0024",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1131,
+        "end_line": 1131,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| invalidation\\_queue | invalidation ID | Idempotent dependency propagation cursor |",
+        "text_sha256": "sha256:b7c8cfa17e2fa76084ba5dd5c4c95e84a73e3b60793f09f6518ea8337c6d7e67",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0025",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1132,
+        "end_line": 1132,
+        "section": "6. Persistence and transactional model / 6.2 Logical tables",
+        "text": "| leases | lease ID | Resource, holder, fencing token, expiry |",
+        "text_sha256": "sha256:7c69fdd2867abcd2554c00ed90d528aae1508236e34d41700bb191106e2693be",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0026",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1245,
+        "end_line": 1245,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Tenant and workspace identity match.",
+        "text_sha256": "sha256:8f9b3c2c13a2fa491bfe53c363a775788914b105391fc1ebd9cc3dbccb88abc9",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0027",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1246,
+        "end_line": 1246,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Explicit project, branch, task, session, and agent scope.",
+        "text_sha256": "sha256:564031d32ff94b1db969e75577781f008408679ac383ba172c87f8fd8cac73a1",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0028",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1247,
+        "end_line": 1247,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Principal status and delegated capability validity.",
+        "text_sha256": "sha256:213bb2af6361b7305b064397ed62a2b122f4a6f3e614065d397684083fcf55c1",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0029",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1248,
+        "end_line": 1248,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Purpose and processor authorization.",
+        "text_sha256": "sha256:30df08a8d8441a366175c70ca523d977d7a6b9cab51a866c1f19c155e345e50b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0030",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1249,
+        "end_line": 1249,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Classification, residency, and egress restrictions.",
+        "text_sha256": "sha256:287aa05513342e192f553f40ea76c8c920e126c67f408733362e8486357c0391",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0031",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1250,
+        "end_line": 1250,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Lifecycle, quarantine, tombstone, and integrity state.",
+        "text_sha256": "sha256:45c8811a2bbae7a5deac361bdf86b6e249913060b8adbc2bb4dbbbd03f4d330b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0032",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1251,
+        "end_line": 1251,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* World-valid time, transaction time, freshness, and expiry.",
+        "text_sha256": "sha256:4c7624edd5e38fab0742f171ca9b664de4fd6e1588cd9debd2fd018279da3fad",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0033",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1252,
+        "end_line": 1252,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Instruction authority and lane promotion.",
+        "text_sha256": "sha256:673fb776b7ec42d37fd567b5af38be9e5b1b81d1dce2b4d118ae2eedb51874bd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0034",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1253,
+        "end_line": 1253,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Explicit contract exclusions and target modality.",
+        "text_sha256": "sha256:75dce02d93088f053514551eee1d41d223fbd054e1fdcdf0d47608f1eef2c0b2",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0035",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1254,
+        "end_line": 1254,
+        "section": "8. Policy, capability, and instruction enforcement / 8.1 Non-bypassable hard gates",
+        "text": "* Effect operation, target, risk, approval, and retry capability.",
+        "text_sha256": "sha256:733bf97266e57dc278bc0887f413c680564e07db2f976905544e4858420e1683",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0036",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1310,
+        "end_line": 1310,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Monotonicity:** narrowing scope or capabilities cannot increase authorized content or effects.",
+        "text_sha256": "sha256:d4856942ac9b1f3dea75e488aefb921d4713eacc20bd9200721c99ebe688fe61",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0037",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1311,
+        "end_line": 1311,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Non-interference:** changing only unauthorized atoms cannot change caller-visible bundle bytes, explanation, or response class beyond defined constant-time tolerance.",
+        "text_sha256": "sha256:54a7fd3246763aa6552db2059c727026ee40a07af19be012bfa426da6fa83353",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0038",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1312,
+        "end_line": 1312,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Project isolation:** adding Project B to the catalog does not make it visible to a Project-A-only contract.",
+        "text_sha256": "sha256:8375dc85fdc69b35159d4e1ab81f588a01afaa22a04a27c885c39f3da09fe94c",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0039",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1313,
+        "end_line": 1313,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Processor confinement:** disallowed plaintext never reaches an embedding, ranker, summary, telemetry, or retry queue.",
+        "text_sha256": "sha256:b37230db29c8be98442c74135133f0f83cb5a077baa017d3df09b2efaa6edea2",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0040",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1314,
+        "end_line": 1314,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Instruction separation:** payload text cannot increase its authority.",
+        "text_sha256": "sha256:1b627bedc19aac724f7e34f0e9765e21b16a987b1162a060265c529527d44750",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0041",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1315,
+        "end_line": 1315,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Revocation:** current ACL or policy denial blocks materialization, handoff acceptance, and effect use even for an older otherwise-valid bundle.",
+        "text_sha256": "sha256:bcbb4503c43de723d6a9c0896ebc3e6803a122368e1d31eba1b95e2347d98f3d",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0042",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1316,
+        "end_line": 1316,
+        "section": "8. Policy, capability, and instruction enforcement / 8.7 Required policy properties",
+        "text": "* **Fail closed:** protected operations fail when a required policy dependency is unavailable.",
+        "text_sha256": "sha256:38acf6847204be8a613d15ccbafa70d65554284a3ac94e03e16955b19b307a33",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-NORM-0017",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1573,
+        "end_line": 1573,
+        "section": "11. Materialization, caching, deltas, and token accounting / 11.4 Delta compilation",
+        "text": "Applying the delta to the canonical base blocks MUST reproduce the new digest. Base mismatch returns DELTA\\_BASE\\_MISMATCH; no fuzzy application occurs. Adapters acknowledge applied deltas so present-state accounting is auditable.",
+        "text_sha256": "sha256:8a4320ac4906e747e427837ec55bcb9dd8cce559aa9e03dc6f08346bf6459035",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0018",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1764,
+        "end_line": 1764,
+        "section": "14. Daemon, APIs, authentication, and operations / 14.5 Required routes",
+        "text": "The v1 HTTP contract SHALL expose exactly the following operation paths. Generated OpenAPI operation IDs SHALL equal the corresponding Protobuf RPC names in lower camel case. Adding aliases or alternate spellings is a compatibility change and is not permitted during v1 implementation.",
+        "text_sha256": "sha256:4b020dcf86cae313f81829a24ef3cd1009029da87d2720a6c0d3b90ae34bc82c",
+        "normative_token_count": 2
+      }
+    },
+    {
+      "id": "PRD-NORM-0019",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1818,
+        "end_line": 1818,
+        "section": "14. Daemon, APIs, authentication, and operations / 14.5 Required routes",
+        "text": "For every mutation, the HTTP binding, Protobuf request, SDK method, CLI JSON envelope, audit event, and error catalog SHALL share one generated operation identifier. The contract tests SHALL enumerate the list above and fail on a missing route, undocumented route, divergent request field, incompatible status mapping, or operation lacking an embedded service equivalent.",
+        "text_sha256": "sha256:221f35e85200e997ede4d680a017877de243dcc5bc7d0daf55d6c642d7be0cf4",
+        "normative_token_count": 2
+      }
+    },
+    {
+      "id": "PRD-NORM-0020",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1834,
+        "end_line": 1834,
+        "section": "14. Daemon, APIs, authentication, and operations / 14.9 Extension host and stable extension boundary",
+        "text": "The extension host makes replaceable behavior modular without allowing extension code to redefine CIGAR identities, authorization, state transitions, or journal semantics. Supported extension kinds are SourceConnector, Atomizer, Retriever, RankingFeature, Transform, SummaryVerifier, Tokenizer, Materializer, PolicyProvider, StorageBackend, EffectConnector, and Reconciler. Built-in extensions MAY link in-process. Third-party extensions MUST execute as a WASI Preview 2 component or as an isolated subprocess using length-delimited canonical CBOR over restricted standard I/O. A remote gRPC extension is permitted only in shared deployments and uses the same logical ABI.",
+        "text_sha256": "sha256:12c633db89bc32b13c034fab92a71074a9f025e2aa3e13cc583f98b87749f05b",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0021",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 1842,
+        "end_line": 1842,
+        "section": "14. Daemon, APIs, authentication, and operations / 14.9 Extension host and stable extension boundary",
+        "text": "Deterministic extensions MUST pass the published vector suite under repeated process launches, locale and timezone changes, randomized host scheduling, and every Tier 1 architecture. Their declared semantic output participates in the enclosing CIGAR digest. Nondeterministic extensions emit an observation record whose digest, inputs, implementation, execution limits, and output become explicit replay dependencies. Package tests include invalid signature, digest substitution, ABI confusion, schema bomb, oversized frame, path traversal, forbidden preopen, environment leak, network escape, fork or subprocess attempt, infinite loop, memory growth, output flood, cancellation race, and crash-after-response cases.",
+        "text_sha256": "sha256:e1a9ba1987e64f592542b2839c5dba554e40ec89e13f186ef11896a94c74355a",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-GATE-0011",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2136,
+        "end_line": 2136,
+        "section": "19. Component and invariant verification / 19.1 ABI and canonicalization",
+        "text": "Gate: zero cross-language differences, zero unbounded allocation, and full public schema-vector coverage.",
+        "text_sha256": "sha256:28b530d5ed8076e328441d60fde2fe2a14e95c2c157457e3d258c28ec766c6ad",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0012",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2144,
+        "end_line": 2144,
+        "section": "19. Component and invariant verification / 19.2 Catalog, provenance, temporal truth, and invalidation",
+        "text": "Gate: no partial snapshot, 100% expected invalidation, zero unexpected invalidation in controlled fixtures, and zero canary leak.",
+        "text_sha256": "sha256:e87cd66c2169ba848536252a49d6967cd2dfda124033a6701340de6fe41f7a12",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0013",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2154,
+        "end_line": 2154,
+        "section": "19. Component and invariant verification / 19.3 Policy and isolation",
+        "text": "Gate: zero unauthorized bytes, identities, counts, paths, scores, timing class, or existence signal.",
+        "text_sha256": "sha256:ed80ced729024b579d050a2b17ea509939817f7633d5fe7df8386cb8d886e7bd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0014",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2171,
+        "end_line": 2171,
+        "section": "19. Component and invariant verification / 19.4 Planner, retrieval, compiler, and explanation",
+        "text": "Gate: 100% mandatory inclusion, 100% selected provenance, at least 99.99% budget compliance over one million generated materializations, and byte-identical deterministic digests.",
+        "text_sha256": "sha256:91097c77b34526920724a6a80def501cb623a7b713dae2e517ed38395c842538",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0015",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2179,
+        "end_line": 2179,
+        "section": "19. Component and invariant verification / 19.5 Materializers and tokenizers",
+        "text": "Gate: 100% semantic block preservation, at least 99.99% token compliance, zero lane escape, zero secret canary.",
+        "text_sha256": "sha256:3c43e0589d4c21d02b066290c7085184df7e54c3b7f2519e03042eea5533ffc7",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0016",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2187,
+        "end_line": 2187,
+        "section": "19. Component and invariant verification / 19.6 Context spaces and handoffs",
+        "text": "Gate: zero authority amplification, zero overlay leakage, deterministic receipts, handoff and first bundle at most 20% of parent transcript reference, and at least 90% productive first action on the adjudicated set.",
+        "text_sha256": "sha256:44ddafafec5c78b2e492237b1ad9947467ce14f0b5486841082865da030715b8",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0017",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2220,
+        "end_line": 2220,
+        "section": "19. Component and invariant verification / 19.7 Effect crash matrix",
+        "text": "Gate: no unjournaled dispatch, no unsafe blind retry, zero duplicate logical effects in the idempotent campaign, and every ambiguity visible.",
+        "text_sha256": "sha256:82f2a18484128b87e3dc9e9bdb0ea9bb881f615c5927e706b48508b0c642e7b3",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0018",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2228,
+        "end_line": 2228,
+        "section": "19. Component and invariant verification / 19.8 Replay",
+        "text": "Gate: zero network or effect call in non-live modes and exact retained evidence digests.",
+        "text_sha256": "sha256:97e97b0ea9a5326f8d8deb770deffdc060dbf0fe0cd66c00e873dbab0722c6dd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0019",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2236,
+        "end_line": 2236,
+        "section": "19. Component and invariant verification / 19.9 Storage and APIs",
+        "text": "Gate: journal RPO zero in the supported durability profile, no semantic loss after rebuild, and all adjacent migrations on supported platforms.",
+        "text_sha256": "sha256:71d0bbb6f8bd4a26ddf49c243cd9d7cb364dee938d7071bd03d3fec96afc0a0a",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0043",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2530,
+        "end_line": 2530,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Unauthorized content or existence leak.",
+        "text_sha256": "sha256:c470580c023c802237534574f8282e3a35a48d94cd45433027347abe13a57b55",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0044",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2531,
+        "end_line": 2531,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Nondeterministic canonical digest.",
+        "text_sha256": "sha256:704189773fed536868f6e0c5df3dd9154895fd52fa99951c585af6cddde6e9af",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0045",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2532,
+        "end_line": 2532,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Mandatory omission, lane promotion, or materializer semantic drift.",
+        "text_sha256": "sha256:2cbc23871b8099694b2e0bd880d691a79438617689e331cb26534327ee76b777",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0046",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2533,
+        "end_line": 2533,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Dispatch before durable intent and authorization.",
+        "text_sha256": "sha256:7a0b04495438dc13f255e65e8cf699c9837d2617d6891de0f88ad7976964c9e3",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0047",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2534,
+        "end_line": 2534,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Unsafe retry or duplicate logical effect.",
+        "text_sha256": "sha256:f264054d32664675a301606c9ba60b5ecc18444092e9a6647187d864cbccec7d",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0048",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2535,
+        "end_line": 2535,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Network or mutation in non-live replay.",
+        "text_sha256": "sha256:30b8f6443e01c8995a813acd30283e7f4515ba28793cac4139b9cde4e9ecadee",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0049",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2536,
+        "end_line": 2536,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Lost committed journal event or partial canonical visibility.",
+        "text_sha256": "sha256:304ba72ba5392a437b9bf7ecc3b38ba6f54e6e09e543d9263aea4bd81add0818",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0050",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2537,
+        "end_line": 2537,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Exploitable critical or high vulnerability.",
+        "text_sha256": "sha256:06136ce514d4747a35ff2416c154591a91a4ff57a852ef42b9ac00031ea943a8",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0051",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2538,
+        "end_line": 2538,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Fuzz, sanitizer, memory-safety, or model-checking defect.",
+        "text_sha256": "sha256:c32f9388b35b9c36eae9542fb200e21ab89ba42c51859b8cb5ee7aeadb4d1167",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0052",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2539,
+        "end_line": 2539,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Failed supported migration.",
+        "text_sha256": "sha256:30057059316ec8e20687d62120c01e038c2631539ded1763f6319e3558e69501",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0053",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2540,
+        "end_line": 2540,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Missed SLO or outcome gate.",
+        "text_sha256": "sha256:ed0fb90487a63efc6e885bf39a23c7d9305ea25a3559fa06a4aee6d1a34df9f9",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0054",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2541,
+        "end_line": 2541,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Broken install, uninstall, offline use, version consistency, signature, SBOM, provenance, or reproducibility.",
+        "text_sha256": "sha256:99b715f01c183148c87d80a1ffa8f6f78380929dc6daf04bfd38dac31191e704",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0055",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2542,
+        "end_line": 2542,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* Any release-blocking flake, skip, quarantine, or missing evidence.",
+        "text_sha256": "sha256:8f4024e3d5fc3cd4f79d19df6d89284198f00efe8fe41149a78f7bae5f3e7a0a",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0056",
+      "kinds": [
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2543,
+        "end_line": 2543,
+        "section": "24. CI, packaging, and release engineering / 24.9 Stop-ship conditions",
+        "text": "* A claimed platform not tested using its distributed artifact.",
+        "text_sha256": "sha256:5f83218e1c17ab0909b85d740ce2a753259a08293f1fb828f6f8b05a1660f798",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0020",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2646,
+        "end_line": 2646,
+        "section": "26. Dependency-ordered implementation work packets / 26.3 WP00 - repository, toolchain, and quality skeleton",
+        "text": "**Exit:** [x] clean workspace runs bootstrap and fast CI commands; empty binaries print semantic version, source revision, protocol range, build profile, and enabled features in stable JSON.",
+        "text_sha256": "sha256:5630dc78491e15f70b4185fd545a9313a314e8f34652e2676edc7c9c3574a618",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0021",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2677,
+        "end_line": 2677,
+        "section": "26. Dependency-ordered implementation work packets / 26.4 WP01 - Context ABI domain types and schemas",
+        "text": "**Exit:** [x] schemas render complete reference docs; generated artifacts are reproducible; no network, storage, or async-runtime dependency enters cigar-protocol.",
+        "text_sha256": "sha256:09dbd7ffb5e39b69357abf45330ed4eca5733aaf554ead78fe6a3c5d972723e3",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0022",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2703,
+        "end_line": 2703,
+        "section": "26. Dependency-ordered implementation work packets / 26.5 WP02 - canonicalization, hashing, crypto, and errors",
+        "text": "**Exit:** [x] identical bytes and digests across Rust, TypeScript, Python, and Go; every invalid form produces the expected safe stable error; semantic digests exclude only documented fields.",
+        "text_sha256": "sha256:4cc086ec7075017af7b103d2049efbbfa6a91f5b89a8a5f1a94db242dc9ad0b1",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0023",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2722,
+        "end_line": 2722,
+        "section": "26. Dependency-ordered implementation work packets / 26.6 WP03 - store traits and transaction contracts",
+        "text": "**Exit:** [x] every repository method is covered by the black-box suite and the in-memory model; dropped, cancelled, stale, invalid, and injected-abort writes expose no partial state.",
+        "text_sha256": "sha256:e923922d8fb80477805f39e4be9b74c8095ae3ab0e0c73cc72a2e9266a1d6a2a",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0024",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2738,
+        "end_line": 2738,
+        "section": "26. Dependency-ordered implementation work packets / 26.7 WP04 - SQLite, blob storage, backup, and recovery",
+        "text": "**Exit:** [x] committed journal RPO zero under durability profile; [x] restored state has identical canonical roots; [x] corruption quarantines and invalidates without plaintext leak; [x] local scale resource target passes.",
+        "text_sha256": "sha256:24dfc4335b3ff95700dd8e22ab78b3779e9be5fb314dce1eb77b2f1f4819bfe2",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0025",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2754,
+        "end_line": 2754,
+        "section": "26. Dependency-ordered implementation work packets / 26.8 WP05 - catalog, ingestion, code intelligence, and invalidation",
+        "text": "**Exit:** [x] one-file refresh invalidates exact dependents; [x] secret scan precedes indexing; [x] sustained ingestion at least 250 small atoms/s; [x] source and symbol provenance resolves end to end.",
+        "text_sha256": "sha256:11beec6a0b7bbaad9bde48be5860d6c4877c591a471630af47caa5e521c0674c",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0026",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2770,
+        "end_line": 2770,
+        "section": "26. Dependency-ordered implementation work packets / 26.9 WP06 - index manager and authorized retrieval",
+        "text": "**Exit:** [x] strong never uses behind watermark; [x] bounded-stale discloses exact lag; [x] unauthorized content never reaches candidate content, external embedding, or caller-visible logs; [x] semantic result set survives rebuild.",
+        "text_sha256": "sha256:37277a741cbd78e025068a21cfad8728e40b3cf18850978db2622bf58980daa5",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0027",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2785,
+        "end_line": 2785,
+        "section": "26. Dependency-ordered implementation work packets / 26.10 WP07 - policy, redaction, and capabilities",
+        "text": "**Exit:** [x] zero unauthorized signal in negative suite; [x] no lower rule overrides deny; [x] protected outage fails closed; [x] policy change prevents old bundle use before background invalidation completes.",
+        "text_sha256": "sha256:afed880ee9045e1bfdc8eddf20095c6a280ca6c75165e72e7235c91f657ff31b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0028",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2801,
+        "end_line": 2801,
+        "section": "26. Dependency-ordered implementation work packets / 26.11 WP08 - planner and deterministic compiler",
+        "text": "**Exit:** [x] deterministic cross-platform digests, [x] 100% mandatory include-or-error, [x] full provenance and disposition, [x] one-million materialization budget gate, [x] p50/p95/p99 compile targets.",
+        "text_sha256": "sha256:75688923170a3940f9092dfdc4b2d9dcff9f01dfa3930cfff45b3b9aea8d62c4",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0029",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2818,
+        "end_line": 2818,
+        "section": "26. Dependency-ordered implementation work packets / 26.12 WP09 - materializers, tokenizers, caches, and deltas",
+        "text": "**Exit:** [x] semantic blocks preserved, [x] no lane escape, [x] no silent truncation, [x] exact delta digest, [x] token-accounting fields distinct, [x] cache-hit p95 target.",
+        "text_sha256": "sha256:eaa153468bc247f807b81c8b4152d82deab430c876a16f796660721eecd7fe1d",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0030",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2832,
+        "end_line": 2832,
+        "section": "26. Dependency-ordered implementation work packets / 26.13 WP10 - context spaces, overlays, commits, and events",
+        "text": "**Exit:** [x] no lost update or silent decision/instruction overwrite; [x] no overlay leak; [x] cursor has no semantic gap; [x] Project B remains invisible to A-only context.",
+        "text_sha256": "sha256:fdb4fdbb8f022aef0e788d828bf725a038972c008c3e9bfe5c4082d51d898cb5",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0031",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2846,
+        "end_line": 2846,
+        "section": "26. Dependency-ordered implementation work packets / 26.14 WP11 - handoff and agent result protocol",
+        "text": "**Exit:** [x] zero authority amplification; [x] accepted bundle is deterministic and inspectable; [x] inaccessible source does not leak; [x] reference handoff stays within 20% baseline and passes first-action outcome gate.",
+        "text_sha256": "sha256:dc8dd33b68c2e28912f357c4dfd34564b3ca34cfa417a0d612e7cb57c621138b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0032",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2862,
+        "end_line": 2862,
+        "section": "26. Dependency-ordered implementation work packets / 26.15 WP12 - effect journal and reference connectors",
+        "text": "**Exit:** [x] no dispatch before durable authorization; [x] 100,000 fault campaign has zero duplicate logical effects; [x] every possible remote ambiguity is explicit; [x] unsafe retry is impossible through public API.",
+        "text_sha256": "sha256:55d0ae38ff84b9380e48d097a709b8f3a6f7c641759487b3e3d474acc9781890",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0033",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2878,
+        "end_line": 2878,
+        "section": "26. Dependency-ordered implementation work packets / 26.16 WP13 - decision records and replay",
+        "text": "**Exit:** [x] non-live replay has zero external calls; [x] missing dependencies never substitute current data; [x] deterministic fixture reproduces through every SDK.",
+        "text_sha256": "sha256:0b12828ef121e3619b392f6c3ab7eabd3e267d6aa6ea74100398f5397b7f6fd9",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0034",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2895,
+        "end_line": 2895,
+        "section": "26. Dependency-ordered implementation work packets / 26.17 WP14 - daemon, APIs, authentication, and operations",
+        "text": "**Exit:** [x] semantic conformance identical in embedded and daemon modes; [x] restart loses no commits or effects; [x] API errors stable; [x] readiness reflects migration, journal, blob, policy, and index state; [x] hostile extension fixtures cannot escape declared capabilities or mutate trusted state outside a validated host call.",
+        "text_sha256": "sha256:3588cdc6f82ee53d9f44f2d43a7557e97af7552a63168d1e180eaf4f4c3575cd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0035",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2909,
+        "end_line": 2909,
+        "section": "26. Dependency-ordered implementation work packets / 26.18 WP15 - complete CLI",
+        "text": "**Exit:** [x] installed CLI completes init through replay and effect recovery; [x] commands are documented and completion scripts pass shell syntax checks.",
+        "text_sha256": "sha256:1476bffba5d333fa7644d46d4cd0ba995aab4d30969f437e0e771eff51d1ee00",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0036",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2924,
+        "end_line": 2924,
+        "section": "26. Dependency-ordered implementation work packets / 26.19 WP16 - Rust, TypeScript, Python, and Go SDKs",
+        "text": "**Exit:** [x] capability manifest shows parity; [x] each quickstart produces the same semantic bundle ID; [x] no SDK automatically retries unsafe dispatch.",
+        "text_sha256": "sha256:c93e4a099c079a04a7d2b3768900f6dbfd6bf8d880be53113e35f2d54cfc59af",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0037",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2939,
+        "end_line": 2939,
+        "section": "26. Dependency-ordered implementation work packets / 26.20 WP17 - Claude Code plugin, MCP, hooks, and skills",
+        "text": "**Exit:** [x] fixture demo passes on all supported platforms; [x] live controlled smoke passes for each claimed Claude range; [x] adapter failure does not corrupt host; [x] all injections are explainable.",
+        "text_sha256": "sha256:79dcd6ee7afca2cac0cfc9bf6cbcdd59628a6c7128c8f84ea52b0e59d9ecb211",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0038",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2953,
+        "end_line": 2953,
+        "section": "26. Dependency-ordered implementation work packets / 26.21 WP18 - PostgreSQL, object storage, and shared deployment",
+        "text": "**Exit:** [x] all claimed conformance profiles pass in shared mode; [x] no lost update or duplicate effect; [x] 10M benchmark publishes curve; [x] S3 failure leaves no metadata pointing to unavailable committed blob.",
+        "text_sha256": "sha256:80455bf76041a2bcd83d8b554e96add0692557be55e2e24da2f4a2dff44e7881",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0039",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2969,
+        "end_line": 2969,
+        "section": "26. Dependency-ordered implementation work packets / 26.22 WP19 - conformance, security, fuzz, and quality hardening",
+        "text": "**Exit:** every normative requirement maps to evidence; no critical or high exploitable defect; all stop-ship security and integrity gates pass.",
+        "text_sha256": "sha256:2400bf5a9f595c96cb3dfca032cd2bf9f9d686fea5f7f62ba267ec0a429dd512",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0040",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 2985,
+        "end_line": 2985,
+        "section": "26. Dependency-ordered implementation work packets / 26.23 WP20 - demos and CIGARBench",
+        "text": "**Exit:** all demos pass with distribution artifacts; performance and outcome gates pass with confidence intervals and per-stratum reports.",
+        "text_sha256": "sha256:d0ed85d327340d93e982abd59b0efa29a8e261ccf07486e8053e788805c51fbd",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0041",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3000,
+        "end_line": 3000,
+        "section": "26. Dependency-ordered implementation work packets / 26.24 WP21 - packaging, documentation, and operational readiness",
+        "text": "**Exit:** every artifact installs and verifies; two builders produce matching payloads; docs examples execute; operations exercises create evidence.",
+        "text_sha256": "sha256:ca494233336650f495adb44e8b6a63c5a64e6396b9237f4a63f9c0aaf9210ffe",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-GATE-0042",
+      "kinds": [
+        "release_gate"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3017,
+        "end_line": 3017,
+        "section": "26. Dependency-ordered implementation work packets / 26.25 WP22 - release candidate and v1.0.0",
+        "text": "**Exit:** cargo xtask release verify dist/ passes with no waiver or skipped condition; all claimed platforms and profiles are backed by actual artifact tests; the v1.0.0 tag points to the evidence source commit.",
+        "text_sha256": "sha256:23ba1badf5627e95b05202074c2064807fa9bbe702d98120d9a4e56e3964f3f6",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-NORM-0022",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3023,
+        "end_line": 3033,
+        "section": "27. Codex execution control protocol / 27.1 Kickoff procedure",
+        "text": "On an empty repository, Codex SHALL:\n\n1. Create the WP00 skeleton only.\n2. Copy the machine-readable templates from Appendices A and B.\n3. Set WP00 to in progress and every other packet to not started.\n4. Record the effective workspace path, available toolchains, platform, container capability, and network policy.\n5. Run the existing tests before modifying any nonempty repository.\n6. Record unrelated existing changes and preserve them.\n7. Implement the smallest real WP00 vertical slice.\n8. Run WP00 exit commands and capture artifacts.\n9. Mark complete only after independent readback of generated evidence.",
+        "text_sha256": "sha256:4d593da5aec6885272f39079457d8a3cf51152e1a17bcad0b2be74e55a22f08c",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0023",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3035,
+        "end_line": 3035,
+        "section": "27. Codex execution control protocol / 27.1 Kickoff procedure",
+        "text": "On an existing partial repository, Codex SHALL inventory packages, schemas, migrations, tests, and open status; map them to work packets; run current gates; and mark a packet complete only when this specification's exit criteria actually pass. Existing code is evidence to inspect, not proof of completion.",
+        "text_sha256": "sha256:b4a7a73502af8ba0f3c4163af424ca7266869356c37aa51549fb398516245fed",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-NORM-0024",
+      "kinds": [
+        "normative"
+      ],
+      "critical": false,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3053,
+        "end_line": 3053,
+        "section": "27. Codex execution control protocol / 27.3 Parallel agent use",
+        "text": "Parallel agents MUST NOT independently edit the same schema version, migration sequence, canonical vector, error catalog, release manifest, or dependency lock. A generated-file conflict is resolved by rerunning the authoritative generator, never hand-merging output.",
+        "text_sha256": "sha256:721b28a12c85d74f3399d353c8b6f444a6fa108bca36d5406dfd14de8cd07097",
+        "normative_token_count": 1
+      }
+    },
+    {
+      "id": "PRD-SEC-0057",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3344,
+        "end_line": 3344,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No unauthorized content, existence, secret, project, tenant, purpose, or processor leak.",
+        "text_sha256": "sha256:bd51e2c9764eda6cbaccb8d3e1a30ddea4d166c8b8c251f82c77edab24547834",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0058",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3345,
+        "end_line": 3345,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Canonical digests are deterministic across all SDKs and supported platforms.",
+        "text_sha256": "sha256:7755da4a5e6cd6964d4875e8700425dcd679584e01de3024b017523c520e1c6a",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0059",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3346,
+        "end_line": 3346,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Mandatory context is included or compilation fails explicitly.",
+        "text_sha256": "sha256:68100488fd73e5f08d339037f07fe3706972b7ccab25656db2646a40faf56f4e",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0060",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3347,
+        "end_line": 3347,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Instruction and evidence lanes cannot be crossed.",
+        "text_sha256": "sha256:852b47bf2ac238ae0b87d2b9186de6298fcb224b77c975af6b0c4b093fcee170",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0061",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3348,
+        "end_line": 3348,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Every selected catalog block has provenance and reason.",
+        "text_sha256": "sha256:7eb956b99557164bb9ff7d5b75bdadbbaf67e306621cdf22c7a3fe3bd412b19b",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0062",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3349,
+        "end_line": 3349,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Every considered eligible candidate has a disposition.",
+        "text_sha256": "sha256:abda5b119bbf97a37adea979d5b45d5e5434e79b11e3fc62ee651866e8c88275",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0063",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3350,
+        "end_line": 3350,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No materializer semantic drift or silent truncation.",
+        "text_sha256": "sha256:e3e2d221f4c44afdf2f380113c2563e488063199605eb454d0c0ffe1cfd14a89",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0064",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3351,
+        "end_line": 3351,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No mediated dispatch before durable intent and authorization.",
+        "text_sha256": "sha256:79e4473b6a1a3c456faa22dc85f2d3865820e94dcd0b6eafe71c850a1da546e3",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0065",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3352,
+        "end_line": 3352,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No unsafe unknown retry or duplicate logical effect.",
+        "text_sha256": "sha256:02985c28271dc5576048451a075038e56bd24945f5ef7ece0bf96a2adeea3725",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0066",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3353,
+        "end_line": 3353,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Non-live replay has zero network, model, tool, or connector call.",
+        "text_sha256": "sha256:c05016b4791382138cd602f73750305a523ff7f4cdfd5ed14ae515f697e0d16d",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0067",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3354,
+        "end_line": 3354,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No lost committed journal event or partial canonical state.",
+        "text_sha256": "sha256:3d4bf856e7a3910d18edf4d87c6a834df0db4f29d30221ca3acf2bba45f06e77",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0068",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3355,
+        "end_line": 3355,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Supported migrations, backup, restore, and projection rebuild pass.",
+        "text_sha256": "sha256:c834b0d7bc734fc6eb0b998d42516556b9b374eabe3a0e62773215c8d2fc1ee9",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0069",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3356,
+        "end_line": 3356,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Security, fuzz, sanitizer, model, mutation, coverage, and chaos gates pass.",
+        "text_sha256": "sha256:3de999db56017384bad4f8ce687188f986a956c9344b1e2ad0c5623d3b6e19ad",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0070",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3357,
+        "end_line": 3357,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Performance and CIGARBench outcome gates pass.",
+        "text_sha256": "sha256:2ceafe42b1a68468e721c5a20fd2707b36f6a93d82308b1055b388d05b911f3f",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0071",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3358,
+        "end_line": 3358,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Claude plugin install, fixtures, degradation, and uninstall pass.",
+        "text_sha256": "sha256:27def95956a558868309e1b81a9150c64109891f91441647331eef0b83313845",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0072",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3359,
+        "end_line": 3359,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] Every SDK and demo passes from distributed packages.",
+        "text_sha256": "sha256:2163426360dd3033ee2cff613ede76d66e192e6df1f07853cde858f2b5de277e",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0073",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3360,
+        "end_line": 3360,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] All artifacts are version-consistent, scanned, reproducible, signed, and accompanied by SBOM and provenance.",
+        "text_sha256": "sha256:dbb64e714e278c5686802ad0316a849428ca32801163005e92204349fed5ef51",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0074",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3361,
+        "end_line": 3361,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] release-evidence.json is complete, current, and verified.",
+        "text_sha256": "sha256:c49cde26fc8cbe474cb21266c90e88ffebba91a97adb5eb3d0f8cdd38c353403",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0075",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3362,
+        "end_line": 3362,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] No required test is skipped, flaky, quarantined, or weakened.",
+        "text_sha256": "sha256:e14f3895dd3ae9e850f0d65cf9385fc966b1f55d38f22f8a749625bc886d6928",
+        "normative_token_count": 0
+      }
+    },
+    {
+      "id": "PRD-SEC-0076",
+      "kinds": [
+        "release_gate",
+        "security_invariant"
+      ],
+      "critical": true,
+      "source": {
+        "path": "prd.md",
+        "start_line": 3363,
+        "end_line": 3363,
+        "section": "Appendix F. Final stop-ship checklist",
+        "text": "* \\[ \\] cargo xtask release verify dist/ passes on the exact v1.0.0 bytes.",
+        "text_sha256": "sha256:16773ea23238dc2656d8a9055a2091151f483387b27a69cc9e989ff3d8106239",
+        "normative_token_count": 0
+      }
+    }
+  ],
+  "derived_requirements": [
     "VER-EVIDENCE-001",
     "VER-TRACEABILITY-001",
     "VER-TRACEABILITY-002",

@@ -1,12 +1,14 @@
 # CIGAR for Claude Code
 
-CIGAR supplies deterministic, inspectable context to Claude Code through its documented plugin, command-hook, and MCP surfaces. The plugin is user-scoped, runs signed CIGAR executables already installed on the host, and never downloads executable code after installation.
+CIGAR's development adapter supplies deterministic, inspectable context to Claude Code through its documented plugin, command-hook, and MCP surfaces. Its design is user-scoped, invokes separately built CIGAR executables on the host, and does not download executable code during the plugin lifecycle.
 
-## Qualified host
+## Development compatibility target
 
-This package is qualified for Claude Code `2.1.207` on Apple silicon macOS and deliberately rejects every version or host outside that recorded compatibility claim. Portable Linux and Windows runtime/test assets are included but remain non-installable until their distributed artifacts pass native platform qualification. The matching `cigar`, `cigar-mcp`, and `cigar-claude-hook` executables must be on `PATH`.
+This is an unpublished, unsupported development package targeting Claude Code `2.1.207` on Apple silicon macOS. The declared version range and platforms define a future qualification scope only; they are not evidence of installed compatibility, signing, release qualification, publication, or support. The development installer rejects every version or host outside that narrow target. Portable Linux and Windows runtime/test assets remain non-installable until their distributed artifacts pass separate native-platform qualification. Any development exercise also requires matching `cigar`, `cigar-mcp`, and `cigar-claude-hook` executables from one verified native archive. The installer captures the exact hook and MCP bytes and stages them under `${CLAUDE_PLUGIN_ROOT}/bin`; neither runtime command is resolved through ambient `PATH`.
 
-Install and inspect it through CIGAR rather than by editing Claude settings:
+The release-mode `cigar` executable embeds the reviewed adapter manifest and every manifest-bound source byte at compile time. Plugin installation therefore does not read this checkout or accept a mutable package as its authority. An explicit `CIGAR_CLAUDE_PLUGIN_SOURCE` remains a development-test injection point; production and installed qualification omit it and exercise only the embedded payload.
+
+Exercise the planned lifecycle through a matching CIGAR development build rather than by editing Claude settings:
 
 ```text
 cigar plugin install claude-code --dry-run
@@ -15,7 +17,7 @@ cigar plugin doctor claude-code --output json
 cigar plugin uninstall claude-code --yes
 ```
 
-Installation uses Claude Code's public marketplace and user-scope plugin commands. Uninstall removes only adapter files managed by the installation receipt; it preserves the portable CIGAR catalog, journal, and other user data.
+The development implementation uses Claude Code's public marketplace and user-scope plugin commands. Its uninstall path removes only adapter files managed by the installation receipt; it preserves the portable CIGAR catalog, journal, and other user data. These commands are qualification inputs, not release installation instructions.
 
 ## What is registered
 
@@ -55,7 +57,7 @@ CIGAR cannot guarantee effects hidden inside arbitrary shell commands, remove pr
 
 Compatibility is based solely on documented hooks and MCP. Private provider files and undocumented configuration stores are not dependencies. If the daemon is unavailable, Claude remains usable and the hook emits a visible degraded marker where context would otherwise have been added.
 
-## Qualification
+## Development qualification procedure
 
 Run from this directory:
 
@@ -68,4 +70,48 @@ Run from this directory:
 
 PowerShell equivalents are provided for future Windows qualification but are not a Windows support claim. The fixture demo needs the installed `cigar-claude-hook` binary; it substitutes a deterministic CIGAR CLI fixture and makes no network or model call. The public-surface smoke runs strict Claude plugin validation plus hook and MCP schema handshakes. An authenticated model smoke is deliberately separate and must be opted into with `CIGAR_CLAUDE_LIVE_SMOKE=1`.
 
-`package-manifest.json` lists every packaged file except itself in strict path order, with its byte count and SHA-256 digest. The signed `cigar` installer embeds the exact release manifest, so a mutable external package cannot authorize changed bytes by rewriting its own manifest. Installation reads each authenticated payload once, stages only those frozen bytes in a private directory, and rehashes the staged tree before any Claude command runs. Any release byte change requires regenerating the manifest before building and signing the matching installer.
+The development archive producer must receive the exact previously built native runtime archive. It copies both `bin/cigar-claude-hook` and `bin/cigar-mcp` from that contract-verified archive instead of compiling second copies:
+
+```text
+SOURCE_DATE_EPOCH=1700000000 \
+CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-plugin-build \
+  python3 scripts/release/build_claude_code_plugin.py \
+    --runtime-archive /private/tmp/cigar-native-build/cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz
+```
+
+Installed development qualification uses the exact runtime and plugin archives under an isolated owner-private home. A real local Claude Code executable can exercise its documented public lifecycle commands without making a model request:
+
+```text
+SOURCE_DATE_EPOCH=1700000000 \
+CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-installed-qualification \
+  python3 scripts/release/qualify_claude_code_plugin.py \
+    --runtime-archive /private/tmp/cigar-native-build/cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz \
+    --runtime-archive-sha256 <independently-recorded-runtime-sha256> \
+    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-1.0.0-dev.1.tar.gz \
+    --plugin-archive-sha256 <independently-recorded-plugin-sha256> \
+    --claude /absolute/path/to/claude \
+    --claude-sha256 <independently-recorded-claude-sha256>
+```
+
+When a real Claude executable is unavailable, the explicit fixed-host lane exercises the same closed public command protocol without claiming Claude compatibility:
+
+```text
+SOURCE_DATE_EPOCH=1700000000 \
+CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-installed-qualification \
+  python3 scripts/release/qualify_claude_code_plugin.py \
+    --runtime-archive /private/tmp/cigar-native-build/cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz \
+    --runtime-archive-sha256 <independently-recorded-runtime-sha256> \
+    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-1.0.0-dev.1.tar.gz \
+    --plugin-archive-sha256 <independently-recorded-plugin-sha256> \
+    --fixed-host
+```
+
+The qualifier requires independently supplied SHA-256 values before parsing either archive or exercising a supplied Claude executable. It reads each input once, extracts only from captured bytes, and executes only protected copies. It requires the exact packaged thin-arm64 `cigar`, `cigard`, `cigar-mcp`, and `cigar-claude-hook` identities; the plugin archive must reuse both the identical hook and MCP server. The installed plugin manifest closes over every staged adapter and runtime byte.
+
+Lifecycle execution is shell-free and runs under a deny-default macOS `sandbox-exec` profile. Only isolated managed roots are writable, process execution is restricted to frozen binaries and exact staged runtime locations, and network operations remain denied by default. The qualifier snapshots the complete isolated HOME, CIGAR home, project, and provider roots and requires their paths, modes, byte counts, and SHA-256 identities to be identical after uninstall. The provider root is outside candidate read/write authority, and exact canary copies are rejected across every candidate-writable root.
+
+The fixed host, daemon, and hook-backend helpers implement the versioned `cigar.claude-installed-fixture-protocol.v1` command set. They are staged as three independent owner-only files with one recorded digest and invoke only the root-owned Command Line Tools Python executable. Candidate processes receive no transcript-writing authority; consequently the receipt does not claim authenticated fixture invocation counts. Passing `--fixed-host` proves CIGAR's package/lifecycle semantics against exact responses only. It is not evidence that a real Claude build accepted the plugin, that a provider session ran, or that a model response was safe or correct.
+
+Every development receipt remains explicitly unqualified. Real interactive Claude compatibility, a live daemon, approved Developer ID signatures, notarization, a clean frozen candidate, a non-admin clean VM, marketplace publication/readback, and support ownership require independent evidence before the compatibility record or release claims can advance.
+
+`package-manifest.json` lists every packaged file except itself in strict path order, with its byte count and SHA-256 digest. The CLI embeds both that manifest and its complete byte inventory; a mutable external package therefore cannot authorize changed bytes by rewriting its own manifest. Installation reads each selected payload once, stages only those frozen bytes in a private directory, and rehashes the staged tree before any Claude command runs. Any candidate byte change requires regenerating the manifest and repeating the applicable build, signing, and qualification gates.

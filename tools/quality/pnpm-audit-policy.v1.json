@@ -1,0 +1,103 @@
+{
+  "audit": {
+    "arguments": [
+      "audit",
+      "--prod",
+      "--audit-level",
+      "high",
+      "--json"
+    ],
+    "expected_metadata": {
+      "dependencies": 1,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 1
+    },
+    "expected_report": {
+      "bytes": 274,
+      "sha256": "c35a9f736e407c8e5f41f4e97d972cf18b7d5910cf0770ddc7602a1ac216fa0a"
+    },
+    "maximum_output_bytes": 1048576,
+    "registry": "https://registry.npmjs.org/",
+    "timeout_seconds": 120
+  },
+  "auditor": {
+    "corepack_hash": "sha512.88d94724d8f2e6c186744a5584c6e59ecac869ec7ba15e9cb4cd628e8dc7066820b2481d8ee3b51ea8da323a7378068aa58c556a3720d32b7c20a051d088363a",
+    "distribution": {
+      "bytes": 19130279,
+      "files": 456,
+      "manifest_sha256": "3b82d8890deac53518eba0e7b2bd51a5c2b04a0bb95dbbd3079ca74962e59c86"
+    },
+    "entrypoint": {
+      "bytes": 12845365,
+      "path": "dist/pnpm.mjs",
+      "sha256": "2a28389465d7d631dee7034f50d4ef313d241735c740f0835937305f50eec39f"
+    },
+    "name": "pnpm",
+    "version": "11.13.0"
+  },
+  "host": {
+    "architecture": "arm64",
+    "node": {
+      "bytes": 117561248,
+      "code_signing": {
+        "candidate_cdhash_full_sha256": "e89ac81c24e645fa48a2c4ca49c10c58b9db488e4cd8229ee77d866b84882275",
+        "format": "Mach-O thin (arm64)",
+        "identifier": "node",
+        "leaf_authority": "Developer ID Application: Node.js Foundation (HX7739G8FX)",
+        "team_identifier": "HX7739G8FX"
+      },
+      "sha256": "9e759d34d97af8a71b75854d20af297794611155406997f06d796b5e0f6d573b",
+      "version": "24.10.0"
+    },
+    "operating_system": "Darwin"
+  },
+  "project": {
+    "importers": [
+      ".",
+      "apps/dashboard",
+      "sdk/typescript"
+    ],
+    "metadata_files": [
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "apps/dashboard/package.json",
+      "sdk/typescript/package.json"
+    ],
+    "package_manager": {
+      "name": "pnpm",
+      "version": "10.34.5"
+    },
+    "package_manifests": {
+      "apps/dashboard/package.json": {
+        "engines": {
+          "node": ">=24.10.0 <25"
+        },
+        "name": "@cigar/dashboard",
+        "packageManager": "pnpm@10.34.5"
+      },
+      "package.json": {
+        "engines": {
+          "node": ">=24.0.0 <25",
+          "pnpm": "10.34.5"
+        },
+        "name": "cigar-workspace",
+        "packageManager": "pnpm@10.34.5"
+      },
+      "sdk/typescript/package.json": {
+        "engines": {
+          "node": ">=24.10.0 <25"
+        },
+        "name": "@cigar/sdk",
+        "packageManager": "pnpm@10.34.5"
+      }
+    },
+    "workspace_packages": [
+      "sdk/typescript",
+      "adapters/claude-code",
+      "apps/dashboard"
+    ]
+  },
+  "schema_version": "cigar.pnpm-audit-policy.v1"
+}

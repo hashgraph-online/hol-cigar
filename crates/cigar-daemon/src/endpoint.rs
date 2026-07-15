@@ -114,6 +114,8 @@ impl ListenerPlan {
 #[derive(Debug)]
 pub struct UnixSocketGuard {
     path: PathBuf,
+    device: u64,
+    inode: u64,
 }
 
 #[cfg(unix)]
@@ -125,8 +127,14 @@ impl UnixSocketGuard {
             .as_ref()
             .ok_or_else(|| DaemonError::new(DaemonErrorCode::UnsafeRuntimePath))?;
         prepare_runtime_directory(&config.runtime_directory)?;
-        if path.exists() {
-            return Err(DaemonError::new(DaemonErrorCode::UnsafeRuntimePath));
+        match std::fs::symlink_metadata(path) {
+            Ok(_metadata) => {
+                return Err(DaemonError::new(DaemonErrorCode::UnsafeRuntimePath));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_error) => {
+                return Err(DaemonError::new(DaemonErrorCode::UnsafeRuntimePath));
+            }
         }
         let listener = tokio::net::UnixListener::bind(path)
             .map_err(|_error| DaemonError::new(DaemonErrorCode::ListenerBindFailed))?;
@@ -136,11 +144,23 @@ impl UnixSocketGuard {
         let metadata = std::fs::symlink_metadata(path)
             .map_err(|_error| DaemonError::new(DaemonErrorCode::UnsafeRuntimePath))?;
         use std::os::unix::fs::FileTypeExt as _;
-        if !metadata.file_type().is_socket() || metadata.permissions().mode() & 0o077 != 0 {
+        use std::os::unix::fs::MetadataExt as _;
+        if !metadata.file_type().is_socket()
+            || metadata.permissions().mode() & 0o077 != 0
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.nlink() != 1
+        {
             let _ignored = std::fs::remove_file(path);
             return Err(DaemonError::new(DaemonErrorCode::UnsafeRuntimePath));
         }
-        Ok((listener, Self { path: path.clone() }))
+        Ok((
+            listener,
+            Self {
+                path: path.clone(),
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            },
+        ))
     }
 }
 
@@ -151,7 +171,11 @@ impl Drop for UnixSocketGuard {
             return;
         };
         use std::os::unix::fs::FileTypeExt as _;
-        if metadata.file_type().is_socket() {
+        use std::os::unix::fs::MetadataExt as _;
+        if metadata.file_type().is_socket()
+            && metadata.dev() == self.device
+            && metadata.ino() == self.inode
+        {
             let _ignored = std::fs::remove_file(&self.path);
         }
     }
@@ -245,10 +269,12 @@ fn prepare_runtime_directory(path: &Path) -> Result<(), DaemonError> {
     }
     let metadata = std::fs::symlink_metadata(path)
         .map_err(|_error| DaemonError::new(DaemonErrorCode::UnsafeRuntimePath))?;
+    use std::os::unix::fs::MetadataExt as _;
     use std::os::unix::fs::PermissionsExt as _;
     if !metadata.file_type().is_dir()
         || metadata.file_type().is_symlink()
         || metadata.permissions().mode() & 0o022 != 0
+        || metadata.uid() != rustix::process::geteuid().as_raw()
     {
         return Err(DaemonError::new(DaemonErrorCode::UnsafeRuntimePath));
     }
@@ -551,55 +577,44 @@ fn read_bounded_regular(path: &Path, private: bool) -> Result<Vec<u8>, DaemonErr
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::UnixSocketGuard;
     use super::{ListenerPlan, LocalIpcEndpoint};
+    #[cfg(unix)]
+    use crate::DaemonErrorCode;
     use crate::{ConfigErrorCode, DaemonConfig, DeploymentMode};
 
-    #[test]
-    fn windows_pipe_abstraction_accepts_only_closed_cigar_namespace() {
-        assert!(LocalIpcEndpoint::is_safe_windows_pipe_name(
-            r"\\.\pipe\cigar-cigd-v1"
-        ));
-        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
-            r"\\server\pipe\cigar-cigd-v1"
-        ));
-        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
-            r"\\.\pipe\other"
-        ));
-        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
-            r"\\.\pipe\cigar-parent\child"
-        ));
-        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
-            r"\\.\pipe\cigar-"
-        ));
-    }
-
-    #[test]
-    fn listener_plan_rechecks_public_local_bind_refusal() {
-        let config = DaemonConfig {
+    #[cfg(unix)]
+    fn local_unix_config(root: &std::path::Path) -> DaemonConfig {
+        let state = root.join("state");
+        let runtime = root.join("run");
+        DaemonConfig {
             mode: DeploymentMode::Local,
-            state_directory: "/tmp/cigar-state".into(),
-            runtime_directory: "/tmp/cigar-run".into(),
-            unix_socket: None,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
+            state_directory: state.clone(),
+            runtime_directory: runtime.clone(),
+            unix_socket: Some(runtime.join("cigard.sock")),
             windows_named_pipe: None,
-            http_listen: Some(std::net::SocketAddr::from(([0, 0, 0, 0], 7443))),
+            http_listen: None,
             grpc_listen: None,
-            local_token_file: Some("/tmp/cigar-run/token".into()),
+            local_token_file: None,
             tls: None,
             oidc: None,
             production: crate::ProductionPaths {
-                project_directory: "/tmp/cigar-project".into(),
-                metadata_database: "/tmp/cigar-state/cigar.sqlite3".into(),
-                blob_directory: "/tmp/cigar-state/blobs".into(),
-                blob_key_reference_directory: "/tmp/cigar-state/blob-keys".into(),
-                keystore_file: "/tmp/cigar-state/keystore.cigar".into(),
-                keystore_passphrase_file: "/tmp/cigar-secrets/keystore-passphrase".into(),
-                cursor_signing_key_file: "/tmp/cigar-state/cursor.key".into(),
-                effect_checkpoint_file: "/tmp/cigar-effect-checkpoints/checkpoints.json".into(),
-                policy_profile_file: "/tmp/cigar-config/policy.json".into(),
-                authority_file: "/tmp/cigar-config/authority.json".into(),
-                source_registry_file: "/tmp/cigar-config/sources.json".into(),
-                effect_registry_file: "/tmp/cigar-config/effects.json".into(),
+                project_directory: root.join("project"),
+                metadata_database: state.join("cigar.sqlite3"),
+                blob_directory: state.join("blobs"),
+                blob_key_reference_directory: state.join("blob-keys"),
+                keystore_file: state.join("keystore.cigar"),
+                keystore_passphrase_file: root.join("secrets/keystore-passphrase"),
+                cursor_signing_key_file: state.join("cursor.key"),
+                effect_checkpoint_file: root.join("checkpoints/effects.json"),
+                policy_profile_file: root.join("config/policy.json"),
+                authority_file: root.join("config/authority.json"),
+                source_registry_file: root.join("config/sources.json"),
+                effect_registry_file: root.join("config/effects.json"),
             },
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 1_000,
             shutdown_deadline_ms: 1_000,
@@ -625,6 +640,87 @@ mod tests {
             },
             telemetry: crate::TelemetrySettings {
                 otlp_endpoint: None,
+                otlp_ca_certificate_file: None,
+                export_timeout_ms: 1_000,
+                metric_interval_ms: 1_000,
+            },
+        }
+    }
+
+    #[test]
+    fn windows_pipe_abstraction_accepts_only_closed_cigar_namespace() {
+        assert!(LocalIpcEndpoint::is_safe_windows_pipe_name(
+            r"\\.\pipe\cigar-cigd-v1"
+        ));
+        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
+            r"\\server\pipe\cigar-cigd-v1"
+        ));
+        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
+            r"\\.\pipe\other"
+        ));
+        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
+            r"\\.\pipe\cigar-parent\child"
+        ));
+        assert!(!LocalIpcEndpoint::is_safe_windows_pipe_name(
+            r"\\.\pipe\cigar-"
+        ));
+    }
+
+    #[test]
+    fn listener_plan_rechecks_public_local_bind_refusal() {
+        let config = DaemonConfig {
+            mode: DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
+            state_directory: "/tmp/cigar-state".into(),
+            runtime_directory: "/tmp/cigar-run".into(),
+            unix_socket: None,
+            windows_named_pipe: None,
+            http_listen: Some(std::net::SocketAddr::from(([0, 0, 0, 0], 7443))),
+            grpc_listen: None,
+            local_token_file: Some("/tmp/cigar-run/token".into()),
+            tls: None,
+            oidc: None,
+            production: crate::ProductionPaths {
+                project_directory: "/tmp/cigar-project".into(),
+                metadata_database: "/tmp/cigar-state/cigar.sqlite3".into(),
+                blob_directory: "/tmp/cigar-state/blobs".into(),
+                blob_key_reference_directory: "/tmp/cigar-state/blob-keys".into(),
+                keystore_file: "/tmp/cigar-state/keystore.cigar".into(),
+                keystore_passphrase_file: "/tmp/cigar-secrets/keystore-passphrase".into(),
+                cursor_signing_key_file: "/tmp/cigar-state/cursor.key".into(),
+                effect_checkpoint_file: "/tmp/cigar-effect-checkpoints/checkpoints.json".into(),
+                policy_profile_file: "/tmp/cigar-config/policy.json".into(),
+                authority_file: "/tmp/cigar-config/authority.json".into(),
+                source_registry_file: "/tmp/cigar-config/sources.json".into(),
+                effect_registry_file: "/tmp/cigar-config/effects.json".into(),
+            },
+            local_vector: crate::LocalVectorSettings::default(),
+            shared_storage: None,
+            request_deadline_ms: 1_000,
+            shutdown_deadline_ms: 1_000,
+            max_request_bytes: 1_024,
+            max_expansion_ratio: 1,
+            workers: crate::WorkerCapacities {
+                ingestion: 1,
+                indexing: 1,
+                invalidation: 1,
+                compilation: 1,
+                outbox: 1,
+                reconciliation: 1,
+                lease_cleanup: 1,
+                backup: 1,
+                garbage_collection: 1,
+            },
+            resources: crate::ApplicationResourceLimits {
+                global_request_concurrency: 16,
+                per_tenant_request_concurrency: 4,
+                blocking_active: 2,
+                blocking_queued: 8,
+                idempotency_wait_ms: 1_000,
+            },
+            telemetry: crate::TelemetrySettings {
+                otlp_endpoint: None,
+                otlp_ca_certificate_file: None,
                 export_timeout_ms: 1_000,
                 metric_interval_ms: 1_000,
             },
@@ -634,5 +730,73 @@ mod tests {
             Some(ConfigErrorCode::UnsafeLocalBind)
         );
         assert!(ListenerPlan::from_config(&config).is_err());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn unix_socket_guard_is_owner_private_and_never_unlinks_a_substitution()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _, symlink};
+
+        let directory = tempfile::tempdir()?;
+        let root = directory.path().canonicalize()?;
+        let config = local_unix_config(&root);
+        config.validate()?;
+        let socket = config.unix_socket.clone().ok_or("socket path missing")?;
+        let (listener, guard) = UnixSocketGuard::bind(&config)?;
+        let original = std::fs::symlink_metadata(&socket)?;
+        assert_eq!(original.uid(), rustix::process::geteuid().as_raw());
+        assert_eq!(original.nlink(), 1);
+        assert_eq!(original.mode() & 0o777, 0o600);
+
+        std::fs::remove_file(&socket)?;
+        let replacement = std::os::unix::net::UnixListener::bind(&socket)?;
+        let replacement_identity = std::fs::symlink_metadata(&socket)?;
+        assert_ne!(
+            (original.dev(), original.ino()),
+            (replacement_identity.dev(), replacement_identity.ino())
+        );
+        drop(guard);
+        let after_drop = std::fs::symlink_metadata(&socket)?;
+        assert_eq!(
+            (after_drop.dev(), after_drop.ino()),
+            (replacement_identity.dev(), replacement_identity.ino())
+        );
+        drop(replacement);
+        std::fs::remove_file(&socket)?;
+        drop(listener);
+
+        std::fs::write(&socket, b"must-not-unlink")?;
+        assert_eq!(
+            UnixSocketGuard::bind(&config)
+                .err()
+                .map(|error| error.code()),
+            Some(DaemonErrorCode::UnsafeRuntimePath)
+        );
+        assert_eq!(std::fs::read(&socket)?, b"must-not-unlink");
+        std::fs::remove_file(&socket)?;
+
+        symlink(root.join("missing-socket-target"), &socket)?;
+        assert_eq!(
+            UnixSocketGuard::bind(&config)
+                .err()
+                .map(|error| error.code()),
+            Some(DaemonErrorCode::UnsafeRuntimePath)
+        );
+        assert!(std::fs::symlink_metadata(&socket)?.file_type().is_symlink());
+        std::fs::remove_file(&socket)?;
+
+        std::fs::set_permissions(
+            &config.runtime_directory,
+            std::fs::Permissions::from_mode(0o777),
+        )?;
+        assert_eq!(
+            UnixSocketGuard::bind(&config)
+                .err()
+                .map(|error| error.code()),
+            Some(DaemonErrorCode::UnsafeRuntimePath)
+        );
+        assert!(!socket.exists());
+        Ok(())
     }
 }

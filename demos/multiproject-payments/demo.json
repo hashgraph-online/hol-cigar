@@ -7,7 +7,7 @@
   "fixture_digest": "12203846561ae3a8f6226f4178b4795746ccc55cea7732e5a869e1c4c46526192115",
   "driver": "driver.py",
   "driver_digest": "12207cae56779476a71dd694381a247e21ef48e2a7a58d51a8a832738ddc749e5d7e",
-  "driver_support_digest": "1220c870206639425c92dc58277d318e2e9a816621a98dd6a0bb66c143ab8e10293f",
+  "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
   "recorded_mode": true,
   "setup": ["isolated-home", "four-project-workspace", "network-disabled", "fixed-clock-and-seed"],
   "expected_assertions": [

@@ -194,22 +194,61 @@ fn shared_development_dependencies_preserve_runtime_least_privilege()
 -> Result<(), Box<dyn std::error::Error>> {
     let compose = workspace_file("deploy/compose/shared.yaml")?;
     let roles = workspace_file("deploy/compose/postgres-shared-init.sql")?;
+    let post_migration = workspace_file("deploy/compose/postgres-shared-post-migration.sql")?;
+    let postgres_tls = workspace_file("deploy/compose/postgres-tls-entrypoint.sh")?;
     let object_policy = workspace_file("deploy/compose/minio-runtime-policy.json")?;
 
     assert!(compose.contains("127.0.0.1:55432:5432"));
     assert!(compose.contains("127.0.0.1:59000:9000"));
     assert!(compose.contains("development-only"));
+    assert!(compose.contains("postgres-tls-entrypoint.sh"));
+    assert!(compose.contains("postgres-shared-post-migration.sql"));
+    assert!(postgres_tls.contains("ssl=on"));
+    assert!(postgres_tls.contains("subjectAltName=DNS:localhost,IP:127.0.0.1"));
+    assert!(postgres_tls.contains("chmod 0600"));
+    assert!(postgres_tls.contains("rm -f \"$TLS_DIRECTORY/ca.key\""));
     assert!(roles.contains("cigar_runtime"));
     assert!(roles.contains("cigar_backup"));
+    assert!(roles.contains("cigar_gc"));
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("BYPASSRLS"));
     assert!(roles.contains("pg_catalog.pg_control_system()"));
     assert!(roles.contains("NOSUPERUSER"));
     assert!(!roles.contains("ALTER ROLE cigar_runtime SUPERUSER"));
+    assert!(!roles.contains("GRANT EXECUTE ON FUNCTIONS TO cigar_backup"));
+    assert!(
+        post_migration
+            .contains("GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_system() TO cigar_backup")
+    );
+    assert!(post_migration.contains(
+        "GRANT EXECUTE ON FUNCTION public.cigar_gc_lock_repository_revision() TO cigar_gc"
+    ));
+    assert!(
+        post_migration
+            .contains("REVOKE ALL ON FUNCTION public.cigar_gc_lock_repository_revision()")
+    );
     assert!(object_policy.contains("cigar-v1/*/staging/*"));
     assert!(object_policy.contains("cigar-v1/*/probes/*"));
     assert!(object_policy.contains("\"Effect\": \"Deny\""));
     assert!(object_policy.contains("cigar-v1/*/objects/*"));
+    Ok(())
+}
+
+#[test]
+fn failover_qualification_preserves_one_verified_tls_identity()
+-> Result<(), Box<dyn std::error::Error>> {
+    let compose = workspace_file("deploy/compose/failover/compose.yaml")?;
+    let tls = workspace_file("deploy/compose/failover/tls-entrypoint.sh")?;
+    let qualifier = workspace_file("tools/wp18-failover/qualify.sh")?;
+
+    assert!(compose.contains("ssl_min_protocol_version=TLSv1.3"));
+    assert!(compose.contains("tls-data:/var/lib/postgresql/cigar-failover-tls:ro"));
+    assert!(compose.contains("failover-tls-entrypoint.sh"));
+    assert!(tls.contains("DNS:primary,DNS:standby,DNS:router,IP:127.0.0.1"));
+    assert!(tls.contains("chmod 0600"));
+    assert!(tls.contains("rm -f \"$TLS_DIRECTORY/ca.key\""));
+    assert!(qualifier.contains("CIGAR_WP18_FAILOVER_CA_PATH"));
+    assert!(qualifier.contains("postgres_private_ca_tls"));
     Ok(())
 }
 

@@ -4,7 +4,7 @@
 The runner never invokes a shell. Test output is reduced to byte counts and
 SHA-256 digests so release evidence cannot accidentally serialize protected
 repository content. Optional private logs are mode 0600 and must be requested
-explicitly.
+explicitly; they are unavailable for external release-evidence runs.
 """
 
 from __future__ import annotations
@@ -26,8 +26,20 @@ from pathlib import Path
 from typing import Any
 
 
+RELEASE_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "release"
+if str(RELEASE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_SCRIPTS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path,
+)
+
+
 SCHEMA_VERSION = "cigar.test-matrix.v1"
 RESULT_SCHEMA_VERSION = "cigar.test-matrix-result.v1"
+DEFAULT_OUTPUT = Path("reports/test-matrix-result.v1.json")
 ALLOWED_PROGRAMS = {"bash", "cargo", "corepack", "go", "python3", "uv"}
 FORBIDDEN_ARGUMENTS = {"--ignored", "--include-ignored", "--no-run", "--skip"}
 IDENTIFIER = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{2,95}$")
@@ -374,7 +386,8 @@ def preflight_offline_cargo(root: Path, cases: list[dict[str, Any]]) -> None:
 
 def write_private_log(log_dir: Path, case_id: str, stream: str, value: bytes) -> None:
     log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(log_dir, 0o700)
+    # Private logs can contain diagnostics excluded from content-free release receipts.
+    os.chmod(log_dir, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     path = log_dir / f"{case_id}.{stream}.log"
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
@@ -400,6 +413,8 @@ def run_case(
     profile_name: str,
     case: dict[str, Any],
     log_dir: Path | None,
+    *,
+    isolate_evidence_environment: bool = False,
 ) -> dict[str, Any]:
     command: list[str] = case["command"]
     missing = [
@@ -431,6 +446,11 @@ def run_case(
         )
     isolated_home = Path(temporary_home.name) if temporary_home else None
     environment = sanitized_environment(suite, profile_name, isolated_home)
+    if isolate_evidence_environment:
+        # The runner owns the pinned evidence workspace. Test children receive
+        # no ambient pathname they could use to bypass create-new, dirfd-bound
+        # publication or to mix protected output into a content-free receipt.
+        environment.pop("CIGAR_EVIDENCE_DIR", None)
     started = time.monotonic()
     timed_out = False
     try:
@@ -514,6 +534,69 @@ def atomic_write_json(path: Path, document: dict[str, Any]) -> None:
         raise
 
 
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select exactly one external evidence root without resolving path components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise MatrixError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide only one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        if arguments.profile == "release":
+            raise MatrixError(
+                "release profile requires --evidence-dir or CIGAR_EVIDENCE_DIR"
+            )
+        if getattr(arguments, "require_evidence", False):
+            raise MatrixError(
+                "this execution requires --evidence-dir or CIGAR_EVIDENCE_DIR"
+            )
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise MatrixError("evidence directory must be an absolute path")
+    return selected
+
+
+def open_evidence_workspace(
+    arguments: argparse.Namespace, root: Path
+) -> EvidenceWorkspace | None:
+    """Open and pin an optional secure workspace before any matrix case runs."""
+
+    selected = selected_evidence_directory(arguments)
+    if selected is None:
+        return None
+    if arguments.log_dir is not None:
+        raise MatrixError(
+            "--log-dir is unavailable with an evidence workspace; release evidence is content-free"
+        )
+    output = os.fspath(arguments.output)
+    try:
+        safe_relative_path(output)
+        return EvidenceWorkspace.create(selected, repository_root=root)
+    except EvidenceWorkspaceError as error:
+        raise MatrixError(f"unsafe evidence workspace: {error}") from error
+
+
+def write_matrix_result(
+    arguments: argparse.Namespace,
+    document: dict[str, Any],
+    workspace: EvidenceWorkspace | None,
+) -> None:
+    """Publish one result, using create-new external storage when configured."""
+
+    if workspace is None:
+        atomic_write_json(arguments.output.resolve(), document)
+        return
+    try:
+        workspace.write_json(os.fspath(arguments.output), document)
+    except EvidenceWorkspaceError as error:
+        raise MatrixError(f"cannot publish matrix evidence: {error}") from error
+
+
 def execute(arguments: argparse.Namespace) -> int:
     root = arguments.root.resolve()
     loaded = load_matrix(arguments.matrix.resolve())
@@ -550,58 +633,87 @@ def execute(arguments: argparse.Namespace) -> int:
     ]
     if not runnable_cases:
         raise MatrixError("selection contains no runnable cases on this host")
-    cargo_preflight_cases = [
-        case
-        for case in runnable_cases
-        if all(os.environ.get(name) for name in case.get("required_environment", []))
-    ]
-    preflight_offline_cargo(root, cargo_preflight_cases)
-    started_at = utc_now()
-    results: list[dict[str, Any]] = []
-    for case in runnable_cases:
-        print(f"running {case['id']}", flush=True)
-        result = run_case(
-            root,
-            loaded.document["suite"],
-            arguments.profile,
-            case,
-            arguments.log_dir,
-        )
-        results.append(result)
-        print(f"{case['id']}: {result['status']}", flush=True)
-    passed = sum(result["status"] == "passed" for result in results)
-    failed = len(results) - passed
-    document = {
-        "schema_version": RESULT_SCHEMA_VERSION,
-        "suite": loaded.document["suite"],
-        "profile": arguments.profile,
-        "matrix": {
-            "path": str(loaded.path.relative_to(root)),
-            "sha256": loaded.digest,
-        },
-        "source": source,
-        "host": {
-            "platform": current_platform,
-            "architecture": platform.machine().lower(),
-            "python": platform.python_version(),
-        },
-        "started_at": started_at,
-        "finished_at": utc_now(),
-        "status": "passed" if failed == 0 else "failed",
-        "selected_case_count": len(results),
-        "passed_case_count": passed,
-        "failed_case_count": failed,
-        "cases": results,
-    }
-    atomic_write_json(arguments.output.resolve(), document)
-    return 0 if failed == 0 else 1
+    workspace = open_evidence_workspace(arguments, root)
+    try:
+        cargo_preflight_cases = [
+            case
+            for case in runnable_cases
+            if all(
+                os.environ.get(name) for name in case.get("required_environment", [])
+            )
+        ]
+        preflight_offline_cargo(root, cargo_preflight_cases)
+        started_at = utc_now()
+        results: list[dict[str, Any]] = []
+        for case in runnable_cases:
+            print(f"running {case['id']}", flush=True)
+            result = run_case(
+                root,
+                loaded.document["suite"],
+                arguments.profile,
+                case,
+                arguments.log_dir,
+                isolate_evidence_environment=getattr(
+                    arguments, "isolate_evidence_environment", False
+                ),
+            )
+            results.append(result)
+            print(f"{case['id']}: {result['status']}", flush=True)
+        passed = sum(result["status"] == "passed" for result in results)
+        failed = len(results) - passed
+        document = {
+            "schema_version": RESULT_SCHEMA_VERSION,
+            "suite": loaded.document["suite"],
+            "profile": arguments.profile,
+            "matrix": {
+                "path": str(loaded.path.relative_to(root)),
+                "sha256": loaded.digest,
+            },
+            "source": source,
+            "host": {
+                "platform": current_platform,
+                "architecture": platform.machine().lower(),
+                "python": platform.python_version(),
+            },
+            "started_at": started_at,
+            "finished_at": utc_now(),
+            "status": "passed" if failed == 0 else "failed",
+            "release_eligible": bool(
+                arguments.profile == "release"
+                and source["committed"] is True
+                and source["clean"] is True
+                and failed == 0
+            ),
+            "selected_case_count": len(results),
+            "passed_case_count": passed,
+            "failed_case_count": failed,
+            "cases": results,
+        }
+        write_matrix_result(arguments, document, workspace)
+        return 0 if failed == 0 else 1
+    finally:
+        if workspace is not None:
+            workspace.close()
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--matrix", type=Path, required=True)
+    result.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     result.add_argument(
-        "--output", type=Path, default=Path("reports/test-matrix-result.v1.json")
+        "--evidence-dir",
+        type=Path,
+        help="absolute external output directory (or set CIGAR_EVIDENCE_DIR)",
+    )
+    result.add_argument(
+        "--require-evidence",
+        action="store_true",
+        help="require secure external evidence even for a non-release profile",
+    )
+    result.add_argument(
+        "--isolate-evidence-environment",
+        action="store_true",
+        help="withhold CIGAR_EVIDENCE_DIR from matrix child processes",
     )
     result.add_argument("--root", type=Path, default=Path.cwd())
     result.add_argument("--profile", default="local")

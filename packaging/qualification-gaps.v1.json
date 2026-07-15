@@ -10,11 +10,11 @@
       "closure": "Reconcile the intentional source, corpus, policy, and status changes; commit the exact candidate; prove the worktree remains clean before and after smoke qualification; rebuild from its source archive; and regenerate every report with matching commit, tree, source-archive, policy, toolchain, and artifact digests."
     },
     {
-      "id": "closed-mutation-evidence-unavailable",
+      "id": "mutation-campaign-not-executed",
       "release_blocking": true,
       "owner": "quality",
-      "condition": "The representative cargo-mutants slice can run diagnostically, but its current receipt does not retain a bounded canonical raw-outcome attachment from which every count, survivor digest, denominator, score, command, and scope claim can be independently recomputed. The combined smoke/mutation verifier therefore fails closed and the mutation receipt is not qualification evidence.",
-      "closure": "Define a closed mutation receipt and attachment schema; retain bounded canonical raw outcomes and private logs outside the candidate; bind their digests, modes, source, command, toolchain, scope, scratch cleanup, and no-egress execution; add substitution and arithmetic negative tests; then enable an exact mutation-only verifier without weakening the smoke verifier."
+      "condition": "The native Apple-silicon mutation-only xtask route and independent raw-outcome verifier are implemented, but the required clean-candidate four-hour cargo-mutants 27.1.0 campaign has not been executed. No current receipt therefore proves the 90% score, complete 24-package production scope, zero timeouts, and zero viable critical survivors.",
+      "closure": "Freeze a clean committed macOS-arm64 candidate and run cargo xtask test mutations --verify in a fresh external evidence workspace for at least 14,400 observed seconds. Investigate every survivor, timeout, or baseline failure; after any source fix create a new candidate and rerun until the independently reopened source-bound receipt passes all mutation gates."
     },
     {
       "id": "external-platform-builds",

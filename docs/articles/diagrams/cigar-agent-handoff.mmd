@@ -1,0 +1,20 @@
+sequenceDiagram
+    title Governed CIGAR agent handoff
+    participant ParentAgent
+    participant ParentSpace
+    participant Policy
+    participant ChildSpace
+    participant ChildAgent
+
+    ParentAgent->>ParentSpace: Propose delegated task
+    ParentSpace->>Policy: Evaluate requested scope
+    Policy-->>ParentSpace: Attenuated grants
+    ParentSpace->>ChildSpace: Signed handoff capsule
+    ChildSpace->>Policy: Reauthorize references
+    Policy-->>ChildSpace: Accepted scope
+    ChildSpace->>ChildAgent: Recipient context bundle
+    ChildAgent->>ChildSpace: Typed result delta
+    ChildSpace-->>ParentSpace: Signed result material
+    ParentSpace->>Policy: Reauthorize returned data
+    Policy-->>ParentSpace: Merge authority
+    ParentSpace-->>ParentAgent: Commit or conflict

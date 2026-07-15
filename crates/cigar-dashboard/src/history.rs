@@ -1,8 +1,8 @@
 //! Owner-protected SQLite journal for strict content-safe dashboard events.
 
 use crate::{
-    CursorKind, DashboardHistoryConfig, EventError, EvidenceDescriptor, PagePosition, RunRecord,
-    RunState, SafeEvent, SafeEventSink,
+    CursorKind, DashboardHistoryConfig, EventError, EvidenceDescriptor, EvidenceStatus,
+    PagePosition, RunRecord, RunState, SafeEvent, SafeEventSink,
 };
 use rusqlite::{Connection, OpenFlags, OptionalExtension as _, Transaction, params};
 use std::fmt;
@@ -17,7 +17,8 @@ use std::time::Duration;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 4;
+const SUPERVISOR_GENERATION: i64 = 1;
 const WRITER_QUEUE_CAPACITY: usize = 64;
 const WRITER_ACK_TIMEOUT: Duration = Duration::from_secs(3);
 const BACKUP_ACK_TIMEOUT: Duration = Duration::from_secs(30);
@@ -27,6 +28,13 @@ const SQLITE_BACKUP_RETRY_PAUSE: Duration = Duration::from_millis(1);
 const DATABASE_SIZE_OVERHEAD_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_SEED_EVENTS: usize = 10_000;
 const MAX_SEED_BYTES: usize = 16 * 1024 * 1024;
+
+fn lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
 
 /// Stable content-free history failure category.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,6 +57,8 @@ pub enum HistoryError {
     EvidenceNotFound,
     /// A retention, database, or writer queue bound was exceeded.
     LimitExceeded,
+    /// SQLite could not durably commit because the backing volume was full.
+    DiskFull,
     /// The single writer was unavailable or did not acknowledge within its deadline.
     WriterUnavailable,
 }
@@ -65,6 +75,7 @@ impl fmt::Display for HistoryError {
             Self::InvalidEvidence => "dashboard history evidence descriptor is invalid",
             Self::EvidenceNotFound => "dashboard history evidence descriptor was not found",
             Self::LimitExceeded => "dashboard history limit was exceeded",
+            Self::DiskFull => "dashboard history volume is full",
             Self::WriterUnavailable => "dashboard history writer is unavailable",
         })
     }
@@ -89,10 +100,126 @@ struct RecordMessage {
     acknowledgement: SyncSender<Result<(), HistoryError>>,
 }
 
+/// Exact per-run aggregate byte reservations persisted before child creation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct RunResourceReservation {
+    output_bytes: i64,
+    evidence_bytes: i64,
+}
+
+impl RunResourceReservation {
+    pub(crate) fn new(output_bytes: u64, evidence_bytes: u64) -> Result<Self, HistoryError> {
+        let reservation = Self {
+            output_bytes: i64::try_from(output_bytes)
+                .map_err(|_error| HistoryError::LimitExceeded)?,
+            evidence_bytes: i64::try_from(evidence_bytes)
+                .map_err(|_error| HistoryError::LimitExceeded)?,
+        };
+        if reservation.output_bytes <= 0 || reservation.evidence_bytes <= 0 {
+            return Err(HistoryError::LimitExceeded);
+        }
+        Ok(reservation)
+    }
+}
+
+/// Exact aggregate usage observed only after every owned descendant and output pipe settled.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct RunResourceUsage {
+    output_bytes: i64,
+    evidence_bytes: i64,
+}
+
+impl RunResourceUsage {
+    pub(crate) fn new(output_bytes: u64, evidence_bytes: u64) -> Result<Self, HistoryError> {
+        Ok(Self {
+            output_bytes: i64::try_from(output_bytes)
+                .map_err(|_error| HistoryError::LimitExceeded)?,
+            evidence_bytes: i64::try_from(evidence_bytes)
+                .map_err(|_error| HistoryError::LimitExceeded)?,
+        })
+    }
+}
+
+/// Private durable identity for one macOS process group owned by a dashboard run.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RunProcessIdentity {
+    pid: i64,
+    process_group_id: i64,
+    identity_sha256: String,
+}
+
+impl RunProcessIdentity {
+    pub(crate) fn new(
+        pid: u32,
+        process_group_id: u32,
+        identity_sha256: String,
+    ) -> Result<Self, HistoryError> {
+        let pid = i64::from(pid);
+        let process_group_id = i64::from(process_group_id);
+        let identity = Self {
+            pid,
+            process_group_id,
+            identity_sha256,
+        };
+        identity.validate()?;
+        Ok(identity)
+    }
+
+    pub(crate) fn pid(&self) -> u32 {
+        u32::try_from(self.pid).unwrap_or_default()
+    }
+
+    pub(crate) fn process_group_id(&self) -> u32 {
+        u32::try_from(self.process_group_id).unwrap_or_default()
+    }
+
+    pub(crate) fn identity_sha256(&self) -> &str {
+        &self.identity_sha256
+    }
+
+    fn validate(&self) -> Result<(), HistoryError> {
+        if self.pid <= 0
+            || self.pid > i64::from(i32::MAX)
+            || self.process_group_id != self.pid
+            || !lower_sha256(&self.identity_sha256)
+        {
+            return Err(HistoryError::InvalidRun);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RecoverableRun {
+    run: RunRecord,
+    supervisor_generation: i64,
+    process: Option<RunProcessIdentity>,
+    resources_reserved: bool,
+}
+
+impl RecoverableRun {
+    pub(crate) fn run(&self) -> &RunRecord {
+        &self.run
+    }
+
+    pub(crate) const fn supervisor_generation(&self) -> i64 {
+        self.supervisor_generation
+    }
+
+    pub(crate) fn process(&self) -> Option<&RunProcessIdentity> {
+        self.process.as_ref()
+    }
+
+    pub(crate) const fn resources_reserved(&self) -> bool {
+        self.resources_reserved
+    }
+}
+
 enum WriterMessage {
     Record(RecordMessage),
     CreateRun {
         run: Box<RunRecord>,
+        resources: Option<RunResourceReservation>,
         acknowledgement: SyncSender<Result<(), HistoryError>>,
     },
     TransitionRun {
@@ -103,6 +230,23 @@ enum WriterMessage {
         failure_code: Option<String>,
         acknowledgement: SyncSender<Result<RunRecord, HistoryError>>,
     },
+    ActivateRun {
+        run_id: String,
+        process: RunProcessIdentity,
+        acknowledgement: SyncSender<Result<RunRecord, HistoryError>>,
+    },
+    CompleteRun {
+        run_id: String,
+        next: RunState,
+        receipt_id: Option<String>,
+        failure_code: Option<String>,
+        resources: RunResourceUsage,
+        descriptors: Vec<EvidenceDescriptor>,
+        acknowledgement: SyncSender<Result<RunRecord, HistoryError>>,
+    },
+    RecoverableRuns {
+        acknowledgement: SyncSender<Result<Vec<RecoverableRun>, HistoryError>>,
+    },
     ListRuns {
         limit: usize,
         after: Option<PagePosition>,
@@ -112,6 +256,7 @@ enum WriterMessage {
         run_id: String,
         acknowledgement: SyncSender<Result<RunRecord, HistoryError>>,
     },
+    #[cfg(test)]
     RecordEvidence {
         descriptor: Box<EvidenceDescriptor>,
         acknowledgement: SyncSender<Result<(), HistoryError>>,
@@ -154,6 +299,22 @@ impl HistoryClient {
         let (acknowledgement, receiver) = mpsc::sync_channel(1);
         self.try_send(WriterMessage::CreateRun {
             run: Box::new(run),
+            resources: None,
+            acknowledgement,
+        })?;
+        receive_ack(receiver)
+    }
+
+    /// Persists a queued run and its exact aggregate byte reservations in one transaction.
+    pub(crate) fn create_run_with_resources(
+        &self,
+        run: RunRecord,
+        resources: RunResourceReservation,
+    ) -> Result<(), HistoryError> {
+        let (acknowledgement, receiver) = mpsc::sync_channel(1);
+        self.try_send(WriterMessage::CreateRun {
+            run: Box::new(run),
+            resources: Some(resources),
             acknowledgement,
         })?;
         receive_ack(receiver)
@@ -177,6 +338,55 @@ impl HistoryClient {
             failure_code: failure_code.map(str::to_owned),
             acknowledgement,
         })?;
+        receive_ack(receiver)
+    }
+
+    /// Atomically persists the verified process identity and the `running` lifecycle edge.
+    pub(crate) fn activate_run(
+        &self,
+        run_id: &str,
+        process: RunProcessIdentity,
+    ) -> Result<RunRecord, HistoryError> {
+        process.validate()?;
+        let (acknowledgement, receiver) = mpsc::sync_channel(1);
+        self.try_send(WriterMessage::ActivateRun {
+            run_id: run_id.to_owned(),
+            process,
+            acknowledgement,
+        })?;
+        receive_ack(receiver)
+    }
+
+    /// Atomically settles lifecycle, process identity, byte ledger, and sanitized evidence rows.
+    pub(crate) fn complete_run(
+        &self,
+        run_id: &str,
+        next: RunState,
+        receipt_id: Option<&str>,
+        failure_code: Option<&str>,
+        resources: RunResourceUsage,
+        descriptors: Vec<EvidenceDescriptor>,
+    ) -> Result<RunRecord, HistoryError> {
+        if !next.is_terminal() || next == RunState::Lost {
+            return Err(HistoryError::InvalidTransition);
+        }
+        let (acknowledgement, receiver) = mpsc::sync_channel(1);
+        self.try_send(WriterMessage::CompleteRun {
+            run_id: run_id.to_owned(),
+            next,
+            receipt_id: receipt_id.map(str::to_owned),
+            failure_code: failure_code.map(str::to_owned),
+            resources,
+            descriptors,
+            acknowledgement,
+        })?;
+        receive_ack(receiver)
+    }
+
+    /// Loads every non-terminal run plus its private persisted process identity for startup repair.
+    pub(crate) fn recoverable_runs(&self) -> Result<Vec<RecoverableRun>, HistoryError> {
+        let (acknowledgement, receiver) = mpsc::sync_channel(1);
+        self.try_send(WriterMessage::RecoverableRuns { acknowledgement })?;
         receive_ack(receiver)
     }
 
@@ -213,7 +423,11 @@ impl HistoryClient {
     }
 
     /// Persists metadata already produced by an independent strict receipt verifier.
-    pub fn record_evidence(&self, descriptor: EvidenceDescriptor) -> Result<(), HistoryError> {
+    #[cfg(test)]
+    pub(crate) fn record_evidence(
+        &self,
+        descriptor: EvidenceDescriptor,
+    ) -> Result<(), HistoryError> {
         let (acknowledgement, receiver) = mpsc::sync_channel(1);
         self.try_send(WriterMessage::RecordEvidence {
             descriptor: Box::new(descriptor),
@@ -761,7 +975,9 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    source_revision TEXT NOT NULL CHECK (length(source_revision) BETWEEN 1 AND 128),
                    executable_digest TEXT CHECK (executable_digest IS NULL OR length(executable_digest) = 64),
                    receipt_id TEXT CHECK (receipt_id IS NULL OR length(receipt_id) BETWEEN 1 AND 128),
-                   failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128)
+                   failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128),
+                   supervisor_generation INTEGER NOT NULL DEFAULT 0
+                     CHECK (supervisor_generation IN (0, 1))
                  ) STRICT;
                  CREATE INDEX runs_created_at ON runs(created_at DESC, run_id DESC);
                  CREATE INDEX runs_state ON runs(state);
@@ -776,6 +992,29 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128)
                  ) STRICT;
                  CREATE INDEX run_transitions_run_sequence ON run_transitions(run_id, sequence);
+                 CREATE TABLE run_processes (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   pid INTEGER NOT NULL CHECK (pid BETWEEN 1 AND 2147483647),
+                   process_group_id INTEGER NOT NULL CHECK (process_group_id = pid),
+                   identity_sha256 TEXT NOT NULL CHECK (length(identity_sha256) = 64),
+                   observed_at TEXT NOT NULL CHECK (length(observed_at) BETWEEN 1 AND 64),
+                   settled_at TEXT CHECK (settled_at IS NULL OR length(settled_at) BETWEEN 1 AND 64)
+                 ) STRICT;
+                 CREATE TABLE run_resource_ledgers (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   output_limit_bytes INTEGER NOT NULL CHECK (output_limit_bytes > 0),
+                   evidence_limit_bytes INTEGER NOT NULL CHECK (evidence_limit_bytes > 0),
+                   output_bytes INTEGER CHECK (output_bytes IS NULL OR output_bytes >= 0),
+                   evidence_bytes INTEGER CHECK (evidence_bytes IS NULL OR evidence_bytes >= 0),
+                   accounting_state TEXT NOT NULL CHECK (accounting_state IN (
+                     'active', 'settled', 'indeterminate'
+                   )),
+                   CHECK (
+                     (accounting_state = 'active' AND output_bytes IS NULL AND evidence_bytes IS NULL)
+                     OR (accounting_state = 'settled' AND output_bytes IS NOT NULL AND evidence_bytes IS NOT NULL)
+                     OR accounting_state = 'indeterminate'
+                   )
+                 ) STRICT;
                  CREATE TABLE evidence_descriptors (
                    evidence_id TEXT PRIMARY KEY CHECK (length(evidence_id) BETWEEN 1 AND 128),
                    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
@@ -800,7 +1039,7 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    )),
                    updated_at TEXT NOT NULL CHECK (length(updated_at) BETWEEN 1 AND 64)
                  ) STRICT;
-                 PRAGMA user_version = 2;
+                 PRAGMA user_version = 4;
                  COMMIT;",
             )
             .map_err(|_error| HistoryError::InvalidDatabase),
@@ -822,7 +1061,9 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    source_revision TEXT NOT NULL CHECK (length(source_revision) BETWEEN 1 AND 128),
                    executable_digest TEXT CHECK (executable_digest IS NULL OR length(executable_digest) = 64),
                    receipt_id TEXT CHECK (receipt_id IS NULL OR length(receipt_id) BETWEEN 1 AND 128),
-                   failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128)
+                   failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128),
+                   supervisor_generation INTEGER NOT NULL DEFAULT 0
+                     CHECK (supervisor_generation IN (0, 1))
                  ) STRICT;
                  CREATE INDEX runs_created_at ON runs(created_at DESC, run_id DESC);
                  CREATE INDEX runs_state ON runs(state);
@@ -837,6 +1078,29 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    failure_code TEXT CHECK (failure_code IS NULL OR length(failure_code) BETWEEN 1 AND 128)
                  ) STRICT;
                  CREATE INDEX run_transitions_run_sequence ON run_transitions(run_id, sequence);
+                 CREATE TABLE run_processes (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   pid INTEGER NOT NULL CHECK (pid BETWEEN 1 AND 2147483647),
+                   process_group_id INTEGER NOT NULL CHECK (process_group_id = pid),
+                   identity_sha256 TEXT NOT NULL CHECK (length(identity_sha256) = 64),
+                   observed_at TEXT NOT NULL CHECK (length(observed_at) BETWEEN 1 AND 64),
+                   settled_at TEXT CHECK (settled_at IS NULL OR length(settled_at) BETWEEN 1 AND 64)
+                 ) STRICT;
+                 CREATE TABLE run_resource_ledgers (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   output_limit_bytes INTEGER NOT NULL CHECK (output_limit_bytes > 0),
+                   evidence_limit_bytes INTEGER NOT NULL CHECK (evidence_limit_bytes > 0),
+                   output_bytes INTEGER CHECK (output_bytes IS NULL OR output_bytes >= 0),
+                   evidence_bytes INTEGER CHECK (evidence_bytes IS NULL OR evidence_bytes >= 0),
+                   accounting_state TEXT NOT NULL CHECK (accounting_state IN (
+                     'active', 'settled', 'indeterminate'
+                   )),
+                   CHECK (
+                     (accounting_state = 'active' AND output_bytes IS NULL AND evidence_bytes IS NULL)
+                     OR (accounting_state = 'settled' AND output_bytes IS NOT NULL AND evidence_bytes IS NOT NULL)
+                     OR accounting_state = 'indeterminate'
+                   )
+                 ) STRICT;
                  CREATE TABLE evidence_descriptors (
                    evidence_id TEXT PRIMARY KEY CHECK (length(evidence_id) BETWEEN 1 AND 128),
                    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
@@ -861,15 +1125,72 @@ fn migrate(connection: &Connection) -> Result<(), HistoryError> {
                    )),
                    updated_at TEXT NOT NULL CHECK (length(updated_at) BETWEEN 1 AND 64)
                  ) STRICT;
-                 PRAGMA user_version = 2;
+                 PRAGMA user_version = 4;
+                 COMMIT;",
+            )
+            .map_err(|_error| HistoryError::InvalidDatabase),
+        2 => connection
+            .execute_batch(
+                "BEGIN IMMEDIATE;
+                 ALTER TABLE runs ADD COLUMN supervisor_generation INTEGER NOT NULL DEFAULT 0
+                   CHECK (supervisor_generation IN (0, 1));
+                 CREATE TABLE run_processes (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   pid INTEGER NOT NULL CHECK (pid BETWEEN 1 AND 2147483647),
+                   process_group_id INTEGER NOT NULL CHECK (process_group_id = pid),
+                   identity_sha256 TEXT NOT NULL CHECK (length(identity_sha256) = 64),
+                   observed_at TEXT NOT NULL CHECK (length(observed_at) BETWEEN 1 AND 64),
+                   settled_at TEXT CHECK (settled_at IS NULL OR length(settled_at) BETWEEN 1 AND 64)
+                 ) STRICT;
+                 CREATE TABLE run_resource_ledgers (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   output_limit_bytes INTEGER NOT NULL CHECK (output_limit_bytes > 0),
+                   evidence_limit_bytes INTEGER NOT NULL CHECK (evidence_limit_bytes > 0),
+                   output_bytes INTEGER CHECK (output_bytes IS NULL OR output_bytes >= 0),
+                   evidence_bytes INTEGER CHECK (evidence_bytes IS NULL OR evidence_bytes >= 0),
+                   accounting_state TEXT NOT NULL CHECK (accounting_state IN (
+                     'active', 'settled', 'indeterminate'
+                   )),
+                   CHECK (
+                     (accounting_state = 'active' AND output_bytes IS NULL AND evidence_bytes IS NULL)
+                     OR (accounting_state = 'settled' AND output_bytes IS NOT NULL AND evidence_bytes IS NOT NULL)
+                     OR accounting_state = 'indeterminate'
+                   )
+                 ) STRICT;
+                 PRAGMA user_version = 4;
+                 COMMIT;",
+            )
+            .map_err(|_error| HistoryError::InvalidDatabase),
+        3 => connection
+            .execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE run_resource_ledgers (
+                   run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+                   output_limit_bytes INTEGER NOT NULL CHECK (output_limit_bytes > 0),
+                   evidence_limit_bytes INTEGER NOT NULL CHECK (evidence_limit_bytes > 0),
+                   output_bytes INTEGER CHECK (output_bytes IS NULL OR output_bytes >= 0),
+                   evidence_bytes INTEGER CHECK (evidence_bytes IS NULL OR evidence_bytes >= 0),
+                   accounting_state TEXT NOT NULL CHECK (accounting_state IN (
+                     'active', 'settled', 'indeterminate'
+                   )),
+                   CHECK (
+                     (accounting_state = 'active' AND output_bytes IS NULL AND evidence_bytes IS NULL)
+                     OR (accounting_state = 'settled' AND output_bytes IS NOT NULL AND evidence_bytes IS NOT NULL)
+                     OR accounting_state = 'indeterminate'
+                   )
+                 ) STRICT;
+                 PRAGMA user_version = 4;
                  COMMIT;",
             )
             .map_err(|_error| HistoryError::InvalidDatabase),
         SCHEMA_VERSION => connection
             .query_row(
                 "SELECT safe_events.sequence, runs.run_id, run_transitions.sequence,
-                        evidence_descriptors.evidence_id, preferences.preference_key
-                 FROM safe_events, runs, run_transitions, evidence_descriptors, preferences LIMIT 0",
+                        run_processes.run_id, evidence_descriptors.evidence_id,
+                        preferences.preference_key, runs.supervisor_generation,
+                        run_resource_ledgers.run_id
+                 FROM safe_events, runs, run_transitions, run_processes,
+                      evidence_descriptors, preferences, run_resource_ledgers LIMIT 0",
                 [],
                 |_row| Ok(()),
             )
@@ -1062,9 +1383,10 @@ fn writer_loop(
             }
             WriterMessage::CreateRun {
                 run,
+                resources,
                 acknowledgement,
             } => {
-                let result = create_run(&mut connection, &run, retention);
+                let result = create_run(&mut connection, &run, resources, retention);
                 let _ignored = acknowledgement.send(result);
             }
             WriterMessage::TransitionRun {
@@ -1079,11 +1401,58 @@ fn writer_loop(
                     &mut connection,
                     &run_id,
                     next,
-                    executable_digest.as_deref(),
-                    receipt_id.as_deref(),
-                    failure_code.as_deref(),
+                    TransitionValues {
+                        executable_digest: executable_digest.as_deref(),
+                        receipt_id: receipt_id.as_deref(),
+                        failure_code: failure_code.as_deref(),
+                        process: None,
+                    },
                     retention,
                 );
+                let _ignored = acknowledgement.send(result);
+            }
+            WriterMessage::ActivateRun {
+                run_id,
+                process,
+                acknowledgement,
+            } => {
+                let result = transition_run(
+                    &mut connection,
+                    &run_id,
+                    RunState::Running,
+                    TransitionValues {
+                        executable_digest: None,
+                        receipt_id: None,
+                        failure_code: None,
+                        process: Some(&process),
+                    },
+                    retention,
+                );
+                let _ignored = acknowledgement.send(result);
+            }
+            WriterMessage::CompleteRun {
+                run_id,
+                next,
+                receipt_id,
+                failure_code,
+                resources,
+                descriptors,
+                acknowledgement,
+            } => {
+                let result = complete_run(
+                    &mut connection,
+                    &run_id,
+                    next,
+                    receipt_id.as_deref(),
+                    failure_code.as_deref(),
+                    resources,
+                    &descriptors,
+                    retention,
+                );
+                let _ignored = acknowledgement.send(result);
+            }
+            WriterMessage::RecoverableRuns { acknowledgement } => {
+                let result = recoverable_runs(&connection);
                 let _ignored = acknowledgement.send(result);
             }
             WriterMessage::ListRuns {
@@ -1101,6 +1470,7 @@ fn writer_loop(
                 let result = get_run_with_events(&connection, &run_id, retention);
                 let _ignored = acknowledgement.send(result);
             }
+            #[cfg(test)]
             WriterMessage::RecordEvidence {
                 descriptor,
                 acknowledgement,
@@ -1150,9 +1520,7 @@ fn persist(
     {
         return Err(HistoryError::InvalidEvent);
     }
-    let transaction = connection
-        .transaction()
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    let transaction = connection.transaction().map_err(map_write_error)?;
     transaction
         .execute(
             "INSERT INTO safe_events(sequence, observed_at, event_json, encoded_bytes)
@@ -1164,32 +1532,29 @@ fn persist(
                 record.encoded_bytes
             ],
         )
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+        .map_err(map_write_error)?;
     prune(&transaction, retention)?;
-    transaction
-        .commit()
-        .map_err(|_error| HistoryError::WriterUnavailable)
+    transaction.commit().map_err(map_write_error)
 }
 
 fn create_run(
     connection: &mut Connection,
     run: &RunRecord,
+    resources: Option<RunResourceReservation>,
     retention: Retention,
 ) -> Result<(), HistoryError> {
     run.validate().map_err(|_error| HistoryError::InvalidRun)?;
     if run.state() != RunState::Queued {
         return Err(HistoryError::InvalidRun);
     }
-    let transaction = connection
-        .transaction()
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    let transaction = connection.transaction().map_err(map_write_error)?;
     transaction
         .execute(
             "INSERT INTO runs(
                run_id, profile_id, state, created_at, started_at, finished_at,
                profile_digest, registry_digest, source_revision, executable_digest,
-               receipt_id, failure_code
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+               receipt_id, failure_code, supervisor_generation
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 run.run_id(),
                 run.profile_id(),
@@ -1203,41 +1568,73 @@ fn create_run(
                 run.executable_digest(),
                 run.receipt_id(),
                 run.failure_code(),
+                SUPERVISOR_GENERATION,
             ],
         )
-        .map_err(|_error| HistoryError::InvalidRun)?;
+        .map_err(map_invalid_run_write_error)?;
+    if let Some(resources) = resources {
+        transaction
+            .execute(
+                "INSERT INTO run_resource_ledgers(
+                   run_id, output_limit_bytes, evidence_limit_bytes, output_bytes,
+                   evidence_bytes, accounting_state
+                 ) VALUES (?1, ?2, ?3, NULL, NULL, 'active')",
+                params![
+                    run.run_id(),
+                    resources.output_bytes,
+                    resources.evidence_bytes,
+                ],
+            )
+            .map_err(map_write_error)?;
+    }
     transaction
         .execute(
             "INSERT INTO run_transitions(run_id, state, observed_at, failure_code)
              VALUES (?1, ?2, ?3, NULL)",
             params![run.run_id(), run.state().as_str(), run.created_at()],
         )
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+        .map_err(map_write_error)?;
     prune_runs(&transaction, retention)?;
-    transaction
-        .commit()
-        .map_err(|_error| HistoryError::WriterUnavailable)
+    transaction.commit().map_err(map_write_error)
+}
+
+struct TransitionValues<'a> {
+    executable_digest: Option<&'a str>,
+    receipt_id: Option<&'a str>,
+    failure_code: Option<&'a str>,
+    process: Option<&'a RunProcessIdentity>,
 }
 
 fn transition_run(
     connection: &mut Connection,
     run_id: &str,
     next: RunState,
-    executable_digest: Option<&str>,
-    receipt_id: Option<&str>,
-    failure_code: Option<&str>,
+    values: TransitionValues<'_>,
     retention: Retention,
 ) -> Result<RunRecord, HistoryError> {
+    if (next == RunState::Running) != values.process.is_some() {
+        return Err(HistoryError::InvalidTransition);
+    }
+    if let Some(identity) = values.process {
+        identity.validate()?;
+    }
     let mut run = get_run(connection, run_id)?.ok_or(HistoryError::RunNotFound)?;
     let prior = run.state();
+    let supervisor_generation: i64 = connection
+        .query_row(
+            "SELECT supervisor_generation FROM runs WHERE run_id = ?1",
+            params![run_id],
+            |row| row.get(0),
+        )
+        .map_err(|_error| HistoryError::InvalidDatabase)?;
     let transition_at = OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .map_err(|_error| HistoryError::WriterUnavailable)?;
     run.transition_at(
         next,
-        executable_digest,
-        receipt_id,
-        failure_code,
+        values.executable_digest,
+        values.receipt_id,
+        values.failure_code,
         &transition_at,
     )
     .map_err(|error| match error {
@@ -1245,9 +1642,7 @@ fn transition_run(
         crate::RunError::InvalidRun => HistoryError::InvalidRun,
         crate::RunError::IdentityUnavailable => HistoryError::WriterUnavailable,
     })?;
-    let transaction = connection
-        .transaction()
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    let transaction = connection.transaction().map_err(map_write_error)?;
     let updated = transaction
         .execute(
             "UPDATE runs SET
@@ -1265,8 +1660,178 @@ fn transition_run(
                 prior.as_str(),
             ],
         )
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+        .map_err(map_write_error)?;
     if updated != 1 {
+        return Err(HistoryError::InvalidTransition);
+    }
+    if let Some(identity) = values.process {
+        let inserted = transaction
+            .execute(
+                "INSERT INTO run_processes(
+                   run_id, pid, process_group_id, identity_sha256, observed_at, settled_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+                params![
+                    run.run_id(),
+                    identity.pid,
+                    identity.process_group_id,
+                    identity.identity_sha256,
+                    transition_at,
+                ],
+            )
+            .map_err(map_invalid_transition_write_error)?;
+        if inserted != 1 {
+            return Err(HistoryError::InvalidTransition);
+        }
+    } else if next.is_terminal() {
+        let settled = transaction
+            .execute(
+                "UPDATE run_processes SET settled_at = ?1
+                 WHERE run_id = ?2 AND settled_at IS NULL",
+                params![transition_at, run.run_id()],
+            )
+            .map_err(map_write_error)?;
+        if supervisor_generation == SUPERVISOR_GENERATION
+            && matches!(prior, RunState::Running | RunState::Cancelling)
+            && settled != 1
+        {
+            return Err(HistoryError::InvalidTransition);
+        }
+        transaction
+            .execute(
+                "UPDATE run_resource_ledgers
+                 SET accounting_state = 'indeterminate'
+                 WHERE run_id = ?1 AND accounting_state = 'active'",
+                params![run.run_id()],
+            )
+            .map_err(map_write_error)?;
+    }
+    transaction
+        .execute(
+            "INSERT INTO run_transitions(run_id, state, observed_at, failure_code)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                run.run_id(),
+                run.state().as_str(),
+                transition_at,
+                run.failure_code()
+            ],
+        )
+        .map_err(map_write_error)?;
+    prune_runs(&transaction, retention)?;
+    transaction.commit().map_err(map_write_error)?;
+    Ok(run)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn complete_run(
+    connection: &mut Connection,
+    run_id: &str,
+    next: RunState,
+    receipt_id: Option<&str>,
+    failure_code: Option<&str>,
+    resources: RunResourceUsage,
+    descriptors: &[EvidenceDescriptor],
+    retention: Retention,
+) -> Result<RunRecord, HistoryError> {
+    if !next.is_terminal() || next == RunState::Lost {
+        return Err(HistoryError::InvalidTransition);
+    }
+    for descriptor in descriptors {
+        descriptor
+            .validate()
+            .map_err(|_error| HistoryError::InvalidEvidence)?;
+        if descriptor.run_id() != run_id {
+            return Err(HistoryError::InvalidEvidence);
+        }
+    }
+    let mut run = get_run(connection, run_id)?.ok_or(HistoryError::RunNotFound)?;
+    let prior = run.state();
+    if !matches!(prior, RunState::Running | RunState::Cancelling) {
+        return Err(HistoryError::InvalidTransition);
+    }
+    let (output_limit, evidence_limit, accounting_state): (i64, i64, String) = connection
+        .query_row(
+            "SELECT output_limit_bytes, evidence_limit_bytes, accounting_state
+             FROM run_resource_ledgers WHERE run_id = ?1",
+            params![run_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_error| HistoryError::InvalidDatabase)?;
+    let resource_limit_exceeded =
+        resources.output_bytes > output_limit || resources.evidence_bytes > evidence_limit;
+    if accounting_state != "active"
+        || resource_limit_exceeded && next != RunState::Failed
+        || next == RunState::Passed
+            && (receipt_id.is_none()
+                || descriptors.len() != 2
+                || descriptors
+                    .iter()
+                    .any(|descriptor| descriptor.status() != EvidenceStatus::Valid)
+                || descriptors
+                    .iter()
+                    .filter(|descriptor| {
+                        descriptor.schema_id() == "cigar.dashboard-supervisor-receipt.v1"
+                    })
+                    .count()
+                    != 1)
+    {
+        return Err(HistoryError::InvalidTransition);
+    }
+    let transition_at = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    run.transition_at(next, None, receipt_id, failure_code, &transition_at)
+        .map_err(|error| match error {
+            crate::RunError::InvalidTransition => HistoryError::InvalidTransition,
+            crate::RunError::InvalidRun => HistoryError::InvalidRun,
+            crate::RunError::IdentityUnavailable => HistoryError::WriterUnavailable,
+        })?;
+
+    let transaction = connection.transaction().map_err(map_write_error)?;
+    let updated = transaction
+        .execute(
+            "UPDATE runs SET
+               state = ?1, started_at = ?2, finished_at = ?3, executable_digest = ?4,
+               receipt_id = ?5, failure_code = ?6
+             WHERE run_id = ?7 AND state = ?8",
+            params![
+                run.state().as_str(),
+                run.started_at(),
+                run.finished_at(),
+                run.executable_digest(),
+                run.receipt_id(),
+                run.failure_code(),
+                run.run_id(),
+                prior.as_str(),
+            ],
+        )
+        .map_err(map_write_error)?;
+    if updated != 1 {
+        return Err(HistoryError::InvalidTransition);
+    }
+    let settled = transaction
+        .execute(
+            "UPDATE run_processes SET settled_at = ?1
+             WHERE run_id = ?2 AND settled_at IS NULL",
+            params![transition_at, run.run_id()],
+        )
+        .map_err(map_write_error)?;
+    if settled != 1 {
+        return Err(HistoryError::InvalidTransition);
+    }
+    let accounted = transaction
+        .execute(
+            "UPDATE run_resource_ledgers SET
+               output_bytes = ?1, evidence_bytes = ?2, accounting_state = 'settled'
+             WHERE run_id = ?3 AND accounting_state = 'active'",
+            params![
+                resources.output_bytes,
+                resources.evidence_bytes,
+                run.run_id()
+            ],
+        )
+        .map_err(map_write_error)?;
+    if accounted != 1 {
         return Err(HistoryError::InvalidTransition);
     }
     transaction
@@ -1280,11 +1845,12 @@ fn transition_run(
                 run.failure_code()
             ],
         )
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+        .map_err(map_write_error)?;
+    for descriptor in descriptors {
+        insert_evidence_row(&transaction, descriptor)?;
+    }
     prune_runs(&transaction, retention)?;
-    transaction
-        .commit()
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    transaction.commit().map_err(map_write_error)?;
     Ok(run)
 }
 
@@ -1355,6 +1921,88 @@ fn get_run(connection: &Connection, run_id: &str) -> Result<Option<RunRecord>, H
         .map_err(|_error| HistoryError::InvalidDatabase)?
         .map(StoredRun::decode)
         .transpose()
+}
+
+fn recoverable_runs(connection: &Connection) -> Result<Vec<RecoverableRun>, HistoryError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT
+               r.run_id, r.profile_id, r.state, r.created_at, r.started_at, r.finished_at,
+               r.profile_digest, r.registry_digest, r.source_revision, r.executable_digest,
+               r.receipt_id, r.failure_code, r.supervisor_generation,
+               p.pid, p.process_group_id, p.identity_sha256, p.settled_at,
+               l.accounting_state
+             FROM runs AS r
+             LEFT JOIN run_processes AS p ON p.run_id = r.run_id
+             LEFT JOIN run_resource_ledgers AS l ON l.run_id = r.run_id
+             WHERE r.state IN ('queued', 'preparing', 'running', 'cancelling')
+             ORDER BY r.created_at ASC, r.run_id ASC",
+        )
+        .map_err(|_error| HistoryError::InvalidDatabase)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                StoredRun::from_row(row)?,
+                row.get::<_, i64>(12)?,
+                row.get::<_, Option<i64>>(13)?,
+                row.get::<_, Option<i64>>(14)?,
+                row.get::<_, Option<String>>(15)?,
+                row.get::<_, Option<String>>(16)?,
+                row.get::<_, Option<String>>(17)?,
+            ))
+        })
+        .map_err(|_error| HistoryError::InvalidDatabase)?;
+    let mut recoverable = Vec::new();
+    for row in rows {
+        let (stored, generation, pid, process_group_id, identity_sha256, settled_at, accounting) =
+            row.map_err(|_error| HistoryError::InvalidDatabase)?;
+        if !matches!(generation, 0 | SUPERVISOR_GENERATION) || settled_at.is_some() {
+            return Err(HistoryError::InvalidDatabase);
+        }
+        let process = match (pid, process_group_id, identity_sha256) {
+            (None, None, None) => None,
+            (Some(pid), Some(process_group_id), Some(identity_sha256)) => {
+                let identity = RunProcessIdentity {
+                    pid,
+                    process_group_id,
+                    identity_sha256,
+                };
+                identity.validate()?;
+                Some(identity)
+            }
+            _ => return Err(HistoryError::InvalidDatabase),
+        };
+        let run = stored.decode()?;
+        let valid_identity_shape = matches!(
+            (generation, run.state(), process.is_some()),
+            (0, _, false)
+                | (
+                    SUPERVISOR_GENERATION,
+                    RunState::Queued | RunState::Preparing,
+                    false
+                )
+                | (
+                    SUPERVISOR_GENERATION,
+                    RunState::Running | RunState::Cancelling,
+                    true
+                )
+        );
+        if !valid_identity_shape {
+            return Err(HistoryError::InvalidDatabase);
+        }
+        let resources_reserved = match accounting.as_deref() {
+            Some("active") => true,
+            None => false,
+            Some(_) => return Err(HistoryError::InvalidDatabase),
+        };
+        recoverable.push(RecoverableRun {
+            run,
+            supervisor_generation: generation,
+            process,
+            resources_reserved,
+        });
+    }
+    Ok(recoverable)
 }
 
 fn list_runs_page(
@@ -1452,6 +2100,7 @@ fn get_run_with_events(
     Ok(run)
 }
 
+#[cfg(test)]
 fn record_evidence(
     connection: &mut Connection,
     descriptor: &EvidenceDescriptor,
@@ -1463,9 +2112,15 @@ fn record_evidence(
     if !run.state().is_terminal() {
         return Err(HistoryError::InvalidEvidence);
     }
-    let transaction = connection
-        .transaction()
-        .map_err(|_error| HistoryError::WriterUnavailable)?;
+    let transaction = connection.transaction().map_err(map_write_error)?;
+    insert_evidence_row(&transaction, descriptor)?;
+    transaction.commit().map_err(map_write_error)
+}
+
+fn insert_evidence_row(
+    transaction: &Transaction<'_>,
+    descriptor: &EvidenceDescriptor,
+) -> Result<(), HistoryError> {
     transaction
         .execute(
             "INSERT INTO evidence_descriptors(
@@ -1484,10 +2139,8 @@ fn record_evidence(
                 descriptor.artifact_digest(),
             ],
         )
-        .map_err(|_error| HistoryError::InvalidEvidence)?;
-    transaction
-        .commit()
-        .map_err(|_error| HistoryError::WriterUnavailable)
+        .map_err(map_invalid_evidence_write_error)?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -1640,13 +2293,51 @@ fn map_history_event_error(error: HistoryError) -> EventError {
         | HistoryError::InvalidDatabase
         | HistoryError::UnsafePath => EventError::StoreUnavailable,
         HistoryError::LimitExceeded => EventError::LimitExceeded,
-        HistoryError::WriterUnavailable => EventError::StoreUnavailable,
+        HistoryError::DiskFull | HistoryError::WriterUnavailable => EventError::StoreUnavailable,
+    }
+}
+
+fn map_write_error(error: rusqlite::Error) -> HistoryError {
+    match &error {
+        rusqlite::Error::SqliteFailure(failure, _message)
+            if failure.code == rusqlite::ErrorCode::DiskFull =>
+        {
+            HistoryError::DiskFull
+        }
+        _ => HistoryError::WriterUnavailable,
+    }
+}
+
+fn map_invalid_run_write_error(error: rusqlite::Error) -> HistoryError {
+    if map_write_error(error) == HistoryError::DiskFull {
+        HistoryError::DiskFull
+    } else {
+        HistoryError::InvalidRun
+    }
+}
+
+fn map_invalid_transition_write_error(error: rusqlite::Error) -> HistoryError {
+    if map_write_error(error) == HistoryError::DiskFull {
+        HistoryError::DiskFull
+    } else {
+        HistoryError::InvalidTransition
+    }
+}
+
+fn map_invalid_evidence_write_error(error: rusqlite::Error) -> HistoryError {
+    if map_write_error(error) == HistoryError::DiskFull {
+        HistoryError::DiskFull
+    } else {
+        HistoryError::InvalidEvidence
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{HistoryClient, HistoryError, HistoryStore};
+    use super::{
+        HistoryClient, HistoryError, HistoryStore, RunProcessIdentity, RunResourceReservation,
+        RunResourceUsage, map_write_error,
+    };
     use crate::{
         DashboardHistoryConfig, EvidenceCategory, EvidenceDescriptor, EvidenceStatus, RunRecord,
         RunState, SafeEventAttribute, SafeEventAttributes, SafeEventBroker, SafeEventKind,
@@ -1672,8 +2363,172 @@ mod tests {
 
     fn pass_run(client: &HistoryClient, run_id: &str, digest: &str) -> Result<(), HistoryError> {
         client.transition_run(run_id, RunState::Preparing, Some(digest), None, None)?;
-        client.transition_run(run_id, RunState::Running, None, None, None)?;
+        client.activate_run(run_id, process_identity()?)?;
         client.transition_run(run_id, RunState::Passed, None, Some("receipt-1"), None)?;
+        Ok(())
+    }
+
+    fn process_identity() -> Result<RunProcessIdentity, HistoryError> {
+        RunProcessIdentity::new(
+            42_424,
+            42_424,
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_owned(),
+        )
+    }
+
+    #[test]
+    fn sqlite_disk_full_has_a_stable_fail_closed_category() {
+        let error = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_FULL),
+            None,
+        );
+        assert_eq!(map_write_error(error), HistoryError::DiskFull);
+    }
+
+    #[test]
+    fn terminal_run_resource_and_evidence_commit_is_atomic()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let store = HistoryStore::open(&config(path.clone(), 10), 4096)?;
+        let client = store.client();
+        let run = RunRecord::queued("dashboard-contracts", DIGEST, DIGEST, "revision-1")?;
+        let run_id = run.run_id().to_owned();
+        client.create_run_with_resources(run, RunResourceReservation::new(100, 200)?)?;
+        client.transition_run(&run_id, RunState::Preparing, Some(DIGEST), None, None)?;
+        client.activate_run(&run_id, process_identity()?)?;
+        let product = EvidenceDescriptor::verified(
+            &run_id,
+            "cigar.dashboard-schema-check.v1",
+            EvidenceCategory::Development,
+            EvidenceStatus::Valid,
+            DIGEST,
+            "revision-1",
+            None,
+        )?;
+        let supervisor = EvidenceDescriptor::verified(
+            &run_id,
+            "cigar.dashboard-supervisor-receipt.v1",
+            EvidenceCategory::Development,
+            EvidenceStatus::Valid,
+            DIGEST,
+            "revision-1",
+            None,
+        )?;
+        assert_eq!(
+            client
+                .complete_run(
+                    &run_id,
+                    RunState::Passed,
+                    Some("receipt-forged"),
+                    None,
+                    RunResourceUsage::new(75, 150)?,
+                    vec![supervisor.clone(), supervisor.clone()],
+                )
+                .err(),
+            Some(HistoryError::InvalidTransition)
+        );
+        assert_eq!(client.get_run(&run_id)?.state(), RunState::Running);
+        client.complete_run(
+            &run_id,
+            RunState::Passed,
+            Some("receipt-product"),
+            None,
+            RunResourceUsage::new(75, 150)?,
+            vec![product, supervisor],
+        )?;
+        let connection = rusqlite::Connection::open(&path)?;
+        let ledger: (i64, i64, i64, i64, String) = connection.query_row(
+            "SELECT output_limit_bytes, evidence_limit_bytes, output_bytes,
+                    evidence_bytes, accounting_state
+             FROM run_resource_ledgers WHERE run_id = ?1",
+            [&run_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )?;
+        assert_eq!(ledger, (100, 200, 75, 150, "settled".to_owned()));
+        assert_eq!(
+            connection.query_row(
+                "SELECT COUNT(*) FROM evidence_descriptors WHERE run_id = ?1",
+                [&run_id],
+                |row| row.get::<_, i64>(0),
+            )?,
+            2
+        );
+        assert!(connection.query_row(
+            "SELECT settled_at IS NOT NULL FROM run_processes WHERE run_id = ?1",
+            [&run_id],
+            |row| row.get::<_, bool>(0),
+        )?);
+
+        let rejected = RunRecord::queued("dashboard-contracts", DIGEST, DIGEST, "revision-2")?;
+        let rejected_id = rejected.run_id().to_owned();
+        client.create_run_with_resources(rejected, RunResourceReservation::new(10, 10)?)?;
+        client.transition_run(&rejected_id, RunState::Preparing, Some(DIGEST), None, None)?;
+        client.activate_run(&rejected_id, process_identity()?)?;
+        assert_eq!(
+            client
+                .complete_run(
+                    &rejected_id,
+                    RunState::Passed,
+                    Some("receipt-forged"),
+                    None,
+                    RunResourceUsage::new(11, 10)?,
+                    Vec::new(),
+                )
+                .err(),
+            Some(HistoryError::InvalidTransition)
+        );
+        assert_eq!(client.get_run(&rejected_id)?.state(), RunState::Running);
+        client.complete_run(
+            &rejected_id,
+            RunState::Failed,
+            None,
+            Some("run.output_limit"),
+            RunResourceUsage::new(11, 10)?,
+            Vec::new(),
+        )?;
+        store.shutdown()?;
+        Ok(())
+    }
+
+    #[test]
+    fn version_three_adds_empty_resource_ledger_without_inventing_usage()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let store = HistoryStore::open(&config(path.clone(), 10), 4096)?;
+        store.shutdown()?;
+        drop(store);
+        let connection = rusqlite::Connection::open(&path)?;
+        connection.execute_batch(
+            "DROP TABLE run_resource_ledgers;
+             PRAGMA user_version = 3;",
+        )?;
+        drop(connection);
+        let migrated = HistoryStore::open(&config(path.clone(), 10), 4096)?;
+        migrated.shutdown()?;
+        let connection = rusqlite::Connection::open(path)?;
+        assert_eq!(
+            connection.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))?,
+            4
+        );
+        assert_eq!(
+            connection.query_row("SELECT COUNT(*) FROM run_resource_ledgers", [], |row| {
+                row.get::<_, i64>(0)
+            })?,
+            0
+        );
         Ok(())
     }
 
@@ -1698,6 +2553,98 @@ mod tests {
         assert_eq!(retained.len(), 2);
         assert_eq!(retained.first().map(|event| event.sequence()), Some(2));
         assert_eq!(retained.last().map(|event| event.sequence()), Some(3));
+        reopened.shutdown()?;
+        Ok(())
+    }
+
+    #[test]
+    fn event_byte_retention_is_durable_and_never_exceeds_the_configured_cap()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let mut retention_config = config(path.clone(), 100);
+        retention_config.max_bytes = 512;
+        let store = HistoryStore::open(&retention_config, 4096)?;
+        let broker = SafeEventBroker::new_seeded(100, 512, 4096, 2, Vec::new())?;
+        broker.attach_sink(store.sink())?;
+        for value in 1..=20 {
+            publish(&broker, value)?;
+        }
+        drop(broker);
+        store.shutdown()?;
+        drop(store);
+
+        let connection = rusqlite::Connection::open(&path)?;
+        let (count, bytes): (i64, i64) = connection.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(encoded_bytes), 0) FROM safe_events",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        assert!(count > 0 && count < 20);
+        assert!(bytes > 0 && bytes <= 512);
+        drop(connection);
+
+        let reopened = HistoryStore::open(&retention_config, 4096)?;
+        assert_eq!(i64::try_from(reopened.retained_events().len())?, count);
+        reopened.shutdown()?;
+        Ok(())
+    }
+
+    #[test]
+    fn age_retention_prunes_unreferenced_terminal_runs_but_keeps_evidence_links()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let mut retention_config = config(path.clone(), 10);
+        retention_config.max_age_days = 1;
+        let store = HistoryStore::open(&retention_config, 4096)?;
+        let client = store.client();
+
+        let retained = RunRecord::queued("dashboard-contracts", DIGEST, DIGEST, "revision-1")?;
+        let retained_id = retained.run_id().to_owned();
+        client.create_run(retained)?;
+        pass_run(&client, &retained_id, DIGEST)?;
+        client.record_evidence(EvidenceDescriptor::verified(
+            &retained_id,
+            "cigar.dashboard-schema-check.v1",
+            EvidenceCategory::Development,
+            EvidenceStatus::Valid,
+            DIGEST,
+            "revision-1",
+            None,
+        )?)?;
+
+        let expired = RunRecord::queued("dashboard-contracts", DIGEST, DIGEST, "revision-1")?;
+        let expired_id = expired.run_id().to_owned();
+        client.create_run(expired)?;
+        pass_run(&client, &expired_id, DIGEST)?;
+        store.shutdown()?;
+        drop(store);
+
+        let connection = rusqlite::Connection::open(&path)?;
+        connection.execute(
+            "UPDATE runs SET created_at = '2020-01-01T00:00:00Z',
+                    started_at = '2020-01-01T00:00:01Z',
+                    finished_at = '2020-01-01T00:00:02Z'
+             WHERE run_id IN (?1, ?2)",
+            [&retained_id, &expired_id],
+        )?;
+        drop(connection);
+
+        let reopened = HistoryStore::open(&retention_config, 4096)?;
+        assert_eq!(reopened.client().list_runs(10)?.len(), 1);
+        assert_eq!(
+            reopened.client().get_run(&expired_id).err(),
+            Some(HistoryError::RunNotFound)
+        );
+        assert_eq!(
+            reopened.client().get_run(&retained_id)?.state(),
+            RunState::Passed
+        );
+        assert_eq!(reopened.client().list_evidence(10)?.len(), 1);
         reopened.shutdown()?;
         Ok(())
     }
@@ -1938,7 +2885,7 @@ mod tests {
         );
         assert_eq!(client.get_run(&run_id)?.state(), RunState::Queued);
         client.transition_run(&run_id, RunState::Preparing, Some(DIGEST), None, None)?;
-        client.transition_run(&run_id, RunState::Running, None, None, None)?;
+        client.activate_run(&run_id, process_identity()?)?;
 
         let premature = EvidenceDescriptor::verified(
             &run_id,
@@ -2037,7 +2984,157 @@ mod tests {
         drop(store);
         let connection = rusqlite::Connection::open(path)?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-        assert_eq!(version, 2);
+        assert_eq!(version, 4);
+        Ok(())
+    }
+
+    #[test]
+    fn version_two_runs_migrate_as_explicit_legacy_supervisor_rows()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const RUN_ID: &str = "01980c69-9d00-7000-8000-000000000001";
+        const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let connection = rusqlite::Connection::open_in_memory()?;
+        connection.execute_batch(
+            "CREATE TABLE runs (
+               run_id TEXT PRIMARY KEY,
+               profile_id TEXT NOT NULL,
+               state TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               started_at TEXT,
+               finished_at TEXT,
+               profile_digest TEXT NOT NULL,
+               registry_digest TEXT NOT NULL,
+               source_revision TEXT NOT NULL,
+               executable_digest TEXT,
+               receipt_id TEXT,
+               failure_code TEXT
+             ) STRICT;
+             INSERT INTO runs(
+               run_id, profile_id, state, created_at, started_at, finished_at,
+               profile_digest, registry_digest, source_revision, executable_digest,
+               receipt_id, failure_code
+             ) VALUES (
+               '01980c69-9d00-7000-8000-000000000001', 'soak-smoke', 'queued',
+               '2026-07-13T12:00:00Z', NULL, NULL,
+               '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+               '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+               'revision-1', NULL, NULL, NULL
+             );
+             PRAGMA user_version = 2;",
+        )?;
+
+        super::migrate(&connection)?;
+        let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        assert_eq!(version, 4);
+        let generation: i64 = connection.query_row(
+            "SELECT supervisor_generation FROM runs WHERE run_id = ?1",
+            [RUN_ID],
+            |row| row.get(0),
+        )?;
+        assert_eq!(generation, 0);
+        let columns: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('run_processes')",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(columns, 6);
+        let recovered = super::recoverable_runs(&connection)?;
+        assert_eq!(recovered.len(), 1);
+        let recovered = recovered.first().ok_or(HistoryError::InvalidRun)?;
+        assert_eq!(recovered.run().run_id(), RUN_ID);
+        assert_eq!(recovered.supervisor_generation(), 0);
+        assert!(recovered.process().is_none());
+        assert_eq!(recovered.run().profile_digest(), DIGEST);
+        Ok(())
+    }
+
+    #[test]
+    fn active_process_identity_is_atomic_reloadable_and_settled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let config = config(path.clone(), 10);
+        let store = HistoryStore::open(&config, 4096)?;
+        let client = store.client();
+        let run = RunRecord::queued("soak-smoke", DIGEST, DIGEST, "revision-1")?;
+        let run_id = run.run_id().to_owned();
+        client.create_run(run)?;
+        client.transition_run(&run_id, RunState::Preparing, Some(DIGEST), None, None)?;
+        assert_eq!(
+            client
+                .transition_run(&run_id, RunState::Running, None, None, None)
+                .err(),
+            Some(HistoryError::InvalidTransition)
+        );
+        client.activate_run(&run_id, process_identity()?)?;
+        let active = client.recoverable_runs()?;
+        assert_eq!(active.len(), 1);
+        let active = active.first().ok_or(HistoryError::InvalidRun)?;
+        assert_eq!(active.run().state(), RunState::Running);
+        assert_eq!(active.process().map(RunProcessIdentity::pid), Some(42_424));
+        assert_eq!(active.supervisor_generation(), 1);
+        store.shutdown()?;
+        drop(store);
+
+        let reopened = HistoryStore::open(&config, 4096)?;
+        let client = reopened.client();
+        assert_eq!(client.recoverable_runs()?.len(), 1);
+        client.transition_run(
+            &run_id,
+            RunState::Lost,
+            None,
+            None,
+            Some("run.recovered_without_live_child"),
+        )?;
+        assert!(client.recoverable_runs()?.is_empty());
+        reopened.shutdown()?;
+        drop(reopened);
+
+        let connection = rusqlite::Connection::open(path)?;
+        let settled: i64 = connection.query_row(
+            "SELECT settled_at IS NOT NULL FROM run_processes WHERE run_id = ?1",
+            [&run_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(settled, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_persisted_process_identity_fails_closed() -> Result<(), Box<dyn std::error::Error>>
+    {
+        const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let directory = tempfile::tempdir()?;
+        restrict_directory(directory.path())?;
+        let path = directory.path().join("history.sqlite3");
+        let config = config(path.clone(), 10);
+        let store = HistoryStore::open(&config, 4096)?;
+        let client = store.client();
+        let run = RunRecord::queued("soak-smoke", DIGEST, DIGEST, "revision-1")?;
+        let run_id = run.run_id().to_owned();
+        client.create_run(run)?;
+        client.transition_run(&run_id, RunState::Preparing, Some(DIGEST), None, None)?;
+        client.activate_run(&run_id, process_identity()?)?;
+        store.shutdown()?;
+        drop(store);
+
+        let connection = rusqlite::Connection::open(&path)?;
+        connection.execute(
+            "UPDATE run_processes SET identity_sha256 = ?1 WHERE run_id = ?2",
+            [
+                "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+                &run_id,
+            ],
+        )?;
+        drop(connection);
+        let reopened = HistoryStore::open(&config, 4096)?;
+        assert_eq!(
+            reopened.client().recoverable_runs().err(),
+            Some(HistoryError::InvalidRun)
+        );
+        reopened.shutdown()?;
         Ok(())
     }
 
@@ -2073,7 +3170,7 @@ mod tests {
 
         for run_id in &run_ids {
             client.transition_run(run_id, RunState::Preparing, Some(DIGEST), None, None)?;
-            client.transition_run(run_id, RunState::Running, None, None, None)?;
+            client.activate_run(run_id, process_identity()?)?;
             client.transition_run(run_id, RunState::Passed, None, Some("receipt-1"), None)?;
             client.record_evidence(EvidenceDescriptor::verified(
                 run_id,

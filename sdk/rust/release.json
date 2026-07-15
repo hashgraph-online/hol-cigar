@@ -1,6 +1,6 @@
 {
   "schema_version": "cigar.sdk-release.v1",
   "name": "cigar-sdk",
-  "version": "0.1.0",
+  "version": "1.0.0-dev.1",
   "context_abi": "cigar.context.v1"
 }

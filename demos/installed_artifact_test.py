@@ -22,6 +22,17 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any, Never, Sequence
 
+ROOT = Path(__file__).resolve().parents[1]
+RELEASE_TOOLS = ROOT / "scripts" / "release"
+if str(RELEASE_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RELEASE_TOOLS))
+
+from evidence_workspace import (  # noqa: E402
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
+
 EXPECTED = "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84"
 IDENTITY = re.compile(r"^1220[0-9a-f]{64}$")
 MAX_ARTIFACT = 512 * 1024 * 1024
@@ -462,12 +473,44 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--go-archive", type=Path, required=True)
     result.add_argument("--go-mod-cache", type=Path, required=True)
     result.add_argument("--output", type=Path, required=True)
+    result.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     return result
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment and Path(argument) != Path(environment):
+        fail("--evidence-dir conflicts with CIGAR_EVIDENCE_DIR")
+    selected = argument if argument is not None else environment
+    if selected is None or os.fspath(selected) == "":
+        return None
+    path = Path(selected)
+    if not path.is_absolute():
+        fail("installed-demo evidence directory must be absolute")
+    return path
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    workspace: EvidenceWorkspace | None = None
     try:
+        selected_evidence = selected_evidence_directory(args)
+        evidence_output: str | None = None
+        if selected_evidence is not None:
+            try:
+                evidence_output = "/".join(safe_evidence_path(os.fspath(args.output)))
+            except EvidenceWorkspaceError as error:
+                raise InstallError(
+                    "installed-demo evidence output path is unsafe"
+                ) from error
+            workspace = EvidenceWorkspace.create(
+                selected_evidence, repository_root=ROOT
+            )
         for store in (
             args.cargo_home,
             args.rustup_home,
@@ -514,28 +557,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             "qualifications": qualifications,
         }
         report["report_digest"] = "1220" + hashlib.sha256(canonical(report)).hexdigest()
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        payload = canonical(report) + b"\n"
-        temporary = args.output.with_name(f".{args.output.name}.{os.getpid()}.tmp")
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, args.output)
-        finally:
-            temporary.unlink(missing_ok=True)
+        if workspace is not None:
+            assert evidence_output is not None
+            workspace.write_json(evidence_output, report)
+        else:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            payload = canonical(report) + b"\n"
+            temporary = args.output.with_name(f".{args.output.name}.{os.getpid()}.tmp")
+            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(payload)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, args.output)
+            finally:
+                temporary.unlink(missing_ok=True)
         print(EXPECTED)
         return 0
     except InstallError as error:
         print(f"installed-artifact-demo: {error}", file=sys.stderr)
         return 2
-    except (OSError, ValueError):
+    except (EvidenceWorkspaceError, OSError, ValueError):
         print(
             "installed-artifact-demo: local artifact operation failed", file=sys.stderr
         )
         return 2
+    finally:
+        if workspace is not None:
+            workspace.close()
 
 
 if __name__ == "__main__":

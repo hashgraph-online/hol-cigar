@@ -1,0 +1,58 @@
+flowchart LR
+    subgraph contextPlane ["Context management"]
+        sources[/Versioned sources/]
+        catalog[(Context catalog)]
+        contract[/Context contract/]
+        plan[Deterministic plan]
+        bundle[Bundle and manifest]
+        materialized[Materialized context]
+    end
+
+    subgraph executionPlane ["Execution and effects"]
+        agent[Agent turn]
+        tool[Tool observation]
+        decision[Decision record]
+        effect[Effect intent]
+        receipt[Journal and receipt]
+    end
+
+    subgraph evidencePlane ["Verification and replay"]
+        verification[Verification receipt]
+        archive[(Replay archive)]
+        replay[Completeness and diff]
+    end
+
+    subgraph telemetryPlane ["Operational telemetry"]
+        traceContext[W3C trace context]
+        telemetry[OTel signals]
+        backend[(OTLP backend)]
+    end
+
+    sources -->|"Ingests"| catalog
+    catalog -->|"Retrieves"| plan
+    contract -->|"Constrains"| plan
+    plan -->|"Selects"| bundle
+    bundle -->|"Renders"| materialized
+    materialized -->|"Supplies"| agent
+    agent -->|"Calls"| tool
+    tool -->|"Records"| decision
+    agent -->|"Records"| decision
+    decision -->|"Proposes"| effect
+    effect -->|"Dispatches"| receipt
+    decision -->|"Checks"| verification
+    bundle -->|"Retains"| archive
+    decision -->|"Retains"| archive
+    receipt -->|"Retains"| archive
+    verification -->|"Retains"| archive
+    archive -->|"Reproduces"| replay
+    traceContext -->|"Correlates"| plan
+    traceContext -->|"Correlates"| telemetry
+    plan -.->|"Emits"| telemetry
+    agent -.->|"Emits"| telemetry
+    receipt -.->|"Emits"| telemetry
+    telemetry -->|"Exports"| backend
+
+    style contextPlane fill:#C2E5FF,stroke:#3DADFF
+    style executionPlane fill:#FFECBD,stroke:#FFC943
+    style evidencePlane fill:#CDF4D3,stroke:#66D575
+    style telemetryPlane fill:#DCCCFF,stroke:#874FFF

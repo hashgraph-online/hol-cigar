@@ -1124,9 +1124,15 @@ def generate_manifest(items: list[dict[str, Any]]) -> None:
             },
         },
     }
-    (SDK / "capabilities-v1.json").write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+    payload = json.dumps(manifest, indent=2, ensure_ascii=True) + "\n"
+    targets = (
+        SDK / "capabilities-v1.json",
+        SDK / "python/src/cigar_sdk/capabilities-v1.json",
+        SDK / "go/capabilities-v1.json",
     )
+    for target in targets:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload, encoding="utf-8")
 
 
 GENERATED_PATHS = (
@@ -1140,6 +1146,8 @@ GENERATED_PATHS = (
     Path("go/operations_gen.go"),
     Path("go/errors_gen.go"),
     Path("capabilities-v1.json"),
+    Path("python/src/cigar_sdk/capabilities-v1.json"),
+    Path("go/capabilities-v1.json"),
 )
 
 

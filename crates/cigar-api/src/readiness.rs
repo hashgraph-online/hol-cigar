@@ -223,27 +223,30 @@ mod tests {
     }
 
     #[test]
-    fn broken_dependency_makes_sorted_report_unhealthy() -> Result<(), Box<dyn std::error::Error>> {
-        let aggregator =
-            ReadinessAggregator::new(probes(Some(ReadinessComponent::JournalIntegrity)))?;
-        let report = aggregator.report(UtcTimestamp::from_unix_nanos(10)?)?;
-        assert_eq!(report.status, HealthStatus::Unhealthy);
-        assert!(
-            report
-                .components
-                .windows(2)
-                .all(|window| match (window.first(), window.get(1)) {
+    fn every_broken_dependency_makes_sorted_report_unhealthy()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for broken in REQUIRED_COMPONENTS {
+            let aggregator = ReadinessAggregator::new(probes(Some(broken)))?;
+            let report = aggregator.report(UtcTimestamp::from_unix_nanos(10)?)?;
+            assert_eq!(report.status, HealthStatus::Unhealthy, "{broken:?}");
+            assert!(report.components.windows(2).all(|window| {
+                match (window.first(), window.get(1)) {
                     (Some(left), Some(right)) => left.name < right.name,
                     _ => false,
-                })
-        );
-        assert!(report.validate().is_ok());
-        let journal = report
-            .components
-            .iter()
-            .find(|component| component.name == "journal_integrity")
-            .ok_or("journal component missing")?;
-        assert_eq!(journal.reason, Some(ErrorCode::DependencyDegraded));
+                }
+            }));
+            assert!(report.validate().is_ok());
+            let component = report
+                .components
+                .iter()
+                .find(|component| component.name == broken.as_str())
+                .ok_or("broken readiness component missing")?;
+            assert_eq!(
+                component.reason,
+                Some(ErrorCode::DependencyDegraded),
+                "{broken:?}"
+            );
+        }
         Ok(())
     }
 

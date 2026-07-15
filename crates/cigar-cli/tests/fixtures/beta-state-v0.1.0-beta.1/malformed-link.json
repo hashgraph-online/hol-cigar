@@ -1,0 +1,1 @@
+{"schema_version":"cigar.cli-administration.v1","generation":1,"projects":{"one":{"path":"/Users/example/one","attached":true}},"sources":{},"links":[{"from":"one","to":"missing"}]}

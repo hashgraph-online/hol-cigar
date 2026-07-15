@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/local-scale-preflight-v1.schema.json",
+  "title": "CIGAR native macOS local-scale capacity preflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result",
+    "release_scale_qualified",
+    "started_at_unix_nanos",
+    "finished_at_unix_nanos",
+    "platform_scope",
+    "targets",
+    "observed",
+    "blockers",
+    "architecture",
+    "capacity_model",
+    "source",
+    "environment",
+    "checks",
+    "claims",
+    "required_remediation",
+    "receipt_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.local-scale-preflight.v1"},
+    "result": {"enum": ["blocked", "passed-preflight"]},
+    "release_scale_qualified": {"const": false},
+    "started_at_unix_nanos": {"type": "integer", "minimum": 0},
+    "finished_at_unix_nanos": {"type": "integer", "minimum": 0},
+    "platform_scope": {"const": "aarch64-apple-darwin"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["atoms", "edges", "referenced_blob_bytes", "referenced_blob_unit"],
+      "properties": {
+        "atoms": {"const": 1000000},
+        "edges": {"const": 10000000},
+        "referenced_blob_bytes": {"const": 107374182400},
+        "referenced_blob_unit": {"const": "logical bytes"}
+      }
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["atoms", "edges", "referenced_blob_bytes"],
+      "properties": {
+        "atoms": {"type": "null"},
+        "edges": {"type": "null"},
+        "referenced_blob_bytes": {"type": "null"}
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "normalized_record_payload_exceeds_large_local_capacity",
+          "large_local_profile_quotas_do_not_cover_target",
+          "large_local_initial_free_space_below_requirement",
+          "source_worktree_is_not_clean"
+        ]
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "standard_maximum_database_bytes",
+        "large_local_maximum_database_bytes",
+        "large_local_minimum_initial_free_bytes",
+        "large_local_minimum_runtime_reserve_bytes",
+        "large_local_maximum_atoms",
+        "large_local_maximum_edges",
+        "large_local_maximum_referenced_blob_bytes",
+        "catalog_schema_version",
+        "authoritative_state_encoding",
+        "commit_rewrites_complete_catalog",
+        "read_decodes_complete_catalog",
+        "normalized_catalog_tables_are_authoritative",
+        "legacy_sql_catalog_tables_are_authoritative",
+        "normalized_atom_insert_occurrences",
+        "normalized_edge_insert_occurrences",
+        "integrity_bucket_count",
+        "capacity_profile_binding",
+        "atom_projection_kind"
+      ],
+      "properties": {
+        "standard_maximum_database_bytes": {"const": 4294967296},
+        "large_local_maximum_database_bytes": {"const": 68719476736},
+        "large_local_minimum_initial_free_bytes": {"const": 322122547200},
+        "large_local_minimum_runtime_reserve_bytes": {"const": 17179869184},
+        "large_local_maximum_atoms": {"const": 1250000},
+        "large_local_maximum_edges": {"const": 12500000},
+        "large_local_maximum_referenced_blob_bytes": {"const": 137438953472},
+        "catalog_schema_version": {"const": 4},
+        "authoritative_state_encoding": {"const": "sqlite-v4-normalized-catalog-plus-cbor-residual"},
+        "commit_rewrites_complete_catalog": {"const": false},
+        "read_decodes_complete_catalog": {"const": false},
+        "normalized_catalog_tables_are_authoritative": {"const": true},
+        "legacy_sql_catalog_tables_are_authoritative": {"const": false},
+        "normalized_atom_insert_occurrences": {"const": 1},
+        "normalized_edge_insert_occurrences": {"const": 1},
+        "integrity_bucket_count": {"const": 65536},
+        "capacity_profile_binding": {"const": "immutable-sqlite-authority-singleton"},
+        "atom_projection_kind": {"const": "disposable-generation-bound-sql-and-fts"}
+      }
+    },
+    "capacity_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_kind",
+        "record_probe",
+        "per_atom_record_bytes",
+        "per_edge_record_bytes",
+        "modeled_atom_record_bytes",
+        "modeled_edge_record_bytes",
+        "modeled_catalog_record_bytes",
+        "large_local_database_capacity_bytes",
+        "capacity_headroom_before_excluded_overhead_bytes",
+        "capacity_fraction_before_excluded_overhead",
+        "record_payload_lower_bound_fits",
+        "logical_targets_within_profile_quotas",
+        "excluded_overhead"
+      ],
+      "properties": {
+        "model_kind": {"const": "normalized-v4-record-cbor-payload-lower-bound"},
+        "record_probe": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "atom_cbor_bytes",
+            "edge_cbor_bytes",
+            "uuid_cbor_text_bytes",
+            "version_cbor_text_bytes"
+          ],
+          "properties": {
+            "schema_version": {"const": "cigar.local-scale-record-probe.v1"},
+            "atom_cbor_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+            "edge_cbor_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+            "uuid_cbor_text_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+            "version_cbor_text_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+          }
+        },
+        "per_atom_record_bytes": {"type": "integer", "minimum": 1},
+        "per_edge_record_bytes": {"type": "integer", "minimum": 1},
+        "modeled_atom_record_bytes": {"type": "integer", "minimum": 1},
+        "modeled_edge_record_bytes": {"type": "integer", "minimum": 1},
+        "modeled_catalog_record_bytes": {"type": "integer", "minimum": 1},
+        "large_local_database_capacity_bytes": {"const": 68719476736},
+        "capacity_headroom_before_excluded_overhead_bytes": {"type": "integer", "minimum": 0},
+        "capacity_fraction_before_excluded_overhead": {"type": "number", "exclusiveMinimum": 0},
+        "record_payload_lower_bound_fits": {"type": "boolean"},
+        "logical_targets_within_profile_quotas": {"type": "boolean"},
+        "excluded_overhead": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 256}
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "files", "git", "source_descriptor_bound"],
+      "properties": {
+        "algorithm": {"const": "sha256-length-prefixed-canonical-file-inventory-v1"},
+        "digest": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "bytes"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "bytes": {"type": "integer", "minimum": 0, "maximum": 67108864}
+            }
+          }
+        },
+        "git": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commit", "clean", "status_entry_count", "status_sha256"],
+          "properties": {
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+            "clean": {"type": "boolean"},
+            "status_entry_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "status_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "source_descriptor_bound": {"const": true}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "machine",
+        "release",
+        "python",
+        "rustc",
+        "cargo",
+        "logical_cpus",
+        "filesystem_path",
+        "filesystem_device",
+        "filesystem_inode",
+        "filesystem_total_bytes",
+        "filesystem_free_bytes"
+      ],
+      "properties": {
+        "system": {"const": "Darwin"},
+        "machine": {"const": "arm64"},
+        "release": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "python": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "rustc": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "cargo": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "logical_cpus": {"type": "integer", "minimum": 1},
+        "filesystem_path": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^/"},
+        "filesystem_device": {"type": "integer", "minimum": 0},
+        "filesystem_inode": {"type": "integer", "minimum": 1},
+        "filesystem_total_bytes": {"type": "integer", "minimum": 1},
+        "filesystem_free_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "detail"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "status": {"enum": ["passed", "blocked", "not-run"]},
+          "detail": {"type": "string", "minLength": 1, "maxLength": 1024}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "physical_scale_execution_attempted",
+        "one_million_physical_atoms",
+        "ten_million_physical_edges",
+        "one_hundred_gib_referenced_blobs",
+        "legacy_sql_tables_treated_as_production",
+        "fuzz_executed",
+        "soak_executed"
+      ],
+      "properties": {
+        "physical_scale_execution_attempted": {"const": false},
+        "one_million_physical_atoms": {"const": false},
+        "ten_million_physical_edges": {"const": false},
+        "one_hundred_gib_referenced_blobs": {"const": false},
+        "legacy_sql_tables_treated_as_production": {"const": false},
+        "fuzz_executed": {"const": false},
+        "soak_executed": {"const": false}
+      }
+    },
+    "required_remediation": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "provision a native Apple-silicon macOS volume with at least 300 GiB available before large_local activation"},
+        {"const": "run this gate against the installed macOS artifact at 1M atoms, 10M edges, and at least 100GB referenced blobs"},
+        {"const": "verify catalog roots, exact replay, quota enforcement, backup, and restore after the physical scale run"}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "receipt_id": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"}
+  }
+}

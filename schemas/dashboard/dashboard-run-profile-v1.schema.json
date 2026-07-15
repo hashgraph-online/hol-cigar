@@ -28,7 +28,7 @@
         "executable": {"enum": ["cargo", "python3", "cigar-soak"]},
         "argv": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 512}},
         "working_directory": {"enum": ["workspace", "isolated_sandbox", "installed_candidate"]},
-        "availability_state": {"enum": ["available", "command_not_implemented"]},
+        "availability_state": {"enum": ["available", "control_disabled", "tool_missing", "platform_unsupported", "source_checkout_required", "dependency_cache_missing", "credential_missing", "command_not_implemented"]},
         "availability_probes": {
           "type": "array",
           "minItems": 1,

@@ -370,12 +370,15 @@ impl RunningDaemon {
             transport.with_maximum_expanded_request_bytes(server.config.max_request_bytes)
         })
         .map_err(|_error| DaemonError::new(DaemonErrorCode::InvalidConfiguration))?;
+        let metrics_observer: Arc<dyn cigar_api::TransportMetricsObserver> =
+            server.dependencies.telemetry.clone();
         let network_kernel = server.authorities.network.as_ref().map(|authority| {
             ServiceKernel::new(
                 Arc::clone(&server.service_facade),
                 Arc::clone(authority),
                 transport,
             )
+            .with_metrics_observer(Arc::clone(&metrics_observer))
         });
         let ipc_kernel = server.authorities.local_ipc.as_ref().map(|authority| {
             ServiceKernel::new(
@@ -383,6 +386,7 @@ impl RunningDaemon {
                 Arc::clone(authority),
                 transport,
             )
+            .with_metrics_observer(Arc::clone(&metrics_observer))
         });
 
         #[cfg(unix)]
@@ -907,12 +911,18 @@ mod tests {
     };
     use base64::Engine as _;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    #[cfg(target_os = "macos")]
+    use cigar_api::generated::{
+        HttpMethod, IdempotencyRequirement, OPERATIONS, OperationContract, RevisionRequirement,
+        StreamKind,
+    };
     use cigar_api::{
-        ApiError, CancellationToken, FacadeEventStream, OperationId, ProbeObservation,
-        ReadinessAggregator, ReadinessComponent, ReadinessProbe, RequestContext, RequestEnvelope,
-        ResponseEnvelope, ServiceFacade, ServiceFuture, TenantId, TraceId,
+        ApiError, CancellationToken, EventEnvelope, FacadeEventStream, OperationId,
+        ProbeObservation, ReadinessAggregator, ReadinessComponent, ReadinessProbe, RequestContext,
+        RequestEnvelope, ResponseEnvelope, ServiceFacade, ServiceFuture, TenantId, TraceId,
     };
     use cigar_protocol::{ErrorCode, RecordId, UtcTimestamp};
+    use futures_core::Stream;
     use rcgen::{
         BasicConstraints, CertificateParams, CertifiedIssuer, ExtendedKeyUsagePurpose, IsCa,
         KeyPair, KeyUsagePurpose, SanType,
@@ -920,13 +930,20 @@ mod tests {
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
     use rustls::{ClientConfig, RootCertStore};
     use serde_json::json;
+    #[cfg(target_os = "macos")]
+    use std::fmt::Write as _;
     use std::net::SocketAddr;
     use std::path::{Path, PathBuf};
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::task::{Context, Poll};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
     use tokio_rustls::TlsConnector;
+
+    #[cfg(target_os = "macos")]
+    type OperationPathBindings = (String, Vec<(String, String)>);
 
     struct SuccessfulStartup(StartupStep);
 
@@ -1179,6 +1196,19 @@ mod tests {
         correlation: RecordId,
     }
 
+    struct OneEvent(Option<EventEnvelope>);
+
+    impl Stream for OneEvent {
+        type Item = Result<EventEnvelope, ApiError>;
+
+        fn poll_next(
+            mut self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Option<Self::Item>> {
+            Poll::Ready(self.0.take().map(Ok))
+        }
+    }
+
     impl ServiceFacade for TestFacade {
         fn call<'a>(
             &'a self,
@@ -1197,10 +1227,16 @@ mod tests {
         fn subscribe<'a>(
             &'a self,
             _context: RequestContext,
-            _request: RequestEnvelope,
+            request: RequestEnvelope,
         ) -> ServiceFuture<'a, Result<FacadeEventStream, ApiError>> {
-            let error = ApiError::new(ErrorCode::Internal, self.correlation.clone());
-            Box::pin(async move { Err(error) })
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let operation = request.operation_id().as_str().to_owned();
+            let correlation = self.correlation.clone();
+            Box::pin(async move {
+                let event = EventEnvelope::new(operation, "event-1", vec![0xf6])
+                    .map_err(|_error| ApiError::new(ErrorCode::Internal, correlation))?;
+                Ok(Box::pin(OneEvent(Some(event))) as FacadeEventStream)
+            })
         }
     }
 
@@ -1310,6 +1346,7 @@ mod tests {
     fn local_tcp_config(root: &Path, address: SocketAddr) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.join("runtime"),
             unix_socket: None,
@@ -1320,6 +1357,7 @@ mod tests {
             tls: None,
             oidc: None,
             production: production_paths(root),
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 1_000,
             shutdown_deadline_ms: 2_000,
@@ -1334,6 +1372,7 @@ mod tests {
     fn shared_config(root: &Path, tls: TlsFiles, grpc_address: SocketAddr) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Shared,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.join("runtime"),
             unix_socket: None,
@@ -1352,6 +1391,7 @@ mod tests {
                 max_token_bytes: 4_096,
             }),
             production: production_paths(root),
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: Some(shared_storage(root)),
             request_deadline_ms: 1_000,
             shutdown_deadline_ms: 2_000,
@@ -1367,6 +1407,7 @@ mod tests {
     fn local_unix_config(root: &Path) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Local,
+            local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.to_path_buf(),
             unix_socket: Some(root.join("cigard.sock")),
@@ -1377,6 +1418,7 @@ mod tests {
             tls: None,
             oidc: None,
             production: production_paths(root),
+            local_vector: crate::LocalVectorSettings::default(),
             shared_storage: None,
             request_deadline_ms: 1_000,
             shutdown_deadline_ms: 2_000,
@@ -1401,6 +1443,7 @@ mod tests {
     fn telemetry_settings() -> crate::TelemetrySettings {
         crate::TelemetrySettings {
             otlp_endpoint: None,
+            otlp_ca_certificate_file: None,
             export_timeout_ms: 1_000,
             metric_interval_ms: 1_000,
         }
@@ -1468,6 +1511,81 @@ mod tests {
         let mut response = Vec::new();
         stream.read_to_end(&mut response).await?;
         Ok(String::from_utf8(response)?)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn operation_path_and_parameters(
+        template: &str,
+    ) -> Result<OperationPathBindings, Box<dyn std::error::Error>> {
+        let mut path = template.to_owned();
+        let mut parameters = Vec::new();
+        while let Some(open) = path.find('{') {
+            let relative_close = path[open + 1..]
+                .find('}')
+                .ok_or("unclosed operation path template")?;
+            let close = open + 1 + relative_close;
+            let name = path[open + 1..close].to_owned();
+            let value = format!("{name}-v1").replace('_', "-");
+            path.replace_range(open..=close, &value);
+            parameters.push((name, value));
+        }
+        parameters.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        Ok((path, parameters))
+    }
+
+    #[cfg(target_os = "macos")]
+    fn unix_operation_request(
+        operation: &OperationContract,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let (path, parameters) = operation_path_and_parameters(operation.http_path)?;
+        let idempotency = (operation.idempotency_requirement == IdempotencyRequirement::Required)
+            .then_some("unix-matrix-key");
+        let revision = (operation.revision_requirement == RevisionRequirement::Required)
+            .then_some("unix-matrix-revision");
+        let mut headers = String::new();
+        if let Some(value) = idempotency {
+            write!(&mut headers, "Idempotency-Key: {value}\r\n")?;
+        }
+        if let Some(value) = revision {
+            write!(&mut headers, "If-Match: {value}\r\n")?;
+        }
+        let method = match operation.http_method {
+            HttpMethod::Get => "GET",
+            HttpMethod::Post => "POST",
+        };
+        if operation.http_method == HttpMethod::Get {
+            return Ok(format!(
+                "{method} {path} HTTP/1.1\r\nHost: local\r\n{headers}Connection: close\r\n\r\n"
+            )
+            .into_bytes());
+        }
+
+        let path_parameters = parameters
+            .into_iter()
+            .map(|(name, value)| json!({"name": name, "value": value}))
+            .collect::<Vec<_>>();
+        let mut body = json!({
+            "operation_id": operation.operation_id,
+            "payload_cbor": URL_SAFE_NO_PAD.encode([0xa0]),
+            "path_parameters": path_parameters,
+        });
+        let object = body
+            .as_object_mut()
+            .ok_or("operation request body must be an object")?;
+        if let Some(value) = idempotency {
+            object.insert("idempotency_key".to_owned(), json!(value));
+        }
+        if let Some(value) = revision {
+            object.insert("expected_revision".to_owned(), json!(value));
+        }
+        let body = serde_json::to_vec(&body)?;
+        let mut request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: local\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .into_bytes();
+        request.extend_from_slice(&body);
+        Ok(request)
     }
 
     fn readiness_payload(response: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -1613,6 +1731,14 @@ mod tests {
             .ok_or("metadata readiness component missing")?;
         assert_eq!(metadata.get("status"), Some(&json!("unhealthy")));
         assert_eq!(metadata.get("reason"), Some(&json!("DEPENDENCY_DEGRADED")));
+        let unhealthy_diagnostics =
+            tcp_get(address, "/v1/diagnostics", Some(&authorization)).await?;
+        assert!(unhealthy_diagnostics.starts_with("HTTP/1.1 200"));
+        let unhealthy_diagnostics_payload = readiness_payload(&unhealthy_diagnostics)?;
+        assert_eq!(
+            unhealthy_diagnostics_payload.get("ready"),
+            Some(&json!(false))
+        );
         inputs.dependency_health.store(true, Ordering::Release);
         readiness.close();
         let closed_lifecycle_gate = tcp_get(address, "/readyz", None).await?;
@@ -1787,6 +1913,93 @@ mod tests {
         assert!(response.contains("\"operation_id\":\"getVersion\""));
         running.shutdown().await?;
         assert!(!readiness.is_open());
+        assert!(!socket.exists());
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn macos_unix_socket_routes_all_45_operations_through_the_generated_contract()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let root = directory.path().canonicalize()?;
+        let config = local_unix_config(&root);
+        let socket = config
+            .unix_socket
+            .clone()
+            .ok_or_else(|| std::io::Error::other("Unix socket missing"))?;
+        let inputs = test_inputs()?;
+        let facade = Arc::clone(&inputs.facade);
+        let server = DaemonServer::local(
+            config,
+            inputs.dependencies,
+            LocalIdentity::new("tenant-local", "user-local")?,
+        )?;
+        let running = server.start().await?;
+        let mut observed = Vec::with_capacity(OPERATIONS.len());
+
+        for operation in OPERATIONS {
+            let mut stream = tokio::net::UnixStream::connect(&socket).await?;
+            stream
+                .write_all(&unix_operation_request(operation)?)
+                .await?;
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).await?;
+            let response = String::from_utf8(response)?;
+            assert!(
+                response.starts_with("HTTP/1.1 200"),
+                "{} returned a non-success response",
+                operation.operation_id
+            );
+            if operation.operation_id == "getMetrics" {
+                let (headers, body) = response
+                    .split_once("\r\n\r\n")
+                    .ok_or("OpenMetrics response body missing")?;
+                let content_type = headers.lines().find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-type")
+                        .then(|| value.trim())
+                });
+                assert_eq!(
+                    content_type,
+                    Some("application/openmetrics-text; version=1.0.0; charset=utf-8")
+                );
+                assert!(body.len() <= cigar_api::MAX_OPERATION_PAYLOAD_BYTES);
+                assert!(body.ends_with("# EOF\n"));
+            } else if operation.stream_kind == StreamKind::ServerStream {
+                assert!(response.contains("id: event-1"));
+                assert!(
+                    response.contains(&format!("\"operation_id\":\"{}\"", operation.operation_id))
+                );
+            } else {
+                let (_headers, body) = response
+                    .split_once("\r\n\r\n")
+                    .ok_or("HTTP response body missing")?;
+                let wire: serde_json::Value = serde_json::from_str(body)?;
+                assert_eq!(
+                    wire.get("operation_id").and_then(serde_json::Value::as_str),
+                    Some(operation.operation_id)
+                );
+            }
+            observed.push(operation.operation_id);
+        }
+
+        assert_eq!(observed.len(), 45);
+        assert_eq!(
+            observed,
+            OPERATIONS
+                .iter()
+                .map(|entry| entry.operation_id)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            facade.calls.load(Ordering::SeqCst),
+            OPERATIONS
+                .iter()
+                .filter(|entry| entry.service != "OperationsService")
+                .count()
+        );
+        running.shutdown().await?;
         assert!(!socket.exists());
         Ok(())
     }

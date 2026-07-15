@@ -60,6 +60,17 @@ python3 demos/run.py \
   --output-dir reports/demos
 ```
 
+For protected evidence, select one canonical absolute external directory and
+keep `--output-dir` relative. Records and the run summary are then published
+create-new at mode `0400`; selector conflicts, repository-local destinations,
+unsafe traversal, aliases, and overwrite fail closed. Child product processes
+do not inherit the evidence selector.
+
+```sh
+export CIGAR_EVIDENCE_DIR=/private/path/to/new-cigar-evidence
+python3 demos/run.py --validate-only --output-dir demos/validation
+```
+
 `--validate-only` verifies the inventory, manifests, fixture digests, seeds, and
 canary bindings without running drivers or product assertions. `--live` is
 accepted only for a demo that explicitly declares a live check and all of its
@@ -97,6 +108,12 @@ fixture-bound bundle identity:
 python3 demos/sdk-clients/run.py --output reports/demos/sdk-quickstarts.json
 ```
 
+The SDK and installed-artifact drivers accept the same `--evidence-dir` or
+`CIGAR_EVIDENCE_DIR` selector. When selected, `--output` is a safe relative path
+inside that external workspace and is canonical, private, read-only, and
+create-new. With no explicit SDK `--output`, protected mode uses
+`demos/sdk-quickstarts.json`.
+
 The source report uses
 `qualification_scope: recorded-ingest-compile-manifest` and sets
 `sdk_workflow_qualified: true` only when all four runtimes pass the exact
@@ -110,15 +127,15 @@ installs each into a clean temporary root, and never falls back to source:
 ```sh
 python3 demos/installed_artifact_test.py \
   --cigar-binary dist/bin/cigar \
-  --expected-version 0.1.0 \
-  --rust-archive dist/sdk/cigar-sdk-0.1.0.crate \
+  --expected-version 1.0.0-dev.1 \
+  --rust-archive dist/sdk/cigar-sdk-1.0.0-dev.1.crate \
   --cargo-home dist/offline/cargo-home \
   --rustup-home dist/offline/rustup-home \
-  --typescript-tarball dist/sdk/cigar-sdk-0.1.0.tgz \
+  --typescript-tarball dist/sdk/cigar-sdk-1.0.0-dev.1.tgz \
   --pnpm-store dist/offline/pnpm-store \
-  --python-wheel dist/sdk/cigar_sdk-0.1.0-py3-none-any.whl \
+  --python-wheel dist/sdk/cigar_sdk-1.0.0.dev1-py3-none-any.whl \
   --python-wheelhouse dist/sdk/wheelhouse \
-  --go-archive dist/sdk/cigar-go-sdk-0.1.0.tar.gz \
+  --go-archive dist/sdk/cigar-go-sdk-1.0.0-dev.1.tar.gz \
   --go-mod-cache dist/offline/go-mod-cache \
   --output reports/demos/installed-artifacts.json
 ```

@@ -1,0 +1,33 @@
+{
+  "schema_version": "cigar.test-matrix.v1",
+  "suite": "models",
+  "description": "Apple-silicon macOS production-linked bounded Loom schedule models for the seven reviewed concurrent publication surfaces.",
+  "cases": [
+    {
+      "id": "MODEL-LOOM-001",
+      "title": "All seven production-linked bounded concurrency models and their source/configuration bindings preserve publication, fencing, cursor, invalidation, and shutdown invariants.",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--config-file",
+        "tests/properties/.config/nextest.toml",
+        "--user-config-file",
+        "none",
+        "-P",
+        "macos-qualification",
+        "--no-tests",
+        "fail",
+        "--manifest-path",
+        "tests/properties/Cargo.toml",
+        "--test",
+        "concurrency_models"
+      ],
+      "timeout_seconds": 3600,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["MODEL-LOOM-001", "VER-CONCURRENCY-001"]
+    }
+  ]
+}

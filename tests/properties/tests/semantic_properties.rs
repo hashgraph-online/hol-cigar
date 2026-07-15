@@ -12,6 +12,9 @@ use cigar_protocol::{
 };
 use proptest::collection::{btree_map, btree_set, vec};
 use proptest::prelude::*;
+use proptest::test_runner::RngSeed;
+
+const QUALIFICATION_SEED: u64 = 0x00c1_6a19_0007_0512;
 
 fn canonical_node() -> impl Strategy<Value = CanonicalNode> {
     let leaf = prop_oneof![
@@ -29,8 +32,7 @@ fn canonical_node() -> impl Strategy<Value = CanonicalNode> {
 }
 
 fn record(number: u16) -> RecordId {
-    RecordId::new(format!("01890f47-8e7d-7b42-a1d2-3c4d5e6f{number:04x}"))
-        .expect("fixed record ID")
+    RecordId::new(format!("01890f47-8e7d-7b42-a1d2-3c4d5e6f{number:04x}")).expect("fixed record ID")
 }
 
 fn time(nanos: i128) -> UtcTimestamp {
@@ -41,6 +43,7 @@ proptest! {
     #![proptest_config(ProptestConfig {
         cases: 512,
         max_shrink_iters: 16_384,
+        rng_seed: RngSeed::Fixed(QUALIFICATION_SEED),
         failure_persistence: Some(Box::new(proptest::test_runner::FileFailurePersistence::Direct(
             "regressions/semantic-properties.txt",
         ))),

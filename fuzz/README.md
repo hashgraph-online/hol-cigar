@@ -46,17 +46,43 @@ The deterministic canonical trust-boundary mutation slice remains available for 
 python3 tools/quality/fuzz_and_mutation.py mutation --evidence-dir "$EVIDENCE_DIR"
 ```
 
-The legacy combined `verify` and `all` routes intentionally fail closed before verification or
-execution. The retained mutation receipt does not yet preserve a bounded raw outcome attachment
-from which every cargo-mutants metric can be independently recomputed, so it cannot authorize a
-combined smoke/mutation claim. Until that evidence format and its substitution tests are
-implemented, only `verify-smoke` is a qualifying verifier; the representative mutation slice also
-does not claim the PRD's full four-hour release-candidate campaign.
+The legacy combined `verify` and `all` routes intentionally remain separate and fail closed. The
+full mutation-only gate is `cargo xtask test mutations --verify`; it accepts only a clean committed
+native Apple-silicon macOS candidate, exact cargo-mutants 27.1.0 raw outcomes, all 24 production
+packages, the reviewed source exclusions, at least four observed hours, score >= 90%, zero
+timeouts, and zero viable critical survivor. It publishes and then independently reopens a
+source-bound attachment. The current bounded cohort did not run that campaign and therefore has no
+passing mutation qualification evidence.
 
 `CIGAR_EVIDENCE_DIR` is equivalent to `--evidence-dir`. The runner rejects repository-internal,
 group/world-writable, and existing receipt destinations. It never overwrites a receipt.
 
 ## Corpus inventory and minimization
+
+Historical crashes are ordinary deterministic regressions, not short fuzz runs. The canonical
+`historical-crashes.v1.json` manifest embeds the exact fixture bytes and SHA-1/SHA-256 identities,
+binds the campaign, corpus policy, MCP implementation/test sources, locked dependency graph,
+Nextest policy, runner, and bounded-process implementation, and permits only exact Nextest test
+selectors. Its closed-world inventory covers every `minimized-regression` in the corpus policy,
+every file below `fuzz/regressions/` and `fuzz/artifacts/`, and any otherwise-unclassified
+crash/leak/OOM/timeout/regression-looking corpus file. Missing, additional, remapped, duplicated,
+case-aliased, linked, special, or tampered inputs fail before a test starts.
+
+The current inventory has two MCP regressions: the historical out-of-range numeric request ID and
+the non-finite backend-number response. `effect_journal_recovery/crash-seed` remains explicitly a
+hand-authored semantic seed for modeled crash recovery, not a preserved historical fuzzer failure.
+Verify the inventory without executing tests, or run only the two exact native-macOS regressions:
+
+```sh
+python3 tools/quality/historical_crashes.py verify
+python3 tools/quality/historical_crashes.py run
+```
+
+`run` requires native Apple-silicon macOS, locked/offline Cargo, the strict serial
+`macos-qualification` profile, bounded private output, and an unchanged manifest/source/fixture
+snapshot before and after execution. It never invokes cargo-fuzz, soak, or mutation tooling. The
+same command is `SEC-MCP-002` in the security matrix, so `cargo xtask test security` records it in
+the existing source-bound, content-free matrix receipt path.
 
 `corpus-policy.v1.json` pins all hand-authored seeds and the minimized MCP numeric-ID regression,
 sets distinct checked-in/minimized and disposable-worker byte/count ceilings, and defines
@@ -161,6 +187,15 @@ the source digest, target, sanitizer, corpus digest, toolchain, start/end times,
 crash count. Crashes, hangs, sanitizer failures, or missing targets reset the clean campaign for the
 affected target. A short smoke run proves harness viability but never satisfies the seven-day-
 equivalent release threshold.
+
+`tools/quality/fuzz_accumulation.py` maintains the cumulative evidence without launching a fuzzer.
+`append` verifies a signed worker bundle and publishes one immutable hash-chained entry; `inspect`
+checks a partial ledger; `verify` additionally requires every one of the 14 targets to have at
+least 604,800 clean CPU-seconds and the exact 8,467,200-second aggregate. It rejects replayed IDs,
+overlap, clock reversal, mixed candidates, untrusted workers, stale binary/toolchain/source
+bindings, corrupt corpus lineage, and post-defect accumulation. `recover` removes only bounded
+tool-owned pending entry files after an interrupted append. Worker corpora remain private and
+writable only to that worker; reviewed minimization uses `corpus_manager.py` on external copies.
 
 Rust's supported `cargo-fuzz` sanitizer for this native release smoke is AddressSanitizer. Strict
 Miri provenance and alignment interpretation is recorded separately as the supplemental memory

@@ -916,4 +916,21 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn manifest_has_no_direct_daemon_storage_or_semantic_dependency()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let manifest = include_str!("../Cargo.toml");
+        for forbidden in [
+            "cigar-daemon",
+            "cigar-store",
+            "cigar-protocol",
+            "cigar-effects",
+            "cigar-policy",
+            "cigar-space",
+        ] {
+            assert!(!manifest.contains(forbidden));
+        }
+        Ok(())
+    }
 }

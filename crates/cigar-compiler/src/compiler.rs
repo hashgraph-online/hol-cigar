@@ -34,7 +34,7 @@ impl DeterministicCompiler {
         validate_profile(&request.profile)?;
         validate_frozen(&contract, &request.profile, &request.frozen)?;
         let contract_digest = contract_digest(&contract)?;
-        let mut candidates = canonical_candidates(request.candidates)?;
+        let mut candidates = canonical_candidates(request.candidates, contract.requirements.len())?;
         validate_dependencies(&candidates)?;
         let mut dispositions = initial_dispositions(&candidates)?;
         reconcile_logical_duplicates(&mut candidates, &mut dispositions);
@@ -51,10 +51,12 @@ impl DeterministicCompiler {
             insert_with_closure(&version, &eligible, &request.profile, true, &mut selected)?;
         }
         enforce_budget(&contract, &selected)?;
+        enforce_profile_item_limits(&request.profile, &eligible, &selected, false)?;
         satisfy_lane_minima(&contract, &request.profile, &eligible, &mut selected)?;
         pack_optional(&contract, &request.profile, &eligible, &mut selected)?;
         local_swaps(&contract, &request.profile, &eligible, &mut selected)?;
         enforce_budget(&contract, &selected)?;
+        enforce_profile_item_limits(&request.profile, &eligible, &selected, true)?;
         ensure_blocking_requirements(&contract, &selected)?;
 
         finalize_dispositions(&candidates, &selected, &mut dispositions)?;
@@ -130,6 +132,7 @@ fn validate_frozen(
 
 fn canonical_candidates(
     candidates: Vec<CompilerCandidate>,
+    requirement_count: usize,
 ) -> Result<BTreeMap<VersionId, CompilerCandidate>, CompilerError> {
     if candidates.len() > MAX_CANDIDATES {
         return Err(CompilerError::new(CompilerErrorCode::LimitExceeded));
@@ -140,7 +143,13 @@ fn canonical_candidates(
             .features
             .balanced_score()
             .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
-        if candidate.representations.is_empty() || candidate.requirement_indices.len() > 1_024 {
+        if candidate.representations.is_empty()
+            || candidate.requirement_indices.len() > 1_024
+            || candidate
+                .requirement_indices
+                .iter()
+                .any(|index| *index >= requirement_count)
+        {
             return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
         }
         candidate.representations.sort_by(representation_order);
@@ -276,7 +285,8 @@ fn reconcile_claims(
                 .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
             if winner_claim.value_digest != loser_claim.value_digest {
                 if claim_rank(winner_candidate) == claim_rank(loser_candidate)
-                    && matches!(winner_candidate.lane, LaneKind::Rules | LaneKind::Task)
+                    && (matches!(winner_candidate.lane, LaneKind::Rules | LaneKind::Task)
+                        || matches!(loser_candidate.lane, LaneKind::Rules | LaneKind::Task))
                 {
                     return Err(CompilerError::new(
                         CompilerErrorCode::UnresolvedCriticalConflict,
@@ -296,13 +306,13 @@ fn reconcile_claims(
     Ok(())
 }
 
-fn claim_rank(candidate: &CompilerCandidate) -> (u16, bool, i128, i128) {
-    candidate.claim.as_ref().map_or((0, false, 0, 0), |claim| {
+fn claim_rank(candidate: &CompilerCandidate) -> (i128, i128, u16, bool) {
+    candidate.claim.as_ref().map_or((0, 0, 0, false), |claim| {
         (
-            claim.authority,
-            claim.verified,
             claim.valid_at.unix_nanos(),
             claim.observed_at.unix_nanos(),
+            claim.authority,
+            claim.verified,
         )
     })
 }
@@ -483,6 +493,9 @@ fn satisfy_lane_minima(
     selected: &mut BTreeMap<VersionId, Selection>,
 ) -> Result<(), CompilerError> {
     for (lane, minimum) in &profile.minimum_items {
+        if !eligible.values().any(|candidate| candidate.lane == *lane) {
+            continue;
+        }
         while selected
             .values()
             .filter(|selection| &selection.candidate.lane == lane)
@@ -514,11 +527,14 @@ fn pack_optional(
         if candidate_utility(&eligible[&version], &representation, profile)? <= 0 {
             continue;
         }
-        let Some(proposed_usage) = usage_with_closure(&version, eligible, profile, selected, &used)
+        let Some((proposed_usage, additions)) =
+            usage_with_closure(&version, eligible, profile, selected, &used)
         else {
             continue;
         };
-        if !usage_fits(contract, &proposed_usage) {
+        if !usage_fits(contract, &proposed_usage)
+            || !additions_respect_item_maxima(&additions, eligible, profile, selected)
+        {
             continue;
         }
         insert_with_closure(&version, eligible, profile, false, selected)?;
@@ -571,7 +587,10 @@ fn closure_fits(
     current_usage(selected)
         .ok()
         .and_then(|used| usage_with_closure(version, eligible, profile, selected, &used))
-        .is_some_and(|used| usage_fits(contract, &used))
+        .is_some_and(|(used, additions)| {
+            usage_fits(contract, &used)
+                && additions_respect_item_maxima(&additions, eligible, profile, selected)
+        })
 }
 
 fn current_usage(
@@ -593,7 +612,7 @@ fn usage_with_closure(
     profile: &CompilerProfile,
     selected: &BTreeMap<VersionId, Selection>,
     used: &BTreeMap<LaneKind, u32>,
-) -> Option<BTreeMap<LaneKind, u32>> {
+) -> Option<(BTreeMap<LaneKind, u32>, BTreeSet<VersionId>)> {
     let mut proposed = used.clone();
     let mut additions = BTreeSet::new();
     collect_closure_cost(
@@ -606,7 +625,28 @@ fn usage_with_closure(
         &mut proposed,
     )
     .ok()?;
-    Some(proposed)
+    Some((proposed, additions))
+}
+
+fn additions_respect_item_maxima(
+    additions: &BTreeSet<VersionId>,
+    eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    profile: &CompilerProfile,
+    selected: &BTreeMap<VersionId, Selection>,
+) -> bool {
+    let mut counts = BTreeMap::<LaneKind, usize>::new();
+    for selection in selected.values() {
+        *counts.entry(selection.candidate.lane).or_default() += 1;
+    }
+    for version in additions {
+        let Some(candidate) = eligible.get(version) else {
+            return false;
+        };
+        *counts.entry(candidate.lane).or_default() += 1;
+    }
+    profile.maximum_items.iter().all(|(lane, maximum)| {
+        counts.get(lane).copied().unwrap_or_default() <= usize::from(*maximum)
+    })
 }
 
 fn usage_fits(contract: &ContextContract, used: &BTreeMap<LaneKind, u32>) -> bool {
@@ -703,7 +743,7 @@ fn local_swaps(
             for added in &alternatives {
                 let mut proposed = base.clone();
                 insert_with_closure(added, eligible, profile, false, &mut proposed)?;
-                if enforce_budget(contract, &proposed).is_ok()
+                if repaired_selection_is_feasible(contract, profile, eligible, &proposed)
                     && proposed
                         .get(added)
                         .is_some_and(|selection| selection.utility > removed_selection.utility)
@@ -726,7 +766,7 @@ fn local_swaps(
                         })
                         .ok_or_else(|| CompilerError::new(CompilerErrorCode::LimitExceeded))?;
                     if added_utility > removed_selection.utility
-                        && enforce_budget(contract, &proposed).is_ok()
+                        && repaired_selection_is_feasible(contract, profile, eligible, &proposed)
                     {
                         *selected = proposed;
                         changed = true;
@@ -740,6 +780,17 @@ fn local_swaps(
         }
     }
     Ok(())
+}
+
+fn repaired_selection_is_feasible(
+    contract: &ContextContract,
+    profile: &CompilerProfile,
+    eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    proposed: &BTreeMap<VersionId, Selection>,
+) -> bool {
+    enforce_budget(contract, proposed).is_ok()
+        && enforce_profile_item_limits(profile, eligible, proposed, false).is_ok()
+        && ensure_blocking_requirements(contract, proposed).is_ok()
 }
 
 fn enforce_budget(
@@ -766,6 +817,32 @@ fn enforce_budget(
         if tokens > budget {
             return Err(CompilerError::budget(minimum_required.unwrap_or(u32::MAX)));
         }
+    }
+    Ok(())
+}
+
+fn enforce_profile_item_limits(
+    profile: &CompilerProfile,
+    eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    selected: &BTreeMap<VersionId, Selection>,
+    enforce_minima: bool,
+) -> Result<(), CompilerError> {
+    let mut selected_counts = BTreeMap::<LaneKind, usize>::new();
+    for selection in selected.values() {
+        *selected_counts.entry(selection.candidate.lane).or_default() += 1;
+    }
+    if profile.maximum_items.iter().any(|(lane, maximum)| {
+        selected_counts.get(lane).copied().unwrap_or_default() > usize::from(*maximum)
+    }) {
+        return Err(CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable));
+    }
+    if enforce_minima
+        && profile.minimum_items.iter().any(|(lane, minimum)| {
+            eligible.values().any(|candidate| candidate.lane == *lane)
+                && selected_counts.get(lane).copied().unwrap_or_default() < usize::from(*minimum)
+        })
+    {
+        return Err(CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable));
     }
     Ok(())
 }

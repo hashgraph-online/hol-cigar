@@ -22,6 +22,11 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "macos")]
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+
 const MAX_STDERR_BYTES: usize = 65_536;
 #[cfg(target_os = "linux")]
 const MAX_NATIVE_PROCESSES: u8 = 1;
@@ -43,11 +48,15 @@ enum SandboxLauncher {
 /// Verified operating-system sandbox configuration for one native package.
 #[derive(Clone)]
 pub struct SubprocessSandbox {
-    package_root: PathBuf,
-    executable: PathBuf,
+    snapshot: Arc<ExecutableSnapshot>,
     launcher: SandboxLauncher,
     maximum_memory_bytes: u64,
     maximum_cpu_seconds: u64,
+}
+
+struct ExecutableSnapshot {
+    directory: tempfile::TempDir,
+    executable: PathBuf,
 }
 
 impl fmt::Debug for SubprocessSandbox {
@@ -64,10 +73,13 @@ impl fmt::Debug for SubprocessSandbox {
             .debug_struct("SubprocessSandbox")
             .field("launcher", &launcher)
             .field(
-                "package_root_depth",
-                &self.package_root.components().count(),
+                "snapshot_directory_depth",
+                &self.snapshot.directory.path().components().count(),
             )
-            .field("executable_depth", &self.executable.components().count())
+            .field(
+                "executable_depth",
+                &self.snapshot.executable.components().count(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -81,7 +93,7 @@ impl SubprocessSandbox {
         if activated.manifest().runtime != ExtensionRuntimeKind::IsolatedSubprocess {
             return Err(error(ExtensionHostErrorCode::CapabilityDenied));
         }
-        let (package_root, executable) = verified_paths(activated, package_root)?;
+        let snapshot = verified_snapshot(activated, package_root)?;
         #[cfg(target_os = "macos")]
         let launcher = {
             let sandbox_exec = Path::new("/usr/bin/sandbox-exec");
@@ -89,7 +101,7 @@ impl SubprocessSandbox {
                 return Err(error(ExtensionHostErrorCode::BackendUnavailable));
             }
             SandboxLauncher::MacOsSandboxExec {
-                profile: macos_profile(&package_root, &executable),
+                profile: macos_profile(&snapshot.executable),
             }
         };
         #[cfg(target_os = "linux")]
@@ -112,8 +124,7 @@ impl SubprocessSandbox {
 
         let (maximum_memory_bytes, maximum_cpu_seconds) = native_limits(activated)?;
         Ok(Self {
-            package_root,
-            executable,
+            snapshot,
             launcher,
             maximum_memory_bytes,
             maximum_cpu_seconds,
@@ -126,11 +137,10 @@ impl SubprocessSandbox {
         package_root: &Path,
         arguments: Vec<String>,
     ) -> Result<Self, ExtensionHostError> {
-        let (package_root, executable) = verified_paths(activated, package_root)?;
+        let snapshot = verified_snapshot(activated, package_root)?;
         let (maximum_memory_bytes, maximum_cpu_seconds) = native_limits(activated)?;
         Ok(Self {
-            package_root,
-            executable,
+            snapshot,
             launcher: SandboxLauncher::DirectFixture { arguments },
             maximum_memory_bytes,
             maximum_cpu_seconds,
@@ -141,22 +151,19 @@ impl SubprocessSandbox {
         let mut command = match &self.launcher {
             #[cfg(target_os = "macos")]
             SandboxLauncher::MacOsSandboxExec { profile } => {
-                let memory_kib = self.maximum_memory_bytes.saturating_add(1_023) / 1_024;
                 let mut command = Command::new("/bin/sh");
                 command
                     .arg("-c")
                     .arg(concat!(
-                        "memory=$1; cpu=$2; shift 2; ",
-                        "ulimit -v \"$memory\" || exit 125; ",
+                        "cpu=$1; shift; ",
                         "ulimit -t \"$cpu\" || exit 125; exec \"$@\""
                     ))
                     .arg("cigar-native-limits")
-                    .arg(memory_kib.to_string())
                     .arg(self.maximum_cpu_seconds.to_string())
                     .arg("/usr/bin/sandbox-exec")
                     .arg("-p")
                     .arg(profile)
-                    .arg(&self.executable);
+                    .arg(&self.snapshot.executable);
                 command
             }
             #[cfg(target_os = "linux")]
@@ -196,7 +203,7 @@ impl SubprocessSandbox {
                     .arg("--dir")
                     .arg("/cigar")
                     .arg("--ro-bind")
-                    .arg(&self.executable)
+                    .arg(&self.snapshot.executable)
                     .arg("/cigar/extension")
                     .arg("--ro-bind")
                     .arg(limiter)
@@ -227,13 +234,13 @@ impl SubprocessSandbox {
             }
             #[cfg(test)]
             SandboxLauncher::DirectFixture { arguments } => {
-                let mut command = Command::new(&self.executable);
+                let mut command = Command::new(&self.snapshot.executable);
                 command.args(arguments);
                 command
             }
         };
         command
-            .current_dir(&self.package_root)
+            .current_dir(self.snapshot.directory.path())
             .env_clear()
             .env("LANG", "C")
             .env("LC_ALL", "C")
@@ -308,6 +315,7 @@ impl ExtensionBackend for IsolatedSubprocessBackend {
             invocation.invocation_id.clone(),
             invocation.effective_limits.max_host_calls,
             cumulative_limit(invocation)?,
+            self.sandbox.maximum_memory_bytes,
         );
         if result.is_err() {
             terminate(&mut child);
@@ -342,10 +350,10 @@ pub(crate) struct HostCallReply {
     pub(crate) response: Vec<u8>,
 }
 
-fn verified_paths(
+fn verified_snapshot(
     activated: &ActivatedExtension,
     package_root: &Path,
-) -> Result<(PathBuf, PathBuf), ExtensionHostError> {
+) -> Result<Arc<ExecutableSnapshot>, ExtensionHostError> {
     let package_root = package_root
         .canonicalize()
         .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
@@ -364,11 +372,32 @@ fn verified_paths(
     if raw_content_digest(&bytes)? != activated.manifest().implementation_digest {
         return Err(error(ExtensionHostErrorCode::DigestMismatch));
     }
-    Ok((package_root, executable))
+    let directory = tempfile::Builder::new()
+        .prefix("cigar-extension-")
+        .tempdir()
+        .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
+    let snapshot_path = directory.path().join("extension");
+    fs::write(&snapshot_path, &bytes)
+        .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
+    #[cfg(unix)]
+    fs::set_permissions(&snapshot_path, fs::Permissions::from_mode(0o500))
+        .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
+    let snapshot_path = snapshot_path
+        .canonicalize()
+        .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
+    let snapshot_bytes = fs::read(&snapshot_path)
+        .map_err(|_error| error(ExtensionHostErrorCode::BackendUnavailable))?;
+    if raw_content_digest(&snapshot_bytes)? != activated.manifest().implementation_digest {
+        return Err(error(ExtensionHostErrorCode::DigestMismatch));
+    }
+    Ok(Arc::new(ExecutableSnapshot {
+        directory,
+        executable: snapshot_path,
+    }))
 }
 
 #[cfg(target_os = "macos")]
-fn macos_profile(_package_root: &Path, executable: &Path) -> String {
+fn macos_profile(executable: &Path) -> String {
     let executable = sandbox_literal(executable);
     format!(
         concat!(
@@ -403,6 +432,7 @@ fn run_child(
     invocation_id: RecordId,
     maximum_host_calls: u32,
     maximum_cumulative_bytes: usize,
+    _maximum_memory_bytes: u64,
 ) -> Result<RuntimeResponse, ExtensionHostError> {
     let stdin = child
         .stdin
@@ -440,6 +470,8 @@ fn run_child(
     let mut io_result = None;
     let mut stderr_result = None;
     let mut exit_status = None;
+    #[cfg(target_os = "macos")]
+    let mut memory_monitor = MacOsMemoryMonitor::new(child.id());
     while io_result.is_none() || stderr_result.is_none() || exit_status.is_none() {
         if cancellation.is_cancelled() {
             terminate(child);
@@ -450,6 +482,12 @@ fn run_child(
             terminate(child);
             join_threads(io_thread, stderr_reader)?;
             return Err(error(ExtensionHostErrorCode::DeadlineExceeded));
+        }
+        #[cfg(target_os = "macos")]
+        if memory_monitor.exceeds(_maximum_memory_bytes) {
+            terminate(child);
+            join_threads(io_thread, stderr_reader)?;
+            return Err(error(ExtensionHostErrorCode::ResourceExhausted));
         }
         receive(&io_rx, &mut io_result)?;
         receive(&stderr_rx, &mut stderr_result)?;
@@ -468,6 +506,34 @@ fn run_child(
         Ok(RuntimeResponse::completed(response))
     } else {
         Ok(RuntimeResponse::crashed_after_response(response))
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct MacOsMemoryMonitor {
+    system: System,
+    pid: Pid,
+}
+
+#[cfg(target_os = "macos")]
+impl MacOsMemoryMonitor {
+    fn new(pid: u32) -> Self {
+        Self {
+            system: System::new(),
+            pid: Pid::from_u32(pid),
+        }
+    }
+
+    fn exceeds(&mut self, maximum_memory_bytes: u64) -> bool {
+        let pids = [self.pid];
+        self.system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&pids),
+            true,
+            ProcessRefreshKind::nothing().with_memory().without_tasks(),
+        );
+        self.system
+            .process(self.pid)
+            .is_some_and(|process| process.memory() > maximum_memory_bytes)
     }
 }
 
@@ -712,10 +778,9 @@ mod macos_sandbox_tests {
             return Err("failed to compile macOS sandbox probe".into());
         }
         let executable = executable.canonicalize()?;
-        let package_root = package.path().canonicalize()?;
         let output = Command::new(Path::new("/usr/bin/sandbox-exec"))
             .arg("-p")
-            .arg(macos_profile(&package_root, &executable))
+            .arg(macos_profile(&executable))
             .arg(&executable)
             .env_clear()
             .env("LANG", "C")

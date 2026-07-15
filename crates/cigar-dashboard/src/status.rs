@@ -848,6 +848,7 @@ mod tests {
                     rejections_total: 0,
                     oldest_age_seconds: 1,
                 }],
+                semantic: Vec::new(),
                 series_count: 8,
             },
             latency_ms: 4,

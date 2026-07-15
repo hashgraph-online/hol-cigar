@@ -1,8 +1,9 @@
 //! Concrete fail-closed production dependency checks over durable repository primitives.
 
 use crate::{
-    ApplicationIdGenerator, AuthorityClock, EffectWorkerOutcome, EffectWorkerProcessor,
-    LifecycleError, ProductionDependencyChecks, ProductionStore, WorkerJob, WorkerKind,
+    ApplicationIdGenerator, AuthorityClock, BlobIntegrityOutcome, DaemonTelemetry,
+    EffectWorkerOutcome, EffectWorkerProcessor, LifecycleError, ProductionDependencyChecks,
+    ProductionStore, WorkerJob, WorkerKind,
 };
 use cigar_api::TenantId;
 use cigar_crypto::{KeyAlgorithm, KeyProvider, KeyPurpose, KeyRef, KeyStatus};
@@ -158,6 +159,7 @@ pub struct RepositoryProductionDependencyChecks {
     blob_probe_tenant: RecordId,
     max_tenants: usize,
     max_effect_records: usize,
+    telemetry: Option<Arc<DaemonTelemetry>>,
 }
 
 impl fmt::Debug for RepositoryProductionDependencyChecks {
@@ -233,7 +235,15 @@ impl RepositoryProductionDependencyChecks {
             blob_probe_tenant: dependencies.blob_probe_tenant,
             max_tenants: dependencies.max_tenants,
             max_effect_records: dependencies.max_effect_records,
+            telemetry: None,
         })
+    }
+
+    /// Attaches the process telemetry authority used by production composition.
+    #[must_use]
+    pub fn with_telemetry(mut self, telemetry: Arc<DaemonTelemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
     }
 
     fn now(&self) -> Result<UtcTimestamp, LifecycleError> {
@@ -461,9 +471,18 @@ impl ProductionDependencyChecks for RepositoryProductionDependencyChecks {
         };
         let blob = BlobRecord::new(reference, bytes.to_vec())
             .map_err(|_error| LifecycleError::action_failed())?;
-        self.store
+        let result = self
+            .store
             .blob_readiness_probe(&self.blob_probe_tenant, &blob)
-            .map_err(|_error| LifecycleError::action_failed())
+            .map_err(|_error| LifecycleError::action_failed());
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.record_blob_integrity(if result.is_ok() {
+                BlobIntegrityOutcome::Verified
+            } else {
+                BlobIntegrityOutcome::Corrupt
+            });
+        }
+        result
     }
 
     fn policy_snapshot(&self) -> Result<(), LifecycleError> {
@@ -519,6 +538,9 @@ impl ProductionDependencyChecks for RepositoryProductionDependencyChecks {
             .0
             .checked_sub(active.built_through_revision.0)
             .ok_or_else(LifecycleError::action_failed)?;
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.observe_index_lag(lag);
+        }
         if active.state != IndexGenerationState::Active
             || watermark != active.built_through_revision
             || lag > self.max_index_lag_revisions
@@ -928,9 +950,10 @@ mod tests {
                 atoms: Vec::new(),
                 edges: Vec::new(),
                 built_through_revision: StoreRevision(0),
+                tenant_watermarks: [(tenant.clone(), StoreRevision(0))].into_iter().collect(),
                 configuration_digest: digest(10)?,
                 verified_at: now,
-                vector_fingerprint: None,
+                vector_binding: None,
             },
             &retrieval,
         )?;

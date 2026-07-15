@@ -88,6 +88,17 @@ mod unix {
                 .contains("CLI_INVALID_CONFIGURATION")
         );
 
+        // Remove the forbidden project credential declaration before proving that the same
+        // project endpoint is valid when credential authority comes from an explicit CLI flag.
+        // A higher-precedence value must not sanitize a prohibited lower-precedence declaration.
+        std::fs::write(
+            project_configuration.join("cli.toml"),
+            concat!(
+                "schema_version = 1\n",
+                "target = \"remote\"\n",
+                "remote_endpoint = \"https://attacker.example\"\n"
+            ),
+        )?;
         let explicitly_authorized = Command::new(cli_binary())
             .args(["status", "--explain-config", "--output", "json"])
             .arg("--authorization-file")

@@ -179,6 +179,8 @@ pub struct OperationalHandlers {
     readiness: Arc<ReadinessAggregator>,
     readiness_gate: Arc<ReadinessGate>,
     workers: Arc<DaemonWorkers>,
+    blocking_pool: Option<Arc<BlockingPool>>,
+    effects_enabled: bool,
     telemetry: Arc<DaemonTelemetry>,
     errors: Arc<dyn FacadeErrorFactory>,
 }
@@ -199,9 +201,41 @@ impl OperationalHandlers {
             readiness,
             readiness_gate,
             workers,
+            blocking_pool: None,
+            effects_enabled: false,
             telemetry,
             errors,
         }
+    }
+
+    /// Creates handlers with the exact production blocking pool they report.
+    #[must_use]
+    pub fn new_with_blocking_pool(
+        config: &DaemonConfig,
+        readiness: Arc<ReadinessAggregator>,
+        readiness_gate: Arc<ReadinessGate>,
+        workers: Arc<DaemonWorkers>,
+        blocking_pool: Arc<BlockingPool>,
+        telemetry: Arc<DaemonTelemetry>,
+        errors: Arc<dyn FacadeErrorFactory>,
+    ) -> Self {
+        let mut handlers = Self::new(
+            config,
+            readiness,
+            readiness_gate,
+            workers,
+            telemetry,
+            errors,
+        );
+        handlers.blocking_pool = Some(blocking_pool);
+        handlers
+    }
+
+    /// Selects the capability profile proven by the validated production effect registry.
+    #[must_use]
+    pub const fn with_effects_enabled(mut self, effects_enabled: bool) -> Self {
+        self.effects_enabled = effects_enabled;
+        self
     }
 
     fn error(&self, code: ErrorCode) -> ApiError {
@@ -304,12 +338,13 @@ impl OperationalHandlers {
                     crate::DeploymentMode::Local => "local",
                     crate::DeploymentMode::Shared => "shared",
                 };
+                let effects_profile = effect_capability_profile(self.effects_enabled);
                 self.typed_response(
                     operation,
                     CapabilitiesResponse {
                         api_version: "v1".to_owned(),
                         protocol_version: cigar_protocol::PROTOCOL_MAX.to_owned(),
-                        profiles: vec!["effects-disabled".to_owned(), profile.to_owned()],
+                        profiles: vec![effects_profile.to_owned(), profile.to_owned()],
                         extensions: Vec::new(),
                         max_payload_bytes,
                         max_event_bytes,
@@ -323,11 +358,21 @@ impl OperationalHandlers {
             }
             "getDiagnostics" => {
                 self.require_empty::<GetDiagnosticsOperation>(request)?;
+                let dependency_report = self
+                    .readiness
+                    .report(now)
+                    .map_err(|_error| self.error(ErrorCode::DependencyDegraded))?;
+                let ready = self.readiness_gate.is_open()
+                    && dependency_report.status == HealthStatus::Healthy;
                 let snapshots = self
                     .workers
                     .runtime()
                     .metrics()
                     .map_err(|_error| self.error(ErrorCode::DependencyDegraded))?;
+                if let Some(blocking_pool) = &self.blocking_pool {
+                    self.telemetry
+                        .observe_runtime(&snapshots, blocking_pool.metrics());
+                }
                 let mut queues = snapshots
                     .iter()
                     .map(|queue| {
@@ -365,7 +410,7 @@ impl OperationalHandlers {
                 self.typed_response(
                     operation,
                     DiagnosticsResponse {
-                        ready: self.readiness_gate.is_open(),
+                        ready,
                         queues,
                         counters,
                     },
@@ -378,6 +423,10 @@ impl OperationalHandlers {
                     .runtime()
                     .metrics()
                     .map_err(|_error| self.error(ErrorCode::DependencyDegraded))?;
+                if let Some(blocking_pool) = &self.blocking_pool {
+                    self.telemetry
+                        .observe_runtime(&queues, blocking_pool.metrics());
+                }
                 self.typed_response(
                     operation,
                     MetricsResponse {
@@ -589,6 +638,14 @@ fn now_utc() -> Result<UtcTimestamp, ()> {
     UtcTimestamp::from_unix_nanos(nanos).map_err(|_error| ())
 }
 
+const fn effect_capability_profile(effects_enabled: bool) -> &'static str {
+    if effects_enabled {
+        "effects-enabled"
+    } else {
+        "effects-disabled"
+    }
+}
+
 pub(crate) struct RuntimeShutdownAction {
     pub step: ShutdownStep,
     pub readiness: Arc<ReadinessGate>,
@@ -641,5 +698,16 @@ impl ShutdownAction for RuntimeShutdownAction {
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effect_capability_profile;
+
+    #[test]
+    fn capability_profile_reflects_both_validated_effect_registry_states() {
+        assert_eq!(effect_capability_profile(false), "effects-disabled");
+        assert_eq!(effect_capability_profile(true), "effects-enabled");
     }
 }

@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/local-scale-result-v1.schema.json",
+  "title": "CIGAR native macOS physical local-scale qualification result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result",
+    "release_scale_qualified",
+    "run_id",
+    "started_at_unix_nanos",
+    "finished_at_unix_nanos",
+    "platform_scope",
+    "profile_sha256",
+    "binding_sha256",
+    "source_revision",
+    "source_tree_sha256",
+    "candidate",
+    "installed_tool",
+    "targets",
+    "observed",
+    "roots",
+    "storage",
+    "checks",
+    "claims",
+    "receipt_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.local-scale-result.v1"},
+    "result": {"enum": ["qualification-passed", "fixture-passed"]},
+    "release_scale_qualified": {"type": "boolean"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "started_at_unix_nanos": {"type": "integer", "minimum": 0},
+    "finished_at_unix_nanos": {"type": "integer", "minimum": 0},
+    "platform_scope": {"const": "aarch64-apple-darwin"},
+    "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "source_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate": {"$ref": "#/$defs/file"},
+    "installed_tool": {"$ref": "#/$defs/file"},
+    "targets": {"$ref": "#/$defs/counts"},
+    "observed": {"$ref": "#/$defs/counts"},
+    "roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "semantic_before_reopen", "semantic_after_reopen", "semantic_after_restore", "backup_canonical"],
+      "properties": {
+        "catalog": {"$ref": "#/$defs/multihash"},
+        "semantic_before_reopen": {"$ref": "#/$defs/multihash"},
+        "semantic_after_reopen": {"$ref": "#/$defs/multihash"},
+        "semantic_after_restore": {"$ref": "#/$defs/multihash"},
+        "backup_canonical": {"$ref": "#/$defs/multihash"}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_bytes", "database_page_count", "retained_snapshots", "backup_file_count", "backup_repository_revision"],
+      "properties": {
+        "database_bytes": {"type": "integer", "minimum": 1},
+        "database_page_count": {"type": "integer", "minimum": 1},
+        "retained_snapshots": {"type": "integer", "minimum": 1},
+        "backup_file_count": {"type": "integer", "minimum": 1},
+        "backup_repository_revision": {"type": "integer", "minimum": 1}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {"enum": ["catalog-counts-and-roots", "encrypted-blob-reference-integrity", "one-over-quota-rejected", "checkpoint-recovery", "restart-and-reopen", "signed-backup-verification", "restore-semantic-root-equality", "input-bindings-stable"]},
+          "status": {"const": "passed"}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical_scale_execution_attempted", "distinct_authoritative_atoms", "distinct_authoritative_edges", "distinct_encrypted_blob_objects", "fuzz_executed", "soak_executed"],
+      "properties": {
+        "physical_scale_execution_attempted": {"type": "boolean"},
+        "distinct_authoritative_atoms": {"type": "boolean"},
+        "distinct_authoritative_edges": {"type": "boolean"},
+        "distinct_encrypted_blob_objects": {"type": "boolean"},
+        "fuzz_executed": {"const": false},
+        "soak_executed": {"const": false}
+      }
+    },
+    "receipt_id": {"$ref": "#/$defs/multihash"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"result": {"const": "qualification-passed"}}},
+      "then": {
+        "properties": {
+          "release_scale_qualified": {"const": true},
+          "targets": {
+            "properties": {
+              "atoms": {"const": 1000000},
+              "edges": {"const": 10000000},
+              "blob_objects": {"const": 1600},
+              "blob_bytes_each": {"const": 67108864},
+              "referenced_blob_bytes": {"const": 107374182400}
+            }
+          },
+          "observed": {
+            "properties": {
+              "atoms": {"const": 1000000},
+              "edges": {"const": 10000000},
+              "blob_objects": {"const": 1600},
+              "blob_bytes_each": {"const": 67108864},
+              "referenced_blob_bytes": {"const": 107374182400}
+            }
+          },
+          "claims": {
+            "properties": {
+              "physical_scale_execution_attempted": {"const": true},
+              "distinct_authoritative_atoms": {"const": true},
+              "distinct_authoritative_edges": {"const": true},
+              "distinct_encrypted_blob_objects": {"const": true}
+            }
+          }
+        }
+      },
+      "else": {"properties": {"release_scale_qualified": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "multihash": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["atoms", "edges", "blob_objects", "blob_bytes_each", "referenced_blob_bytes"],
+      "properties": {
+        "atoms": {"type": "integer", "minimum": 1},
+        "edges": {"type": "integer", "minimum": 1},
+        "blob_objects": {"type": "integer", "minimum": 1},
+        "blob_bytes_each": {"type": "integer", "minimum": 1},
+        "referenced_blob_bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

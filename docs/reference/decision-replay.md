@@ -161,8 +161,14 @@ effect dispatch and terminal commit, so a result returned after cancellation is 
 
 An injected synchronous dependency must still cooperate with that context or run behind a terminable
 process boundary to guarantee prompt permit release; dropping a running blocking thread is not safe.
-The checked-in production live-replay factory remains deny-only. Regardless of provider behavior, a
-late result cannot authorize an effect or publish replay completion after its authoritative lifetime.
+The standalone `cigard` production composition remains deny-only. A local macOS embedding can opt in
+only by constructing `ProductionLiveReplayProfile::tenant_bound_v1` from an explicit durable
+authorization repository and a tenant-bound verifier/provider/effect-gate factory, then calling
+`compose_production_server_with_live_replay`. There is no environment-variable, daemon-file, or
+ambient-provider fallback. The composer rejects shared and non-macOS use, scopes the factory to the
+authority document's active tenants, and keeps all three live boundaries mandatory. Regardless of
+provider behavior, a late result cannot authorize an effect or publish replay completion after its
+authoritative lifetime.
 
 Errors use stable, content-free categories. Diagnostic formatting reports counts, digests,
 fingerprints, media types, and lengths but not protected task, invocation, artifact, or response

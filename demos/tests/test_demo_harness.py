@@ -5,11 +5,14 @@ import http.client
 import importlib.util
 import io
 import json
+import os
+import stat
 import sys
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +39,78 @@ live_smoke = load(
 
 
 class DemoHarnessTests(unittest.TestCase):
+    def test_external_evidence_output_is_private_create_new_and_unambiguous(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            evidence = base / "evidence"
+            with io.StringIO() as stdout, contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    demos.main(
+                        [
+                            "--scenario",
+                            "effect-crash-recovery",
+                            "--validate-only",
+                            "--evidence-dir",
+                            str(evidence),
+                            "--output-dir",
+                            "records",
+                        ]
+                    ),
+                    0,
+                )
+            record = evidence / "records" / "effect-crash-recovery.json"
+            summary = evidence / "records" / "summary.json"
+            self.assertTrue(record.is_file())
+            self.assertTrue(summary.is_file())
+            self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(record.stat().st_mode), 0o400)
+            self.assertEqual(stat.S_IMODE(summary.stat().st_mode), 0o400)
+            self.assertEqual(
+                json.loads(summary.read_bytes())["completed"],
+                ["effect-crash-recovery"],
+            )
+            with (
+                io.StringIO() as stdout,
+                io.StringIO() as stderr,
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                self.assertEqual(
+                    demos.main(
+                        [
+                            "--scenario",
+                            "effect-crash-recovery",
+                            "--validate-only",
+                            "--evidence-dir",
+                            str(evidence),
+                            "--output-dir",
+                            "records",
+                        ]
+                    ),
+                    2,
+                )
+
+            other = base / "other"
+            with (
+                mock.patch.dict(
+                    os.environ, {"CIGAR_EVIDENCE_DIR": str(other)}, clear=False
+                ),
+                io.StringIO() as stderr,
+                contextlib.redirect_stderr(stderr),
+            ):
+                self.assertEqual(
+                    demos.main(
+                        [
+                            "--list",
+                            "--evidence-dir",
+                            str(evidence),
+                        ]
+                    ),
+                    2,
+                )
+
     def test_inventory_is_exactly_seven_and_validate_records_are_deterministic(
         self,
     ) -> None:
@@ -132,11 +207,25 @@ class DemoHarnessTests(unittest.TestCase):
             )
 
     def test_every_demo_has_a_bounded_regular_fixture_driver(self) -> None:
-        for manifest_path, manifest in demos.load_manifests().values():
+        manifests = demos.load_manifests()
+        support_digest = demos.digest(
+            (ROOT / "demos" / "driver_support.py").read_bytes()
+        )
+        for manifest_path, manifest in manifests.values():
             driver = manifest_path.parent / manifest["driver"]
             self.assertTrue(driver.is_file())
             self.assertFalse(driver.is_symlink())
             self.assertLessEqual(driver.stat().st_size, demos.MAX_JSON)
+            self.assertEqual(
+                manifest["driver_digest"], demos.digest(driver.read_bytes())
+            )
+            self.assertEqual(manifest["driver_support_digest"], support_digest)
+
+        claude_path = ROOT / "demos" / "claude-code" / "driver.py"
+        self.assertEqual(
+            manifests["claude-code-experience"][1]["driver_digest"],
+            demos.digest(claude_path.read_bytes()),
+        )
 
         manifest_path = ROOT / "demos" / "quickstart" / "demo.json"
         manifest = demos.load_json(manifest_path)
@@ -180,6 +269,7 @@ class DemoHarnessTests(unittest.TestCase):
         self,
     ) -> None:
         manifest = quickstarts.load_manifest()
+        self.assertEqual(quickstarts.pinned_go_toolchain(), "go1.26.5")
         self.assertEqual(
             {item["language"] for item in manifest["quickstarts"]},
             {"rust", "typescript", "python", "go"},
@@ -215,6 +305,99 @@ class DemoHarnessTests(unittest.TestCase):
                 for item in report["quickstarts"]
             )
         )
+
+    def test_sdk_and_installed_demo_reports_use_shared_external_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            sdk_evidence = base / "sdk-evidence"
+
+            def recorded_command(_parts, _cwd, _state, expect_identity):
+                return (
+                    quickstarts.load_manifest()["expected_bundle_id"]
+                    if expect_identity
+                    else None
+                )
+
+            with mock.patch.object(
+                quickstarts, "command", side_effect=recorded_command
+            ):
+                self.assertEqual(
+                    quickstarts.main(
+                        [
+                            "--evidence-dir",
+                            str(sdk_evidence),
+                            "--output",
+                            "sdk/report.json",
+                        ]
+                    ),
+                    0,
+                )
+            sdk_report = sdk_evidence / "sdk" / "report.json"
+            self.assertEqual(stat.S_IMODE(sdk_report.stat().st_mode), 0o400)
+            self.assertTrue(
+                json.loads(sdk_report.read_bytes())["sdk_workflow_qualified"]
+            )
+
+            stores = []
+            for name in ("cargo", "rustup", "pnpm", "wheelhouse", "gomod"):
+                store = base / name
+                store.mkdir(mode=0o700)
+                stores.append(store)
+            installed_evidence = base / "installed-evidence"
+            arguments = [
+                "--cigar-binary",
+                str(base / "cigar"),
+                "--expected-version",
+                "1.0.0-dev.1",
+                "--rust-archive",
+                str(base / "rust.crate"),
+                "--cargo-home",
+                str(stores[0]),
+                "--rustup-home",
+                str(stores[1]),
+                "--typescript-tarball",
+                str(base / "typescript.tgz"),
+                "--pnpm-store",
+                str(stores[2]),
+                "--python-wheel",
+                str(base / "python.whl"),
+                "--python-wheelhouse",
+                str(stores[3]),
+                "--go-archive",
+                str(base / "go.zip"),
+                "--go-mod-cache",
+                str(stores[4]),
+                "--output",
+                "installed/report.json",
+                "--evidence-dir",
+                str(installed_evidence),
+            ]
+            qualification = {
+                "artifact": "test",
+                "bundle_id": installed.EXPECTED,
+                "status": "package_fixture_identity_passed",
+            }
+            with (
+                mock.patch.object(
+                    installed, "qualify_native", return_value=qualification
+                ),
+                mock.patch.object(
+                    installed, "qualify_rust", return_value=qualification
+                ),
+                mock.patch.object(
+                    installed, "qualify_typescript", return_value=qualification
+                ),
+                mock.patch.object(
+                    installed, "qualify_python", return_value=qualification
+                ),
+                mock.patch.object(installed, "qualify_go", return_value=qualification),
+            ):
+                self.assertEqual(installed.main(arguments), 0)
+            installed_report = installed_evidence / "installed" / "report.json"
+            self.assertEqual(stat.S_IMODE(installed_report.stat().st_mode), 0o400)
+            self.assertFalse(
+                json.loads(installed_report.read_bytes())["release_demo_qualified"]
+            )
 
     def test_installed_driver_rejects_archive_traversal_and_links(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -256,6 +439,9 @@ class DemoHarnessTests(unittest.TestCase):
         self.assertEqual(demo_environment["HOME"], str(state / "home"))
         self.assertEqual(source_environment["HOME"], str(state / "home"))
         self.assertEqual(installed_environment["HOME"], str(state))
+        self.assertEqual(demo_environment["GOTOOLCHAIN"], "go1.26.5")
+        self.assertEqual(demo_environment["GOPROXY"], "off")
+        self.assertEqual(demos.pinned_go_toolchain(), "go1.26.5")
         self.assertTrue(live_smoke.accepted_outcome({"status": "ok"}))
         self.assertTrue(
             live_smoke.accepted_outcome(

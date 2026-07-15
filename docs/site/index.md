@@ -12,8 +12,8 @@ and practice every [operator runbook](../operations/index.md). Interface details
 [public API reference](../reference/public-api.md), while artifact trust begins with
 [offline release verification](../release/verification.md).
 
-This site describes product version 0.1.0 and Context ABI `cigar.context.v1`. The `latest` selector
-must resolve to the same version until a later compatible documentation set is published.
+This site describes product version 1.0.0-dev.1 and Context ABI `cigar.context.v1`. The selector is
+development-only; `latest` remains absent until an approved version is published.
 
 <!-- docs-check: command docs-build-local -->
 ```sh

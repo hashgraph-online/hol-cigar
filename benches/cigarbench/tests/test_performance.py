@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import math
+import stat
 import sys
 import tempfile
 import unittest
@@ -391,6 +392,47 @@ class PerformanceHarnessTests(unittest.TestCase):
                 )
             )
 
+    def test_candidate_cannot_be_its_own_baseline(self) -> None:
+        paths = self.write_evidence("self-comparison", make_manifest("same-run"))
+        evidence = self.load_evidence(*paths)
+        attestation, _ = self.attest_evidence("self-comparison", evidence)
+        with self.assertRaisesRegex(
+            performance.PerformanceError, "distinct sample streams"
+        ):
+            performance.comparison_report(
+                evidence[0],
+                evidence[1],
+                evidence[2],
+                evidence[0],
+                evidence[1],
+                evidence[2],
+                10_000,
+                attestation,
+                attestation,
+            )
+
+        baseline_paths = self.write_evidence(
+            "same-build-baseline", make_manifest("baseline-run", build="same-build")
+        )
+        candidate_paths = self.write_evidence(
+            "same-build-candidate",
+            make_manifest("candidate-run", build="same-build"),
+        )
+        baseline = self.load_evidence(*baseline_paths)
+        candidate = self.load_evidence(*candidate_paths)
+        with self.assertRaisesRegex(
+            performance.PerformanceError, "distinct build digest"
+        ):
+            performance.comparison_report(
+                candidate[0],
+                candidate[1],
+                candidate[2],
+                baseline[0],
+                baseline[1],
+                baseline[2],
+                10_000,
+            )
+
     def test_unattested_or_forged_qualification_cannot_pass(self) -> None:
         paths = self.write_evidence("unattested", make_manifest("unattested"))
         manifest, samples, sample_digest = self.load_evidence(*paths)
@@ -614,6 +656,30 @@ class PerformanceHarnessTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertIn("operating system operation failed", stderr.getvalue())
         self.assertNotIn("sensitive-path-component", stderr.getvalue())
+
+    def test_cli_publishes_external_create_new_evidence(self) -> None:
+        manifest, samples = self.write_evidence(
+            "external", make_manifest("external", evidence_class="harness_smoke")
+        )
+        evidence = self.temp.resolve() / "performance-evidence"
+        arguments = [
+            "--evidence-dir",
+            str(evidence),
+            "validate",
+            "--manifest",
+            str(manifest),
+            "--samples",
+            str(samples),
+            "--output",
+            "performance/report.json",
+        ]
+        self.assertEqual(performance.main(arguments), 0)
+        report = evidence / "performance" / "report.json"
+        receipt = evidence / "performance" / "report.json.receipt.json"
+        self.assertEqual(stat.S_IMODE(report.stat().st_mode), 0o400)
+        self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o400)
+        self.assertFalse(json.loads(receipt.read_bytes())["qualifying_evidence"])
+        self.assertEqual(performance.main(arguments), 2)
 
 
 if __name__ == "__main__":

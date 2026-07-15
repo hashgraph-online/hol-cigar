@@ -31,12 +31,23 @@ Image digest pinning, signing, SBOM/provenance attachment, and distribution
 qualification remain release-pipeline responsibilities in WP20-WP22.
 
 The WP18 shared profile is under `shared`, `compose/shared.yaml`, and
-`kubernetes/shared`. It uses separate PostgreSQL owner/runtime credentials, forced RLS,
+`kubernetes/shared`. It uses separate PostgreSQL migrator/runtime/backup/GC credentials, forced RLS,
 an encrypted S3-compatible CAS, TLS/OIDC, a one-shot migration Job, non-root replicas,
 bounded resources, disruption/autoscaling controls, default-deny networking, and OTLP/alert
 examples. The Kubernetes base contains intentionally invalid external endpoints and a local image
 name; operators must replace them and pin the exact release digest before applying it. The runtime
 pod never mounts the migrator credential.
+
+The development Compose profile generates a fresh, short-lived PostgreSQL CA and server key inside
+its disposable owner-only volume, starts PostgreSQL with TLS enabled, and exposes only the CA
+certificate to the live qualification harness. These development credentials are never production
+trust material; managed deployments must supply their own private CA and secret-mounted identities.
+After running the embedded migrations, apply
+`compose/postgres-shared-post-migration.sql` to the disposable development database before opening
+runtime, backup, or GC stores. It gives backup only the database-identity function and GC only the
+revision guard; broad default function execution is intentionally disabled. From `deploy/compose`,
+run `docker compose -f shared.yaml exec -T postgres psql -X --username cigar_migrator --dbname cigar
+--file /cigar/postgres-shared-post-migration.sql`.
 
 Before enabling an extension-capable release unit, operators must verify that
 unprivileged user namespaces are enabled and that the packaged bubblewrap probe

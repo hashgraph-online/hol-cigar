@@ -39,8 +39,58 @@ pub struct SealedDelta {
     pub delta_digest: ContentDigest,
 }
 
+/// Opaque evidence that one sealed delta reproduced its exact declared target.
+///
+/// Values can be constructed only by [`apply_delta_verified`], so acknowledgement cannot be
+/// emitted for an unverified or tampered delta record.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AppliedDelta {
+    bundle: ContextBundle,
+    base_bundle_id: VersionId,
+    target_bundle_id: VersionId,
+    delta_digest: ContentDigest,
+}
+
+impl fmt::Debug for AppliedDelta {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AppliedDelta")
+            .field("bundle", &"[OPAQUE]")
+            .field("base_bundle_id", &"[OPAQUE]")
+            .field("target_bundle_id", &"[OPAQUE]")
+            .field("delta_digest", &"[OPAQUE]")
+            .finish()
+    }
+}
+
+impl AppliedDelta {
+    /// Exact reconstructed target bundle.
+    #[must_use]
+    pub const fn bundle(&self) -> &ContextBundle {
+        &self.bundle
+    }
+
+    /// Exact base identity that was verified during application.
+    #[must_use]
+    pub const fn base_bundle_id(&self) -> &VersionId {
+        &self.base_bundle_id
+    }
+
+    /// Exact target identity reproduced during application.
+    #[must_use]
+    pub const fn target_bundle_id(&self) -> &VersionId {
+        &self.target_bundle_id
+    }
+
+    /// Digest of the exact delta record that was applied.
+    #[must_use]
+    pub const fn delta_digest(&self) -> &ContentDigest {
+        &self.delta_digest
+    }
+}
+
 /// Auditable provider acknowledgement of one exact target transition.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct DeltaAcknowledgement {
     /// Provider session that accepted the target.
     pub provider_session: String,
@@ -56,8 +106,22 @@ pub struct DeltaAcknowledgement {
     pub sequence: u64,
 }
 
+impl fmt::Debug for DeltaAcknowledgement {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DeltaAcknowledgement")
+            .field("provider_session", &"[OPAQUE]")
+            .field("target_fingerprint", &"[OPAQUE]")
+            .field("base_bundle_id", &"[OPAQUE]")
+            .field("target_bundle_id", &"[OPAQUE]")
+            .field("delta_digest", &"[OPAQUE]")
+            .field("sequence", &self.sequence)
+            .finish()
+    }
+}
+
 /// Explicit request to recompile because a target's physical limit changed.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct TargetOverflowRepairRequest {
     /// Bundle that overflowed under the current target.
     pub bundle_id: VersionId,
@@ -67,6 +131,18 @@ pub struct TargetOverflowRepairRequest {
     pub observed_tokens: u32,
     /// Current hard input limit.
     pub maximum_input_tokens: u32,
+}
+
+impl fmt::Debug for TargetOverflowRepairRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TargetOverflowRepairRequest")
+            .field("bundle_id", &"[OPAQUE]")
+            .field("target_fingerprint", &"[OPAQUE]")
+            .field("observed_tokens", &self.observed_tokens)
+            .field("maximum_input_tokens", &self.maximum_input_tokens)
+            .finish()
+    }
 }
 
 impl TargetOverflowRepairRequest {
@@ -151,6 +227,15 @@ pub fn apply_delta(
     expected_target: &ContextBundle,
     sealed: &SealedDelta,
 ) -> Result<ContextBundle, DeltaError> {
+    apply_delta_verified(base, expected_target, sealed).map(|applied| applied.bundle)
+}
+
+/// Applies and verifies a sealed delta, returning opaque acknowledgement evidence.
+pub fn apply_delta_verified(
+    base: &ContextBundle,
+    expected_target: &ContextBundle,
+    sealed: &SealedDelta,
+) -> Result<AppliedDelta, DeltaError> {
     base.validate().map_err(|_error| DeltaError::InvalidInput)?;
     expected_target
         .validate()
@@ -202,23 +287,28 @@ pub fn apply_delta(
     {
         return Err(DeltaError::TargetMismatch);
     }
-    Ok(expected_target.clone())
+    Ok(AppliedDelta {
+        bundle: expected_target.clone(),
+        base_bundle_id: base.bundle_id.clone(),
+        target_bundle_id: expected_target.bundle_id.clone(),
+        delta_digest: sealed.delta_digest.clone(),
+    })
 }
 
 /// Creates an auditable acknowledgement after exact application succeeds.
 pub fn acknowledge_delta(
     provider_session: impl Into<String>,
     target_fingerprint: ContentDigest,
-    sealed: &SealedDelta,
+    applied: &AppliedDelta,
     sequence: u64,
 ) -> Option<DeltaAcknowledgement> {
     let provider_session = provider_session.into();
-    (!provider_session.is_empty()).then(|| DeltaAcknowledgement {
+    (!provider_session.is_empty() && sequence > 0).then(|| DeltaAcknowledgement {
         provider_session,
         target_fingerprint,
-        base_bundle_id: sealed.delta.base_bundle_id.clone(),
-        target_bundle_id: sealed.delta.target_bundle_id.clone(),
-        delta_digest: sealed.delta_digest.clone(),
+        base_bundle_id: applied.base_bundle_id.clone(),
+        target_bundle_id: applied.target_bundle_id.clone(),
+        delta_digest: applied.delta_digest.clone(),
         sequence,
     })
 }

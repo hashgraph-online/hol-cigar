@@ -27,7 +27,11 @@ const MAX_SESSIONS: usize = 128;
 const MAX_EVENTS_PER_SESSION: usize = 2_048;
 const MAX_PRESENT_PER_SESSION: usize = 4_096;
 const MAX_CHECKPOINTS_PER_SESSION: usize = 64;
-const BACKEND_DEADLINE: Duration = Duration::from_millis(100);
+// The invoked CLI enforces its own explicit 100 ms service deadline. Keep a
+// separate bounded allowance for process startup, pipe draining, and teardown;
+// collapsing both budgets made healthy sandboxed invocations degrade before
+// the CLI could parse its request.
+const BACKEND_DEADLINE: Duration = Duration::from_millis(500);
 const LOCK_DEADLINE: Duration = Duration::from_millis(25);
 const LOCK_STALE_AFTER: Duration = Duration::from_secs(10);
 const STATE_SCHEMA: &str = "cigar.claude-hook-state.v1";
@@ -336,7 +340,7 @@ fn expected_mcp_configuration() -> Value {
     json!({
         "mcpServers": {
             "cigar": {
-                "command": "cigar-mcp",
+                "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-mcp",
                 "args": ["serve"],
                 "env": {
                     "CIGAR_CLAUDE_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
@@ -350,7 +354,7 @@ fn expected_mcp_configuration() -> Value {
 fn expected_hook_configuration() -> Value {
     let handler = json!({
         "type": "command",
-        "command": "cigar-claude-hook",
+        "command": "${CLAUDE_PLUGIN_ROOT}/bin/cigar-claude-hook",
         "args": [
             "run",
             "--plugin-root",

@@ -5,6 +5,7 @@ use crate::{
     RetrievalStage, Retriever,
 };
 use cigar_protocol::ContentDigest;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::time::Instant;
 
@@ -57,6 +58,8 @@ impl StagedRetrieval {
     ) -> Result<StagedRetrievalResult, RetrievalError> {
         context.check()?;
         let mut stages = Vec::with_capacity(plan.stages.len());
+        let mut blocking_requirements = BTreeSet::new();
+        let mut satisfied_blocking_requirements = BTreeSet::new();
         for planned in &plan.stages {
             context.check()?;
             let stage_deadline = Instant::now()
@@ -70,10 +73,11 @@ impl StagedRetrieval {
             if batch.candidates.len() > planned.request.limit {
                 return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration));
             }
-            if planned.blocking && batch.candidates.is_empty() {
-                return Err(RetrievalError::new(
-                    RetrievalErrorCode::RequiredCandidateMissing,
-                ));
+            if planned.blocking {
+                blocking_requirements.insert(planned.requirement_index);
+                if !batch.candidates.is_empty() {
+                    satisfied_blocking_requirements.insert(planned.requirement_index);
+                }
             }
             stages.push(ExecutedStage {
                 requirement_index: planned.requirement_index,
@@ -81,6 +85,11 @@ impl StagedRetrieval {
                 query_fingerprint: planned.query_fingerprint.clone(),
                 batch,
             });
+        }
+        if !blocking_requirements.is_subset(&satisfied_blocking_requirements) {
+            return Err(RetrievalError::new(
+                RetrievalErrorCode::RequiredCandidateMissing,
+            ));
         }
         Ok(StagedRetrievalResult {
             plan_fingerprint: plan.plan_fingerprint.clone(),
@@ -93,14 +102,16 @@ impl StagedRetrieval {
 mod tests {
     use super::StagedRetrieval;
     use crate::{
-        AuthorizedPartition, CandidateBatch, QueryPlanner, RetrievalConsistency, RetrievalContext,
-        RetrievalDisclosure, RetrievalError, RetrievalErrorCode, RetrievalRequest, Retriever,
+        AuthorizedPartition, CandidateBatch, CandidateFeatures, CandidateRef, MatchEvidence,
+        QueryPlanner, RetrievalConsistency, RetrievalContext, RetrievalDisclosure, RetrievalError,
+        RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever,
     };
     use cigar_protocol::{
         Classification, ContentDigest, ContextRequirement, InstructionAuthority, RecordId,
-        UtcTimestamp,
+        SourceUri, UtcTimestamp, VersionId,
     };
     use cigar_store::{CancellationToken, StoreRevision};
+    use std::collections::BTreeSet;
     use std::error::Error;
     use std::time::{Duration, Instant};
 
@@ -131,26 +142,54 @@ mod tests {
         }
     }
 
+    struct LexicalOnlyRetriever;
+
+    impl Retriever for LexicalOnlyRetriever {
+        fn retrieve(
+            &self,
+            request: &RetrievalRequest,
+            context: &RetrievalContext,
+        ) -> Result<CandidateBatch, RetrievalError> {
+            let mut batch = EmptyRetriever.retrieve(request, context)?;
+            if request.stage == RetrievalStage::Lexical {
+                let version_id = VersionId::new(digest('c')?.as_str())
+                    .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
+                batch.candidates.push(CandidateRef {
+                    version_id,
+                    canonical_uri: SourceUri::new("file:///authorized/document.md").map_err(
+                        |_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration),
+                    )?,
+                    relative_path: None,
+                    instruction_authority: InstructionAuthority::Data,
+                    features: CandidateFeatures::default(),
+                    total_score: 0,
+                    evidence: BTreeSet::from([MatchEvidence::Lexical]),
+                });
+            }
+            Ok(batch)
+        }
+    }
+
     fn digest(value: char) -> Result<ContentDigest, RetrievalError> {
         ContentDigest::new(format!("1220{}", value.to_string().repeat(64)))
             .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))
     }
 
     fn partition() -> Result<AuthorizedPartition, Box<dyn Error>> {
-        Ok(AuthorizedPartition {
-            tenant_id: RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7801")?,
-            project_ids: [RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7802")?]
+        crate::test_support::authorized_partition(
+            RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7801")?,
+            RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7804")?,
+            [RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7802")?]
                 .into_iter()
                 .collect(),
-            purpose: "coding".to_owned(),
-            processor: "local".to_owned(),
-            maximum_classification: Classification::Internal,
-            maximum_instruction_authority: InstructionAuthority::Project,
-            valid_at: UtcTimestamp::parse_rfc3339("2026-07-10T00:00:02Z")?,
-            observed_as_of: UtcTimestamp::parse_rfc3339("2026-07-10T00:00:02Z")?,
-            vector_allowed: false,
-            partition_digest: ContentDigest::new(format!("1220{}", "a".repeat(64)))?,
-        })
+            "coding",
+            "local",
+            Classification::Internal,
+            InstructionAuthority::Project,
+            false,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:02Z")?,
+            UtcTimestamp::parse_rfc3339("2026-07-10T00:00:02Z")?,
+        )
     }
 
     fn requirement(blocking: bool) -> Result<ContextRequirement, Box<dyn Error>> {
@@ -208,6 +247,12 @@ mod tests {
                 .map_err(|error| error.code()),
             Err(RetrievalErrorCode::RequiredCandidateMissing)
         );
+
+        let lexical = StagedRetrieval.execute(&blocking, &LexicalOnlyRetriever, &context())?;
+        let metadata_stage = lexical.stages.first().ok_or("missing metadata stage")?;
+        let lexical_stage = lexical.stages.get(1).ok_or("missing lexical stage")?;
+        assert!(metadata_stage.batch.candidates.is_empty());
+        assert_eq!(lexical_stage.batch.candidates.len(), 1);
         Ok(())
     }
 }

@@ -18,13 +18,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
     load_json_bytes,
     process_failure_summary,
+    reject_evidence_directory,
+    repo_root,
+    require_distinct_output,
     run_bounded,
     safe_relative_path,
+    selected_evidence_directory,
     write_bytes,
 )
 
@@ -90,6 +99,12 @@ def parse_arguments() -> argparse.Namespace:
         "--expires-at", type=int, help="optional exclusive Unix expiry timestamp"
     )
     sign.add_argument("--out", type=Path, required=True)
+    sign.add_argument("--root", type=Path, default=repo_root())
+    sign.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external signature workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     sign.add_argument(
         "--openssl",
         type=Path,
@@ -123,6 +138,15 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         help="independently reviewed SHA-256 of the OpenSSL executable",
     )
+    verify.add_argument("--root", type=Path, default=repo_root())
+    verify.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help=(
+            "reserved external evidence selector; verification is stdout-only and "
+            "does not emit a report"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -147,7 +171,7 @@ def _executable_identity(path: Path) -> tuple[int, int, int, int, int, str]:
         raise ReleaseError(f"cannot securely open reviewed OpenSSL: {error}") from error
     try:
         metadata = os.fstat(descriptor)
-        named = path.stat(follow_symlinks=False)
+        named = path.lstat()
         if (
             not stat.S_ISREG(metadata.st_mode)
             or (metadata.st_dev, metadata.st_ino) != (named.st_dev, named.st_ino)
@@ -291,7 +315,7 @@ def _stable_file_state(
         raise ReleaseError(f"cannot securely open {label}: {error}") from error
     try:
         before = os.fstat(descriptor)
-        named_before = path.stat(follow_symlinks=False)
+        named_before = path.lstat()
         _validate_regular_metadata(
             before, named_before, maximum, label, owner_only=owner_only
         )
@@ -303,7 +327,7 @@ def _stable_file_state(
             if total > maximum:
                 raise ReleaseError(f"{label} exceeds the reviewed byte limit")
         after = os.fstat(descriptor)
-        named_after = path.stat(follow_symlinks=False)
+        named_after = path.lstat()
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
         if any(
             getattr(before, field) != getattr(after, field) for field in stable_fields
@@ -359,7 +383,7 @@ def _snapshot_regular_file(
     completed = False
     try:
         before = os.fstat(source_descriptor)
-        named_before = source.stat(follow_symlinks=False)
+        named_before = source.lstat()
         _validate_regular_metadata(
             before, named_before, maximum, label, owner_only=owner_only
         )
@@ -381,7 +405,7 @@ def _snapshot_regular_file(
             _write_all(destination_descriptor, chunk, f"{label} snapshot")
         os.fsync(destination_descriptor)
         after = os.fstat(source_descriptor)
-        named_after = source.stat(follow_symlinks=False)
+        named_after = source.lstat()
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
         if any(
             getattr(before, field) != getattr(after, field) for field in stable_fields
@@ -418,7 +442,7 @@ def _stable_regular_bytes(
         raise ReleaseError(f"cannot securely open {label}: {error}") from error
     try:
         before = os.fstat(descriptor)
-        named_before = path.stat(follow_symlinks=False)
+        named_before = path.lstat()
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
@@ -450,7 +474,7 @@ def _stable_regular_bytes(
             if total > maximum:
                 raise ReleaseError(f"{label} exceeds the reviewed byte limit")
         after = os.fstat(descriptor)
-        named_after = path.stat(follow_symlinks=False)
+        named_after = path.lstat()
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
         if any(
             getattr(before, field) != getattr(after, field) for field in stable_fields
@@ -492,7 +516,11 @@ def _run(
                 _STAGED_OPENSSL[0].cleanup()
             temporary = tempfile.TemporaryDirectory(prefix="cigar-openssl-")
             directory = Path(temporary.name).resolve(strict=True)
-            os.chmod(directory, 0o700)
+            # The pinned signer executable snapshot must be inaccessible to other local users.
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+                directory,
+                0o700,
+            )
             staged = directory / ("openssl.exe" if os.name == "nt" else "openssl")
             try:
                 with selected.open("rb") as source, staged.open("xb") as destination:
@@ -534,7 +562,11 @@ def _public_der(
     key_payload = _stable_regular_bytes(public_key, 1024 * 1024, "release public key")
     with tempfile.TemporaryDirectory(prefix="cigar-public-key-") as raw:
         directory = Path(raw).resolve(strict=True)
-        os.chmod(directory, 0o700)
+        # Key conversion staging is private even though this particular payload is public.
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            directory,
+            0o700,
+        )
         snapshot = directory / "public.pem"
         write_bytes(snapshot, key_payload)
         os.chmod(snapshot, 0o400)
@@ -683,7 +715,7 @@ def _write_new_private_json(path: Path, value: object) -> None:
     original_parent = path.parent
     try:
         parent = original_parent.resolve(strict=True)
-        metadata = parent.stat(follow_symlinks=False)
+        metadata = parent.lstat()
     except OSError as error:
         raise ReleaseError(
             f"cannot resolve signature output directory: {error}"
@@ -773,7 +805,11 @@ def sign(
         )
     with tempfile.TemporaryDirectory(prefix="cigar-signature-") as raw:
         directory = Path(raw).resolve(strict=True)
-        os.chmod(directory, 0o700)
+        # Signature staging contains a private-key snapshot and must be owner-only.
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            directory,
+            0o700,
+        )
         payload_snapshot = directory / "payload.bin"
         private_key_snapshot = directory / "private.pem"
         public_key_snapshot = directory / "public.pem"
@@ -899,7 +935,11 @@ def verify(
     )
     with tempfile.TemporaryDirectory(prefix="cigar-verify-inputs-") as raw:
         directory = Path(raw).resolve(strict=True)
-        os.chmod(directory, 0o700)
+        # Verification snapshots remain private until every input identity is rechecked.
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            directory,
+            0o700,
+        )
         envelope_snapshot = directory / "envelope.json"
         payload_snapshot = directory / "payload.bin"
         public_key_snapshot = directory / "public.pem"
@@ -945,6 +985,72 @@ def verify(
     ):
         raise ReleaseError("trusted public key changed while it was being verified")
     return unsigned
+
+
+def _sign_to_evidence_workspace(
+    arguments: argparse.Namespace,
+    selected: Path,
+) -> bytes:
+    """Stage a signature, then bind and publish it through EvidenceWorkspace."""
+
+    try:
+        root = arguments.root.resolve(strict=True)
+    except OSError as error:
+        raise ReleaseError(f"cannot resolve repository root: {error}") from error
+    if not root.is_dir():
+        raise ReleaseError("repository root is not a directory")
+    try:
+        parts = safe_evidence_path(os.fspath(arguments.out))
+        workspace = EvidenceWorkspace.create(selected, repository_root=root)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+
+    payload = arguments.payload.absolute()
+    private_key = arguments.private_key.absolute()
+    public_key = arguments.public_key.absolute()
+    final_path = workspace.root.joinpath(*parts)
+    try:
+        require_distinct_output(
+            final_path,
+            (payload, private_key, public_key),
+            "signature",
+        )
+        with tempfile.TemporaryDirectory(prefix="cigar-signature-output-") as raw:
+            staging_directory = Path(raw).resolve(strict=True)
+            # Unpublished signature envelopes are assembled in an owner-private directory.
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+                staging_directory,
+                0o700,
+            )
+            staged = staging_directory / "signature-envelope.json"
+            sign(
+                payload,
+                private_key,
+                public_key,
+                staged,
+                signer_principal=arguments.signer_principal,
+                purpose=arguments.purpose,
+                signed_at=arguments.signed_at,
+                expires_at=arguments.expires_at,
+                openssl_path=arguments.openssl,
+                openssl_sha256=arguments.openssl_sha256,
+            )
+            envelope = _stable_regular_bytes(
+                staged,
+                _MAX_ENVELOPE_BYTES,
+                "staged signature output",
+            )
+            workspace.attach_file(
+                staged,
+                "/".join(parts),
+                expected_sha256=hashlib.sha256(envelope).hexdigest(),
+                expected_bytes=len(envelope),
+            )
+            return envelope
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"cannot publish signature evidence: {error}") from error
+    finally:
+        workspace.close()
 
 
 def _verify_with_public_key(
@@ -1042,29 +1148,37 @@ def _verify_with_public_key(
 def main() -> int:
     arguments = parse_arguments()
     if arguments.action == "sign":
-        payload = arguments.payload.absolute()
-        private_key = arguments.private_key.absolute()
-        public_key = arguments.public_key.absolute()
-        output = arguments.out.absolute()
-        sign(
-            payload,
-            private_key,
-            public_key,
-            output,
-            signer_principal=arguments.signer_principal,
-            purpose=arguments.purpose,
-            signed_at=arguments.signed_at,
-            expires_at=arguments.expires_at,
-            openssl_path=arguments.openssl,
-            openssl_sha256=arguments.openssl_sha256,
-        )
-        print(
-            _stable_regular_bytes(
-                output, _MAX_ENVELOPE_BYTES, "signature output"
-            ).decode("utf-8"),
-            end="",
-        )
+        selected = selected_evidence_directory(arguments.evidence_dir)
+        if selected is None:
+            payload = arguments.payload.absolute()
+            private_key = arguments.private_key.absolute()
+            public_key = arguments.public_key.absolute()
+            output = arguments.out.absolute()
+            sign(
+                payload,
+                private_key,
+                public_key,
+                output,
+                signer_principal=arguments.signer_principal,
+                purpose=arguments.purpose,
+                signed_at=arguments.signed_at,
+                expires_at=arguments.expires_at,
+                openssl_path=arguments.openssl,
+                openssl_sha256=arguments.openssl_sha256,
+            )
+            envelope = _stable_regular_bytes(
+                output,
+                _MAX_ENVELOPE_BYTES,
+                "signature output",
+            )
+        else:
+            envelope = _sign_to_evidence_workspace(arguments, selected)
+        print(envelope.decode("utf-8"), end="")
     else:
+        reject_evidence_directory(
+            arguments.evidence_dir,
+            "signature verification",
+        )
         verify(
             arguments.envelope.absolute(),
             arguments.payload.absolute(),

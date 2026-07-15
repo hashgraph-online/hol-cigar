@@ -11,6 +11,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from release_lib import (
     ReleaseError,
     load_json,
@@ -27,8 +32,50 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=repo_root())
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external report workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     parser.add_argument("--require-committed-clean", action="store_true")
     return parser.parse_args()
+
+
+def selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    """Select one external report root without resolving untrusted components."""
+
+    argument_value = arguments.evidence_dir
+    environment_value = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument_value is not None and environment_value:
+        if Path(argument_value) != Path(environment_value):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; provide one location"
+            )
+    raw = argument_value if argument_value is not None else environment_value
+    if raw is None or os.fspath(raw) == "":
+        return None
+    selected = Path(raw)
+    if not selected.is_absolute():
+        raise ReleaseError("evidence directory must be an absolute path")
+    return selected
+
+
+def open_report_workspace(
+    arguments: argparse.Namespace, root: Path
+) -> tuple[EvidenceWorkspace | None, str | None]:
+    """Pin an optional external workspace and validate its relative report path."""
+
+    selected = selected_evidence_directory(arguments)
+    if selected is None:
+        return None, None
+    if arguments.report is None:
+        raise ReleaseError("--evidence-dir requires a relative --report path")
+    try:
+        parts = safe_evidence_path(os.fspath(arguments.report))
+        workspace = EvidenceWorkspace.create(selected, repository_root=root)
+    except EvidenceWorkspaceError as error:
+        raise ReleaseError(f"unsafe evidence workspace: {error}") from error
+    return workspace, "/".join(parts)
 
 
 def _build(
@@ -70,57 +117,69 @@ def main() -> int:
     arguments = parse_arguments()
     root = arguments.root.resolve()
     epoch = require_source_date_epoch(arguments.source_date_epoch)
-    with tempfile.TemporaryDirectory(prefix="cigar-reproducibility-") as directory:
-        temporary = Path(directory)
-        first = _build(
-            root,
-            temporary / "builder-a/dist",
-            temporary / "builder-a/home",
-            epoch,
-            arguments.require_committed_clean,
-        )
-        second = _build(
-            root,
-            temporary / "builder-b/dist",
-            temporary / "builder-b/home",
-            epoch,
-            arguments.require_committed_clean,
-        )
-        first_artifacts = {
-            item["id"]: (item["sha256"], item["bytes"]) for item in first["artifacts"]
-        }
-        second_artifacts = {
-            item["id"]: (item["sha256"], item["bytes"]) for item in second["artifacts"]
-        }
-        if first.get("source") != second.get("source"):
-            raise ReleaseError("isolated builders reported different source identities")
-        if first_artifacts != second_artifacts:
-            differences = sorted(set(first_artifacts) | set(second_artifacts))
-            raise ReleaseError(f"isolated archive payloads differ: {differences}")
-        report = {
-            "schema_version": "cigar.reproducibility-report.v1",
-            "scope": "source-derived-local-archives",
-            "status": "passed",
-            "source_date_epoch": epoch,
-            "source": first["source"],
-            "environment": {
-                "timezone": "UTC",
-                "locale": "C",
-                "python_hash_seed": "0",
-                "network_required": False,
-            },
-            "artifacts": [
-                {
-                    "id": identifier,
-                    "builder_a_sha256": value[0],
-                    "builder_b_sha256": second_artifacts[identifier][0],
-                    "bytes": value[1],
-                }
-                for identifier, value in sorted(first_artifacts.items())
-            ],
-        }
-    if arguments.report is not None:
-        write_json(arguments.report.resolve(), report)
+    workspace, relative_report = open_report_workspace(arguments, root)
+    try:
+        with tempfile.TemporaryDirectory(prefix="cigar-reproducibility-") as directory:
+            temporary = Path(directory)
+            first = _build(
+                root,
+                temporary / "builder-a/dist",
+                temporary / "builder-a/home",
+                epoch,
+                arguments.require_committed_clean,
+            )
+            second = _build(
+                root,
+                temporary / "builder-b/dist",
+                temporary / "builder-b/home",
+                epoch,
+                arguments.require_committed_clean,
+            )
+            first_artifacts = {
+                item["id"]: (item["sha256"], item["bytes"])
+                for item in first["artifacts"]
+            }
+            second_artifacts = {
+                item["id"]: (item["sha256"], item["bytes"])
+                for item in second["artifacts"]
+            }
+            if first.get("source") != second.get("source"):
+                raise ReleaseError(
+                    "isolated builders reported different source identities"
+                )
+            if first_artifacts != second_artifacts:
+                differences = sorted(set(first_artifacts) | set(second_artifacts))
+                raise ReleaseError(f"isolated archive payloads differ: {differences}")
+            report = {
+                "schema_version": "cigar.reproducibility-report.v1",
+                "scope": "source-derived-local-archives",
+                "status": "passed",
+                "source_date_epoch": epoch,
+                "source": first["source"],
+                "environment": {
+                    "timezone": "UTC",
+                    "locale": "C",
+                    "python_hash_seed": "0",
+                    "network_required": False,
+                },
+                "artifacts": [
+                    {
+                        "id": identifier,
+                        "builder_a_sha256": value[0],
+                        "builder_b_sha256": second_artifacts[identifier][0],
+                        "bytes": value[1],
+                    }
+                    for identifier, value in sorted(first_artifacts.items())
+                ],
+            }
+        if workspace is not None:
+            assert relative_report is not None
+            workspace.write_json(relative_report, report)
+        elif arguments.report is not None:
+            write_json(arguments.report.resolve(), report)
+    finally:
+        if workspace is not None:
+            workspace.close()
     print(
         f"reproducibility passed for {len(report['artifacts'])} local archive payloads"
     )
@@ -130,5 +189,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (subprocess.TimeoutExpired, ReleaseError) as error:
+    except (EvidenceWorkspaceError, subprocess.TimeoutExpired, ReleaseError) as error:
         raise SystemExit(f"reproducibility check failed: {error}") from error

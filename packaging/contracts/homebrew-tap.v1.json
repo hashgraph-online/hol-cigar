@@ -1,0 +1,19 @@
+{
+  "schema_version": "cigar.package-contract.v1",
+  "id": "homebrew-tap-v1",
+  "formats": ["tar.gz"],
+  "allow": ["Formula/cigar.rb", "HOMEBREW-TAP-METADATA.json", "LICENSE", "NOTICE", "RELEASE-METADATA.json", "SHA256SUMS"],
+  "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/*.p12", "**/*.mobileprovision"],
+  "required": ["Formula/cigar.rb", "HOMEBREW-TAP-METADATA.json", "LICENSE", "NOTICE", "RELEASE-METADATA.json", "SHA256SUMS"],
+  "symlinks": "forbid",
+  "line_endings": "lf",
+  "modes": ["0644"],
+  "max_entries": 16,
+  "max_member_bytes": 16777216,
+  "max_total_bytes": 33554432,
+  "content_scan": true,
+  "content_scan_exemptions": [],
+  "version_binding": {"path_pattern": "HOMEBREW-TAP-METADATA.json", "format": "json", "json_pointer": "/product_version"},
+  "abi_binding": {"path_pattern": "HOMEBREW-TAP-METADATA.json", "format": "json", "json_pointer": "/context_abi"},
+  "checksum_manifest": {"path": "SHA256SUMS", "scope": "all-payload-files"}
+}

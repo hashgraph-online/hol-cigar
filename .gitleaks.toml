@@ -6,7 +6,7 @@ useDefault = true
 [[allowlists]]
 description = "Ignore non-source build, dependency, coverage, and ephemeral test outputs."
 paths = [
-  '''(^|/)(?:target|node_modules|\.venv|dist|build|\.tmp|\.git|\.cigar|\.shared-secrets)(?:/|$)''',
+  '''(^|/)(?:target|node_modules|__pycache__|\.venv|dist|build|\.tmp|\.git|\.cigar|\.shared-secrets)(?:/|$)''',
   '''^artifacts/packages(?:/|$)''',
   '''^reports/.*\.(?:info|tmp)$''',
 ]
@@ -34,3 +34,30 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^prd\.md$''']
 regexes = ['''Implement strict JSON parsing.*key provider.*XChaCha20-Poly1305''']
+
+[[allowlists]]
+description = "Schema-validated CIGARBench tokenizer identities are public algorithm identifiers, never credential material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''^benches/cigarbench/(?:pins/deterministic-consumer-v1\.json|fixtures/smoke-environment\.json|reports/smoke/.*)$''',
+  '''^reports/cigarbench/.*$''',
+]
+regexes = ['''tokenizer["']?\s*:\s*["'][^"'\r\n]{1,128}["']''']
+
+[[allowlists]]
+description = "The benchmark test's fixed canary is deliberately written to prove that consumer filesystem leakage is rejected."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^benches/cigarbench/tests/test_cigarbench\.py$''']
+regexes = ['''secret\s*=\s*"BENCH_CANARY_POLICY_C28617"''']
+
+[[allowlists]]
+description = "These two integration requirement identifiers name handoff authorization tests and are not credentials."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^tests/integration/matrix-v1\.json$''']
+regexes = ['''HANDOFF-AUTH-001"\s*,\s*"HANDOFF-RESULT-001''']

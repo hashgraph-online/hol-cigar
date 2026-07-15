@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/post-beta-capability-profile.v1.schema.json",
+  "title": "CIGAR post-beta macOS arm64 capability profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "source_capability_policy",
+    "platform_scope",
+    "state_order",
+    "fail_closed",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.post-beta.capability-profile.v1"},
+    "profile_id": {"const": "cigar.post-beta.macos-arm64.v1"},
+    "source_capability_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "packaging/beta/capability-policy.v1.json"},
+        "sha256": {"const": "262abc5d6a026ca895a905509436463dc24bd7c60bc94cb42c56978e07c66568"}
+      }
+    },
+    "platform_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_os", "host_arch", "target_triple"],
+      "properties": {
+        "host_os": {"const": "macos"},
+        "host_arch": {"const": "arm64"},
+        "target_triple": {"const": "aarch64-apple-darwin"}
+      }
+    },
+    "state_order": {
+      "const": [
+        "specified",
+        "implemented_source",
+        "integrated",
+        "packaged",
+        "qualified",
+        "published",
+        "supported"
+      ]
+    },
+    "fail_closed": {"const": true},
+    "capabilities": {
+      "type": "array",
+      "minItems": 29,
+      "maxItems": 29,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "catalog-discovery"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "catalog-ingest"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "catalog-query"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "context"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "retrieval"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "handoff"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "space"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "replay"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "policy"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "daemon"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "effects"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "extensions"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "installers"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "macos"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "mcp"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "oci"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "otlp"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "plugin"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "remote"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "sdk"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "shared"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "vector"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "windows"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "arm"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "backup"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "garbage-collection"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "diagnostics"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "serving"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capability"}, {"properties": {"id": {"const": "completion-man"}}}]}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "specified",
+        "implemented_source",
+        "integrated",
+        "packaged",
+        "qualified",
+        "published",
+        "supported"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "specified": {"type": "boolean"},
+        "implemented_source": {"type": "boolean"},
+        "integrated": {"type": "boolean"},
+        "packaged": {"type": "boolean"},
+        "qualified": {"type": "boolean"},
+        "published": {"type": "boolean"},
+        "supported": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"implemented_source": {"const": true}}, "required": ["implemented_source"]}, "then": {"properties": {"specified": {"const": true}}}},
+        {"if": {"properties": {"integrated": {"const": true}}, "required": ["integrated"]}, "then": {"properties": {"implemented_source": {"const": true}}}},
+        {"if": {"properties": {"packaged": {"const": true}}, "required": ["packaged"]}, "then": {"properties": {"integrated": {"const": true}}}},
+        {"if": {"properties": {"qualified": {"const": true}}, "required": ["qualified"]}, "then": {"properties": {"packaged": {"const": true}}}},
+        {"if": {"properties": {"published": {"const": true}}, "required": ["published"]}, "then": {"properties": {"qualified": {"const": true}}}},
+        {"if": {"properties": {"supported": {"const": true}}, "required": ["supported"]}, "then": {"properties": {"published": {"const": true}}}}
+      ]
+    }
+  }
+}

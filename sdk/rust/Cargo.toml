@@ -1,7 +1,7 @@
 [package]
 name = "cigar-sdk"
 description = "Production Rust SDK for embedded and remote CIGAR clients"
-version = "0.1.0"
+version = "1.0.0-dev.1"
 edition = "2024"
 rust-version = "1.92"
 license = "Apache-2.0"
@@ -10,7 +10,16 @@ readme = "README.md"
 homepage = "https://github.com/CIGAR/cigar"
 authors = ["CIGAR contributors"]
 publish = ["crates-io"]
-include = ["src/**", "Cargo.toml", "README.md", "LICENSE", "NOTICE", "release.json"]
+include = [
+    "src/**",
+    "examples/quickstart.rs",
+    "fixtures/semantic-bundle-v1.json",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "release.json",
+]
 
 [features]
 default = ["embedded-daemon"]
@@ -18,14 +27,15 @@ embedded-daemon = ["dep:cigar-daemon"]
 
 [dependencies]
 base64 = "=0.22.1"
-cigar-api = { version = "=0.1.0", path = "../../crates/cigar-api" }
-cigar-canon = { version = "=0.1.0", path = "../../crates/cigar-canon" }
-cigar-daemon = { version = "=0.1.0", path = "../../crates/cigar-daemon", optional = true }
-cigar-protocol = { version = "=0.1.0", path = "../../crates/cigar-protocol" }
+cigar-api = { version = "=1.0.0-dev.1", path = "../../crates/cigar-api" }
+cigar-canon = { version = "=1.0.0-dev.1", path = "../../crates/cigar-canon" }
+cigar-daemon = { version = "=1.0.0-dev.1", path = "../../crates/cigar-daemon", optional = true }
+cigar-protocol = { version = "=1.0.0-dev.1", path = "../../crates/cigar-protocol" }
 futures-core = "=0.3.32"
 futures-util = "=0.3.32"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
 rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+rustix = { version = "=1.1.4", features = ["fs", "process"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 sha2 = "=0.11.0"

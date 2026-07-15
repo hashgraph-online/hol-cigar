@@ -9,17 +9,31 @@ import gzip
 import hashlib
 import io
 import os
+import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
+from evidence_workspace import (
+    EvidenceWorkspace,
+    EvidenceWorkspaceError,
+    safe_relative_path as safe_evidence_path,
+)
 from exercise_runbooks import _source as operation_source
 from qualify_install import (
+    INSTALLED_WORKFLOW_PROFILE,
+    MACOS_NO_EGRESS_ENFORCEMENT,
+    MACOS_PROCESS_ENFORCEMENT,
+    REQUIRED_DRIVER_CHECKS,
+    RUNTIME_PROFILE,
+    _installed_workflow_binding,
     _validate_driver_receipt as validate_installed_driver_receipt,
 )
+from product_version import python_distribution_version
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -36,12 +50,115 @@ from signatures import sign, verify as verify_signature
 from verify_package import verify as verify_package
 
 
+PRODUCT_VERSION = "1.0.0-dev.1"
+PYTHON_DISTRIBUTION_VERSION = python_distribution_version(PRODUCT_VERSION)
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=repo_root())
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="absolute external evidence workspace (or set CIGAR_EVIDENCE_DIR)",
+    )
     return parser.parse_args()
+
+
+def _selected_evidence_directory(arguments: argparse.Namespace) -> Path | None:
+    argument = arguments.evidence_dir
+    environment = os.environ.get("CIGAR_EVIDENCE_DIR")
+    if argument is not None and environment:
+        if os.fspath(argument) != os.fspath(Path(environment)):
+            raise ReleaseError(
+                "--evidence-dir conflicts with CIGAR_EVIDENCE_DIR; "
+                "provide one evidence directory"
+            )
+    if argument is not None:
+        return argument
+    if environment:
+        return Path(environment)
+    return None
+
+
+class _ReportOutput:
+    """Pinned create-new destination for the local qualification receipt."""
+
+    def __init__(self, workspace: EvidenceWorkspace, relative: str) -> None:
+        self.workspace = workspace
+        self.relative = relative
+
+    @classmethod
+    def open(
+        cls,
+        arguments: argparse.Namespace,
+        *,
+        repository_root: Path,
+    ) -> _ReportOutput:
+        evidence_root = _selected_evidence_directory(arguments)
+        requested = arguments.out
+        if evidence_root is not None:
+            if requested.is_absolute():
+                raise ReleaseError(
+                    "--out must be relative when an evidence directory is selected"
+                )
+            parts = safe_evidence_path(os.fspath(requested))
+        else:
+            if not requested.is_absolute():
+                raise ReleaseError(
+                    "--out must be absolute unless --evidence-dir or "
+                    "CIGAR_EVIDENCE_DIR is selected"
+                )
+            evidence_root = requested.parent
+            parts = safe_evidence_path(requested.name)
+        workspace = EvidenceWorkspace.create(
+            evidence_root,
+            repository_root=repository_root,
+        )
+        return cls(workspace, "/".join(parts))
+
+    def publish(self, report: dict[str, Any]) -> None:
+        self.workspace.write_json(self.relative, report)
+
+    def close(self) -> None:
+        self.workspace.close()
+
+
+def _is_same_or_beneath(path: Path, directory: Path) -> bool:
+    try:
+        path.relative_to(directory)
+    except ValueError:
+        return False
+    return True
+
+
+@contextmanager
+def _private_scratch_directory(repository_root: Path) -> Iterator[Path]:
+    """Yield one canonical private scratch root outside the source repository."""
+
+    with tempfile.TemporaryDirectory(prefix="cigar-wp21-local-") as raw:
+        scratch = Path(raw).resolve(strict=True)
+        repository = repository_root.resolve(strict=True)
+        # Qualification scratch holds installed candidate bytes and must remain owner-private.
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            scratch,
+            0o700,
+        )
+        metadata = scratch.stat(follow_symlinks=False)
+        if (
+            scratch != scratch.resolve(strict=True)
+            or _is_same_or_beneath(scratch, repository)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise ReleaseError(
+                "local qualification scratch directory is not canonical, "
+                "private, owner-controlled, and external"
+            )
+        yield scratch
 
 
 def _run(
@@ -70,6 +187,22 @@ def _run(
         raw.stderr.decode("utf-8", errors="replace"),
     )
     return result
+
+
+def _qualification_environment(epoch: int) -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("CIGAR_EVIDENCE_DIR", None)
+    environment.update(
+        {
+            "SOURCE_DATE_EPOCH": str(epoch),
+            "TZ": "UTC",
+            "LC_ALL": "C",
+            "LANG": "C",
+            "PYTHONHASHSEED": "0",
+            "NO_COLOR": "1",
+        }
+    )
+    return environment
 
 
 def _expect_failure(callable_value: Any, label: str) -> None:
@@ -156,7 +289,7 @@ def _write_oci_fixture(
         )
         manifest["annotations"] = {
             "dev.cigar.context-abi": "cigar.context.v1",
-            "org.opencontainers.image.version": "0.1.0",
+            "org.opencontainers.image.version": PRODUCT_VERSION,
         }
         manifest["platform"] = {"architecture": architecture, "os": "linux"}
         blobs[f"blobs/sha256/{manifest['digest'].removeprefix('sha256:')}"] = (
@@ -187,36 +320,18 @@ def _write_oci_fixture(
             archive.addfile(member, io.BytesIO(payload))
 
 
-def main() -> int:
-    arguments = parse_arguments()
-    root = arguments.root.resolve()
-    output = arguments.out.resolve()
-    qualification_root = (root / "artifacts/qualification").resolve()
-    if (
-        root in output.parents
-        and output.parent != qualification_root
-        and qualification_root not in output.parents
-    ):
-        raise ReleaseError(
-            "a repository-local WP21 report must be written beneath artifacts/qualification"
-        )
+def _qualify(
+    arguments: argparse.Namespace,
+    *,
+    root: Path,
+    report_output: _ReportOutput,
+) -> int:
     epoch = require_source_date_epoch(arguments.source_date_epoch)
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "SOURCE_DATE_EPOCH": str(epoch),
-            "TZ": "UTC",
-            "LC_ALL": "C",
-            "LANG": "C",
-            "PYTHONHASHSEED": "0",
-            "NO_COLOR": "1",
-        }
-    )
+    environment = _qualification_environment(epoch)
     python = sys.executable
     checks: list[dict[str, Any]] = []
 
-    with tempfile.TemporaryDirectory(prefix="cigar-wp21-local-") as directory:
-        temporary = Path(directory)
+    with _private_scratch_directory(root) as temporary:
         _run(root, [python, "scripts/release/validate_metadata.py"], environment)
         matrix = load_json(root / "packaging/artifact-matrix.v1.json")
         requirements = load_json(root / "packaging/release-requirements.v1.json")
@@ -319,7 +434,7 @@ def main() -> int:
                     }
                 ],
                 "context_abi": "cigar.context.v1",
-                "product_version": "0.1.0",
+                "product_version": PRODUCT_VERSION,
                 "release_state": "release",
                 "schema_version": "cigar.artifact-matrix.v1",
             },
@@ -330,7 +445,7 @@ def main() -> int:
             {
                 "artifacts": [candidate_record],
                 "context_abi": "cigar.context.v1",
-                "product_version": "0.1.0",
+                "product_version": PRODUCT_VERSION,
                 "schema_version": "cigar.release-build.v1",
                 "source": {
                     "clean": True,
@@ -365,22 +480,21 @@ def main() -> int:
             "operation candidate artifact mutation",
         )
 
-        installed_checks = sorted(
-            {
-                "daemon-lifecycle",
-                "doctor",
-                "effect-recovery",
-                "explain",
-                "handoff",
-                "ingest",
-                "init",
-                "offline-restart",
-                "read-only-parent",
-                "replay",
-                "source-add",
-                "compile",
-                "upgrade",
-            }
+        installed_checks = sorted(REQUIRED_DRIVER_CHECKS)
+        installed_workflow: dict[str, object] = {
+            "profile": INSTALLED_WORKFLOW_PROFILE,
+            "full_surface_sha256": "1" * 64,
+            "semantic_identity_sha256": "2" * 64,
+            "cigar_sha256": "3" * 64,
+            "cigard_sha256": "4" * 64,
+            "binding_sha256": "0" * 64,
+            "no_egress_enforcement": MACOS_NO_EGRESS_ENFORCEMENT,
+        }
+        installed_workflow["binding_sha256"] = _installed_workflow_binding(
+            artifact_id="source",
+            artifact_sha256="d" * 64,
+            source_revision="b" * 40,
+            workflow=installed_workflow,
         )
         installed_driver_receipt = {
             "artifact_id": "source",
@@ -390,7 +504,11 @@ def main() -> int:
                 for identifier in installed_checks
             ],
             "context_abi": "cigar.context.v1",
-            "product_version": "0.1.0",
+            "source_revision": "b" * 40,
+            "runtime_profile": RUNTIME_PROFILE,
+            "installed_workflow": installed_workflow,
+            "process_enforcement": MACOS_PROCESS_ENFORCEMENT,
+            "product_version": PRODUCT_VERSION,
             "schema_version": "cigar.installed-driver.v1",
             "status": "passed",
         }
@@ -398,8 +516,9 @@ def main() -> int:
             canonical_json_bytes(installed_driver_receipt),
             "source",
             "d" * 64,
-            "0.1.0",
+            PRODUCT_VERSION,
             "cigar.context.v1",
+            "b" * 40,
         )
         stale_installed_receipt = {
             **installed_driver_receipt,
@@ -410,8 +529,9 @@ def main() -> int:
                 canonical_json_bytes(stale_installed_receipt),
                 "source",
                 "d" * 64,
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
+                "b" * 40,
             ),
             "installed driver stale artifact binding",
         )
@@ -555,7 +675,7 @@ def main() -> int:
         )
 
         key_directory = temporary / "ephemeral-key"
-        key_directory.mkdir()
+        key_directory.mkdir(mode=0o700)
         private_key = key_directory / "private.pem"
         public_key = key_directory / "public.pem"
         _run(
@@ -683,7 +803,7 @@ def main() -> int:
         oci_report = verify_package(
             oci_fixture,
             oci_contract,
-            "0.1.0",
+            PRODUCT_VERSION,
             "cigar.context.v1",
             epoch,
         )
@@ -703,7 +823,7 @@ def main() -> int:
             lambda: verify_package(
                 root_oci_fixture,
                 oci_contract,
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
                 epoch,
             ),
@@ -720,7 +840,7 @@ def main() -> int:
             lambda: verify_package(
                 wrong_diff_oci_fixture,
                 oci_contract,
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
                 epoch,
             ),
@@ -737,7 +857,7 @@ def main() -> int:
             lambda: verify_package(
                 secret_oci_fixture,
                 oci_contract,
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
                 epoch,
             ),
@@ -813,12 +933,12 @@ def main() -> int:
         python_sdist_contract = root / "packaging/contracts/python-sdist.v1.json"
 
         def write_python_sdist_fixture(path: Path, gitignore_payload: bytes) -> None:
-            prefix = "cigar_sdk-0.1.0/"
+            prefix = f"cigar_sdk-{PYTHON_DISTRIBUTION_VERSION}/"
             release_payload = canonical_json_bytes(
                 {
                     "schema_version": "cigar.sdk-release.v1",
                     "name": "cigar-sdk",
-                    "version": "0.1.0",
+                    "version": PRODUCT_VERSION,
                     "context_abi": "cigar.context.v1",
                 }
             )
@@ -826,9 +946,13 @@ def main() -> int:
                 ".gitignore": gitignore_payload,
                 "LICENSE": b"synthetic Apache-2.0 license fixture\n",
                 "NOTICE": b"synthetic CIGAR notice fixture\n",
-                "PKG-INFO": b"Metadata-Version: 2.4\nName: cigar-sdk\nVersion: 0.1.0\n",
+                "PKG-INFO": (
+                    f"Metadata-Version: 2.4\nName: cigar-sdk\nVersion: {PYTHON_DISTRIBUTION_VERSION}\n".encode()
+                ),
                 "README.md": b"# Synthetic CIGAR SDK sdist fixture\n",
-                "pyproject.toml": b'[project]\nname = "cigar-sdk"\nversion = "0.1.0"\n',
+                "pyproject.toml": (
+                    f'[project]\nname = "cigar-sdk"\nversion = "{PYTHON_DISTRIBUTION_VERSION}"\n'.encode()
+                ),
                 "src/cigar_sdk/__init__.py": b'CONTEXT_ABI = "cigar.context.v1"\n',
                 "src/cigar_sdk/release.json": release_payload,
             }
@@ -847,7 +971,7 @@ def main() -> int:
         verify_package(
             safe_python_sdist,
             python_sdist_contract,
-            "0.1.0",
+            PRODUCT_VERSION,
             "cigar.context.v1",
             epoch,
         )
@@ -860,7 +984,7 @@ def main() -> int:
             lambda: verify_package(
                 secret_python_sdist,
                 python_sdist_contract,
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
                 epoch,
             ),
@@ -879,7 +1003,7 @@ def main() -> int:
             lambda: verify_package(
                 malicious,
                 root / "packaging/contracts/license-archive.v1.json",
-                "0.1.0",
+                PRODUCT_VERSION,
                 "cigar.context.v1",
                 epoch,
             ),
@@ -901,7 +1025,11 @@ def main() -> int:
         write_json(bounded_contract_path, bounded_contract)
         _expect_failure(
             lambda: verify_package(
-                entry_bomb, bounded_contract_path, "0.1.0", "cigar.context.v1", epoch
+                entry_bomb,
+                bounded_contract_path,
+                PRODUCT_VERSION,
+                "cigar.context.v1",
+                epoch,
             ),
             "archive entry-count bomb",
         )
@@ -1011,15 +1139,30 @@ def main() -> int:
         "checks": checks,
         "release_blocking_gaps": blocking_gaps,
     }
-    write_json(output, report)
+    report_output.publish(report)
     print(
         f"WP21 local qualification passed {len(checks)} checks; {len(blocking_gaps)} release-blocking gaps remain"
     )
     return 0
 
 
+def main() -> int:
+    arguments = parse_arguments()
+    root = arguments.root.resolve(strict=True)
+    report_output = _ReportOutput.open(arguments, repository_root=root)
+    try:
+        return _qualify(arguments, root=root, report_output=report_output)
+    finally:
+        report_output.close()
+
+
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, subprocess.TimeoutExpired, ReleaseError) as error:
+    except (
+        EvidenceWorkspaceError,
+        OSError,
+        subprocess.TimeoutExpired,
+        ReleaseError,
+    ) as error:
         raise SystemExit(f"WP21 local qualification failed: {error}") from error

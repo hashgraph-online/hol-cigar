@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "status": "development-closed",
+  "cli": {
+    "mapping_count": 34,
+    "mappings": [
+      { "exposed_name": "source.refresh", "operation_id": "discoverSources", "operation_kind": "read" },
+      { "exposed_name": "source.inspect", "operation_id": "getSourceStatus", "operation_kind": "read" },
+      { "exposed_name": "ingest", "operation_id": "ingestCatalog", "operation_kind": "mutation" },
+      { "exposed_name": "status", "operation_id": "getReadiness", "operation_kind": "read" },
+      { "exposed_name": "context.plan", "operation_id": "createContextPlan", "operation_kind": "mutation" },
+      { "exposed_name": "context.compile", "operation_id": "compileContextBundle", "operation_kind": "mutation" },
+      { "exposed_name": "context.explain", "operation_id": "explainContextBundle", "operation_kind": "mutation" },
+      { "exposed_name": "context.diff", "operation_id": "compileContextDelta", "operation_kind": "mutation" },
+      { "exposed_name": "context.revalidate", "operation_id": "revalidateContextBundle", "operation_kind": "mutation" },
+      { "exposed_name": "context.materialize", "operation_id": "materializeContextBundle", "operation_kind": "mutation" },
+      { "exposed_name": "focus.new", "operation_id": "createSpace", "operation_kind": "mutation" },
+      { "exposed_name": "focus.checkpoint", "operation_id": "createSpaceCheckpoint", "operation_kind": "mutation" },
+      { "exposed_name": "space.fork", "operation_id": "forkSpace", "operation_kind": "mutation" },
+      { "exposed_name": "space.publish", "operation_id": "publishSpace", "operation_kind": "mutation" },
+      { "exposed_name": "space.log", "operation_id": "getSpaceLog", "operation_kind": "read" },
+      { "exposed_name": "space.conflicts", "operation_id": "listSpaceConflicts", "operation_kind": "read" },
+      { "exposed_name": "handoff.create", "operation_id": "createHandoff", "operation_kind": "mutation" },
+      { "exposed_name": "handoff.preview", "operation_id": "previewHandoff", "operation_kind": "read" },
+      { "exposed_name": "handoff.inspect", "operation_id": "previewHandoff", "operation_kind": "read", "alias_of": "handoff.preview" },
+      { "exposed_name": "handoff.accept", "operation_id": "acceptHandoff", "operation_kind": "mutation" },
+      { "exposed_name": "handoff.revoke", "operation_id": "revokeHandoff", "operation_kind": "mutation" },
+      { "exposed_name": "handoff.merge", "operation_id": "mergeHandoff", "operation_kind": "mutation" },
+      { "exposed_name": "effect.prepare", "operation_id": "prepareEffect", "operation_kind": "mutation" },
+      { "exposed_name": "effect.approve", "operation_id": "authorizeEffect", "operation_kind": "mutation" },
+      { "exposed_name": "effect.dispatch", "operation_id": "dispatchEffect", "operation_kind": "mutation" },
+      { "exposed_name": "effect.inspect", "operation_id": "getEffectStatus", "operation_kind": "read" },
+      { "exposed_name": "effect.reconcile", "operation_id": "reconcileEffect", "operation_kind": "mutation" },
+      { "exposed_name": "effect.compensate", "operation_id": "compensateEffect", "operation_kind": "mutation" },
+      { "exposed_name": "replay.reconstruct", "operation_id": "createReplay", "operation_kind": "mutation" },
+      { "exposed_name": "replay.run", "operation_id": "runObservationalReplay", "operation_kind": "mutation" },
+      { "exposed_name": "replay.compare", "operation_id": "compareLiveReplay", "operation_kind": "mutation" },
+      { "exposed_name": "replay.completeness", "operation_id": "getReplayCompleteness", "operation_kind": "read" },
+      { "exposed_name": "doctor", "operation_id": "getDiagnostics", "operation_kind": "read" },
+      { "exposed_name": "catalog.query", "operation_id": "queryCatalog", "operation_kind": "read" }
+    ]
+  },
+  "mcp": {
+    "mapping_count": 10,
+    "mappings": [
+      { "exposed_name": "context_compile", "operation_id": "createContextPlan", "operation_kind": "mutation", "authority_lane": "context_read" },
+      { "exposed_name": "context_expand", "operation_id": "materializeContextBundle", "operation_kind": "mutation", "authority_lane": "context_read" },
+      { "exposed_name": "context_explain", "operation_id": "explainContextBundle", "operation_kind": "mutation", "authority_lane": "context_read" },
+      { "exposed_name": "catalog_query", "operation_id": "queryCatalog", "operation_kind": "read", "authority_lane": "catalog_read" },
+      { "exposed_name": "checkpoint_create", "operation_id": "createSpaceCheckpoint", "operation_kind": "mutation", "authority_lane": "coordination_write" },
+      { "exposed_name": "handoff_create", "operation_id": "createHandoff", "operation_kind": "mutation", "authority_lane": "coordination_write" },
+      { "exposed_name": "handoff_accept", "operation_id": "acceptHandoff", "operation_kind": "mutation", "authority_lane": "coordination_write" },
+      { "exposed_name": "effect_prepare", "operation_id": "prepareEffect", "operation_kind": "mutation", "authority_lane": "effect_prepare" },
+      { "exposed_name": "effect_commit", "operation_id": "dispatchEffect", "operation_kind": "mutation", "authority_lane": "effect_commit" },
+      { "exposed_name": "effect_status", "operation_id": "getEffectStatus", "operation_kind": "read", "authority_lane": "effect_read" }
+    ]
+  }
+}

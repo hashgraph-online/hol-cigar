@@ -6,6 +6,7 @@ Commands:
   cigar init
   cigar source add | list | refresh | inspect | remove
   cigar ingest
+  cigar catalog query
   cigar status
   cigar context plan | compile | explain | diff | revalidate | materialize
   cigar project list | attach | detach | switch | link | unlink
@@ -18,9 +19,12 @@ Commands:
   cigar backup create <archive>
   cigar backup verify <archive>
   cigar backup restore <archive> <empty-target>
-  cigar gc plan [--input <gc-policy.json>]
-  cigar gc run --input <gc-policy.json>
+  cigar gc plan <new-signed-plan.json> [--input <gc-policy.json>] --yes
+  cigar gc run <signed-plan.json> --yes
   cigar diagnostics bundle <content-free-support.tar>
+  cigar state inspect-beta <0.1.0-beta.1-state.json>
+  cigar state import-beta <0.1.0-beta.1-state.json> <new-backup-directory>
+  cigar state restore-beta <verified-backup-directory> <new-empty-recovery-directory>
   cigar doctor [--security] [--deep]
   cigar serve
   cigar mcp serve
@@ -30,6 +34,8 @@ Commands:
   cigar release verify
   cigar completion <bash|zsh|fish>
   cigar man
+  cigar help
+  cigar version
 
 Global options:
   --output <text|json>                 Select human or versioned machine output
@@ -46,6 +52,7 @@ Global options:
   --page-size <1..1000>               Bound one page
   --dry-run                           Validate and authorize without committing
   --yes                               Confirm a reviewed state change
+  --confirm                           Alias of --yes
   --non-interactive                   Disable all prompts
   --quiet                             Disable progress
   --color <auto|always|never>         Control optional color
@@ -54,7 +61,13 @@ Global options:
   --explain-config                    Print effective values and their sources
   --security                          Run local security diagnostics
   --deep                              Verify hashes, journals, and projections
+  --help                              Show this help (alias: -h)
+  --version                           Show build metadata (alias: -V)
 
 Mutations require --yes unless --dry-run is used. JSON is emitted only on stdout;
 progress is emitted only to an interactive stderr. Secrets are accepted only through files.
 Local source/project/focus references do not rewrite the daemon's trusted production registries.
+Beta-state inspection and transition receipts are content-free: they emit digests and counts, never
+paths or identifiers. Import requires a verified exact-byte backup and publishes a new full-only
+state directory atomically. In-place downgrade is blocked; restore writes only a distinct new empty
+recovery directory.

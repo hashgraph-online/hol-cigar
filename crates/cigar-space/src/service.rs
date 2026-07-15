@@ -555,8 +555,9 @@ impl ContextSpaceService {
             }
             scanned = scanned.checked_add(1).ok_or(SpaceError::LimitExceeded)?;
         }
-        let resume_cursor =
-            EventCursor(u64::try_from(scanned).map_err(|_error| SpaceError::LimitExceeded)?);
+        let resume_cursor = after.advance_to(EventCursor(
+            u64::try_from(scanned).map_err(|_error| SpaceError::LimitExceeded)?,
+        ));
         Ok(EventPage {
             has_more,
             events,

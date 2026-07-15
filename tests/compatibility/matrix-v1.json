@@ -1,12 +1,12 @@
 {
   "schema_version": "cigar.test-matrix.v1",
   "suite": "compatibility",
-  "description": "Frozen schema, operation, canonical digest, replay, SDK ABI, and Claude public-surface compatibility gates.",
+  "description": "Frozen schema, operation, local Unix IPC, canonical digest, replay, SDK ABI, and Claude public-surface compatibility gates.",
   "cases": [
     {
       "id": "COMPAT-API-001",
-      "title": "Every generated operation and payload is identical across HTTP, gRPC, SDK, and embedded bindings.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-api", "--test", "complete_registry_differential", "--test", "typed_payload_contract"],
+      "title": "Every generated operation and payload is identical across embedded, HTTP/SSE, and gRPC bindings.",
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-api", "--test", "complete_registry_differential", "--test", "typed_payload_contract"],
       "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -14,8 +14,8 @@
     },
     {
       "id": "COMPAT-CLAUDE-001",
-      "title": "Claude plugin archive and its public hook and MCP surfaces validate without private paths.",
-      "command": ["bash", "adapters/claude-code/tests/public-surface-smoke.sh"],
+      "title": "Claude plugin source directory and its source-built public hook and MCP surfaces validate without private paths.",
+      "command": ["bash", "adapters/claude-code/tests/public-surface-smoke.sh", "--source-build"],
       "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos"],
@@ -31,6 +31,15 @@
       "requirements": ["SDK-GO-001", "COMPAT-ABI-001"]
     },
     {
+      "id": "COMPAT-LOCAL-IPC-001",
+      "title": "All 45 generated operations retain their exact HTTP or SSE contract over the real macOS Unix socket.",
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-daemon", "--lib", "-E", "test(=server::tests::macos_unix_socket_routes_all_45_operations_through_the_generated_contract)"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["API-DIFFERENTIAL-001", "API-UNIX-IPC-001"]
+    },
+    {
       "id": "COMPAT-PYTHON-001",
       "title": "Python SDK release metadata, Context ABI, digests, hardening, and client contracts stay frozen.",
       "command": ["uv", "run", "--project", "sdk/python", "pytest", "sdk/python/tests"],
@@ -42,7 +51,7 @@
     {
       "id": "COMPAT-REPLAY-001",
       "title": "Rust, TypeScript, Python, and Go reproduce the exact replay vector and reject duplicate keys.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-replay", "--test", "wp13_cross_sdk"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-replay", "--test", "wp13_cross_sdk"],
       "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
@@ -51,11 +60,20 @@
     {
       "id": "COMPAT-RUST-001",
       "title": "Rust SDK release metadata, Context ABI, domain routes, errors, and frozen vectors stay compatible.",
-      "command": ["cargo", "nextest", "run", "--locked", "-p", "cigar-sdk", "--all-targets"],
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-sdk", "--all-targets"],
       "timeout_seconds": 1800,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
       "requirements": ["SDK-RUST-001", "COMPAT-ABI-001"]
+    },
+    {
+      "id": "COMPAT-SURFACE-001",
+      "title": "The complete frozen operation semantics and closed CLI/MCP/observability/error projections retain one source authority.",
+      "command": ["python3", "tools/quality/operation_surface_parity.py", "--quiet"],
+      "timeout_seconds": 120,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["API-OPERATION-ID-001", "API-DIFFERENTIAL-001", "COMPAT-SCHEMA-001", "OBS-CARDINALITY-001"]
     },
     {
       "id": "COMPAT-TYPESCRIPT-001",
@@ -67,10 +85,37 @@
       "requirements": ["SDK-TYPESCRIPT-001", "COMPAT-ABI-001"]
     },
     {
-      "id": "COMPAT-VECTORS-001",
-      "title": "All four languages reproduce the immutable canonical vectors.",
-      "command": ["cargo", "xtask", "test", "vectors"],
-      "timeout_seconds": 1800,
+      "id": "COMPAT-VECTORS-GO-001",
+      "title": "Go independently reproduces the immutable canonical vectors.",
+      "command": ["go", "-C", "sdk/go", "run", "./cmd/cigar-verify-vectors", "../../schemas/vectors/canonical-v1.json"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["VER-CANON-DIFFERENTIAL-001", "COMPAT-VECTOR-001"]
+    },
+    {
+      "id": "COMPAT-VECTORS-PYTHON-001",
+      "title": "Python independently reproduces the immutable canonical vectors.",
+      "command": ["uv", "run", "--project", "sdk/python", "python", "-m", "cigar_sdk.verify_vectors", "schemas/vectors/canonical-v1.json"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["VER-CANON-DIFFERENTIAL-001", "COMPAT-VECTOR-001"]
+    },
+    {
+      "id": "COMPAT-VECTORS-RUST-001",
+      "title": "Rust independently reproduces the immutable canonical vectors.",
+      "command": ["cargo", "run", "--locked", "-p", "cigar-canon", "--bin", "cigar-verify-vectors", "--", "schemas/vectors/canonical-v1.json"],
+      "timeout_seconds": 1200,
+      "profiles": ["local", "release"],
+      "platforms": ["linux", "macos", "windows"],
+      "requirements": ["VER-CANON-DIFFERENTIAL-001", "COMPAT-VECTOR-001"]
+    },
+    {
+      "id": "COMPAT-VECTORS-TYPESCRIPT-001",
+      "title": "TypeScript independently reproduces the immutable canonical vectors.",
+      "command": ["corepack", "pnpm", "--dir", "sdk/typescript", "vectors"],
+      "timeout_seconds": 1200,
       "profiles": ["local", "release"],
       "platforms": ["linux", "macos", "windows"],
       "requirements": ["VER-CANON-DIFFERENTIAL-001", "COMPAT-VECTOR-001"]

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "benches" / "cigarbench" / "cigarbench.py"
@@ -82,6 +85,80 @@ class CigarBenchTests(unittest.TestCase):
         )
         self.assertEqual(status, 0)
         return output
+
+    def test_external_evidence_output_is_private_create_new_and_conflict_safe(
+        self,
+    ) -> None:
+        evidence = self.temp.resolve() / "external-evidence"
+        arguments = [
+            "--evidence-dir",
+            str(evidence),
+            "plan",
+            "--datasets",
+            str(self.datasets),
+            "--baselines",
+            str(self.baselines),
+            "--canaries",
+            str(self.canaries),
+            "--pins",
+            str(self.pins),
+            "--environment",
+            str(self.environment),
+            "--seed-file",
+            str(self.public_seed),
+            "--run-id",
+            "external-evidence-v1",
+            "--baseline-id",
+            "full-transcript-project",
+            "--replicates",
+            "1",
+            "--evidence-class",
+            "harness_smoke",
+            "--output",
+            "benchmark/plan.json",
+        ]
+        self.assertEqual(cigarbench.main(arguments), 0)
+        output = evidence / "benchmark" / "plan.json"
+        receipt = evidence / "benchmark" / "plan.json.receipt.json"
+        self.assertTrue(output.is_file())
+        self.assertTrue(receipt.is_file())
+        self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o400)
+        self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o400)
+        publication = json.loads(receipt.read_bytes())
+        self.assertEqual(publication["command"], "plan")
+        self.assertEqual(publication["status"], "passed")
+        self.assertFalse(publication["qualifying_evidence"])
+        self.assertFalse(publication["source_descriptor_bound"])
+        self.assertEqual(publication["output"]["path"], "benchmark/plan.json")
+        self.assertEqual(cigarbench.main(arguments), 2)
+
+        other = self.temp.resolve() / "other-evidence"
+        with mock.patch.dict(
+            os.environ, {"CIGAR_EVIDENCE_DIR": str(other)}, clear=False
+        ):
+            self.assertEqual(cigarbench.main(arguments), 2)
+        self.assertFalse(other.exists())
+
+    def test_external_evidence_receipts_stdout_only_commands(self) -> None:
+        evidence = self.temp.resolve() / "digest-evidence"
+        self.assertEqual(
+            cigarbench.main(
+                [
+                    "--evidence-dir",
+                    str(evidence),
+                    "manifest-digest",
+                    "--kind",
+                    "datasets",
+                    "--input",
+                    str(self.datasets),
+                ]
+            ),
+            0,
+        )
+        receipt = evidence / "cigarbench" / "manifest-digest.receipt.json"
+        self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o400)
+        self.assertEqual(json.loads(receipt.read_bytes())["status"], "passed")
 
     def test_hidden_seed_is_committed_not_disclosed_and_assignment_is_balanced(
         self,

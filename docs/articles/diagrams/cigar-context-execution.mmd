@@ -1,0 +1,32 @@
+flowchart LR
+    source[/"Approved source"/]
+    snapshot["Immutable snapshot"]
+    atoms["Typed atoms and provenance"]
+    contract[/"Context contract"/]
+    retrieve["Authorized retrieval"]
+    reconcile["Reconcile versions"]
+    compile["Deterministic compile"]
+    bundle["Bundle and manifest"]
+    materialize["Exact materialization"]
+    consumer["Agent or model"]
+    decision["Decision archive"]
+    replay["Replay and compare"]
+
+    source --> snapshot
+    snapshot --> atoms
+    contract --> retrieve
+    atoms --> retrieve
+    retrieve --> reconcile
+    reconcile --> compile
+    compile --> bundle
+    bundle --> materialize
+    materialize --> consumer
+    consumer --> decision
+    bundle --> decision
+    decision --> replay
+
+    style source fill:#C2E5FF,stroke:#3DADFF
+    style contract fill:#C2E5FF,stroke:#3DADFF
+    style bundle fill:#CDF4D3,stroke:#66D575
+    style decision fill:#DCCCFF,stroke:#874FFF
+    style replay fill:#DCCCFF,stroke:#874FFF

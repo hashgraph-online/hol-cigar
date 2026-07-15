@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 cigar-protocol.workspace = true
+getrandom.workspace = true
 
 [lints]
 workspace = true
@@ -17,4 +18,3 @@ workspace = true
 [[bin]]
 name = "cigar-mcp"
 path = "src/main.rs"
-

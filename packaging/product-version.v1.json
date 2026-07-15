@@ -1,0 +1,13 @@
+{
+  "schema_version": "cigar.product-version.v1",
+  "product": "cigar",
+  "version": "1.0.0-dev.1",
+  "target_release_version": "1.0.0",
+  "context_abi": "cigar.context.v1",
+  "release_state": "development",
+  "channel": "development",
+  "prerelease": true,
+  "published": false,
+  "supported": false,
+  "tag": null
+}
