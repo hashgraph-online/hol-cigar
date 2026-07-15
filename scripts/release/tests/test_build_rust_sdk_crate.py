@@ -314,6 +314,24 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         self.assertIn("examples/quickstart.rs", configuration.sdk_sources)
         self.assertIn("fixtures/semantic-bundle-v1.json", configuration.sdk_sources)
 
+    def test_honey_output_workspace_accepts_the_contracted_kit_bound(self) -> None:
+        captured: dict[str, object] = {}
+        real_create = builder.EvidenceWorkspace.create
+
+        def capture_create(*args: object, **kwargs: object) -> object:
+            captured["limits"] = kwargs.get("limits")
+            return real_create(*args, **kwargs)
+
+        with mock.patch.object(
+            builder.EvidenceWorkspace, "create", side_effect=capture_create
+        ):
+            self.produce(self.base / "bounded-kit")
+
+        limits = captured["limits"]
+        self.assertIsInstance(limits, builder.EvidenceLimits)
+        self.assertEqual(limits.max_file_bytes, builder.MAX_KIT_ARCHIVE_BYTES)
+        self.assertGreater(limits.max_total_bytes, limits.max_file_bytes)
+
     def test_repeated_builds_are_byte_identical(self) -> None:
         first = self.base / "first"
         second = self.base / "second"

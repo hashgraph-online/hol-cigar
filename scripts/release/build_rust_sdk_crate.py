@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
-from evidence_workspace import EvidenceWorkspace, EvidenceWorkspaceError
+from evidence_workspace import EvidenceLimits, EvidenceWorkspace, EvidenceWorkspaceError
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -2639,7 +2639,21 @@ def produce(
         root, honey_local_registry_kit=honey_local_registry_kit
     )
 
-    workspace = EvidenceWorkspace.create(evidence_root, repository_root=root)
+    maximum_archive_bytes = (
+        MAX_KIT_ARCHIVE_BYTES if honey_local_registry_kit else MAX_ARCHIVE_BYTES
+    )
+    workspace = EvidenceWorkspace.create(
+        evidence_root,
+        repository_root=root,
+        limits=EvidenceLimits(
+            max_files=4,
+            max_directories=2,
+            max_file_bytes=maximum_archive_bytes,
+            max_total_bytes=maximum_archive_bytes + (16 * 1024 * 1024),
+            max_json_bytes=16 * 1024 * 1024,
+            max_path_depth=2,
+        ),
+    )
     try:
         workspace.read_files(set())
         with tempfile.TemporaryDirectory(prefix="cigar-rust-sdk-crate-build-") as raw:
@@ -2673,11 +2687,9 @@ def produce(
                 if built.kit_path is None:
                     raise ReleaseError("Honey Rust SDK builder returned no kit archive")
                 staged_archive = built.kit_path
-                maximum_archive_bytes = MAX_KIT_ARCHIVE_BYTES
             else:
                 staged_archive = scratch / configuration.filename
                 _write_canonical_crate(staged_archive, built.entries, epoch)
-                maximum_archive_bytes = MAX_ARCHIVE_BYTES
             validated = _read_stable_file(
                 staged_archive, maximum_archive_bytes, "staged Rust SDK artifact"
             )
