@@ -38,7 +38,7 @@ class SourceOnlyEntrypointTests(unittest.TestCase):
             entrypoints.append(path.name)
             if "--evidence-dir" not in source:
                 missing.append(path.name)
-        self.assertEqual(len(entrypoints), 36)
+        self.assertEqual(len(entrypoints), 44)
         self.assertEqual(missing, [])
 
     def test_source_mutators_and_stdout_only_checks_reject_evidence(self) -> None:

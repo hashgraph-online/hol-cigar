@@ -15,6 +15,18 @@ Start at the [documentation home](site/index.md). The published set is declared 
 - [Troubleshooting](troubleshooting/index.md)
 - [Release verification](release/verification.md)
 
+The Honey developer-preview path has its own bounded installation and usage guides:
+
+- [Honey install](guides/honey-install.md)
+- [Honey offline quickstart](guides/honey-quickstart.md)
+- [Honey two-agent workflow](guides/honey-two-agent.md)
+- [Honey Python](guides/honey-python.md), [TypeScript](guides/honey-typescript.md), and
+  [Rust](guides/honey-rust.md)
+- [Honey MCP and Claude Code](guides/honey-mcp-claude.md)
+- [Honey effects and replay](guides/honey-effects-replay.md)
+- [Honey troubleshooting](guides/honey-troubleshooting.md) and
+  [security limitations](guides/honey-security-limitations.md)
+
 `python3 scripts/release/check_docs.py --execute-local` checks links, anchors, strict JSON/TOML
 examples, version selectors, and all locally executable documentation commands. Every shell example
 is SHA-256-bound to exactly one structurally validated command entry, and every non-page site asset

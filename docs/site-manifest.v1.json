@@ -1,8 +1,8 @@
 {
   "schema_version": "cigar.docs-site.v1",
-  "product_version": "1.0.0-dev.1",
+  "product_version": "0.9.0-honey.1",
   "context_abi": "cigar.context.v1",
-  "version_selectors": ["1.0.0-dev.1"],
+  "version_selectors": ["0.9.0-honey.1"],
   "include": [
     "docs/README.md", "docs/site/**", "docs/guides/**", "docs/reference/**", "docs/operations/**",
     "docs/runbooks/**", "docs/troubleshooting/**", "docs/demos/**", "docs/release/**"
@@ -21,7 +21,13 @@
   "required_pages": [
     "docs/site/index.md", "docs/guides/quickstart.md", "docs/guides/install.md", "docs/guides/concepts.md",
     "docs/guides/workflows.md", "docs/guides/handoffs-effects-replay.md", "docs/guides/claude-code.md",
-    "docs/guides/deployment.md", "docs/guides/sdks.md", "docs/reference/public-api.md",
+    "docs/guides/deployment.md", "docs/guides/sdks.md",
+    "docs/guides/honey-install.md", "docs/guides/honey-quickstart.md",
+    "docs/guides/honey-two-agent.md", "docs/guides/honey-python.md",
+    "docs/guides/honey-typescript.md", "docs/guides/honey-rust.md",
+    "docs/guides/honey-mcp-claude.md", "docs/guides/honey-effects-replay.md",
+    "docs/guides/honey-troubleshooting.md", "docs/guides/honey-security-limitations.md",
+    "docs/reference/public-api.md",
     "docs/reference/cli.md", "docs/reference/configuration-errors-metrics-extensions.md",
     "docs/operations/index.md", "docs/operations/security-hardening.md", "docs/operations/daemon-lifecycle.md",
     "docs/operations/transport-identity.md", "docs/operations/key-management.md",

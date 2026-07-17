@@ -543,7 +543,13 @@ printf '{"ok":true}\n'
         fs::write(&sentinel, b"receipt target bytes\n")?;
         let receipt_path = fixture.cigar_home.join("claude-code/install.json");
         let mut receipt: serde_json::Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
-        receipt["marketplace_root"] = outside.to_string_lossy().into_owned().into();
+        let Some(receipt_object) = receipt.as_object_mut() else {
+            return Err("install receipt must be a JSON object".into());
+        };
+        receipt_object.insert(
+            "marketplace_root".to_string(),
+            outside.to_string_lossy().into_owned().into(),
+        );
         fs::write(&receipt_path, serde_json::to_vec(&receipt)?)?;
 
         let uninstall = fixture.run(&[

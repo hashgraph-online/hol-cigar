@@ -66,7 +66,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
     def plugin_files() -> dict[str, bytes]:
         return {
             ".claude-plugin/plugin.json": qualifier.canonical_json_bytes(
-                {"name": "cigar", "version": "1.0.0-dev.1"}
+                {"name": "cigar", "version": "0.9.0-honey.1"}
             ),
             ".mcp.json": qualifier.canonical_json_bytes(
                 {
@@ -133,6 +133,86 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
                 with self.assertRaisesRegex(ReleaseError, "lowercase SHA-256"):
                     qualifier._expected_sha256(value, "archive")
 
+    def test_product_authority_selects_distinct_bounded_runtime_identities(
+        self,
+    ) -> None:
+        honey = json.loads(
+            (
+                qualifier.REPOSITORY_ROOT / "packaging/product-version.v1.json"
+            ).read_bytes()
+        )
+        selected = qualifier._qualification_product(honey)
+        self.assertTrue(selected.honey)
+        self.assertEqual(selected.version, "0.9.0-honey.1")
+        self.assertEqual(
+            selected.runtime_artifact_id, qualifier.HONEY_RUNTIME_ARTIFACT_ID
+        )
+
+        development = {
+            "schema_version": "cigar.product-version.v1",
+            "release_state": "development",
+            "channel": "development",
+            "published": False,
+            "supported": False,
+            "version": "1.0.0-dev.1",
+            "context_abi": "cigar.context.v1",
+        }
+        selected = qualifier._qualification_product(development)
+        self.assertFalse(selected.honey)
+        self.assertEqual(
+            selected.runtime_artifact_id,
+            qualifier.DEVELOPMENT_RUNTIME_ARTIFACT_ID,
+        )
+
+        stale_honey = {**honey, "tag": "v0.9.0-honey.2"}
+        with self.assertRaisesRegex(ReleaseError, "development or Honey"):
+            qualifier._qualification_product(stale_honey)
+
+    def test_honey_runtime_plugin_pair_reaches_lifecycle_metadata_gate(self) -> None:
+        product = qualifier._qualification_product(
+            json.loads(
+                (
+                    qualifier.REPOSITORY_ROOT / "packaging/product-version.v1.json"
+                ).read_bytes()
+            )
+        )
+        source = {
+            "revision": "a" * 40,
+            "tree_sha256": "b" * 64,
+            "committed": True,
+            "clean": True,
+        }
+
+        def verification(artifact_id: str) -> dict[str, object]:
+            return {
+                "metadata": {
+                    "artifact_id": artifact_id,
+                    "product_version": product.version,
+                    "context_abi": product.context_abi,
+                    "source_date_epoch": 1_700_000_000,
+                    "source": dict(source),
+                    "input_tree_sha256": "c" * 64,
+                    "input_file_count": 12,
+                }
+            }
+
+        runtime, plugin = qualifier._archive_metadata_pair(
+            verification(qualifier.HONEY_RUNTIME_ARTIFACT_ID),
+            verification(qualifier.PLUGIN_ARTIFACT_ID),
+            product,
+            1_700_000_000,
+        )
+        self.assertEqual(runtime["artifact_id"], qualifier.HONEY_RUNTIME_ARTIFACT_ID)
+        self.assertEqual(plugin["artifact_id"], qualifier.PLUGIN_ARTIFACT_ID)
+
+        with self.assertRaisesRegex(ReleaseError, qualifier.HONEY_RUNTIME_ARTIFACT_ID):
+            qualifier._archive_metadata_pair(
+                verification(qualifier.DEVELOPMENT_RUNTIME_ARTIFACT_ID),
+                verification(qualifier.PLUGIN_ARTIFACT_ID),
+                product,
+                1_700_000_000,
+            )
+
     def test_secure_reader_rejects_symlink_hardlink_and_writable_input(self) -> None:
         safe = self.base / "safe"
         safe.write_bytes(b"payload")
@@ -184,7 +264,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
         document = {
             "metadata": {
                 "artifact_id": qualifier.PLUGIN_ARTIFACT_ID,
-                "product_version": "1.0.0-dev.1",
+                "product_version": "0.9.0-honey.1",
                 "context_abi": "cigar.context.v1",
                 "source_date_epoch": 1_700_000_000,
                 "source": {
@@ -201,7 +281,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             qualifier._metadata(
                 document,
                 qualifier.PLUGIN_ARTIFACT_ID,
-                "1.0.0-dev.1",
+                "0.9.0-honey.1",
                 "cigar.context.v1",
                 1_700_000_000,
             ),
@@ -213,7 +293,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             qualifier._metadata(
                 changed,
                 qualifier.PLUGIN_ARTIFACT_ID,
-                "1.0.0-dev.1",
+                "0.9.0-honey.1",
                 "cigar.context.v1",
                 1_700_000_000,
             )
@@ -236,13 +316,13 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
         plugin = self.directory("plugin")
         self.materialize(plugin, files)
         public = qualifier._validate_plugin_authority(
-            files, "1.0.0-dev.1", "cigar.context.v1"
+            files, "0.9.0-honey.1", "cigar.context.v1"
         )
         authority_payload = qualifier.canonical_json_bytes(
             {
                 "schema_version": qualifier.FIXTURE_PROTOCOL_SCHEMA,
                 "claude_version": qualifier.CLAUDE_VERSION,
-                "product_version": "1.0.0-dev.1",
+                "product_version": "0.9.0-honey.1",
                 "context_abi": "cigar.context.v1",
                 "public_files": public["public_files"],
             }
@@ -372,7 +452,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
     def test_plugin_authority_rejects_version_abi_mcp_and_hook_drift(self) -> None:
         files = self.plugin_files()
         authority = qualifier._validate_plugin_authority(
-            files, "1.0.0-dev.1", "cigar.context.v1"
+            files, "0.9.0-honey.1", "cigar.context.v1"
         )
         self.assertEqual(authority["registered_hook_count"], 18)
         self.assertEqual(authority["mcp_tool_count"], 10)
@@ -408,7 +488,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 with self.assertRaisesRegex(ReleaseError, message):
                     qualifier._validate_plugin_authority(
-                        changed, "1.0.0-dev.1", "cigar.context.v1"
+                        changed, "0.9.0-honey.1", "cigar.context.v1"
                     )
 
     def test_installed_manifest_binds_exact_private_tree_and_rejects_links(

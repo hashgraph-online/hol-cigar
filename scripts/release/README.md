@@ -9,7 +9,7 @@ Local source-derived qualification:
 ```text
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/validate_metadata.py
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/build_archives.py --out /tmp/cigar-dist
-python3 scripts/release/verify_package.py /tmp/cigar-dist/cigar-1.0.0-dev.1-source.tar.gz --contract packaging/contracts/source-archive.v1.json
+python3 scripts/release/verify_package.py /tmp/cigar-dist/cigar-0.9.0-honey.1-source.tar.gz --contract packaging/contracts/source-archive.v1.json
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/check_reproducibility.py --report /tmp/cigar-reproducibility.json
 python3 scripts/release/check_docs.py
 python3 scripts/release/exercise_runbooks.py --mode static --out /tmp/cigar-runbooks
@@ -81,32 +81,32 @@ variables, and exec that exact path with `-B -I -S`; no caller interpreter overr
 SOURCE_DATE_EPOCH=1700000000 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-conformance-tool-build \
   python3 scripts/release/build_macos_qualification_tools.py conformance
-SOURCE_DATE_EPOCH=1700000000 \
-CIGAR_EVIDENCE_DIR=/private/tmp/cigar-cigarbench-tool-build \
-  python3 scripts/release/build_macos_qualification_tools.py cigarbench
 ```
 
 Qualify the installed runtime with the complete conformance-tool archive and its package contract;
 `qualify_install.py` also requires the official-format runtime and qualification-tool build
-receipts, securely stages them, and verifies their exact artifact, archive, contract, source-tree,
+receipts, securely stages them, and verifies their exact artifact, archive, contract, input-tree,
 authority, build-tool, and payload bindings before it extracts the fixed driver. The two receipts'
-shared product-version, artifact-matrix, and local-macOS profile records must have identical
-digests and sizes. It does not accept a caller-selected executable:
+shared product-version, Honey artifact-matrix, Honey capability-profile, and Honey
+release-requirements records must have identical
+digests and sizes. Their source records must name the same clean committed Git revision; the
+runtime and tool input-tree SHA-256 values remain independently bound. It does not accept a
+caller-selected executable:
 
 ```text
 CIGAR_NO_EGRESS_ENFORCED=1 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-installed-qualification \
   python3 scripts/release/qualify_install.py \
-    /private/tmp/cigar-macos-arm64-build/cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz \
+    /private/tmp/cigar-macos-arm64-build/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
     --contract packaging/contracts/macos-runtime-archive.v1.json \
     --runtime-build-receipt \
-      /private/tmp/cigar-macos-arm64-build/macos-aarch64-development-build.json \
+      /private/tmp/cigar-macos-arm64-build/native-build-receipt.json \
     --qualification-tool-archive \
-      /private/tmp/cigar-conformance-tool-build/cigar-conformance-1.0.0-dev.1-aarch64-apple-darwin.tar.gz \
+      /private/tmp/cigar-conformance-tool-build/cigar-conformance-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
     --qualification-tool-contract packaging/contracts/macos-conformance-runner.v1.json \
     --qualification-tool-build-receipt \
       /private/tmp/cigar-conformance-tool-build/macos-conformance-development-build.json \
-    --expected-artifact-id cli-daemon-macos-aarch64 \
+    --expected-artifact-id macos-runtime-aarch64 \
     --expected-target aarch64-apple-darwin \
     --report macos/install-qualification.json
 ```

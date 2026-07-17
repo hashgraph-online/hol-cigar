@@ -40,13 +40,13 @@ from release_lib import (
 from verify_package import verify as verify_package
 
 
-DEFAULT_PRODUCT_VERSION = "1.0.0-dev.1"
+DEFAULT_PRODUCT_VERSION = "0.9.0-honey.1"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
 MAX_CONTRACT_BYTES = 8 * 1024 * 1024
 MAX_BUILD_RECEIPT_BYTES = 8 * 1024 * 1024
 MAX_DRIVER_BYTES = 512 * 1024 * 1024
-RUNTIME_ARTIFACT_ID = "cli-daemon-macos-aarch64"
+RUNTIME_ARTIFACT_ID = "macos-runtime-aarch64"
 RUNTIME_CONTRACT_ID = "macos-runtime-archive-v1"
 RUNTIME_PROFILE = "cigar.full.local-macos-aarch64.v1"
 INSTALLED_WORKFLOW_PROFILE = "cigar.full.offline-read-only.macos-aarch64.v1"
@@ -67,9 +67,10 @@ QUALIFICATION_TOOL_BUILD_RECEIPT_SCHEMA = (
 RUNTIME_RECEIPT_AUTHORITY_PATHS = frozenset(
     {
         "packaging/product-version.v1.json",
-        "packaging/artifact-matrix.v1.json",
-        "packaging/local-archives.v1.json",
-        "packaging/development/local-macos-aarch64.v1.json",
+        "packaging/honey/capability-profile.v1.json",
+        "packaging/honey/artifact-matrix.v1.json",
+        "packaging/honey/local-archives.v1.json",
+        "packaging/honey/release-requirements.v1.json",
         "packaging/contracts/macos-runtime-archive.v1.json",
         "adapters/claude-code/package-manifest.json",
     }
@@ -77,15 +78,17 @@ RUNTIME_RECEIPT_AUTHORITY_PATHS = frozenset(
 QUALIFICATION_TOOL_RECEIPT_AUTHORITY_PATHS = frozenset(
     {
         "packaging/product-version.v1.json",
-        "packaging/artifact-matrix.v1.json",
-        "packaging/development/local-macos-aarch64.v1.json",
+        "packaging/honey/capability-profile.v1.json",
+        "packaging/honey/artifact-matrix.v1.json",
+        "packaging/honey/release-requirements.v1.json",
         "packaging/contracts/macos-conformance-runner.v1.json",
     }
 )
 SHARED_BUILD_AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
-    "packaging/artifact-matrix.v1.json",
-    "packaging/development/local-macos-aarch64.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
 )
 PROHIBITED_BUILD_COMMANDS = (
     "ar",
@@ -731,8 +734,8 @@ def _validate_receipt_source(
 
 def _validate_same_source_identity(
     runtime_source: object, tool_source: object
-) -> dict[str, Any]:
-    """Require both archives to name one exact clean committed source tree."""
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Require distinct producer inputs to originate at one clean Git commit."""
 
     if not isinstance(runtime_source, dict):
         raise ReleaseError("runtime archive source identity is not exact")
@@ -740,9 +743,13 @@ def _validate_same_source_identity(
     if not isinstance(tool_source, dict):
         raise ReleaseError("qualification-tool archive source identity is not exact")
     _validate_receipt_source(
-        tool_source, runtime_source, "qualification-tool archive metadata"
+        tool_source, tool_source, "qualification-tool archive metadata"
     )
-    return runtime_source
+    if tool_source["revision"] != runtime_source["revision"]:
+        raise ReleaseError(
+            "runtime and qualification-tool archives do not share one clean committed revision"
+        )
+    return runtime_source, tool_source
 
 
 def _validate_shared_build_authority(
@@ -958,7 +965,8 @@ def _validate_runtime_build_receipt(
         receipt.get("package_verification"), "runtime build receipt"
     )
     if receipt.get("claims") != {
-        "development_build": True,
+        "development_build": False,
+        "developer_preview_build": True,
         "distribution_signed": False,
         "notarized": False,
         "qualified": False,
@@ -1092,7 +1100,8 @@ def _validate_qualification_tool_build_receipt(
         receipt.get("package_verification"), "qualification-tool build receipt"
     )
     if receipt.get("claims") != {
-        "development_build": True,
+        "development_build": False,
+        "developer_preview_build": True,
         "candidate": False,
         "distribution_signed": False,
         "notarized": False,
@@ -1650,7 +1659,7 @@ def _qualify(arguments: argparse.Namespace) -> dict[str, Any]:
             raise ReleaseError(
                 "qualification-tool archive is not an exact same-source official-format tool"
             )
-        source = _validate_same_source_identity(source, tool_source)
+        source, tool_source = _validate_same_source_identity(source, tool_source)
         tool_receipt = _validate_qualification_tool_build_receipt(
             staged_tool_build_receipt.read_bytes(),
             archive_name=tool_archive.name,
@@ -1660,7 +1669,7 @@ def _qualify(arguments: argparse.Namespace) -> dict[str, Any]:
             contract_bytes=tool_contract_size,
             product_version=arguments.expected_version,
             context_abi=arguments.expected_abi,
-            source=source,
+            source=tool_source,
         )
         _validate_shared_build_authority(runtime_receipt, tool_receipt)
         long_path = (

@@ -26,7 +26,7 @@ BASELINE_ID = "cigar.development.protocol-baseline.v1"
 BASELINE_PATH = "packaging/development/protocol-baseline.v1.json"
 SCHEMA_PATH = "packaging/development/schemas/protocol-baseline.v1.schema.json"
 SCHEMA_SHA256 = "35f9bc9eb346fec90e75be1a626d1d0d62cba29440e25ad2c713cb295018a945"
-BASELINE_SHA256 = "3a8b10e0ca7a6adabb0e8b559cb1486f25599c1b20ab5b95aaf88019bca792bc"
+BASELINE_SHA256 = "3df2b60c2e4daf07891c86d36a11d634ea2862c8bc8358a53a3edd8e2820065f"
 
 CONTEXT_ABI = "cigar.context.v1"
 PROTOCOL_MIN = "1.0"
@@ -600,14 +600,26 @@ def _validate_errors(root: Path) -> list[dict[str, Any]]:
 
 def _validate_protocol_identity(root: Path) -> None:
     product = _load_bound_json(root, "packaging/product-version.v1.json")
+    release_identity = (
+        (
+            product.get("release_state"),
+            product.get("channel"),
+        )
+        if isinstance(product, dict)
+        else None
+    )
     if (
         not isinstance(product, dict)
         or product.get("context_abi") != CONTEXT_ABI
-        or product.get("release_state") != "development"
+        or release_identity
+        not in {
+            ("development", "development"),
+            ("developer-preview", "honey"),
+        }
         or product.get("published") is not False
         or product.get("supported") is not False
     ):
-        raise ReleaseError("development product Context ABI binding is invalid")
+        raise ReleaseError("development/Honey product Context ABI binding is invalid")
     protocol_source = _read_bound_text(root, "crates/cigar-protocol/src/lib.rs")
     for declaration in (
         f'pub const PROTOCOL_MIN: &str = "{PROTOCOL_MIN}";',

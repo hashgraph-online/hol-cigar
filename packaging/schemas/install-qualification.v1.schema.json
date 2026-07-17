@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": {"const": "cigar.install-qualification.v1"},
     "status": {"const": "passed"},
-    "artifact_id": {"const": "cli-daemon-macos-aarch64"},
+    "artifact_id": {"const": "macos-runtime-aarch64"},
     "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "artifact_bytes": {"type": "integer", "minimum": 1},
     "package_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

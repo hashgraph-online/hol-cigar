@@ -47,48 +47,48 @@
       "id": "quickstart-source-compile",
       "block_sha256": "fcfc4b742ee27772e6e8955bd9dccde2273d99bb616707a9bde02c8f46bb68dc",
       "mode": "installed-candidate",
-      "cwd": "${UNICODE_WORKSPACE}",
-      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "quickstart"],
+      "cwd": "${EMPTY_WORKSPACE}",
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/qualify_honey_docs.py", "quickstart", "--demos-archive", "${HONEY_DEMOS_ARCHIVE}", "--demos-sha256", "${HONEY_DEMOS_SHA256}", "--runtime-archive", "${HONEY_RUNTIME_ARCHIVE}", "--runtime-sha256", "${HONEY_RUNTIME_SHA256}", "--evidence-dir", "${HONEY_DOCS_EVIDENCE_DIR}", "--output", "docs/quickstart.json"],
       "expected_exit": 0
     },
     {
       "id": "install-archive",
-      "block_sha256": "19721101483955ddf3be09a095835b8f8bcf8878d480c0c2ecbce79e5c025830",
+      "block_sha256": "b827b6046c717b45152e7efd6f4d8a0b190b24a77d458ca375fee66fbb782bdf",
       "mode": "installed-candidate",
       "cwd": ".",
-      "argv": ["python3", "scripts/release/qualify_install.py", "${BINARY_ARCHIVE}", "--contract", "packaging/contracts/macos-runtime-archive.v1.json", "--runtime-build-receipt", "${CIGAR_RUNTIME_BUILD_RECEIPT}", "--qualification-tool-archive", "${CIGAR_QUALIFICATION_TOOL_ARCHIVE}", "--qualification-tool-contract", "packaging/contracts/macos-conformance-runner.v1.json", "--qualification-tool-build-receipt", "${CIGAR_QUALIFICATION_TOOL_BUILD_RECEIPT}", "--expected-artifact-id", "cli-daemon-macos-aarch64", "--expected-target", "aarch64-apple-darwin"],
+      "argv": ["python3", "scripts/release/qualify_install.py", "${BINARY_ARCHIVE}", "--contract", "packaging/contracts/macos-runtime-archive.v1.json", "--runtime-build-receipt", "${CIGAR_RUNTIME_BUILD_RECEIPT}", "--qualification-tool-archive", "${CIGAR_QUALIFICATION_TOOL_ARCHIVE}", "--qualification-tool-contract", "packaging/contracts/macos-conformance-runner.v1.json", "--qualification-tool-build-receipt", "${CIGAR_QUALIFICATION_TOOL_BUILD_RECEIPT}", "--expected-artifact-id", "macos-runtime-aarch64", "--expected-target", "aarch64-apple-darwin"],
       "expected_exit": 0
     },
     {
       "id": "handoff-flow",
       "block_sha256": "7d951793872ca8cd14ae8292c36742e6b53ce0e98e987c685c1bbc05a2099ea2",
       "mode": "installed-candidate",
-      "cwd": "${QUALIFICATION_PROJECT}",
-      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "handoff"],
+      "cwd": "${EMPTY_WORKSPACE}",
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/qualify_honey_docs.py", "handoff", "--demos-archive", "${HONEY_DEMOS_ARCHIVE}", "--demos-sha256", "${HONEY_DEMOS_SHA256}", "--runtime-archive", "${HONEY_RUNTIME_ARCHIVE}", "--runtime-sha256", "${HONEY_RUNTIME_SHA256}", "--python-wheel", "${HONEY_PYTHON_WHEEL}", "--python-wheel-sha256", "${HONEY_PYTHON_WHEEL_SHA256}", "--evidence-dir", "${HONEY_DOCS_EVIDENCE_DIR}", "--output", "docs/handoff.json"],
       "expected_exit": 0
     },
     {
       "id": "effect-replay-flow",
       "block_sha256": "5f25d373dca16a90f570b34273cb1937edb374c81694a5a733ba1ab807092a1c",
       "mode": "installed-candidate",
-      "cwd": "${QUALIFICATION_PROJECT}",
-      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "effect-replay"],
+      "cwd": "${EMPTY_WORKSPACE}",
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/qualify_honey_docs.py", "effect-replay", "--demos-archive", "${HONEY_DEMOS_ARCHIVE}", "--demos-sha256", "${HONEY_DEMOS_SHA256}", "--runtime-archive", "${HONEY_RUNTIME_ARCHIVE}", "--runtime-sha256", "${HONEY_RUNTIME_SHA256}", "--evidence-dir", "${HONEY_DOCS_EVIDENCE_DIR}", "--output", "docs/effect-replay.json"],
       "expected_exit": 0
     },
     {
       "id": "claude-plugin-flow",
       "block_sha256": "ef66bf566bbcecc8ed69562b0a70d85d5c8fb9854e33bf5a2dd62167aaff214f",
       "mode": "installed-candidate",
-      "cwd": "${QUALIFICATION_PROJECT}",
-      "argv": ["${CIGAR_QUALIFICATION_DRIVER}", "claude-plugin"],
+      "cwd": "${EMPTY_WORKSPACE}",
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/qualify_honey_docs.py", "claude-plugin", "--demos-archive", "${HONEY_DEMOS_ARCHIVE}", "--demos-sha256", "${HONEY_DEMOS_SHA256}", "--runtime-archive", "${HONEY_RUNTIME_ARCHIVE}", "--runtime-sha256", "${HONEY_RUNTIME_SHA256}", "--claude-plugin-archive", "${HONEY_CLAUDE_PLUGIN_ARCHIVE}", "--claude-plugin-sha256", "${HONEY_CLAUDE_PLUGIN_SHA256}", "--evidence-dir", "${HONEY_DOCS_EVIDENCE_DIR}", "--output", "docs/claude-plugin.json"],
       "expected_exit": 0
     },
     {
       "id": "release-verify",
-      "block_sha256": "3993882b80b6bc7a6307d7678b0c0015cb04ae4ed0a730f15df37bdfba2dfd34",
+      "block_sha256": "35b278db4824957e5c4167e8eb90d34e7f617a002936eafa3ce5ff9c0588c650",
       "mode": "installed-candidate",
       "cwd": "${EMPTY_WORKSPACE}",
-      "argv": ["${CIGAR_BIN}", "release", "verify", "${DIST_DIRECTORY}"],
+      "argv": ["python3", "${CIGAR_SOURCE_ROOT}/scripts/release/verify_honey_release.py", "${DIST_DIRECTORY}"],
       "expected_exit": 0
     },
     {

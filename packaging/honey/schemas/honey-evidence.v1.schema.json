@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/honey-evidence.v1.schema.json",
+  "title": "CIGAR Honey internal developer-preview evidence ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product",
+    "authorities",
+    "source",
+    "artifacts",
+    "evidence",
+    "capabilities",
+    "mandatory_gates",
+    "deferred_gates",
+    "limitations",
+    "aggregate",
+    "fail_closed"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.honey.evidence.v1"},
+    "product": {"$ref": "#/$defs/product"},
+    "authorities": {"$ref": "#/$defs/authorities"},
+    "source": {"$ref": "#/$defs/source"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidence"}
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/capability"}
+    },
+    "mandatory_gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/mandatoryGate"}
+    },
+    "deferred_gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/deferredGate"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/limitation"}
+    },
+    "aggregate": {"$ref": "#/$defs/aggregate"},
+    "fail_closed": {"const": true}
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "schemaIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "evidenceId": {
+      "enum": [
+        "bounded-safety-report",
+        "claude-lifecycle-report",
+        "documentation-report",
+        "installed-runtime-report",
+        "license-inventory",
+        "offline-dependency-check",
+        "other-demo-reports",
+        "python-clean-install",
+        "qualification-tools",
+        "rust-clean-consumer",
+        "secret-scan",
+        "two-agent-demo-report",
+        "typescript-clean-install"
+      ]
+    },
+    "evidenceReportSchema": {
+      "enum": [
+        "cigar.honey.gate-report.v1",
+        "cigar.development-claude-plugin-installed-qualification.v2",
+        "cigar.docs-check.v1",
+        "cigar.install-qualification.v1",
+        "cigar.third-party-license-inventory.v1",
+        "cigar.honey-installed-demo-report.v1",
+        "cigar.development-python-sdk-build.v1",
+        "cigar.conformance-result.v1",
+        "cigar.honey-rust-sdk-local-registry-build.v1",
+        "cigar.development-typescript-sdk-build.v1"
+      ]
+    },
+    "safePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))(?!.*//)(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f]).+$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 67108864
+    },
+    "gitObject": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "stringArray": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 4096}
+    },
+    "idArray": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "authorityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"$ref": "#/$defs/bytes"}
+      }
+    },
+    "reportBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace", "path", "schema_version", "sha256", "bytes"],
+      "properties": {
+        "workspace": {"$ref": "#/$defs/identifier"},
+        "path": {"$ref": "#/$defs/safePath"},
+        "schema_version": {"$ref": "#/$defs/schemaIdentifier"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"$ref": "#/$defs/bytes"}
+      }
+    },
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "context_abi",
+        "release_state",
+        "channel",
+        "profile_id",
+        "prerelease",
+        "published",
+        "supported",
+        "production_ready",
+        "production_qualified"
+      ],
+      "properties": {
+        "version": {"const": "0.9.0-honey.1"},
+        "context_abi": {"const": "cigar.context.v1"},
+        "release_state": {"const": "developer-preview"},
+        "channel": {"const": "honey"},
+        "profile_id": {"const": "cigar.honey.local-developer-preview.macos-arm64.v1"},
+        "prerelease": {"const": true},
+        "published": {"const": false},
+        "supported": {"const": false},
+        "production_ready": {"const": false},
+        "production_qualified": {"const": false}
+      }
+    },
+    "authorities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact-matrix",
+        "capability-ownership",
+        "capability-profile",
+        "honey-evidence-schema",
+        "product-version",
+        "release-requirements"
+      ],
+      "properties": {
+        "artifact-matrix": {"$ref": "#/$defs/authorityBinding"},
+        "capability-ownership": {"$ref": "#/$defs/authorityBinding"},
+        "capability-profile": {"$ref": "#/$defs/authorityBinding"},
+        "honey-evidence-schema": {"$ref": "#/$defs/authorityBinding"},
+        "product-version": {"$ref": "#/$defs/authorityBinding"},
+        "release-requirements": {"$ref": "#/$defs/authorityBinding"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descriptor", "revision", "tree", "committed", "clean"],
+      "properties": {
+        "descriptor": {"$ref": "#/$defs/reportBinding"},
+        "revision": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "committed": {"const": true},
+        "clean": {"const": true}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "filename",
+        "sha256",
+        "bytes",
+        "source_revision",
+        "source_tree"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"$ref": "#/$defs/identifier"},
+        "filename": {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^(?!.*[/\\\\])(?!\\.\\.?$).+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+        "source_revision": {"$ref": "#/$defs/gitObject"},
+        "source_tree": {"$ref": "#/$defs/gitObject"}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "database_updated_at", "database_freshness", "offline"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 256},
+        "version": {"type": "string", "minLength": 1, "maxLength": 256},
+        "database_updated_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"}
+          ]
+        },
+        "database_freshness": {"enum": ["current", "not-applicable"]},
+        "offline": {"const": true}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "status",
+        "report",
+        "artifact_ids",
+        "capability_ids",
+        "mandatory_gate_ids",
+        "source_revision",
+        "source_tree",
+        "tool"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/evidenceId"},
+        "category": {"enum": ["workflow", "integration", "demo", "docs", "tests", "security"]},
+        "status": {"const": "passed"},
+        "report": {
+          "allOf": [
+            {"$ref": "#/$defs/reportBinding"},
+            {"properties": {"schema_version": {"$ref": "#/$defs/evidenceReportSchema"}}}
+          ]
+        },
+        "artifact_ids": {"$ref": "#/$defs/idArray"},
+        "capability_ids": {"$ref": "#/$defs/idArray"},
+        "mandatory_gate_ids": {"$ref": "#/$defs/idArray"},
+        "source_revision": {"$ref": "#/$defs/gitObject"},
+        "source_tree": {"$ref": "#/$defs/gitObject"},
+        "tool": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/tool"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"category": {"const": "security"}}, "required": ["category"]},
+          "then": {"properties": {"tool": {"$ref": "#/$defs/tool"}}},
+          "else": {"properties": {"tool": {"type": "null"}}}
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "id": {"const": "bounded-safety-report"},
+                "category": {"const": "tests"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey.gate-report.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "claude-lifecycle-report"},
+                "category": {"const": "integration"},
+                "report": {"properties": {"schema_version": {"const": "cigar.development-claude-plugin-installed-qualification.v2"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "documentation-report"},
+                "category": {"const": "docs"},
+                "report": {"properties": {"schema_version": {"const": "cigar.docs-check.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "installed-runtime-report"},
+                "category": {"const": "workflow"},
+                "report": {"properties": {"schema_version": {"const": "cigar.install-qualification.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "license-inventory"},
+                "category": {"const": "security"},
+                "report": {"properties": {"schema_version": {"const": "cigar.third-party-license-inventory.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "offline-dependency-check"},
+                "category": {"const": "security"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey.gate-report.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "other-demo-reports"},
+                "category": {"const": "demo"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey-installed-demo-report.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "python-clean-install"},
+                "category": {"const": "integration"},
+                "report": {"properties": {"schema_version": {"const": "cigar.development-python-sdk-build.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "qualification-tools"},
+                "category": {"const": "tests"},
+                "report": {"properties": {"schema_version": {"const": "cigar.conformance-result.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "rust-clean-consumer"},
+                "category": {"const": "integration"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey-rust-sdk-local-registry-build.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "secret-scan"},
+                "category": {"const": "security"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey.gate-report.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "two-agent-demo-report"},
+                "category": {"const": "demo"},
+                "report": {"properties": {"schema_version": {"const": "cigar.honey-installed-demo-report.v1"}}}
+              }
+            },
+            {
+              "properties": {
+                "id": {"const": "typescript-clean-install"},
+                "category": {"const": "integration"},
+                "report": {"properties": {"schema_version": {"const": "cigar.development-typescript-sdk-build.v1"}}}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specified",
+        "implemented_source",
+        "integrated",
+        "packaged",
+        "honey_smoke_passed",
+        "v1_qualified",
+        "v1_supported"
+      ],
+      "properties": {
+        "specified": {"const": true},
+        "implemented_source": {"const": true},
+        "integrated": {"const": true},
+        "packaged": {"const": true},
+        "honey_smoke_passed": {"const": true},
+        "v1_qualified": {"const": false},
+        "v1_supported": {"const": false}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "implementation_paths",
+        "artifact_ids",
+        "guide_paths",
+        "demo_ids",
+        "fast_acceptance_tests",
+        "evidence_ids",
+        "stages"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "implementation_paths": {"$ref": "#/$defs/stringArray"},
+        "artifact_ids": {"$ref": "#/$defs/idArray"},
+        "guide_paths": {"$ref": "#/$defs/stringArray"},
+        "demo_ids": {"$ref": "#/$defs/idArray"},
+        "fast_acceptance_tests": {"$ref": "#/$defs/stringArray"},
+        "evidence_ids": {"$ref": "#/$defs/idArray"},
+        "stages": {"$ref": "#/$defs/stages"}
+      }
+    },
+    "mandatoryGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "status": {"const": "passed"},
+        "evidence_ids": {"$ref": "#/$defs/idArray"}
+      }
+    },
+    "deferredGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "required_for_honey"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "status": {"const": "not-run-deferred"},
+        "required_for_honey": {"const": false}
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "status": {"const": "not-claimed"}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "domain", "sha256"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "domain": {"const": "cigar.honey.evidence-root.v1"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

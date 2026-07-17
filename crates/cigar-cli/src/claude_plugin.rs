@@ -519,10 +519,10 @@ fn validate_package() -> Result<Package, CliError> {
         ),
     ] {
         let payload = freeze_runtime_executable(variable, executable)?;
-        if let Some(packaged) = source_files.remove(relative) {
-            if packaged != payload {
-                return Err(CliError::plugin_invalid());
-            }
+        if let Some(packaged) = source_files.remove(relative)
+            && packaged != payload
+        {
+            return Err(CliError::plugin_invalid());
         }
         let digest = sha256(&payload);
         aggregate.update(relative.as_bytes());
@@ -1044,10 +1044,10 @@ fn collect_files_at(root: &Dir) -> Result<BTreeSet<String>, CliError> {
                     .to_str()
                     .ok_or_else(CliError::plugin_invalid)?
                     .replace('\\', "/");
-                if relative != "package-manifest.json" {
-                    if files.len() >= MAX_FILES || !files.insert(relative) {
-                        return Err(CliError::plugin_invalid());
-                    }
+                if relative != "package-manifest.json"
+                    && (files.len() >= MAX_FILES || !files.insert(relative))
+                {
+                    return Err(CliError::plugin_invalid());
                 }
             } else {
                 return Err(CliError::plugin_invalid());

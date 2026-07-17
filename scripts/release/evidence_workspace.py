@@ -77,7 +77,11 @@ _MAX_DIRECTORY_ENTRIES = 65_536
 _LIMIT_CEILINGS = {
     "max_files": 100_000,
     "max_directories": 16_384,
-    "max_file_bytes": 64 * 1024 * 1024,
+    # Some explicitly contracted release artifacts (notably the self-contained
+    # Honey Rust local-registry kit) are larger than the conservative 64 MiB
+    # workspace default.  Callers must still opt in to this higher per-file
+    # bound with an EvidenceLimits instance.
+    "max_file_bytes": 512 * 1024 * 1024,
     "max_total_bytes": 64 * 1024 * 1024 * 1024,
     "max_json_bytes": 16 * 1024 * 1024,
     "max_path_depth": 64,

@@ -232,6 +232,14 @@ class EvidenceWorkspaceTests(unittest.TestCase):
             with self.assertRaisesRegex(EvidenceWorkspaceError, "file-count"):
                 workspace.write_json("two.json", {"value": "small"})
 
+    def test_large_release_artifact_limit_requires_explicit_opt_in(self) -> None:
+        default_limits = EvidenceLimits()
+        self.assertEqual(default_limits.max_file_bytes, 64 * 1024 * 1024)
+
+        release_limits = EvidenceLimits(max_file_bytes=512 * 1024 * 1024)
+        release_limits.validate()
+        self.assertEqual(release_limits.max_file_bytes, 512 * 1024 * 1024)
+
     def test_finite_json_metrics_and_secure_digests(self) -> None:
         for value in (math.inf, -math.inf, math.nan):
             with self.subTest(value=value):

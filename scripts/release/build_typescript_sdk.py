@@ -41,6 +41,7 @@ from verify_package import verify as verify_package
 ARTIFACT_ID = "typescript-sdk"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 PRODUCER = "python3 scripts/release/build_typescript_sdk.py"
+PRODUCER_ARGV = ["python3", "scripts/release/build_typescript_sdk.py"]
 BUILD_RECEIPT = "typescript-sdk-development-build.json"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SDK_RELATIVE = "sdk/typescript"
@@ -66,6 +67,18 @@ AUTHORITY_PATHS = (
     f"{SDK_RELATIVE}/package.json",
     f"{SDK_RELATIVE}/release.json",
 )
+HONEY_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
+    "packaging/contracts/npm-package.v1.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    f"{SDK_RELATIVE}/package.json",
+    f"{SDK_RELATIVE}/release.json",
+)
 
 SOURCE_TYPESCRIPT_PATHS = frozenset(
     {
@@ -73,6 +86,7 @@ SOURCE_TYPESCRIPT_PATHS = frozenset(
         "src/digest.ts",
         "src/errors.ts",
         "src/examples/quickstart.ts",
+        "src/examples/two-agent-observer.ts",
         "src/examples/verify-shared-bundle.ts",
         "src/generated/cigar_service_pb.ts",
         "src/generated/context_abi_pb.ts",
@@ -188,12 +202,14 @@ class BuildConfiguration:
     version: str
     context_abi: str
     filename: str
+    receipt_filename: str
     contract_path: Path
     contract_relative: str
     authority: dict[str, dict[str, object]]
     sdk_sources: dict[str, bytes]
     workspace_sources: dict[str, bytes]
     producer_declared: bool
+    honey: bool
 
 
 @dataclass(frozen=True)
@@ -307,9 +323,11 @@ def _read_stable_file(
             os.close(descriptor)
 
 
-def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, paths: tuple[str, ...] = AUTHORITY_PATHS
+) -> dict[str, dict[str, object]]:
     records: dict[str, dict[str, object]] = {}
-    for relative in AUTHORITY_PATHS:
+    for relative in paths:
         payload = _read_stable_file(
             root.joinpath(*relative.split("/")), MAX_SOURCE_BYTES, relative
         )
@@ -381,97 +399,274 @@ def _expected_package_paths() -> frozenset[str]:
 EXPECTED_PACKAGE_PATHS = _expected_package_paths()
 
 
+def _is_honey_product(product: Any) -> bool:
+    return (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
+
+
+def _validate_honey_authority(
+    product: dict[str, Any],
+    matrix: Any,
+    profile: Any,
+    requirements: Any,
+    authority: dict[str, dict[str, object]],
+) -> None:
+    version = product["version"]
+    python_match = re.fullmatch(
+        r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
+    )
+    if python_match is None:
+        raise ReleaseError("Honey version cannot be mapped to the capability profile")
+    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    identity = {
+        "channel": "honey",
+        "context_abi": product["context_abi"],
+        "ecosystem_versions": {
+            "archive": version,
+            "plugin": version,
+            "python": python_version,
+            "rust": version,
+            "typescript": version,
+        },
+        "marketing_name": "CIGAR Honey v0.9",
+        "prerelease": True,
+        "product_version": version,
+        "production_qualified": False,
+        "published": False,
+        "python_distribution_version": python_version,
+        "release_state": "developer-preview",
+        "supported": False,
+        "tag": f"v{version}",
+    }
+    if (
+        not isinstance(matrix, dict)
+        or matrix.get("schema_version") != "cigar.honey.artifact-matrix.v1"
+        or matrix.get("release_state") != "developer-preview"
+        or matrix.get("product_version") != version
+        or matrix.get("context_abi") != product["context_abi"]
+        or matrix.get("profile_id")
+        != "cigar.honey.local-developer-preview.macos-arm64.v1"
+        or matrix.get("fail_closed") is not True
+        or not isinstance(matrix.get("artifacts"), list)
+        or not isinstance(profile, dict)
+        or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+        or profile.get("profile_id") != matrix.get("profile_id")
+        or profile.get("fail_closed") is not True
+        or profile.get("identity") != identity
+        or profile.get("platform")
+        != {
+            "deployment_modes": ["embedded", "local-sidecar"],
+            "host_arch": "arm64",
+            "host_os": "macos",
+            "network_required": False,
+            "target_triple": TARGET_TRIPLE,
+            "trust_model": "single-local-os-user-with-explicit-agent-principals",
+        }
+        or profile.get("product_version_binding")
+        != {
+            "path": "packaging/product-version.v1.json",
+            "sha256": authority["packaging/product-version.v1.json"]["sha256"],
+        }
+        or profile.get("artifact_ids") != [row.get("id") for row in matrix["artifacts"]]
+        or "typescript-direct-tarball" not in profile.get("integrations", [])
+        or not any(
+            isinstance(capability, dict)
+            and capability.get("id") == "typescript-sdk"
+            and capability.get("status") == "required"
+            and capability.get("support_level") == "developer-preview"
+            for capability in profile.get("capabilities", [])
+        )
+    ):
+        raise ReleaseError(
+            "Honey TypeScript capability authority is incomplete or stale"
+        )
+    expected_bindings = {
+        "artifact_matrix": {
+            "path": "packaging/honey/artifact-matrix.v1.json",
+            "sha256": authority["packaging/honey/artifact-matrix.v1.json"]["sha256"],
+        },
+        "capability_profile": {
+            "path": "packaging/honey/capability-profile.v1.json",
+            "sha256": authority["packaging/honey/capability-profile.v1.json"]["sha256"],
+        },
+    }
+    mandatory_gates = profile.get("mandatory_gate_ids")
+    if (
+        not isinstance(requirements, dict)
+        or requirements.get("schema_version") != "cigar.honey.release-requirements.v1"
+        or requirements.get("profile_id") != matrix.get("profile_id")
+        or requirements.get("fail_closed") is not True
+        or requirements.get("machine_claims")
+        != {
+            "prerelease": True,
+            "production_qualified": False,
+            "supported": False,
+        }
+        or requirements.get("required_source_state")
+        != {"clean": True, "committed": True, "tagged_before_build": False}
+        or requirements.get("authority_bindings") != expected_bindings
+        or not isinstance(mandatory_gates, list)
+        or requirements.get("mandatory_gates")
+        != [
+            {
+                "evidence_status": "required-not-implied",
+                "id": gate,
+                "required": True,
+            }
+            for gate in mandatory_gates
+        ]
+    ):
+        raise ReleaseError("Honey release requirements are incomplete or stale")
+
+
 def _load_configuration(root: Path) -> BuildConfiguration:
     root = root.resolve(strict=True)
     sdk_root = root / SDK_RELATIVE
     _validate_source_inventory(sdk_root)
-    authority = _authority_digests(root)
+    initial_product = load_json(root / "packaging/product-version.v1.json")
+    honey = _is_honey_product(initial_product)
+    authority_paths = HONEY_AUTHORITY_PATHS if honey else AUTHORITY_PATHS
+    authority = _authority_digests(root, authority_paths)
     product = load_json(root / "packaging/product-version.v1.json")
-    matrix = load_json(root / "packaging/artifact-matrix.v1.json")
-    profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+    if honey:
+        matrix = load_json(root / "packaging/honey/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/honey/capability-profile.v1.json")
+        requirements = load_json(root / "packaging/honey/release-requirements.v1.json")
+    else:
+        matrix = load_json(root / "packaging/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+        requirements = None
     contract = load_json(root / "packaging/contracts/npm-package.v1.json")
     package = load_json(sdk_root / "package.json")
     release = load_json(sdk_root / "release.json")
     workspace = load_json(root / "package.json")
 
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or _is_honey_product(product))
+        or honey != _is_honey_product(product)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or product.get("context_abi") != "cigar.context.v1"
     ):
         raise ReleaseError(
-            "product version authority is not an unpublished development identity"
+            "product version authority is not an unpublished development or Honey identity"
         )
     version = product["version"]
     context_abi = product["context_abi"]
-
-    if (
-        not isinstance(matrix, dict)
-        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("release_state") != "development"
-        or matrix.get("product_version") != version
-        or matrix.get("context_abi") != context_abi
-        or not isinstance(matrix.get("artifacts"), list)
-    ):
-        raise ReleaseError(
-            "artifact matrix is stale relative to product version authority"
-        )
-    matching = [
-        row
-        for row in matrix["artifacts"]
-        if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
-    ]
-    if len(matching) != 1:
-        raise ReleaseError(
-            f"artifact matrix must contain exactly one {ARTIFACT_ID} row"
-        )
-    artifact = matching[0]
     expected_filename = f"cigar-sdk-{version}.tgz"
-    if (
-        artifact.get("kind") != "npm-package"
-        or artifact.get("filename") != expected_filename
-        or artifact.get("contract") != "contracts/npm-package.v1.json"
-        or artifact.get("ecosystem") != "npm"
-        or artifact.get("required_for_release") is not True
-        or artifact.get("producer") != PRODUCER
-    ):
-        raise ReleaseError("TypeScript SDK artifact row is incomplete or stale")
 
-    selected = profile.get("selected_artifacts") if isinstance(profile, dict) else None
-    selected_rows = (
-        [
+    if honey:
+        _validate_honey_authority(product, matrix, profile, requirements, authority)
+        matching = [
             row
-            for row in selected
+            for row in matrix["artifacts"]
             if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
         ]
-        if isinstance(selected, list)
-        else []
-    )
-    if (
-        not isinstance(profile, dict)
-        or profile.get("schema_version") != "cigar.development-artifact-profile.v1"
-        or profile.get("release_state") != "development"
-        or profile.get("published") is not False
-        or profile.get("supported") is not False
-        or profile.get("target")
-        != {
-            "host_arch": "arm64",
-            "host_os": "macos",
-            "target_triple": TARGET_TRIPLE,
+        expected_artifact = {
+            "contract": "packaging/contracts/npm-package.v1.json",
+            "filename": expected_filename,
+            "generated_by_assembler": False,
+            "id": ARTIFACT_ID,
+            "kind": "npm-tarball",
+            "order": 5,
+            "producer": PRODUCER_ARGV,
+            "public_attachment": True,
+            "qualification_gate_ids": ["sdk-clean-installs", "archive-contracts"],
+            "receipt": {
+                "filename": "typescript-sdk-build-receipt.json",
+                "required": True,
+                "schema_version": "cigar.development-typescript-sdk-build.v1",
+            },
+            "required": True,
+            "sha256_required": True,
+            "workspace": "typescript",
         }
-        or len(selected_rows) != 1
-        or selected_rows[0].get("status") != "planned"
-        or selected_rows[0].get("built") is not False
-        or selected_rows[0].get("qualified") is not False
-    ):
-        raise ReleaseError("development macOS profile does not keep the SDK unclaimed")
+        if len(matching) != 1 or matching[0] != expected_artifact:
+            raise ReleaseError(
+                "TypeScript SDK Honey artifact row is incomplete or stale"
+            )
+        artifact = matching[0]
+        receipt_filename = artifact["receipt"]["filename"]
+    else:
+        if (
+            not isinstance(matrix, dict)
+            or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
+            or matrix.get("release_state") != "development"
+            or matrix.get("product_version") != version
+            or matrix.get("context_abi") != context_abi
+            or not isinstance(matrix.get("artifacts"), list)
+        ):
+            raise ReleaseError(
+                "artifact matrix is stale relative to product version authority"
+            )
+        matching = [
+            row
+            for row in matrix["artifacts"]
+            if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
+        ]
+        if len(matching) != 1:
+            raise ReleaseError(
+                f"artifact matrix must contain exactly one {ARTIFACT_ID} row"
+            )
+        artifact = matching[0]
+        if (
+            artifact.get("kind") != "npm-package"
+            or artifact.get("filename") != expected_filename
+            or artifact.get("contract") != "contracts/npm-package.v1.json"
+            or artifact.get("ecosystem") != "npm"
+            or artifact.get("required_for_release") is not True
+            or artifact.get("producer") != PRODUCER
+        ):
+            raise ReleaseError("TypeScript SDK artifact row is incomplete or stale")
+
+        selected = (
+            profile.get("selected_artifacts") if isinstance(profile, dict) else None
+        )
+        selected_rows = (
+            [
+                row
+                for row in selected
+                if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
+            ]
+            if isinstance(selected, list)
+            else []
+        )
+        if (
+            not isinstance(profile, dict)
+            or profile.get("schema_version") != "cigar.development-artifact-profile.v1"
+            or profile.get("release_state") != "development"
+            or profile.get("published") is not False
+            or profile.get("supported") is not False
+            or profile.get("target")
+            != {
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "target_triple": TARGET_TRIPLE,
+            }
+            or len(selected_rows) != 1
+            or selected_rows[0].get("status") != "planned"
+            or selected_rows[0].get("built") is not False
+            or selected_rows[0].get("qualified") is not False
+        ):
+            raise ReleaseError(
+                "development macOS profile does not keep the SDK unclaimed"
+            )
+        receipt_filename = BUILD_RECEIPT
 
     expected_package_files = [
         "dist/",
@@ -585,17 +780,31 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         version=version,
         context_abi=context_abi,
         filename=expected_filename,
+        receipt_filename=receipt_filename,
         contract_path=root / "packaging/contracts/npm-package.v1.json",
         contract_relative="packaging/contracts/npm-package.v1.json",
         authority=authority,
         sdk_sources=sdk_sources,
         workspace_sources=workspace_sources,
         producer_declared=True,
+        honey=honey,
     )
 
 
 def _source_identity(root: Path) -> dict[str, Any]:
-    files = expand_files(root, list(SOURCE_INCLUDES), list(SOURCE_EXCLUDES))
+    honey = _is_honey_product(load_json(root / "packaging/product-version.v1.json"))
+    includes = list(SOURCE_INCLUDES)
+    if honey:
+        includes.extend(
+            [
+                "packaging/product-version.v1.json",
+                "packaging/honey/capability-profile.v1.json",
+                "packaging/honey/artifact-matrix.v1.json",
+                "packaging/honey/release-requirements.v1.json",
+                "packaging/contracts/npm-package.v1.json",
+            ]
+        )
+    files = expand_files(root, includes, list(SOURCE_EXCLUDES))
     if not files:
         raise ReleaseError("TypeScript SDK build source inventory is empty")
     identity = git_state(root, tree_digest(files))
@@ -604,6 +813,7 @@ def _source_identity(root: Path) -> dict[str, Any]:
         or not isinstance(identity.get("revision"), str)
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", identity["revision"]) is None
         or not isinstance(identity.get("clean"), bool)
+        or (honey and identity.get("clean") is not True)
         or not isinstance(identity.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", identity["tree_sha256"]) is None
     ):
@@ -1477,7 +1687,10 @@ def produce(
                 raise ReleaseError(
                     "TypeScript SDK build source changed during construction"
                 )
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "TypeScript SDK build authority changed during construction"
                 )
@@ -1504,7 +1717,10 @@ def produce(
                 raise ReleaseError(
                     "TypeScript SDK build source changed during verification"
                 )
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "TypeScript SDK build authority changed during verification"
                 )
@@ -1570,9 +1786,10 @@ def produce(
                 "release": False,
             },
         }
-        workspace.write_json(BUILD_RECEIPT, receipt)
+        workspace.write_json(configuration.receipt_filename, receipt)
         workspace.read_files(
-            {configuration.filename, BUILD_RECEIPT}, strict_read_only=True
+            {configuration.filename, configuration.receipt_filename},
+            strict_read_only=True,
         )
         return receipt
     finally:

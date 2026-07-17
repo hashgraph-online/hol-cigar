@@ -18,7 +18,7 @@ test("release metadata and generated descriptor bind the exported Context ABI", 
   ) as ReleaseMetadata;
   assert.equal(release.schema_version, "cigar.sdk-release.v1");
   assert.equal(release.name, "@cigar/sdk");
-  assert.equal(release.version, "1.0.0-dev.1");
+  assert.equal(release.version, "0.9.0-honey.1");
   assert.equal(release.context_abi, CONTEXT_ABI);
   assert.equal(file_context_abi.proto.package, CONTEXT_ABI);
 });

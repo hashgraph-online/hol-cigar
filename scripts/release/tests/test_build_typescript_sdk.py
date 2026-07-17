@@ -231,18 +231,23 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
                 package_builder=package_builder or self.fake_builder,
             )
 
-    def test_configuration_binds_development_authorities_and_exact_inventory(
+    def test_configuration_binds_honey_authorities_and_exact_inventory(
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "1.0.0-dev.1")
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
-        self.assertEqual(configuration.filename, "cigar-sdk-1.0.0-dev.1.tgz")
-        self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
+        self.assertEqual(configuration.filename, "cigar-sdk-0.9.0-honey.1.tgz")
+        self.assertEqual(
+            set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
+        )
+        self.assertEqual(
+            configuration.receipt_filename, "typescript-sdk-build-receipt.json"
+        )
         self.assertEqual(
             set(configuration.sdk_sources), set(builder.SDK_BUILD_SOURCE_PATHS)
         )
-        self.assertEqual(len(builder.EXPECTED_PACKAGE_PATHS), 70)
+        self.assertEqual(len(builder.EXPECTED_PACKAGE_PATHS), 74)
 
     def test_configuration_requires_the_exact_matrix_producer_binding(self) -> None:
         load_json = builder.load_json
@@ -270,13 +275,13 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-sdk-1.0.0-dev.1.tgz"
+        filename = "cigar-sdk-0.9.0-honey.1.tgz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
         self.assertEqual(first["archive"], second["archive"])
         self.assertEqual(first["status"], "built-unqualified")
-        self.assertEqual(first["payload_file_count"], 70)
+        self.assertEqual(first["payload_file_count"], 74)
         self.assertEqual(
             first["claims"],
             {
@@ -293,10 +298,14 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(first_root.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE(first_archive.stat().st_mode), 0o400)
         self.assertEqual(
-            stat.S_IMODE((first_root / builder.BUILD_RECEIPT).stat().st_mode), 0o400
+            stat.S_IMODE(
+                (first_root / "typescript-sdk-build-receipt.json").stat().st_mode
+            ),
+            0o400,
         )
         self.assertEqual(
-            json.loads((first_root / builder.BUILD_RECEIPT).read_bytes()), first
+            json.loads((first_root / "typescript-sdk-build-receipt.json").read_bytes()),
+            first,
         )
 
         with tarfile.open(first_archive, "r:gz") as archive:

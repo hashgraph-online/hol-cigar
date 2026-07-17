@@ -21,6 +21,20 @@ from release_lib import ReleaseError, canonical_json_bytes, sha256_bytes  # noqa
 import verify_macos_development_assembly as verifier  # noqa: E402
 
 
+HONEY_SELECTED = (
+    json.loads(
+        (assembler.REPOSITORY_ROOT / "packaging/product-version.v1.json").read_text(
+            encoding="utf-8"
+        )
+    ).get("channel")
+    == "honey"
+)
+
+
+@unittest.skipIf(
+    HONEY_SELECTED,
+    "legacy development assembly is replaced by the Honey assembly profile",
+)
 @unittest.skipUnless(os.name == "posix", "secure evidence workspaces require POSIX")
 class MacosDevelopmentAssemblyTests(unittest.TestCase):
     def setUp(self) -> None:

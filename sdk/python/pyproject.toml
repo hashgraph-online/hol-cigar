@@ -1,6 +1,6 @@
 [project]
 name = "cigar-sdk"
-version = "1.0.0-dev.1"
+version = "0.9.0.dev1"
 description = "CIGAR v1 Python SDK"
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,6 +14,7 @@ Repository = "https://github.com/CIGAR/cigar"
 
 [project.scripts]
 cigar-qualify-bundle = "cigar_sdk.qualify_bundle:main"
+cigar-agent-b-handoff = "cigar_sdk.examples.agent_b_handoff:main"
 
 [dependency-groups]
 dev = [

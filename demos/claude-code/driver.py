@@ -32,7 +32,9 @@ from driver_support import (  # noqa: E402
 def executable(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8", newline="\n")
     # This generated demo helper must be owner-executable without becoming shared.
-    os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(
+        path, 0o700
+    )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
 
 
 def parse_object(payload: bytes, label: str) -> dict[str, Any]:
@@ -101,6 +103,19 @@ def additional_context(value: dict[str, Any]) -> str:
         return ""
     context = output.get("additionalContext")
     return context if isinstance(context, str) else ""
+
+
+def development_plugin_source_environment(
+    plugin_root: Path, *, installed_package: bool
+) -> dict[str, str]:
+    """Select the mutable-source injection only for checkout development runs."""
+
+    if installed_package:
+        return {}
+    return {
+        "CIGAR_CLAUDE_PLUGIN_SOURCE": str(plugin_root),
+        "CIGAR_TEST_PLUGIN_SOURCE": str(plugin_root),
+    }
 
 
 def run() -> None:
@@ -201,20 +216,32 @@ print(json.dumps({
         ),
     )
 
-    plugin_root = Path(__file__).resolve().parents[2] / "adapters" / "claude-code"
-    environment = clean_environment(
-        args.state,
-        {
-            "CIGAR_HOME": str(args.state / "cigar-home"),
-            "CIGAR_CLAUDE_PLUGIN_SOURCE": str(plugin_root),
-            "CIGAR_TEST_PLUGIN_SOURCE": str(plugin_root),
-            "CIGAR_CLAUDE_BINARY": str(fake_claude),
-            "CIGAR_MCP_BINARY": str(successful_component),
-            "CIGAR_CLAUDE_HOOK_BINARY": str(hook_binary),
-            "CIGAR_CLAUDE_DAEMON_CHECK_BINARY": str(successful_component),
-            "CIGAR_DEMO_CLAUDE_LOG": str(invocation_log),
-        },
+    plugin_root_value = os.environ.get("CIGAR_DEMO_CLAUDE_PLUGIN_ROOT")
+    plugin_root = (
+        Path(plugin_root_value).resolve()
+        if plugin_root_value
+        else Path(__file__).resolve().parents[2] / "adapters" / "claude-code"
     )
+    if (
+        not plugin_root.is_dir()
+        or not (plugin_root / ".claude-plugin" / "plugin.json").is_file()
+        or not (plugin_root / "hooks" / "hooks.json").is_file()
+    ):
+        fail("Claude plugin root is incomplete")
+    environment_additions = {
+        "CIGAR_HOME": str(args.state / "cigar-home"),
+        "CIGAR_CLAUDE_BINARY": str(fake_claude),
+        "CIGAR_MCP_BINARY": str(successful_component),
+        "CIGAR_CLAUDE_HOOK_BINARY": str(hook_binary),
+        "CIGAR_CLAUDE_DAEMON_CHECK_BINARY": str(successful_component),
+        "CIGAR_DEMO_CLAUDE_LOG": str(invocation_log),
+    }
+    environment_additions.update(
+        development_plugin_source_environment(
+            plugin_root, installed_package=plugin_root_value is not None
+        )
+    )
+    environment = clean_environment(args.state, environment_additions)
     install = cli(
         args.cigar_binary,
         [

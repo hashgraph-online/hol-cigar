@@ -36,7 +36,7 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
             "revision": "a" * 40,
             "tree_sha256": "b" * 64,
             "committed": True,
-            "clean": False,
+            "clean": True,
         }
 
     def arguments(self, evidence: Path | None) -> argparse.Namespace:
@@ -160,13 +160,13 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
                 runtime_builder=runtime_builder or self.fake_builder,
             )
 
-    def test_configuration_is_bound_to_development_authorities(self) -> None:
+    def test_configuration_is_bound_to_honey_authorities(self) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "1.0.0-dev.1")
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.filename,
-            "cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz",
+            "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
         )
         self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
         self.assertEqual(set(configuration.assets), set(builder.ASSET_PATHS))
@@ -248,7 +248,7 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-1.0.0-dev.1-aarch64-apple-darwin.tar.gz"
+        filename = "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
@@ -271,7 +271,8 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
         self.assertEqual(
             first["claims"],
             {
-                "development_build": True,
+                "development_build": False,
+                "developer_preview_build": True,
                 "distribution_signed": False,
                 "notarized": False,
                 "qualified": False,
@@ -331,7 +332,20 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
             assert metadata_handle is not None
             metadata = json.loads(metadata_handle.read())
             self.assertEqual(metadata["artifact_id"], builder.ARTIFACT_ID)
-            self.assertFalse(metadata["source"]["clean"])
+            self.assertTrue(metadata["source"]["clean"])
+
+    def test_honey_native_build_rejects_dirty_source_before_building(self) -> None:
+        dirty = {**self.source, "clean": False}
+        attempted = mock.Mock(side_effect=AssertionError("builder must not run"))
+        evidence = self.base / "dirty-source"
+        with self.assertRaisesRegex(ReleaseError, "committed, clean"):
+            self.produce(
+                evidence,
+                attempted,
+                source_side_effect=[dirty],
+            )
+        attempted.assert_not_called()
+        self.assertFalse(evidence.exists())
 
     def test_stale_runtime_wrong_architecture_and_source_change_fail_closed(
         self,

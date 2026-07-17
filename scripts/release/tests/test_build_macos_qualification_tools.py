@@ -36,7 +36,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
             "revision": "a" * 40,
             "tree_sha256": "b" * 64,
             "committed": True,
-            "clean": False,
+            "clean": True,
         }
         self.host = {
             "platform": "macos",
@@ -82,12 +82,13 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         return builder.BuildConfiguration(
             root=self.root,
             spec=spec,
-            version="1.0.0-dev.1",
+            version="0.9.0-honey.1",
             context_abi="cigar.context.v1",
-            filename=spec.filename_template.format(version="1.0.0-dev.1"),
+            filename=spec.filename_template.format(version="0.9.0-honey.1"),
             contract_path=self.root.joinpath(*spec.contract_relative.split("/")),
             authority=authority,
             assets=assets,
+            honey=True,
         )
 
     @staticmethod
@@ -197,7 +198,8 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         for spec in builder.SPECS.values():
             with self.subTest(spec=spec.selector):
                 self.assertEqual(
-                    rows[spec.artifact_id], builder._matrix_row(spec, "1.0.0-dev.1")
+                    rows[spec.artifact_id],
+                    builder._matrix_row(spec, "0.9.0-honey.1"),
                 )
                 contract = load_json(
                     self.root.joinpath(*spec.contract_relative.split("/"))
@@ -206,6 +208,21 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
                 self.assertEqual(set(contract["allow"]), expected)
                 self.assertEqual(set(contract["required"]), expected)
         import development_macos_profile as profile
+
+        honey = load_json(self.root / "packaging/honey/artifact-matrix.v1.json")
+        selected_internal = [
+            row
+            for row in honey["internal_inputs"]
+            if row.get("id") == builder.HONEY_INTERNAL_INPUT_ID
+        ]
+        self.assertEqual(
+            selected_internal,
+            [
+                builder._honey_internal_input(
+                    builder.SPECS["conformance"], "0.9.0-honey.1"
+                )
+            ],
+        )
 
         selected = dict(profile.SELECTED)
         self.assertEqual(len(selected), 17)
@@ -227,40 +244,36 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         self.assertEqual(profile.MISSING, ())
 
     def test_configuration_loader_binds_rows_profile_contracts_and_assets(self) -> None:
-        import development_macos_profile as profile
-
         staged = self.base / "configuration-repository"
         required = {
             "packaging/product-version.v1.json",
-            "packaging/artifact-matrix.v1.json",
-            "packaging/development/local-macos-aarch64.v1.json",
+            "packaging/honey/capability-profile.v1.json",
+            "packaging/honey/artifact-matrix.v1.json",
+            "packaging/honey/release-requirements.v1.json",
             "LICENSE",
             "NOTICE",
-            *(spec.contract_relative for spec in builder.SPECS.values()),
+            builder.SPECS["conformance"].contract_relative,
             *builder.CONFORMANCE_ASSETS.values(),
-            *builder.BENCHMARK_ASSETS.values(),
         }
         for relative in required:
             destination = staged.joinpath(*relative.split("/"))
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if relative == "packaging/development/local-macos-aarch64.v1.json":
-                destination.write_bytes(
-                    profile.canonical_json_bytes(profile.expected_profile())
-                )
-            else:
-                shutil.copyfile(self.root.joinpath(*relative.split("/")), destination)
-        for selector, spec in builder.SPECS.items():
-            with self.subTest(selector=selector):
-                configuration = builder._load_configuration(staged, spec)
-                self.assertEqual(configuration.version, "1.0.0-dev.1")
-                self.assertEqual(configuration.context_abi, "cigar.context.v1")
-                self.assertEqual(
-                    configuration.filename,
-                    spec.filename_template.format(version="1.0.0-dev.1"),
-                )
-                self.assertEqual(
-                    set(configuration.authority), set(builder._authority_paths(spec))
-                )
+            shutil.copyfile(self.root.joinpath(*relative.split("/")), destination)
+        spec = builder.SPECS["conformance"]
+        configuration = builder._load_configuration(staged, spec)
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
+        self.assertEqual(configuration.context_abi, "cigar.context.v1")
+        self.assertTrue(configuration.honey)
+        self.assertEqual(
+            configuration.filename,
+            spec.filename_template.format(version="0.9.0-honey.1"),
+        )
+        self.assertEqual(
+            set(configuration.authority),
+            set(builder._authority_paths(spec, honey=True)),
+        )
+        with self.assertRaisesRegex(ReleaseError, "only the bounded conformance"):
+            builder._load_configuration(staged, builder.SPECS["cigarbench"])
 
     def test_conformance_fake_build_is_deterministic_exact_and_unclaimed(self) -> None:
         first_root = self.base / "conformance-first"
@@ -271,7 +284,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         second = self.produce(
             "conformance", second_root, tool_builder=self.fake_conformance
         )
-        name = "cigar-conformance-1.0.0-dev.1-aarch64-apple-darwin.tar.gz"
+        name = "cigar-conformance-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
         self.assertEqual(
             (first_root / name).read_bytes(), (second_root / name).read_bytes()
         )
@@ -311,7 +324,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         second_root = self.base / "bench-second"
         first = self.produce("cigarbench", first_root)
         second = self.produce("cigarbench", second_root)
-        name = "cigarbench-1.0.0-dev.1-aarch64-apple-darwin.tar.gz"
+        name = "cigarbench-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
         self.assertEqual(
             (first_root / name).read_bytes(), (second_root / name).read_bytes()
         )
@@ -431,6 +444,20 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.produce("conformance", occupied, tool_builder=self.fake_conformance)
 
+    def test_honey_tool_build_rejects_dirty_source_before_building(self) -> None:
+        dirty = {**self.source, "clean": False}
+        attempted = mock.Mock(side_effect=AssertionError("builder must not run"))
+        evidence = self.base / "dirty-source"
+        with self.assertRaisesRegex(ReleaseError, "Honey requires a clean tree"):
+            self.produce(
+                "conformance",
+                evidence,
+                tool_builder=attempted,
+                source_side_effect=[dirty],
+            )
+        attempted.assert_not_called()
+        self.assertFalse(evidence.exists())
+
     @unittest.skipUnless(
         sys.platform == "darwin", "requires the macOS Seatbelt launcher"
     )
@@ -494,7 +521,8 @@ raise SystemExit(4)
     @staticmethod
     def expected_claims() -> dict[str, bool]:
         return {
-            "development_build": True,
+            "development_build": False,
+            "developer_preview_build": True,
             "candidate": False,
             "distribution_signed": False,
             "notarized": False,

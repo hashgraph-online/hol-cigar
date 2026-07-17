@@ -27,6 +27,17 @@ from evidence_workspace import EvidenceWorkspace, EvidenceWorkspaceError  # noqa
 from release_lib import ReleaseError, canonical_json_bytes  # noqa: E402
 
 
+HONEY_SELECTED = (
+    json.loads(
+        (homebrew.REPOSITORY_ROOT / "packaging/product-version.v1.json").read_text(
+            encoding="utf-8"
+        )
+    ).get("channel")
+    == "honey"
+)
+
+
+@unittest.skipIf(HONEY_SELECTED, "Homebrew is explicitly deferred by the Honey profile")
 @unittest.skipUnless(os.name == "posix", "secure evidence workspaces require POSIX")
 class MacosHomebrewArtifactTests(unittest.TestCase):
     def setUp(self) -> None:

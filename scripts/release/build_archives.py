@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import io
 import os
+import re
 import stat
 import tarfile
 import tempfile
@@ -43,6 +44,17 @@ from verify_package import verify as verify_package
 
 MAX_SOURCE_FILE_BYTES = 64 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 512 * 1024 * 1024
+HONEY_MANIFEST_PATH = "packaging/honey/local-archives.v1.json"
+HONEY_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
+    HONEY_MANIFEST_PATH,
+)
+HONEY_VERSION = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-honey\.[1-9][0-9]*\Z"
+)
 
 
 @dataclass(frozen=True)
@@ -320,6 +332,24 @@ def _stable_source_bytes(path: Path, relative: str) -> bytes:
             os.close(descriptor)
 
 
+def _honey_authority(
+    root: Path, manifest: dict[str, Any]
+) -> dict[str, dict[str, object]]:
+    contract_paths = tuple(entry["contract"] for entry in manifest["archives"])
+    paths = (*HONEY_AUTHORITY_PATHS, *contract_paths)
+    if len(paths) != len(set(paths)):
+        raise ReleaseError("Honey portable authority inventory is duplicated")
+    authority: dict[str, dict[str, object]] = {}
+    for relative in paths:
+        path = resolve_beneath(root, relative)
+        payload = _stable_source_bytes(path, relative)
+        authority[relative] = {
+            "sha256": sha256_bytes(payload),
+            "bytes": len(payload),
+        }
+    return authority
+
+
 def _snapshot_expanded_files(
     expanded: dict[str, list[tuple[str, Path]]],
 ) -> tuple[dict[str, list[SourceSnapshot]], dict[str, Path], dict[str, bytes]]:
@@ -432,6 +462,17 @@ def _build(arguments: argparse.Namespace, *, root: Path, output: ArchiveOutput) 
     manifest_path = resolve_beneath(root, arguments.manifest)
     manifest = load_json(manifest_path)
     _validate_manifest(manifest)
+    honey = (
+        isinstance(manifest.get("product_version"), str)
+        and HONEY_VERSION.fullmatch(manifest["product_version"]) is not None
+    )
+    if honey and manifest_path != resolve_beneath(root, HONEY_MANIFEST_PATH):
+        raise ReleaseError(
+            "Honey portable builds require the exact Honey archive manifest authority"
+        )
+    if honey and not arguments.require_committed_clean:
+        raise ReleaseError("Honey portable builds require --require-committed-clean")
+    authority = _honey_authority(root, manifest) if honey else None
     epoch = require_source_date_epoch(arguments.source_date_epoch)
     excludes = manifest.get("always_exclude", [])
     if not isinstance(excludes, list) or not all(
@@ -456,7 +497,7 @@ def _build(arguments: argparse.Namespace, *, root: Path, output: ArchiveOutput) 
     )
     source_tree_digest = _snapshot_tree_digest(expanded["source"])
     source = git_state(root, source_tree_digest)
-    if arguments.require_committed_clean and (
+    if (arguments.require_committed_clean or honey) and (
         not source["committed"] or not source["clean"]
     ):
         raise ReleaseError("release archive requires a committed, clean source tree")
@@ -504,6 +545,8 @@ def _build(arguments: argparse.Namespace, *, root: Path, output: ArchiveOutput) 
 
     try:
         _verify_source_snapshot(snapshot_paths, snapshot_payloads)
+        if authority is not None and _honey_authority(root, manifest) != authority:
+            raise ReleaseError("Honey portable authority changed during construction")
     except ReleaseError:
         for record in build_records:
             (output_root / record["path"]).unlink(missing_ok=True)
@@ -531,6 +574,7 @@ def _build(arguments: argparse.Namespace, *, root: Path, output: ArchiveOutput) 
         "source_date_epoch": epoch,
         "source": source,
         "artifacts": sorted(build_records, key=lambda item: item["id"]),
+        **({"authority": authority} if authority is not None else {}),
     }
     write_json(build_manifest_path, build_manifest)
     output.publish(

@@ -23,6 +23,17 @@ from evidence_workspace import EvidenceWorkspaceError  # noqa: E402
 from release_lib import ReleaseError  # noqa: E402
 
 
+HONEY_SELECTED = (
+    json.loads(
+        (builder.REPOSITORY_ROOT / "packaging/product-version.v1.json").read_text(
+            encoding="utf-8"
+        )
+    ).get("channel")
+    == "honey"
+)
+
+
+@unittest.skipIf(HONEY_SELECTED, "Go SDK is explicitly deferred by the Honey profile")
 @unittest.skipUnless(os.name == "posix", "secure workspace requires POSIX")
 class GoSdkBuilderTests(unittest.TestCase):
     def setUp(self) -> None:

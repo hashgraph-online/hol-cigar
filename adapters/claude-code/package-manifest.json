@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "25390b6e1a95f560452d4c8a862ba35333435eed2e7fff28b105d0c7a1d5d01e",
-      "bytes": 520
+      "sha256": "a2ae7e9a81c7cc57971259b3b522d2018ec91ca0ff68807ccb380dbfb599a70f",
+      "bytes": 522
     },
     {
       "path": ".mcp.json",
@@ -13,8 +13,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "60d427752267b2870706e49bc8d5f501a2ca396d2d3fa094a81f1c205c6c3f15",
-      "bytes": 11787
+      "sha256": "919b8c317213ce6721e234e40b7f0329a87f079f5177a82a67331056c3633a6c",
+      "bytes": 11819
     },
     {
       "path": "agents/context-curator.md",
@@ -303,8 +303,8 @@
     },
     {
       "path": "tests/validate-package.ps1",
-      "sha256": "e202dd291c4a6063b2954e8c623fcc51b2dee6681a2c7ac3cdcb849011907584",
-      "bytes": 6698
+      "sha256": "6204b4c3a3d95f819d6aa55393c961bb13dedb82938de5ed13912b8d877ac232",
+      "bytes": 6700
     },
     {
       "path": "tests/validate-package.sh",
@@ -313,8 +313,8 @@
     },
     {
       "path": "tests/validate_package.py",
-      "sha256": "470cb79c5f5ff2e7b96733e506cc33a3de66d8a4aa27e341fa5b6a8fd10699ba",
-      "bytes": 10320
+      "sha256": "7a1ff8a2e5c13f6b6dd23d075ea56b6595fa738d8cdd4bbf0af5c4566b50ca07",
+      "bytes": 10366
     }
   ]
 }

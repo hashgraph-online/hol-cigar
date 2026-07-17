@@ -1,0 +1,142 @@
+{
+  "schema_version": "cigar.demo-manifest.v1",
+  "demo_id": "honey-two-agent-handoff",
+  "title": "Honey Agent A and Agent B handoff",
+  "fixed_seed": 49003,
+  "fixture": "fixture.json",
+  "fixture_digest": "1220418620274bec4a046837543e66d31198a897e740131b69919df5dd07b1a0df96",
+  "driver": "driver.py",
+  "driver_digest": "1220f6926c7bd69466ec955d5d453a5be210afd6c46bb5a5bec9a14957cc10dc8416",
+  "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
+  "recorded_mode": true,
+  "setup": [
+    "isolated-home",
+    "deterministic-parent-and-children",
+    "network-disabled",
+    "fixed-clock-and-seed"
+  ],
+  "expected_assertions": [
+    "forbidden-access-denied-content-free",
+    "write-grant-attenuation-rejected",
+    "package-at-most-20-percent",
+    "first-action-useful",
+    "result-is-typed-evidence",
+    "optimistic-merge-exact",
+    "distinct-agent-identities-bound",
+    "typed-conflict-explicitly-resolved",
+    "final-evidence-root-correlated"
+  ],
+  "checks": [
+    {
+      "check_id": "handoff-two-agent-acceptance",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "handoff",
+        "partial_acceptance_reauthorizes_every_reference_and_compiles_recipient_bundle"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": [
+        "forbidden-access-denied-content-free",
+        "result-is-typed-evidence",
+        "distinct-agent-identities-bound"
+      ]
+    },
+    {
+      "check_id": "handoff-two-agent-attenuation",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "handoff",
+        "generated_requested_capability_lattice_never_amplifies_authority"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["write-grant-attenuation-rejected"]
+    },
+    {
+      "check_id": "handoff-two-agent-capsule",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "handoff",
+        "capsule_contains_typed_references_and_excludes_parent_transcript"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["package-at-most-20-percent"]
+    },
+    {
+      "check_id": "handoff-two-agent-first-action",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "handoff",
+        "reference_handoff_and_first_action_outcome_gate_passes"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["first-action-useful"]
+    },
+    {
+      "check_id": "handoff-two-agent-merge",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "handoff",
+        "child_result_enters_parent_overlay_without_granting_followup_authority_and_conflicts_typed"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["optimistic-merge-exact"]
+    },
+    {
+      "check_id": "handoff-two-agent-conflict-resolution",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "cigar-space",
+        "--test",
+        "space",
+        "stale_revision_and_same_key_conflicts_never_overwrite_silently"
+      ],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": [
+        "typed-conflict-explicitly-resolved",
+        "final-evidence-root-correlated"
+      ]
+    }
+  ],
+  "teardown": [
+    "remove-isolated-home",
+    "remove-child-state",
+    "remove-recorded-consumer-state"
+  ],
+  "ci_smoke_command": "python3 demos/run_honey.py --validate-only --scenario two-agent --output reports/honey-two-agent-validation.json",
+  "canary_ids": ["parent-transcript"],
+  "live_mode": {"enabled": false, "required_environment": [], "check": null}
+}

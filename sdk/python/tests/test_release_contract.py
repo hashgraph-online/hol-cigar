@@ -13,7 +13,7 @@ class ReleaseContractTests(unittest.TestCase):
         release = json.loads(resources.files("cigar_sdk").joinpath("release.json").read_text(encoding="utf-8"))
         self.assertEqual(release["schema_version"], "cigar.sdk-release.v1")
         self.assertEqual(release["name"], "cigar-sdk")
-        distribution_version = release["version"].replace("-dev.", ".dev")
+        distribution_version = release["version"].replace("-honey.", ".dev")
         self.assertEqual(distribution_version, metadata.version("cigar-sdk"))
         self.assertEqual(release["context_abi"], CONTEXT_ABI)
         self.assertEqual(context_abi_pb2.DESCRIPTOR.package, CONTEXT_ABI)

@@ -48,6 +48,7 @@ from verify_package import verify as verify_package
 SDIST_ARTIFACT_ID = "python-sdk-sdist"
 WHEEL_ARTIFACT_ID = "python-sdk-wheel"
 PRODUCER = "python3 scripts/release/build_python_sdk_artifacts.py"
+PRODUCER_ARGV = ["python3", "scripts/release/build_python_sdk_artifacts.py"]
 BUILD_RECEIPT = "python-sdk-development-build.json"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -62,6 +63,17 @@ AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
     "packaging/artifact-matrix.v1.json",
     "packaging/development/local-macos-aarch64.v1.json",
+    "packaging/contracts/python-sdist.v1.json",
+    "packaging/contracts/python-wheel.v1.json",
+    f"{SDK_RELATIVE}/pyproject.toml",
+    f"{SDK_RELATIVE}/uv.lock",
+    f"{SDK_RELATIVE}/src/cigar_sdk/release.json",
+)
+HONEY_AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/release-requirements.v1.json",
     "packaging/contracts/python-sdist.v1.json",
     "packaging/contracts/python-wheel.v1.json",
     f"{SDK_RELATIVE}/pyproject.toml",
@@ -111,10 +123,12 @@ class BuildConfiguration:
     context_abi: str
     sdist_filename: str
     wheel_filename: str
+    receipt_filename: str
     contracts: dict[str, Path]
     authority: dict[str, dict[str, object]]
     source_assets: dict[str, bytes]
     lock_summary: dict[str, object]
+    honey: bool
 
 
 @dataclass(frozen=True)
@@ -220,9 +234,11 @@ def _read_stable_file(path: Path, maximum: int, label: str) -> bytes:
             os.close(descriptor)
 
 
-def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, paths: tuple[str, ...] = AUTHORITY_PATHS
+) -> dict[str, dict[str, object]]:
     records: dict[str, dict[str, object]] = {}
-    for relative in AUTHORITY_PATHS:
+    for relative in paths:
         payload = _read_stable_file(
             root.joinpath(*relative.split("/")), MAX_SOURCE_BYTES, relative
         )
@@ -236,8 +252,13 @@ def _python_distribution_version(version: str) -> str:
         version,
     )
     if match is None:
+        match = re.fullmatch(
+            r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-honey\.([1-9][0-9]*)",
+            version,
+        )
+    if match is None:
         raise ReleaseError(
-            "development product version cannot be normalized to PEP 440"
+            "development or Honey product version cannot be normalized to PEP 440"
         )
     major, minor, patch, sequence = match.groups()
     return f"{major}.{minor}.{patch}.dev{sequence}"
@@ -352,12 +373,12 @@ def _load_toml(payload: bytes, label: str) -> dict[str, Any]:
     return document
 
 
-def _validate_pyproject(document: dict[str, Any], version: str) -> None:
+def _validate_pyproject(document: dict[str, Any], python_version: str) -> None:
     project = document.get("project")
     if (
         not isinstance(project, dict)
         or project.get("name") != "cigar-sdk"
-        or project.get("version") != version
+        or project.get("version") != python_version
         or project.get("description") != "CIGAR v1 Python SDK"
         or project.get("readme") != "README.md"
         or project.get("license") != "Apache-2.0"
@@ -365,7 +386,10 @@ def _validate_pyproject(document: dict[str, Any], version: str) -> None:
         or project.get("requires-python") != ">=3.14,<3.15"
         or project.get("dependencies") != ["protobuf==6.33.5"]
         or project.get("scripts")
-        != {"cigar-qualify-bundle": "cigar_sdk.qualify_bundle:main"}
+        != {
+            "cigar-agent-b-handoff": "cigar_sdk.examples.agent_b_handoff:main",
+            "cigar-qualify-bundle": "cigar_sdk.qualify_bundle:main",
+        }
     ):
         raise ReleaseError("Python project identity or runtime metadata is stale")
     if project.get("urls") != {
@@ -398,7 +422,7 @@ def _validate_pyproject(document: dict[str, Any], version: str) -> None:
         raise ReleaseError("Python Hatchling package targets are stale")
 
 
-def _validate_lock(document: dict[str, Any], version: str) -> dict[str, object]:
+def _validate_lock(document: dict[str, Any], python_version: str) -> dict[str, object]:
     if (
         document.get("version") != 1
         or document.get("revision") != 3
@@ -419,7 +443,7 @@ def _validate_lock(document: dict[str, Any], version: str) -> dict[str, object]:
     ]
     expected_sdk = {
         "name": "cigar-sdk",
-        "version": version,
+        "version": python_version,
         "source": {"editable": "."},
         "dependencies": [{"name": "protobuf"}],
         "dev-dependencies": {
@@ -550,27 +574,159 @@ def _source_assets(root: Path) -> dict[str, bytes]:
     return dict(sorted(assets.items(), key=lambda item: item[0].encode("utf-8")))
 
 
+def _is_honey_product(product: Any) -> bool:
+    return (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
+
+
+def _validate_honey_authority(
+    product: dict[str, Any],
+    python_version: str,
+    matrix: Any,
+    profile: Any,
+    requirements: Any,
+    authority: dict[str, dict[str, object]],
+) -> None:
+    version = product["version"]
+    identity = {
+        "channel": "honey",
+        "context_abi": product["context_abi"],
+        "ecosystem_versions": {
+            "archive": version,
+            "plugin": version,
+            "python": python_version,
+            "rust": version,
+            "typescript": version,
+        },
+        "marketing_name": "CIGAR Honey v0.9",
+        "prerelease": True,
+        "product_version": version,
+        "production_qualified": False,
+        "published": False,
+        "python_distribution_version": python_version,
+        "release_state": "developer-preview",
+        "supported": False,
+        "tag": f"v{version}",
+    }
+    if (
+        not isinstance(matrix, dict)
+        or matrix.get("schema_version") != "cigar.honey.artifact-matrix.v1"
+        or matrix.get("release_state") != "developer-preview"
+        or matrix.get("product_version") != version
+        or matrix.get("context_abi") != product["context_abi"]
+        or matrix.get("profile_id")
+        != "cigar.honey.local-developer-preview.macos-arm64.v1"
+        or matrix.get("fail_closed") is not True
+        or not isinstance(matrix.get("artifacts"), list)
+        or not isinstance(profile, dict)
+        or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+        or profile.get("profile_id") != matrix.get("profile_id")
+        or profile.get("fail_closed") is not True
+        or profile.get("identity") != identity
+        or profile.get("platform")
+        != {
+            "deployment_modes": ["embedded", "local-sidecar"],
+            "host_arch": "arm64",
+            "host_os": "macos",
+            "network_required": False,
+            "target_triple": TARGET_TRIPLE,
+            "trust_model": "single-local-os-user-with-explicit-agent-principals",
+        }
+        or profile.get("product_version_binding")
+        != {
+            "path": "packaging/product-version.v1.json",
+            "sha256": authority["packaging/product-version.v1.json"]["sha256"],
+        }
+        or profile.get("artifact_ids") != [row.get("id") for row in matrix["artifacts"]]
+        or "python-wheel-sdist" not in profile.get("integrations", [])
+        or not any(
+            isinstance(capability, dict)
+            and capability.get("id") == "python-sdk"
+            and capability.get("status") == "required"
+            and capability.get("support_level") == "developer-preview"
+            for capability in profile.get("capabilities", [])
+        )
+    ):
+        raise ReleaseError("Honey Python capability authority is incomplete or stale")
+    expected_bindings = {
+        "artifact_matrix": {
+            "path": "packaging/honey/artifact-matrix.v1.json",
+            "sha256": authority["packaging/honey/artifact-matrix.v1.json"]["sha256"],
+        },
+        "capability_profile": {
+            "path": "packaging/honey/capability-profile.v1.json",
+            "sha256": authority["packaging/honey/capability-profile.v1.json"]["sha256"],
+        },
+    }
+    mandatory_gates = profile.get("mandatory_gate_ids")
+    if (
+        not isinstance(requirements, dict)
+        or requirements.get("schema_version") != "cigar.honey.release-requirements.v1"
+        or requirements.get("profile_id") != matrix.get("profile_id")
+        or requirements.get("fail_closed") is not True
+        or requirements.get("machine_claims")
+        != {
+            "prerelease": True,
+            "production_qualified": False,
+            "supported": False,
+        }
+        or requirements.get("required_source_state")
+        != {"clean": True, "committed": True, "tagged_before_build": False}
+        or requirements.get("authority_bindings") != expected_bindings
+        or not isinstance(mandatory_gates, list)
+        or requirements.get("mandatory_gates")
+        != [
+            {
+                "evidence_status": "required-not-implied",
+                "id": gate,
+                "required": True,
+            }
+            for gate in mandatory_gates
+        ]
+    ):
+        raise ReleaseError("Honey release requirements are incomplete or stale")
+
+
 def _load_configuration(root: Path) -> BuildConfiguration:
     root = root.resolve(strict=True)
-    authority = _authority_digests(root)
+    initial_product = load_json(root / "packaging/product-version.v1.json")
+    honey = _is_honey_product(initial_product)
+    authority_paths = HONEY_AUTHORITY_PATHS if honey else AUTHORITY_PATHS
+    authority = _authority_digests(root, authority_paths)
     product = load_json(root / "packaging/product-version.v1.json")
-    matrix = load_json(root / "packaging/artifact-matrix.v1.json")
-    profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+    if honey:
+        matrix = load_json(root / "packaging/honey/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/honey/capability-profile.v1.json")
+        requirements = load_json(root / "packaging/honey/release-requirements.v1.json")
+    else:
+        matrix = load_json(root / "packaging/artifact-matrix.v1.json")
+        profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+        requirements = None
     release = load_json(root / "sdk/python/src/cigar_sdk/release.json")
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or _is_honey_product(product))
+        or honey != _is_honey_product(product)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or product.get("context_abi") != "cigar.context.v1"
     ):
         raise ReleaseError(
-            "product version authority is not an unpublished development identity"
+            "product version authority is not an unpublished development or Honey identity"
         )
     version = product["version"]
     python_version = _python_distribution_version(version)
@@ -582,55 +738,105 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         "context_abi": context_abi,
     }:
         raise ReleaseError("Python SDK release identity is stale")
-    if (
-        not isinstance(matrix, dict)
-        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("release_state") != "development"
-        or matrix.get("product_version") != version
-        or matrix.get("context_abi") != context_abi
-        or not isinstance(matrix.get("artifacts"), list)
-    ):
-        raise ReleaseError(
-            "artifact matrix is stale relative to product version authority"
+    if honey:
+        _validate_honey_authority(
+            product, python_version, matrix, profile, requirements, authority
         )
-    expected_rows = {
-        SDIST_ARTIFACT_ID: {
-            "id": SDIST_ARTIFACT_ID,
-            "kind": "python-sdist",
-            "filename": f"cigar_sdk-{python_version}.tar.gz",
-            "contract": "contracts/python-sdist.v1.json",
-            "ecosystem": "python",
-            "producer": PRODUCER,
-            "required_for_release": True,
-            "qualification": [
-                "twine-check",
-                "clean-install",
-                "offline",
-                "version-abi-consistency",
-                "sbom",
-                "license",
-                "signature",
-            ],
-        },
-        WHEEL_ARTIFACT_ID: {
-            "id": WHEEL_ARTIFACT_ID,
-            "kind": "python-wheel",
-            "filename": f"cigar_sdk-{python_version}-py3-none-any.whl",
-            "contract": "contracts/python-wheel.v1.json",
-            "ecosystem": "python",
-            "producer": PRODUCER,
-            "required_for_release": True,
-            "qualification": [
-                "wheel-matrix",
-                "clean-install",
-                "offline",
-                "version-abi-consistency",
-                "sbom",
-                "license",
-                "signature",
-            ],
-        },
-    }
+        common_receipt = {
+            "filename": "python-sdk-build-receipt.json",
+            "required": True,
+            "schema_version": "cigar.development-python-sdk-build.v1",
+        }
+        expected_rows = {
+            WHEEL_ARTIFACT_ID: {
+                "contract": "packaging/contracts/python-wheel.v1.json",
+                "filename": f"cigar_sdk-{python_version}-py3-none-any.whl",
+                "generated_by_assembler": False,
+                "id": WHEEL_ARTIFACT_ID,
+                "kind": "python-wheel",
+                "order": 6,
+                "producer": PRODUCER_ARGV,
+                "public_attachment": True,
+                "qualification_gate_ids": [
+                    "sdk-clean-installs",
+                    "archive-contracts",
+                ],
+                "receipt": common_receipt,
+                "required": True,
+                "sha256_required": True,
+                "workspace": "python",
+            },
+            SDIST_ARTIFACT_ID: {
+                "contract": "packaging/contracts/python-sdist.v1.json",
+                "filename": f"cigar_sdk-{python_version}.tar.gz",
+                "generated_by_assembler": False,
+                "id": SDIST_ARTIFACT_ID,
+                "kind": "python-sdist",
+                "order": 7,
+                "producer": PRODUCER_ARGV,
+                "public_attachment": True,
+                "qualification_gate_ids": [
+                    "sdk-clean-installs",
+                    "archive-contracts",
+                ],
+                "receipt": common_receipt,
+                "required": True,
+                "sha256_required": True,
+                "workspace": "python",
+            },
+        }
+        receipt_filename = common_receipt["filename"]
+    else:
+        if (
+            not isinstance(matrix, dict)
+            or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
+            or matrix.get("release_state") != "development"
+            or matrix.get("product_version") != version
+            or matrix.get("context_abi") != context_abi
+            or not isinstance(matrix.get("artifacts"), list)
+        ):
+            raise ReleaseError(
+                "artifact matrix is stale relative to product version authority"
+            )
+        expected_rows = {
+            SDIST_ARTIFACT_ID: {
+                "id": SDIST_ARTIFACT_ID,
+                "kind": "python-sdist",
+                "filename": f"cigar_sdk-{python_version}.tar.gz",
+                "contract": "contracts/python-sdist.v1.json",
+                "ecosystem": "python",
+                "producer": PRODUCER,
+                "required_for_release": True,
+                "qualification": [
+                    "twine-check",
+                    "clean-install",
+                    "offline",
+                    "version-abi-consistency",
+                    "sbom",
+                    "license",
+                    "signature",
+                ],
+            },
+            WHEEL_ARTIFACT_ID: {
+                "id": WHEEL_ARTIFACT_ID,
+                "kind": "python-wheel",
+                "filename": f"cigar_sdk-{python_version}-py3-none-any.whl",
+                "contract": "contracts/python-wheel.v1.json",
+                "ecosystem": "python",
+                "producer": PRODUCER,
+                "required_for_release": True,
+                "qualification": [
+                    "wheel-matrix",
+                    "clean-install",
+                    "offline",
+                    "version-abi-consistency",
+                    "sbom",
+                    "license",
+                    "signature",
+                ],
+            },
+        }
+        receipt_filename = BUILD_RECEIPT
     for identifier, expected in expected_rows.items():
         matching = [
             row
@@ -639,38 +845,41 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         ]
         if len(matching) != 1 or matching[0] != expected:
             raise ReleaseError(f"{identifier} artifact row is incomplete or stale")
-    selected = profile.get("selected_artifacts") if isinstance(profile, dict) else None
-    selected_rows = (
-        {
-            row.get("id"): row
-            for row in selected
-            if isinstance(row, dict) and row.get("id") in expected_rows
-        }
-        if isinstance(selected, list)
-        else {}
-    )
-    if (
-        profile.get("schema_version") != "cigar.development-artifact-profile.v1"
-        or profile.get("release_state") != "development"
-        or profile.get("published") is not False
-        or profile.get("supported") is not False
-        or profile.get("target")
-        != {
-            "host_arch": "arm64",
-            "host_os": "macos",
-            "target_triple": TARGET_TRIPLE,
-        }
-        or set(selected_rows) != set(expected_rows)
-        or any(
-            row.get("status") != "planned"
-            or row.get("built") is not False
-            or row.get("qualified") is not False
-            for row in selected_rows.values()
+    if not honey:
+        selected = (
+            profile.get("selected_artifacts") if isinstance(profile, dict) else None
         )
-    ):
-        raise ReleaseError(
-            "development profile does not keep Python packages unclaimed"
+        selected_rows = (
+            {
+                row.get("id"): row
+                for row in selected
+                if isinstance(row, dict) and row.get("id") in expected_rows
+            }
+            if isinstance(selected, list)
+            else {}
         )
+        if (
+            profile.get("schema_version") != "cigar.development-artifact-profile.v1"
+            or profile.get("release_state") != "development"
+            or profile.get("published") is not False
+            or profile.get("supported") is not False
+            or profile.get("target")
+            != {
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "target_triple": TARGET_TRIPLE,
+            }
+            or set(selected_rows) != set(expected_rows)
+            or any(
+                row.get("status") != "planned"
+                or row.get("built") is not False
+                or row.get("qualified") is not False
+                for row in selected_rows.values()
+            )
+        ):
+            raise ReleaseError(
+                "development profile does not keep Python packages unclaimed"
+            )
     expected_contracts = _expected_contracts(python_version)
     contracts = {
         SDIST_ARTIFACT_ID: root / "packaging/contracts/python-sdist.v1.json",
@@ -681,12 +890,12 @@ def _load_configuration(root: Path) -> BuildConfiguration:
             raise ReleaseError(f"{identifier} package contract is not exact")
     source_assets = _source_assets(root)
     pyproject = _load_toml(source_assets["pyproject.toml"], "sdk/python/pyproject.toml")
-    _validate_pyproject(pyproject, version)
+    _validate_pyproject(pyproject, python_version)
     uv_lock_payload = _read_stable_file(
         root / "sdk/python/uv.lock", MAX_SOURCE_BYTES, "sdk/python/uv.lock"
     )
     lock_summary = _validate_lock(
-        _load_toml(uv_lock_payload, "sdk/python/uv.lock"), version
+        _load_toml(uv_lock_payload, "sdk/python/uv.lock"), python_version
     )
     return BuildConfiguration(
         root=root,
@@ -696,15 +905,27 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         context_abi=context_abi,
         sdist_filename=expected_rows[SDIST_ARTIFACT_ID]["filename"],
         wheel_filename=expected_rows[WHEEL_ARTIFACT_ID]["filename"],
+        receipt_filename=receipt_filename,
         contracts=contracts,
         authority=authority,
         source_assets=source_assets,
         lock_summary=lock_summary,
+        honey=honey,
     )
 
 
 def _source_identity(root: Path) -> dict[str, Any]:
-    files = expand_files(root, list(SOURCE_INCLUDES), list(SOURCE_EXCLUDES))
+    honey = _is_honey_product(load_json(root / "packaging/product-version.v1.json"))
+    includes = list(SOURCE_INCLUDES)
+    if honey:
+        includes.extend(
+            [
+                "packaging/honey/capability-profile.v1.json",
+                "packaging/honey/artifact-matrix.v1.json",
+                "packaging/honey/release-requirements.v1.json",
+            ]
+        )
+    files = expand_files(root, includes, list(SOURCE_EXCLUDES))
     if not files:
         raise ReleaseError("Python SDK build source inventory is empty")
     identity = git_state(root, tree_digest(files))
@@ -713,6 +934,7 @@ def _source_identity(root: Path) -> dict[str, Any]:
         or not isinstance(identity.get("revision"), str)
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", identity["revision"]) is None
         or not isinstance(identity.get("clean"), bool)
+        or (honey and identity.get("clean") is not True)
         or not isinstance(identity.get("tree_sha256"), str)
         or re.fullmatch(r"[0-9a-f]{64}", identity["tree_sha256"]) is None
     ):
@@ -848,6 +1070,7 @@ def _qualify_clean_installs(
         )
         interpreter = virtual_environment / "bin/python"
         qualifier = virtual_environment / "bin/cigar-qualify-bundle"
+        agent_b_example = virtual_environment / "bin/cigar-agent-b-handoff"
         _run_checked(
             [
                 str(uv),
@@ -894,6 +1117,15 @@ def _qualify_clean_installs(
         )
         if identity != EXPECTED_QUICKSTART_IDENTITY:
             raise ReleaseError(f"clean {kind} semantic-bundle identity differs")
+        help_output = _run_checked(
+            [str(agent_b_example), "--help"],
+            cwd=qualification_root,
+            environment=environment,
+            timeout=60,
+            label=f"clean {kind} Agent B handoff example",
+        )
+        if b"--handoff-id" not in help_output or b"--evidence" not in help_output:
+            raise ReleaseError(f"clean {kind} Agent B handoff example is incomplete")
         payload = _read_stable_file(
             artifact, MAX_ARTIFACT_BYTES, f"qualified Python SDK {kind}"
         )
@@ -902,6 +1134,7 @@ def _qualify_clean_installs(
             "artifact_bytes": len(payload),
             "identity": identity,
             "public_import": "passed",
+            "agent_b_example": "passed-help",
             "status": "passed",
         }
     return {
@@ -1095,6 +1328,7 @@ def _validate_clean_install(
             "artifact_bytes": len(payload),
             "identity": EXPECTED_QUICKSTART_IDENTITY,
             "public_import": "passed",
+            "agent_b_example": "passed-help",
             "status": "passed",
         }:
             raise ReleaseError(f"Python clean-install {kind} binding differs")
@@ -1333,7 +1567,9 @@ def _read_wheel(
     ):
         raise ReleaseError("Python wheel compatibility metadata is stale")
     if payloads[f"{dist_info}/entry_points.txt"] != (
-        b"[console_scripts]\ncigar-qualify-bundle = cigar_sdk.qualify_bundle:main\n"
+        b"[console_scripts]\n"
+        b"cigar-agent-b-handoff = cigar_sdk.examples.agent_b_handoff:main\n"
+        b"cigar-qualify-bundle = cigar_sdk.qualify_bundle:main\n"
     ):
         raise ReleaseError("Python wheel console entry point is stale")
     record_path = f"{dist_info}/RECORD"
@@ -1402,7 +1638,10 @@ def produce(
                 )
             if _source_identity(root) != source_before:
                 raise ReleaseError("Python SDK source changed during construction")
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError("Python SDK authority changed during construction")
 
             sdist_payloads, sdist_validation = _read_sdist(
@@ -1434,7 +1673,10 @@ def produce(
                 raise ReleaseError(
                     "Python SDK source changed during package verification"
                 )
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError(
                     "Python SDK authority changed during package verification"
                 )
@@ -1523,9 +1765,13 @@ def produce(
                 "release": False,
             },
         }
-        workspace.write_json(BUILD_RECEIPT, receipt)
+        workspace.write_json(configuration.receipt_filename, receipt)
         workspace.read_files(
-            {configuration.sdist_filename, configuration.wheel_filename, BUILD_RECEIPT},
+            {
+                configuration.sdist_filename,
+                configuration.wheel_filename,
+                configuration.receipt_filename,
+            },
             strict_read_only=True,
         )
         return receipt

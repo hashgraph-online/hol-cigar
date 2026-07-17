@@ -137,13 +137,17 @@ def validate_text() -> None:
         "not evidence of installed compatibility, signing, release qualification, publication, or support",
         "These commands are qualification inputs, not release installation instructions.",
     ]:
-        require(statement in readme, f"README development disclaimer missing: {statement}")
+        require(
+            statement in readme, f"README development disclaimer missing: {statement}"
+        )
     for forbidden in [
         "This package is qualified",
         "runs signed CIGAR executables",
         "The signed `cigar` installer embeds",
     ]:
-        require(forbidden not in readme, f"README contains a premature claim: {forbidden}")
+        require(
+            forbidden not in readme, f"README contains a premature claim: {forbidden}"
+        )
 
 
 def validate_json_files() -> None:
@@ -165,7 +169,7 @@ def validate_plugin() -> None:
     require(metadata == ["plugin.json"], ".claude-plugin must contain only plugin.json")
     plugin = load_json(ROOT / ".claude-plugin/plugin.json")
     require(plugin.get("name") == "cigar", "plugin name mismatch")
-    require(plugin.get("version") == "1.0.0-dev.1", "plugin version mismatch")
+    require(plugin.get("version") == "0.9.0-honey.1", "plugin version mismatch")
     for redundant in ["skills", "agents", "hooks", "mcpServers", "commands"]:
         require(
             redundant not in plugin,

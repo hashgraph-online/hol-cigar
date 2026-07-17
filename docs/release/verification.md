@@ -41,7 +41,20 @@ receipts and all of their attachments are signed directly in addition to the sig
 python3 scripts/release/validate_metadata.py
 ```
 
+Honey v0.9 is an unsigned developer preview, so it uses the narrower, fail-closed Honey verifier.
+Run it from the exact Honey source archive or clean checkout against the directory containing all
+13 candidate files. A pass establishes artifact integrity and the bounded Honey profile; it does
+not establish signatures, notarization, support, or production qualification.
+
 <!-- docs-check: command release-verify -->
+```sh
+python3 scripts/release/verify_honey_release.py dist/
+```
+
+The future signed production profile retains a separate installed-binary verification surface. It
+is not a Honey v0.9 claim.
+
+<!-- docs-check: illustrative -->
 ```sh
 cigar release verify dist/
 ```

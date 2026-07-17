@@ -442,6 +442,17 @@ class DemoHarnessTests(unittest.TestCase):
         self.assertEqual(demo_environment["GOTOOLCHAIN"], "go1.26.5")
         self.assertEqual(demo_environment["GOPROXY"], "off")
         self.assertEqual(demos.pinned_go_toolchain(), "go1.26.5")
+        honey_environment = demos.clean_environment(state, include_go_toolchain=False)
+        for key in (
+            "GOMODCACHE",
+            "GOCACHE",
+            "GOTOOLCHAIN",
+            "GOWORK",
+            "GOPROXY",
+            "GOSUMDB",
+            "GONOSUMDB",
+        ):
+            self.assertNotIn(key, honey_environment)
         self.assertTrue(live_smoke.accepted_outcome({"status": "ok"}))
         self.assertTrue(
             live_smoke.accepted_outcome(

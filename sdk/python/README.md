@@ -28,6 +28,13 @@ Token providers accept the remaining call timeout in seconds. Injecting a custom
 ambient proxies and refuses redirects. The wheel and source distribution both include
 the shared fixture, so `cigar-qualify-bundle` works from a clean installation.
 
+Honey distributions also install `cigar-agent-b-handoff`. It accepts an existing recipient-bound
+handoff, then records one typed, evidence-backed result with independent idempotency keys. The
+Agent B bearer token is read only from `CIGAR_AGENT_B_TOKEN`, never a command-line argument. Run
+`cigar-agent-b-handoff --help` for the required handoff, plan, base-commit, revision, claim,
+evidence, and caller-generated acceptance/result idempotency keys. The example requests no
+follow-up capability and never dispatches an effect.
+
 Remote HTTPS construction requires an explicit `bearer_token` value or provider. The SDK never
 discovers credentials from the URL, environment, project configuration, proxy settings, or a
 redirect target. Explicit cleartext loopback mode remains available only for local development.

@@ -40,10 +40,12 @@ from release_lib import (
 from verify_package import verify as verify_package
 
 
-ARTIFACT_ID = "cli-daemon-macos-aarch64"
+ARTIFACT_ID = "macos-runtime-aarch64"
+DEVELOPMENT_ARTIFACT_ID = "cli-daemon-macos-aarch64"
 TARGET_TRIPLE = "aarch64-apple-darwin"
 RUNTIME_PROFILE = "cigar.full.local-macos-aarch64.v1"
-BUILD_RECEIPT = "macos-aarch64-development-build.json"
+BUILD_RECEIPT = "native-build-receipt.json"
+DEVELOPMENT_BUILD_RECEIPT = "macos-aarch64-development-build.json"
 MACOS_SANDBOX_EXEC = Path("/usr/bin/sandbox-exec")
 MACOS_NO_EGRESS_POLICY = "(version 1)(allow default)(deny network*)"
 MACOS_NO_EGRESS_ENFORCEMENT = "darwin-sandbox-exec-deny-network-v1"
@@ -53,11 +55,20 @@ MAX_COMMAND_OUTPUT = 16 * 1024 * 1024
 MAX_SOURCE_FILE_BYTES = 64 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 512 * 1024 * 1024
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-AUTHORITY_PATHS = (
+DEVELOPMENT_AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
     "packaging/artifact-matrix.v1.json",
     "packaging/local-archives.v1.json",
     "packaging/development/local-macos-aarch64.v1.json",
+    "packaging/contracts/macos-runtime-archive.v1.json",
+    "adapters/claude-code/package-manifest.json",
+)
+AUTHORITY_PATHS = (
+    "packaging/product-version.v1.json",
+    "packaging/honey/capability-profile.v1.json",
+    "packaging/honey/artifact-matrix.v1.json",
+    "packaging/honey/local-archives.v1.json",
+    "packaging/honey/release-requirements.v1.json",
     "packaging/contracts/macos-runtime-archive.v1.json",
     "adapters/claude-code/package-manifest.json",
 )
@@ -118,6 +129,9 @@ class BuildConfiguration:
     version: str
     context_abi: str
     filename: str
+    artifact_id: str
+    receipt_name: str
+    release_state: str
     contract_path: Path
     contract_relative: str
     authority: dict[str, dict[str, object]]
@@ -256,9 +270,11 @@ def _read_stable_file(path: Path, maximum: int, label: str) -> bytes:
             os.close(descriptor)
 
 
-def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
+def _authority_digests(
+    root: Path, paths: tuple[str, ...] = AUTHORITY_PATHS
+) -> dict[str, dict[str, object]]:
     records: dict[str, dict[str, object]] = {}
-    for relative in AUTHORITY_PATHS:
+    for relative in paths:
         path = root.joinpath(*relative.split("/"))
         payload = _read_stable_file(path, 16 * 1024 * 1024, relative)
         records[relative] = {
@@ -270,34 +286,69 @@ def _authority_digests(root: Path) -> dict[str, dict[str, object]]:
 
 def _load_configuration(root: Path) -> BuildConfiguration:
     root = root.resolve(strict=True)
-    authority = _authority_digests(root)
     product = load_json(root / "packaging/product-version.v1.json")
-    matrix = load_json(root / "packaging/artifact-matrix.v1.json")
-    archives = load_json(root / "packaging/local-archives.v1.json")
-    profile = load_json(root / "packaging/development/local-macos-aarch64.v1.json")
+    honey = (
+        isinstance(product, dict)
+        and product.get("release_state") == "developer-preview"
+        and product.get("channel") == "honey"
+    )
+    authority_paths = AUTHORITY_PATHS if honey else DEVELOPMENT_AUTHORITY_PATHS
+    authority = _authority_digests(root, authority_paths)
+    matrix_relative = (
+        "packaging/honey/artifact-matrix.v1.json"
+        if honey
+        else "packaging/artifact-matrix.v1.json"
+    )
+    archives_relative = (
+        "packaging/honey/local-archives.v1.json"
+        if honey
+        else "packaging/local-archives.v1.json"
+    )
+    profile_relative = (
+        "packaging/honey/capability-profile.v1.json"
+        if honey
+        else "packaging/development/local-macos-aarch64.v1.json"
+    )
+    matrix = load_json(root / matrix_relative)
+    archives = load_json(root / archives_relative)
+    profile = load_json(root / profile_relative)
     contract = load_json(root / "packaging/contracts/macos-runtime-archive.v1.json")
 
+    development_identity = (
+        isinstance(product, dict)
+        and product.get("release_state") == "development"
+        and product.get("channel") == "development"
+        and product.get("tag") is None
+    )
+    honey_identity = (
+        honey
+        and isinstance(product, dict)
+        and isinstance(product.get("version"), str)
+        and product.get("tag") == f"v{product['version']}"
+    )
     if (
         not isinstance(product, dict)
         or product.get("schema_version") != "cigar.product-version.v1"
-        or product.get("release_state") != "development"
-        or product.get("channel") != "development"
+        or not (development_identity or honey_identity)
         or product.get("prerelease") is not True
         or product.get("published") is not False
         or product.get("supported") is not False
-        or product.get("tag") is not None
         or not isinstance(product.get("version"), str)
         or product.get("context_abi") != "cigar.context.v1"
     ):
         raise ReleaseError(
-            "product version authority is not an unpublished development identity"
+            "product version authority is not an unpublished development or Honey identity"
         )
     version = product["version"]
     context_abi = product["context_abi"]
+    artifact_id = ARTIFACT_ID if honey else DEVELOPMENT_ARTIFACT_ID
+    receipt_name = BUILD_RECEIPT if honey else DEVELOPMENT_BUILD_RECEIPT
     if (
         not isinstance(matrix, dict)
-        or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("release_state") != "development"
+        or matrix.get("schema_version")
+        != ("cigar.honey.artifact-matrix.v1" if honey else "cigar.artifact-matrix.v1")
+        or matrix.get("release_state")
+        != ("developer-preview" if honey else "development")
         or matrix.get("product_version") != version
         or matrix.get("context_abi") != context_abi
         or not isinstance(matrix.get("artifacts"), list)
@@ -308,40 +359,63 @@ def _load_configuration(root: Path) -> BuildConfiguration:
     matching = [
         entry
         for entry in matrix["artifacts"]
-        if isinstance(entry, dict) and entry.get("id") == ARTIFACT_ID
+        if isinstance(entry, dict) and entry.get("id") == artifact_id
     ]
     if len(matching) != 1:
         raise ReleaseError(
-            f"artifact matrix must contain exactly one {ARTIFACT_ID} row"
+            f"artifact matrix must contain exactly one {artifact_id} row"
         )
     artifact = matching[0]
     expected_filename = f"cigar-{version}-{TARGET_TRIPLE}.tar.gz"
-    expected_producer = "python3 scripts/release/build_macos_aarch64_archive.py"
-    if (
-        artifact.get("kind") != "binary-archive"
-        or artifact.get("platform") != TARGET_TRIPLE
-        or artifact.get("filename") != expected_filename
-        or artifact.get("contract") != "contracts/macos-runtime-archive.v1.json"
-        or artifact.get("producer") != expected_producer
-        or artifact.get("signature_purpose") != "macos-runtime-distribution"
-        or artifact.get("install_target") != "bin"
-        or artifact.get("evidence_map")
-        != [
-            "package-contract",
-            "installed-artifact",
-            "unprivileged",
-            "offline",
-            "upgrade",
-            "uninstall",
-            "sbom",
-            "license",
-            "signature",
-            "platform-signing",
-            "notarization",
-            "provenance",
-        ]
-    ):
-        raise ReleaseError("macOS arm64 artifact row is incomplete or stale")
+    if honey:
+        expected_receipt = {
+            "filename": receipt_name,
+            "required": True,
+            "schema_version": "cigar.development-native-archive-build.v1",
+        }
+        if (
+            artifact.get("kind") != "native-runtime-archive"
+            or artifact.get("filename") != expected_filename
+            or artifact.get("contract")
+            != "packaging/contracts/macos-runtime-archive.v1.json"
+            or artifact.get("producer")
+            != ["python3", "scripts/release/build_macos_aarch64_archive.py"]
+            or artifact.get("workspace") != "native"
+            or artifact.get("generated_by_assembler") is not False
+            or artifact.get("public_attachment") is not True
+            or artifact.get("required") is not True
+            or artifact.get("receipt") != expected_receipt
+        ):
+            raise ReleaseError(
+                "Honey macOS runtime artifact row is incomplete or stale"
+            )
+    else:
+        expected_producer = "python3 scripts/release/build_macos_aarch64_archive.py"
+        if (
+            artifact.get("kind") != "binary-archive"
+            or artifact.get("platform") != TARGET_TRIPLE
+            or artifact.get("filename") != expected_filename
+            or artifact.get("contract") != "contracts/macos-runtime-archive.v1.json"
+            or artifact.get("producer") != expected_producer
+            or artifact.get("signature_purpose") != "macos-runtime-distribution"
+            or artifact.get("install_target") != "bin"
+            or artifact.get("evidence_map")
+            != [
+                "package-contract",
+                "installed-artifact",
+                "unprivileged",
+                "offline",
+                "upgrade",
+                "uninstall",
+                "sbom",
+                "license",
+                "signature",
+                "platform-signing",
+                "notarization",
+                "provenance",
+            ]
+        ):
+            raise ReleaseError("macOS arm64 artifact row is incomplete or stale")
     if (
         not isinstance(archives, dict)
         or archives.get("schema_version") != "cigar.local-archives.v1"
@@ -349,39 +423,65 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         or archives.get("context_abi") != context_abi
     ):
         raise ReleaseError("local archive authority is stale")
-    if not isinstance(profile, dict):
-        raise ReleaseError("development macOS arm64 profile is malformed")
-    selected = profile.get("selected_artifacts")
-    missing = profile.get("missing_artifacts")
-    selected_rows = (
-        [
-            row
-            for row in selected
-            if isinstance(row, dict) and row.get("id") == ARTIFACT_ID
-        ]
-        if isinstance(selected, list)
-        else []
-    )
-    if (
-        profile.get("schema_version") != "cigar.development-artifact-profile.v1"
-        or profile.get("release_state") != "development"
-        or profile.get("published") is not False
-        or profile.get("supported") is not False
-        or profile.get("target")
-        != {
-            "host_arch": "arm64",
-            "host_os": "macos",
-            "target_triple": TARGET_TRIPLE,
-        }
-        or len(selected_rows) != 1
-        or selected_rows[0].get("status") != "planned"
-        or selected_rows[0].get("built") is not False
-        or selected_rows[0].get("qualified") is not False
-        or missing != []
-    ):
-        raise ReleaseError(
-            "development macOS arm64 profile does not remain planned, unclaimed, and sidecar-complete"
+    if honey:
+        identity = profile.get("identity") if isinstance(profile, dict) else None
+        platform_profile = (
+            profile.get("platform") if isinstance(profile, dict) else None
         )
+        artifact_ids = (
+            profile.get("artifact_ids") if isinstance(profile, dict) else None
+        )
+        if (
+            not isinstance(profile, dict)
+            or profile.get("schema_version") != "cigar.honey.capability-profile.v1"
+            or not isinstance(identity, dict)
+            or identity.get("product_version") != version
+            or identity.get("context_abi") != context_abi
+            or identity.get("release_state") != "developer-preview"
+            or identity.get("supported") is not False
+            or identity.get("production_qualified") is not False
+            or not isinstance(platform_profile, dict)
+            or platform_profile.get("host_os") != "macos"
+            or platform_profile.get("host_arch") != "arm64"
+            or platform_profile.get("target_triple") != TARGET_TRIPLE
+            or not isinstance(artifact_ids, list)
+            or artifact_id not in artifact_ids
+        ):
+            raise ReleaseError("Honey macOS capability profile is stale")
+    else:
+        if not isinstance(profile, dict):
+            raise ReleaseError("development macOS arm64 profile is malformed")
+        selected = profile.get("selected_artifacts")
+        missing = profile.get("missing_artifacts")
+        selected_rows = (
+            [
+                row
+                for row in selected
+                if isinstance(row, dict) and row.get("id") == artifact_id
+            ]
+            if isinstance(selected, list)
+            else []
+        )
+        if (
+            profile.get("schema_version") != "cigar.development-artifact-profile.v1"
+            or profile.get("release_state") != "development"
+            or profile.get("published") is not False
+            or profile.get("supported") is not False
+            or profile.get("target")
+            != {
+                "host_arch": "arm64",
+                "host_os": "macos",
+                "target_triple": TARGET_TRIPLE,
+            }
+            or len(selected_rows) != 1
+            or selected_rows[0].get("status") != "planned"
+            or selected_rows[0].get("built") is not False
+            or selected_rows[0].get("qualified") is not False
+            or missing != []
+        ):
+            raise ReleaseError(
+                "development macOS arm64 profile does not remain planned, unclaimed, and sidecar-complete"
+            )
     required_allow = {
         "RELEASE-METADATA.json",
         "bin/cigar",
@@ -438,6 +538,9 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         version=version,
         context_abi=context_abi,
         filename=expected_filename,
+        artifact_id=artifact_id,
+        receipt_name=receipt_name,
+        release_state=("developer-preview" if honey else "development"),
         contract_path=root / "packaging/contracts/macos-runtime-archive.v1.json",
         contract_relative="packaging/contracts/macos-runtime-archive.v1.json",
         authority=authority,
@@ -1099,6 +1202,11 @@ def produce(
     configuration = _load_configuration(root)
     source_snapshot = _source_snapshot(root)
     source_before = _source_identity(root, source_snapshot)
+    if (
+        configuration.release_state == "developer-preview"
+        and source_before.get("clean") is not True
+    ):
+        raise ReleaseError("Honey native build requires a committed, clean source tree")
 
     workspace = EvidenceWorkspace.create(evidence_root, repository_root=root)
     try:
@@ -1122,7 +1230,10 @@ def produce(
             _verify_source_snapshot(root, source_snapshot)
             if _source_identity(root) != source_before:
                 raise ReleaseError("native build source changed during construction")
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError("native build authority changed during construction")
 
             entries = _package_entries(runtime, configuration)
@@ -1133,7 +1244,7 @@ def produce(
             )
             metadata = {
                 "schema_version": "cigar.release-metadata.v1",
-                "artifact_id": ARTIFACT_ID,
+                "artifact_id": configuration.artifact_id,
                 "product_version": configuration.version,
                 "context_abi": configuration.context_abi,
                 "source_date_epoch": epoch,
@@ -1160,7 +1271,10 @@ def produce(
             _verify_source_snapshot(root, source_snapshot)
             if _source_identity(root) != source_before:
                 raise ReleaseError("native build source changed during verification")
-            if _authority_digests(root) != configuration.authority:
+            if (
+                _authority_digests(root, tuple(configuration.authority))
+                != configuration.authority
+            ):
                 raise ReleaseError("native build authority changed during verification")
             verified_archive = _read_stable_file(
                 staged_archive, MAX_ARCHIVE_BYTES, "verified native archive"
@@ -1180,7 +1294,7 @@ def produce(
         receipt = {
             "schema_version": "cigar.development-native-archive-build.v1",
             "status": "built-unqualified",
-            "artifact_id": ARTIFACT_ID,
+            "artifact_id": configuration.artifact_id,
             "target": TARGET_TRIPLE,
             "product_version": configuration.version,
             "context_abi": configuration.context_abi,
@@ -1222,7 +1336,9 @@ def produce(
                 "expanded_bytes": verification["expanded_bytes"],
             },
             "claims": {
-                "development_build": True,
+                "development_build": configuration.release_state == "development",
+                "developer_preview_build": configuration.release_state
+                == "developer-preview",
                 "distribution_signed": False,
                 "notarized": False,
                 "qualified": False,
@@ -1231,9 +1347,9 @@ def produce(
                 "release": False,
             },
         }
-        workspace.write_json(BUILD_RECEIPT, receipt)
+        workspace.write_json(configuration.receipt_name, receipt)
         workspace.read_files(
-            {configuration.filename, BUILD_RECEIPT}, strict_read_only=True
+            {configuration.filename, configuration.receipt_name}, strict_read_only=True
         )
         return receipt
     finally:

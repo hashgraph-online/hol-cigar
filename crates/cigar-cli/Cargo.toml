@@ -31,8 +31,8 @@ cigar-api = { workspace = true, optional = true }
 cigar-canon.workspace = true
 cap-std.workspace = true
 cigar-crypto = { workspace = true, optional = true }
-cigar-daemon = { path = "../cigar-daemon", version = "=1.0.0-dev.1", optional = true }
-cigar-effects = { path = "../cigar-effects", version = "=1.0.0-dev.1", optional = true }
+cigar-daemon = { path = "../cigar-daemon", version = "=0.9.0-honey.1", optional = true }
+cigar-effects = { path = "../cigar-effects", version = "=0.9.0-honey.1", optional = true }
 cigar-policy = { workspace = true, optional = true }
 cigar-protocol = { workspace = true, optional = true }
 cigar-store = { workspace = true, optional = true }

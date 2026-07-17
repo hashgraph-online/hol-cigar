@@ -5,11 +5,18 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sdk" / "python" / "src"))
+sdk_override = __import__("os").environ.get("CIGAR_DEMO_PYTHON_SDK_ROOT")
+sys.path.insert(
+    0,
+    sdk_override
+    if sdk_override
+    else str(Path(__file__).resolve().parents[2] / "sdk" / "python" / "src"),
+)
 
 from driver_support import (  # noqa: E402
     DriverError,
@@ -60,7 +67,10 @@ def child_package(
 def run() -> None:
     args = parser().parse_args()
     fixture = validate_paths(args.fixture, args.state, args.cigar_binary)
-    if fixture.get("demo_id") != "multi-agent-handoff":
+    if fixture.get("demo_id") not in {
+        "multi-agent-handoff",
+        "honey-two-agent-handoff",
+    }:
         fail("driver received the wrong fixture")
     parent_tokens = fixture.get("parent_transcript_tokens")
     children = fixture.get("children")
@@ -69,9 +79,24 @@ def run() -> None:
         or not isinstance(parent_tokens, int)
         or parent_tokens <= 0
         or not isinstance(children, list)
-        or len(children) != 2
+        or len(children) not in {1, 2}
     ):
         fail("handoff fixture inventory is invalid")
+    is_honey = fixture.get("demo_id") == "honey-two-agent-handoff"
+    principals = fixture.get("principals")
+    if is_honey:
+        if (
+            not isinstance(principals, dict)
+            or set(principals) != {"agent_a", "agent_b"}
+            or not all(isinstance(value, str) for value in principals.values())
+            or principals["agent_a"] == principals["agent_b"]
+        ):
+            fail("Honey agent principals are invalid")
+        agent_a = principals["agent_a"]
+        agent_b = principals["agent_b"]
+    else:
+        agent_a = "01890f47-8e7d-7b42-a1d2-000000041061"
+        agent_b = "01890f47-8e7d-7b42-a1d2-000000041062"
     root = args.state / "handoff-state"
     root.mkdir()
     environment = clean_environment(args.state)
@@ -101,6 +126,9 @@ def run() -> None:
     result_fields = fixture.get("expected", {}).get("result_fields")
     if not isinstance(result_fields, list):
         fail("handoff result field inventory is invalid")
+    effect_reference = digest_value(
+        {"seed": fixture["fixed_seed"], "kind": "local-reference-effect"}
+    )
     typed_results = []
     for package in packages:
         typed_results.append(
@@ -124,6 +152,7 @@ def run() -> None:
                         {"package": package["references"], "kind": "verification"}
                     )
                 ],
+                "effect_references": [effect_reference] if is_honey else [],
             }
         )
     public_result_fields = {
@@ -143,27 +172,35 @@ def run() -> None:
     base_commit_id = digest_value(
         {"seed": fixture["fixed_seed"], "kind": "parent-commit"}
     )
+    parent_space_id = "01890f47-8e7d-7b42-a1d2-000000041070"
+    conflict_id = "01890f47-8e7d-7b42-a1d2-000000041071"
+    trace_id = digest_value({"seed": fixture["fixed_seed"], "kind": "trace"})
+    run_id = "01890f47-8e7d-7b42-a1d2-000000041072"
+    task_id = "01890f47-8e7d-7b42-a1d2-000000041073"
     handoff_ids = [
-        "01890f47-8e7d-7b42-a1d2-000000041110",
-        "01890f47-8e7d-7b42-a1d2-000000041111",
+        f"01890f47-8e7d-7b42-a1d2-{41110 + index:012d}"
+        for index in range(len(children))
     ]
     adversarial_ids = [
         "01890f47-8e7d-7b42-a1d2-000000041112",
         "01890f47-8e7d-7b42-a1d2-000000041113",
     ]
     target_plan_ids = [
-        "01890f47-8e7d-7b42-a1d2-000000041120",
-        "01890f47-8e7d-7b42-a1d2-000000041121",
+        f"01890f47-8e7d-7b42-a1d2-{41120 + index:012d}"
+        for index in range(len(children))
     ]
     delta_ids = [
-        "01890f47-8e7d-7b42-a1d2-000000041130",
-        "01890f47-8e7d-7b42-a1d2-000000041131",
+        f"01890f47-8e7d-7b42-a1d2-{41130 + index:012d}"
+        for index in range(len(children))
     ]
     create_requests = []
     for package in packages:
         create_requests.append(
             {
-                "recipient": {"type": "role", "value": package["role"]},
+                "recipient": {
+                    "type": "principal" if is_honey else "role",
+                    "value": agent_b if is_honey else package["role"],
+                },
                 "task": f"complete deterministic {package['role']} work",
                 "acceptance_criteria": ["return typed evidence"],
                 "requested_projects": [allowed_project],
@@ -197,7 +234,7 @@ def run() -> None:
             "requested_projects": [forbidden_project],
         },
         {
-            **create_requests[1],
+            **create_requests[0],
             "recipient": {"type": "role", "value": "untrusted-writer"},
             "requested_capabilities": ["read_context", "write_overlay"],
         },
@@ -223,19 +260,72 @@ def run() -> None:
                 "requested_followup_capabilities": [],
             }
         )
+        if is_honey:
+            result_requests[-1]["effect_references"] = typed_results[index][
+                "effect_references"
+            ]
     merge_requests = [
         {
             "handoff_id": handoff_id,
             "delta_id": delta_id,
-            "space_id": digest_value(
-                {"seed": fixture["fixed_seed"], "space": "parent"}
-            ),
+            "space_id": parent_space_id
+            if is_honey
+            else digest_value({"seed": fixture["fixed_seed"], "space": "parent"}),
             "overlay_id": f"01890f47-8e7d-7b42-a1d2-{41140 + index:012x}",
         }
         for index, (handoff_id, delta_id) in enumerate(
             zip(handoff_ids, delta_ids, strict=True)
         )
     ]
+    acceptance_ids = [
+        f"01890f47-8e7d-7b42-a1d2-{41150 + index:012x}"
+        for index in range(len(children))
+    ]
+    final_correlations = {
+        "trace_id": trace_id,
+        "run_id": run_id,
+        "task_id": task_id,
+        "agent_a": agent_a,
+        "agent_b": agent_b,
+        "handoff_id": handoff_ids[0],
+        "acceptance_id": acceptance_ids[0],
+        "delta_id": delta_ids[0],
+        "conflict_id": conflict_id,
+        "effect_reference": effect_reference,
+        "verification": typed_results[0]["verifier_receipts"][0],
+    }
+    final_evidence_root = digest_value(final_correlations)
+    final_commit = {
+        "schema_version": "cigar.context-commit.v1",
+        "commit_id": digest_value(
+            {"root": final_evidence_root, "sequence": 3, "space": parent_space_id}
+        ),
+        "space_id": parent_space_id,
+        "sequence": 3,
+        "parent_commit_id": base_commit_id,
+        "author_id": agent_a,
+        "purpose": "resolve Honey Agent A and Agent B merge conflict",
+        "events": [
+            {
+                "event_id": "01890f47-8e7d-7b42-a1d2-000000041074",
+                "kind": "merge_conflict_created",
+                "payload_digest": digest_value(
+                    {"conflict_id": conflict_id, "resolution": "proposed"}
+                ),
+            }
+        ],
+        "root_digest": final_evidence_root,
+        "policy_snapshot_digest": digest_value(
+            {"policy": "handoff-recorded", "seed": fixture["fixed_seed"]}
+        ),
+        "committed_at": fixture["fixed_time"],
+        "extensions": {},
+    }
+    conflict_resolution_request = {
+        "space_id": parent_space_id,
+        "conflict_id": conflict_id,
+        "resolution": {"choice": "proposed"},
+    }
     operations: list[RecordedOperation] = []
     for index, request in enumerate(create_requests):
         operations.append(
@@ -300,9 +390,11 @@ def run() -> None:
                 request,
                 {
                     "schema_version": "cigar.handoff-acceptance.v1",
-                    "acceptance_id": f"01890f47-8e7d-7b42-a1d2-{41150 + index:012x}",
+                    "acceptance_id": acceptance_ids[index],
                     "handoff_id": handoff_ids[index],
-                    "recipient_id": f"01890f47-8e7d-7b42-a1d2-{41160 + index:012x}",
+                    "recipient_id": agent_b
+                    if is_honey
+                    else f"01890f47-8e7d-7b42-a1d2-{41160 + index:012x}",
                     "accepted_capabilities": ["read_context"],
                     "rejected_capabilities": [],
                     "unavailable_references": [],
@@ -339,26 +431,61 @@ def run() -> None:
             )
         )
     for index, request in enumerate(merge_requests):
+        merge_response = {
+            "delta_id": delta_ids[index],
+            "proposed_versions": typed_results[index]["artifacts"],
+            "rejected_versions": [],
+            "conflict_ids": [conflict_id] if is_honey else [],
+        }
+        if not is_honey:
+            merge_response["commit"] = {
+                "revision": index + 2,
+                "base_commit_id": base_commit_id,
+            }
         operations.append(
             RecordedOperation(
                 "mergeHandoff",
                 "POST",
                 f"/v1/handoffs/{handoff_ids[index]}:merge",
                 request,
-                {
-                    "delta_id": delta_ids[index],
-                    "proposed_versions": typed_results[index]["artifacts"],
-                    "rejected_versions": [],
-                    "conflict_ids": [],
-                    "commit": {
-                        "revision": index + 2,
-                        "base_commit_id": base_commit_id,
-                    },
-                },
+                merge_response,
                 idempotency_key=f"handoff-merge-{index}",
                 expected_revision=f"parent-revision-{index + 1}",
                 path_parameters=(("handoff_id", handoff_ids[index]),),
             )
+        )
+    if is_honey:
+        operations.extend(
+            [
+                RecordedOperation(
+                    "listSpaceConflicts",
+                    "GET",
+                    f"/v1/spaces/{parent_space_id}/conflicts",
+                    None,
+                    {
+                        "conflicts": [
+                            {
+                                "conflict_id": conflict_id,
+                                "base_commit_id": base_commit_id,
+                                "resolver": "typed-choice",
+                            }
+                        ]
+                    },
+                ),
+                RecordedOperation(
+                    "resolveSpaceConflict",
+                    "POST",
+                    f"/v1/spaces/{parent_space_id}/conflicts/{conflict_id}:resolve",
+                    conflict_resolution_request,
+                    {"conflict_id": conflict_id, "commit": final_commit},
+                    idempotency_key="honey-conflict-resolve-0",
+                    expected_revision="parent-revision-2",
+                    path_parameters=(
+                        ("conflict_id", conflict_id),
+                        ("space_id", parent_space_id),
+                    ),
+                ),
+            ]
         )
 
     legitimate_creations = []
@@ -366,6 +493,8 @@ def run() -> None:
     acceptances = []
     receipts = []
     merges = []
+    listed_conflicts = None
+    resolution_receipt = None
     request_sequence = [
         *create_requests,
         *adversarial_requests,
@@ -472,6 +601,27 @@ def run() -> None:
                     f"parent-revision-{index + 1}",
                 )
             )
+        if is_honey:
+            with CigarClient(
+                api.base_url(),
+                bearer_token=api.bearer_token(),
+                allow_insecure_loopback=True,
+                max_attempts=1,
+            ) as client:
+                listed_conflicts = client.list_space_conflicts(
+                    TypedOperationRequest(models.SpaceIdRequest(parent_space_id))
+                ).payload
+                resolution_receipt = client.resolve_space_conflict(
+                    TypedOperationRequest(
+                        models.ResolveSpaceConflictRequest(
+                            space_id=parent_space_id,
+                            conflict_id=conflict_id,
+                            resolution={"choice": "proposed"},
+                        ),
+                        idempotency_key="honey-conflict-resolve-0",
+                        expected_revision="parent-revision-2",
+                    )
+                ).payload
         api.assert_complete()
 
     denied_read = (
@@ -492,8 +642,58 @@ def run() -> None:
         for index, receipt in enumerate(receipts)
     )
     parent_revision = 1
-    merge_revisions = [merge["commit"].get("revision") for merge in merges]
-    merged_revision = merge_revisions[-1]
+    if is_honey:
+        listed = (
+            list(listed_conflicts.conflicts) if listed_conflicts is not None else []
+        )
+        resolved_commit = (
+            resolution_receipt.commit if resolution_receipt is not None else {}
+        )
+        conflict_observed = (
+            merges[0].get("conflict_ids") == [conflict_id]
+            and listed
+            == [
+                {
+                    "conflict_id": conflict_id,
+                    "base_commit_id": base_commit_id,
+                    "resolver": "typed-choice",
+                }
+            ]
+            and all(
+                set(summary) == {"conflict_id", "base_commit_id", "resolver"}
+                for summary in listed
+            )
+        )
+        resolution_exact = (
+            resolution_receipt is not None
+            and resolution_receipt.conflict_id == conflict_id
+            and isinstance(resolved_commit, Mapping)
+            and set(resolved_commit) == set(final_commit)
+            and resolved_commit.get("commit_id") == final_commit["commit_id"]
+            and resolved_commit.get("space_id") == parent_space_id
+            and resolved_commit.get("sequence") == 3
+            and resolved_commit.get("parent_commit_id") == base_commit_id
+            and resolved_commit.get("author_id") == agent_a
+            and resolved_commit.get("root_digest") == final_evidence_root
+            and resolved_commit.get("policy_snapshot_digest")
+            == final_commit["policy_snapshot_digest"]
+        )
+        merge_revisions = [resolved_commit.get("sequence")]
+        merged_revision = merge_revisions[-1]
+    else:
+        conflict_observed = False
+        resolution_exact = False
+        merge_revisions = [merge["commit"].get("revision") for merge in merges]
+        merged_revision = merge_revisions[-1]
+    identities_bound = (
+        is_honey
+        and agent_a != agent_b
+        and create_requests[0]["recipient"] == {"type": "principal", "value": agent_b}
+        and acceptances[0].get("recipient_id") == agent_b
+    )
+    correlation_complete = is_honey and final_evidence_root == digest_value(
+        final_correlations
+    )
     ratios = [package["package_tokens"] / parent_tokens for package in packages]
     maximum_ratio = fixture.get("expected", {}).get("maximum_package_ratio")
     ratio_valid = isinstance(maximum_ratio, (int, float)) and all(
@@ -522,18 +722,57 @@ def run() -> None:
             {"seed": fixture["fixed_seed"], "time": fixture["fixed_time"]},
         ),
     ]
-    flow_evidence = [
-        legitimate_creations[0]["capsule"],
-        legitimate_creations[1]["capsule"],
-        adversarial_creations[0]["preview"],
-        adversarial_creations[1]["preview"],
-        {"acceptance_count": len(acceptances), "receipt_count": len(receipts)},
-        {"base_revision": parent_revision, "merge_revisions": merge_revisions},
-    ]
+    if is_honey:
+        flow_evidence = [
+            legitimate_creations[0]["capsule"],
+            {
+                "acceptance_id": acceptances[0].get("acceptance_id"),
+                "recipient_id": acceptances[0].get("recipient_id"),
+            },
+            adversarial_creations[0]["preview"],
+            adversarial_creations[1]["preview"],
+            {"receipt_count": len(receipts), "delta_id": delta_ids[0]},
+            {"conflict_ids": merges[0].get("conflict_ids")},
+            {"conflict_count": len(listed), "content_fields": 0},
+            {
+                "conflict_id": resolution_receipt.conflict_id
+                if resolution_receipt is not None
+                else None,
+                "commit_id": final_commit["commit_id"],
+            },
+            {
+                "correlation_field_count": len(final_correlations),
+                "evidence_root": final_evidence_root,
+            },
+        ]
+    elif len(children) == 2:
+        flow_evidence = [
+            legitimate_creations[0]["capsule"],
+            legitimate_creations[1]["capsule"],
+            adversarial_creations[0]["preview"],
+            adversarial_creations[1]["preview"],
+            {"acceptance_count": len(acceptances), "receipt_count": len(receipts)},
+            {"base_revision": parent_revision, "merge_revisions": merge_revisions},
+        ]
+    else:
+        flow_evidence = [
+            legitimate_creations[0]["capsule"],
+            acceptances[0],
+            adversarial_creations[0]["preview"],
+            adversarial_creations[1]["preview"],
+            {"receipt_count": len(receipts), "delta_id": delta_ids[0]},
+            {"base_revision": parent_revision, "merge_revisions": merge_revisions},
+        ]
     flow = [
         step(flow_id, "product_observed", evidence)
         for flow_id, evidence in zip(fixture["flow"], flow_evidence, strict=True)
     ]
+    merge_exact = (
+        conflict_observed and resolution_exact
+        if is_honey
+        else merge_revisions == list(range(2, 2 + len(children)))
+        and merged_revision == 1 + len(children)
+    )
     assertions = [
         assertion(
             "forbidden-access-denied-content-free",
@@ -567,9 +806,7 @@ def run() -> None:
         ),
         assertion(
             "optimistic-merge-exact",
-            "product_observed"
-            if merge_revisions == [2, 3] and merged_revision == 3
-            else "not_observed",
+            "product_observed" if merge_exact else "not_observed",
             {
                 "base_revision": parent_revision,
                 "result_count": len(receipts),
@@ -577,6 +814,39 @@ def run() -> None:
             },
         ),
     ]
+    if is_honey:
+        assertions.extend(
+            [
+                assertion(
+                    "distinct-agent-identities-bound",
+                    "product_observed" if identities_bound else "not_observed",
+                    {
+                        "distinct": agent_a != agent_b,
+                        "recipient_bound": identities_bound,
+                    },
+                ),
+                assertion(
+                    "typed-conflict-explicitly-resolved",
+                    "product_observed"
+                    if conflict_observed and resolution_exact
+                    else "not_observed",
+                    {
+                        "conflict_count": len(listed),
+                        "resolution": "proposed",
+                    },
+                ),
+                assertion(
+                    "final-evidence-root-correlated",
+                    "product_observed"
+                    if correlation_complete and resolution_exact
+                    else "not_observed",
+                    {
+                        "correlation_field_count": len(final_correlations),
+                        "root": final_evidence_root,
+                    },
+                ),
+            ]
+        )
     removed_home = remove_tree(args.state / "home")
     removed_children = remove_tree(root)
     removed_sdk_state = remove_tree(args.state / "cigar-home")
@@ -604,10 +874,15 @@ def run() -> None:
         teardown,
         {
             "product_version_surface_ok": isinstance(version, dict)
-            and version.get("version") == "1.0.0-dev.1",
+            and version.get("version") == "0.9.0-honey.1",
             "package_count": len(packages),
             "typed_result_count": len(receipts),
             "public_operation_count": len(operations),
+            "distinct_principal_count": 2 if is_honey else len(children) + 1,
+            "correlation_field_count": len(final_correlations) if is_honey else 0,
+            "final_evidence_root": final_evidence_root if is_honey else None,
+            "typed_conflict_observed": conflict_observed if is_honey else None,
+            "typed_resolution_observed": resolution_exact if is_honey else None,
             "driver_scope": "fixture-bound-public-python-sdk-recorded-api",
         },
     )

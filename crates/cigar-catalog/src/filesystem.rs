@@ -137,6 +137,7 @@ impl LocalFilesystemConnector {
                 include_overrides: &request.include_overrides,
                 cigar_ignore: &cigar_ignore,
                 active_git_ignores: Vec::new(),
+                directory_identities: Vec::new(),
                 collected_git_ignores: &mut git_ignores,
                 loaded_git_ignore_bytes: 0,
                 loaded_git_ignore_patterns: 0,
@@ -145,7 +146,7 @@ impl LocalFilesystemConnector {
                 budget: &mut walk_budget,
                 output: &mut candidates,
             };
-            walker.walk(&self.root, Path::new(""), &[], 0)?;
+            walker.walk(Path::new(""), &[], 0)?;
         }
         if candidates.len() > MAX_CONNECTOR_ITEMS {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
@@ -479,6 +480,7 @@ struct FilesystemWalker<'a> {
     include_overrides: &'a std::collections::BTreeSet<RelativePath>,
     cigar_ignore: &'a IgnorePatterns,
     active_git_ignores: Vec<ScopedIgnorePatterns>,
+    directory_identities: Vec<FileIdentity>,
     collected_git_ignores: &'a mut Vec<ScopedIgnorePatterns>,
     loaded_git_ignore_bytes: usize,
     loaded_git_ignore_patterns: usize,
@@ -488,19 +490,94 @@ struct FilesystemWalker<'a> {
     output: &'a mut Vec<Candidate>,
 }
 
+#[derive(Clone, Copy)]
+enum WalkEntryKind {
+    Directory,
+    Symlink,
+    File,
+    Other,
+}
+
+struct WalkEntry {
+    name: PathBuf,
+    name_bytes: Vec<u8>,
+    kind: WalkEntryKind,
+}
+
+struct PendingDirectory {
+    name: PathBuf,
+    name_bytes: Vec<u8>,
+    expected_identity: FileIdentity,
+}
+
+struct WalkFrame {
+    relative_path: PathBuf,
+    relative: Vec<u8>,
+    depth: usize,
+    pending_directories: Vec<PendingDirectory>,
+}
+
 impl FilesystemWalker<'_> {
     fn walk(
         &mut self,
-        directory: &Dir,
         relative_directory: &Path,
         relative_directory_bytes: &[u8],
         depth: usize,
     ) -> Result<(), CatalogError> {
+        debug_assert!(self.active_git_ignores.is_empty());
+        debug_assert!(self.directory_identities.is_empty());
+        // Explicit frames keep both descriptor use and the native call stack
+        // independent of attacker-controlled directory depth.
+        let first = self.enter_directory(
+            relative_directory.to_path_buf(),
+            relative_directory_bytes.to_vec(),
+            depth,
+        )?;
+        let mut frames = vec![first];
+        while let Some(frame) = frames.last_mut() {
+            self.context.check()?;
+            let Some(pending) = frame.pending_directories.pop() else {
+                let _frame = frames.pop();
+                let _scoped = self.active_git_ignores.pop();
+                if !frames.is_empty() {
+                    let _identity = self.directory_identities.pop();
+                }
+                continue;
+            };
+            let relative_path = frame.relative_path.join(&pending.name);
+            let relative = join_relative_bytes(&frame.relative, pending.name_bytes)?;
+            let next_depth = frame
+                .depth
+                .checked_add(1)
+                .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
+            self.directory_identities.push(pending.expected_identity);
+            let child = match self.enter_directory(relative_path, relative, next_depth) {
+                Ok(child) => child,
+                Err(error) => {
+                    let _identity = self.directory_identities.pop();
+                    return Err(error);
+                }
+            };
+            frames.push(child);
+        }
+        debug_assert!(self.active_git_ignores.is_empty());
+        debug_assert!(self.directory_identities.is_empty());
+        Ok(())
+    }
+
+    fn enter_directory(
+        &mut self,
+        relative_directory: PathBuf,
+        relative_directory_bytes: Vec<u8>,
+        depth: usize,
+    ) -> Result<WalkFrame, CatalogError> {
         self.context.check()?;
         if depth > MAX_FILESYSTEM_DEPTH {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
         }
-        let patterns = load_ignore(directory, Path::new(".gitignore"), self.context)?;
+        let directory =
+            reopen_walk_directory(self.root, &relative_directory, &self.directory_identities)?;
+        let patterns = load_ignore(&directory, Path::new(".gitignore"), self.context)?;
         self.loaded_git_ignore_bytes = self
             .loaded_git_ignore_bytes
             .checked_add(patterns.source_bytes())
@@ -515,7 +592,7 @@ impl FilesystemWalker<'_> {
             return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
         }
         let scoped = ScopedIgnorePatterns {
-            base: relative_directory_bytes.to_vec(),
+            base: relative_directory_bytes.clone(),
             patterns,
         };
         self.collected_git_ignores.push(scoped.clone());
@@ -527,33 +604,64 @@ impl FilesystemWalker<'_> {
         for entry in iterator {
             self.context.check()?;
             self.budget.charge()?;
-            entries.push(entry.map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?);
-        }
-        entries.sort_by_key(|entry| os_bytes(entry.file_name()));
-        for entry in entries {
-            self.context.check()?;
+            let entry = entry.map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
             let name = entry.file_name();
-            let relative_path = relative_directory.join(&name);
-            let relative_bytes =
-                join_relative_bytes(relative_directory_bytes, os_bytes(name.clone()))?;
+            let name_bytes = os_bytes(name.clone());
             let file_type = entry
                 .file_type()
                 .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
-            if file_type.is_dir() {
+            let kind = if file_type.is_dir() {
+                WalkEntryKind::Directory
+            } else if file_type.is_symlink() {
+                WalkEntryKind::Symlink
+            } else if file_type.is_file() {
+                WalkEntryKind::File
+            } else {
+                WalkEntryKind::Other
+            };
+            // DirEntry retains its ReadDir descriptor through an Arc. Keep
+            // only owned values so the iterator descriptor closes here.
+            entries.push(WalkEntry {
+                name: PathBuf::from(name),
+                name_bytes,
+                kind,
+            });
+        }
+        entries.sort_by(|left, right| left.name_bytes.cmp(&right.name_bytes));
+        let mut pending_directories = Vec::new();
+        for entry in entries {
+            self.context.check()?;
+            let relative_path = relative_directory.join(&entry.name);
+            let relative_bytes =
+                join_relative_bytes(&relative_directory_bytes, entry.name_bytes.clone())?;
+            if matches!(entry.kind, WalkEntryKind::Directory) {
                 if !is_hard_directory(&relative_bytes) && !self.prune_directory(&relative_bytes)? {
                     let child = directory
-                        .open_dir_nofollow(&name)
+                        .open_dir_nofollow(&entry.name)
                         .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
                     if !has_nested_git_marker(&child, self.context)? {
                         let next_depth = depth
                             .checked_add(1)
                             .ok_or_else(|| CatalogError::new(CatalogErrorCode::LimitExceeded))?;
-                        self.walk(&child, &relative_path, &relative_bytes, next_depth)?;
+                        if next_depth > MAX_FILESYSTEM_DEPTH {
+                            return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+                        }
+                        let metadata = child
+                            .dir_metadata()
+                            .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
+                        if !metadata.is_dir() {
+                            return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+                        }
+                        pending_directories.push(PendingDirectory {
+                            name: entry.name,
+                            name_bytes: entry.name_bytes,
+                            expected_identity: file_identity(&metadata),
+                        });
                     }
                 }
                 continue;
             }
-            if file_type.is_symlink() {
+            if matches!(entry.kind, WalkEntryKind::Symlink) {
                 if self.policy.follow_internal_symlinks
                     && let Some(metadata) = internal_symlink_metadata(self.root, &relative_path)?
                 {
@@ -568,7 +676,7 @@ impl FilesystemWalker<'_> {
                     continue;
                 }
                 let metadata = directory
-                    .symlink_metadata(&name)
+                    .symlink_metadata(&entry.name)
                     .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
                 self.output.push(Candidate {
                     relative_path,
@@ -580,8 +688,8 @@ impl FilesystemWalker<'_> {
                 });
                 continue;
             }
-            if file_type.is_file() {
-                let file = open_file_in(directory, &name, false)
+            if matches!(entry.kind, WalkEntryKind::File) {
+                let file = open_file_in(&directory, &entry.name, false)
                     .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
                 let metadata = file
                     .metadata()
@@ -599,8 +707,14 @@ impl FilesystemWalker<'_> {
                 });
             }
         }
-        let _scoped = self.active_git_ignores.pop();
-        Ok(())
+        drop(directory);
+        pending_directories.reverse();
+        Ok(WalkFrame {
+            relative_path: relative_directory,
+            relative: relative_directory_bytes,
+            depth,
+            pending_directories,
+        })
     }
 
     fn prune_directory(&mut self, path: &[u8]) -> Result<bool, CatalogError> {
@@ -639,6 +753,38 @@ impl FilesystemWalker<'_> {
         }
         Ok(false)
     }
+}
+
+fn reopen_walk_directory(
+    root: &Dir,
+    relative: &Path,
+    expected_identities: &[FileIdentity],
+) -> Result<Dir, CatalogError> {
+    let mut directory = root
+        .try_clone()
+        .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+    let mut identities = expected_identities.iter();
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+        };
+        let expected_identity = identities
+            .next()
+            .ok_or_else(|| CatalogError::new(CatalogErrorCode::SourceChanged))?;
+        directory = directory
+            .open_dir_nofollow(name)
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
+        let metadata = directory
+            .dir_metadata()
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::SourceChanged))?;
+        if !metadata.is_dir() || file_identity(&metadata) != *expected_identity {
+            return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+        }
+    }
+    if identities.next().is_some() {
+        return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+    }
+    Ok(directory)
 }
 
 fn source_record_metadata(
@@ -864,7 +1010,27 @@ fn read_open_file(
 }
 
 fn open_relative_file(root: &Dir, path: &Path, follow: bool) -> std::io::Result<File> {
-    open_file_in(root, path, follow)
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let directory = reopen_relative_directory(root, parent)?;
+    open_file_in(&directory, name, follow)
+}
+
+fn reopen_relative_directory(root: &Dir, relative: &Path) -> std::io::Result<Dir> {
+    // cap-std's full-path resolver retains ancestor handles for `..` safety.
+    // These paths are already normalized relative paths, so reopening one
+    // no-follow component at a time provides the same confinement with a
+    // constant number of descriptors.
+    let mut directory = root.try_clone()?;
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+        };
+        directory = directory.open_dir_nofollow(name)?;
+    }
+    Ok(directory)
 }
 
 fn open_file_in(directory: &Dir, path: impl AsRef<Path>, follow: bool) -> std::io::Result<File> {
@@ -1274,6 +1440,8 @@ fn path_bytes(value: &Path) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{LocalFilesystemConnector, MAX_FILESYSTEM_DEPTH};
+    #[cfg(unix)]
+    use super::{file_identity, reopen_walk_directory};
     use crate::{
         ByteRange, ChangeKind, ChangeWatermark, ConnectorContext, DiscoveryDisposition,
         DiscoveryPolicy, DiscoveryReason, DiscoveryRequest, SourceConnector, SourceHealthState,
@@ -1282,7 +1450,16 @@ mod tests {
     use cigar_store::CancellationToken;
     use std::collections::{BTreeSet, HashSet};
     use std::fs;
+    use std::sync::{Mutex, MutexGuard};
     use std::time::{Duration, Instant};
+
+    static DEEP_FILESYSTEM_FIXTURE_LOCK: Mutex<()> = Mutex::new(());
+
+    fn deep_filesystem_fixture_guard() -> MutexGuard<'static, ()> {
+        DEEP_FILESYSTEM_FIXTURE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     fn context() -> ConnectorContext {
         ConnectorContext::new(
@@ -1498,6 +1675,7 @@ mod tests {
     #[test]
     fn ignored_directory_is_pruned_before_hostile_depth_is_charged()
     -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = deep_filesystem_fixture_guard();
         let root = tempfile::tempdir()?;
         fs::write(root.path().join(".gitignore"), b"ignored\n")?;
         let mut nested = root.path().join("ignored");
@@ -1525,6 +1703,32 @@ mod tests {
                 .as_bytes()
                 .starts_with(b"ignored/")
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn nested_repository_is_pruned_before_hostile_depth_is_charged()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = deep_filesystem_fixture_guard();
+        let root = tempfile::tempdir()?;
+        let mut nested = root.path().to_path_buf();
+        for _depth in 0..=MAX_FILESYSTEM_DEPTH {
+            nested.push("d");
+            fs::create_dir(&nested)?;
+        }
+        fs::create_dir(nested.join(".git"))?;
+
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: policy()?,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert!(plan.entries.is_empty());
         Ok(())
     }
 
@@ -1622,6 +1826,33 @@ mod tests {
             plan.entries.first().map(|entry| entry.reason),
             Some(DiscoveryReason::HardExclusion)
         );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn external_symlinked_directory_is_never_traversed() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir()?;
+        let outside = tempfile::tempdir()?;
+        fs::write(outside.path().join("private.rs"), b"fn private() {}")?;
+        symlink(outside.path(), root.path().join("escape"))?;
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: policy()?,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert_eq!(plan.entries.len(), 1);
+        let escape = plan.entries.first().ok_or("missing symlink entry")?;
+        assert_eq!(escape.record.relative_path.as_bytes(), b"escape");
+        assert_eq!(escape.disposition, DiscoveryDisposition::Exclude);
+        assert_eq!(escape.reason, DiscoveryReason::HardExclusion);
         Ok(())
     }
 
@@ -1802,14 +2033,45 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn recursive_walk_rejects_paths_beyond_the_depth_budget()
+    fn assert_recursive_walk_accepts_paths_at_the_depth_budget()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = deep_filesystem_fixture_guard();
+        let root = tempfile::tempdir()?;
+        let mut directory = root.path().to_path_buf();
+        for _depth in 0..MAX_FILESYSTEM_DEPTH {
+            directory.push("d");
+            fs::create_dir(&directory)?;
+        }
+        fs::write(directory.join("at-limit.rs"), b"fn at_limit() {}")?;
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: policy()?,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert_eq!(plan.included_count, 1);
+        assert!(plan.entries.iter().any(|entry| {
+            entry
+                .record
+                .relative_path
+                .as_bytes()
+                .ends_with(b"at-limit.rs")
+        }));
+        Ok(())
+    }
+
+    fn assert_recursive_walk_rejects_paths_beyond_the_depth_budget()
     -> Result<(), Box<dyn std::error::Error>> {
         use crate::CatalogErrorCode;
 
+        let _guard = deep_filesystem_fixture_guard();
         let root = tempfile::tempdir()?;
         let mut directory = root.path().to_path_buf();
-        for _depth in 0..=256 {
+        for _depth in 0..=MAX_FILESYSTEM_DEPTH {
             directory.push("d");
             fs::create_dir(&directory)?;
         }
@@ -1827,6 +2089,87 @@ mod tests {
             .err()
             .ok_or("over-depth traversal must fail closed")?;
         assert_eq!(error.code(), CatalogErrorCode::LimitExceeded);
+        Ok(())
+    }
+
+    #[test]
+    fn recursive_walk_accepts_paths_at_the_depth_budget() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert_recursive_walk_accepts_paths_at_the_depth_budget()
+    }
+
+    #[test]
+    fn recursive_walk_rejects_paths_beyond_the_depth_budget()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_recursive_walk_rejects_paths_beyond_the_depth_budget()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recursive_walk_depth_budget_low_fd_child() -> Result<(), Box<dyn std::error::Error>> {
+        if std::env::var_os("CIGAR_CATALOG_LOW_NOFILE_CHILD").is_none() {
+            return Ok(());
+        }
+        assert_recursive_walk_accepts_paths_at_the_depth_budget()?;
+        assert_recursive_walk_rejects_paths_beyond_the_depth_budget()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recursive_walk_depth_budget_holds_under_low_fd_limit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = deep_filesystem_fixture_guard();
+        let executable = std::env::current_exe()?;
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg("ulimit -n 64 && exec \"$@\"")
+            .arg("cigar-catalog-low-nofile")
+            .arg(executable)
+            .arg("filesystem::tests::recursive_walk_depth_budget_low_fd_child")
+            .arg("--exact")
+            .arg("--test-threads=1")
+            .env("CIGAR_CATALOG_LOW_NOFILE_CHILD", "1")
+            .output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "low-NOFILE depth subprocess failed: status={}; stdout={}; stderr={}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reopened_walk_rejects_an_ancestor_swap_even_when_the_child_identity_is_unchanged()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::CatalogErrorCode;
+
+        let root = tempfile::tempdir()?;
+        fs::create_dir_all(root.path().join("a/b"))?;
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri)?;
+        let first = connector.root.open_dir("a")?;
+        let second = first.open_dir("b")?;
+        let identities = [
+            file_identity(&first.dir_metadata()?),
+            file_identity(&second.dir_metadata()?),
+        ];
+        drop(second);
+        drop(first);
+
+        fs::rename(root.path().join("a"), root.path().join("old-a"))?;
+        fs::create_dir(root.path().join("a"))?;
+        fs::rename(root.path().join("old-a/b"), root.path().join("a/b"))?;
+
+        let error =
+            reopen_walk_directory(&connector.root, std::path::Path::new("a/b"), &identities)
+                .err()
+                .ok_or("ancestor replacement must fail closed")?;
+        assert_eq!(error.code(), CatalogErrorCode::SourceChanged);
         Ok(())
     }
 }

@@ -144,18 +144,23 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "1.0.0-dev.1")
-        self.assertEqual(configuration.python_version, "1.0.0.dev1")
+        self.assertEqual(configuration.version, "0.9.0-honey.1")
+        self.assertEqual(configuration.python_version, "0.9.0.dev1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.sdist_filename,
-            "cigar_sdk-1.0.0.dev1.tar.gz",
+            "cigar_sdk-0.9.0.dev1.tar.gz",
         )
         self.assertEqual(
             configuration.wheel_filename,
-            "cigar_sdk-1.0.0.dev1-py3-none-any.whl",
+            "cigar_sdk-0.9.0.dev1-py3-none-any.whl",
         )
-        self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
+        self.assertEqual(
+            set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
+        )
+        self.assertEqual(
+            configuration.receipt_filename, "python-sdk-build-receipt.json"
+        )
         self.assertEqual(
             configuration.lock_summary,
             {
@@ -192,9 +197,9 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         second = self.produce(second_root)
 
         filenames = {
-            "cigar_sdk-1.0.0.dev1.tar.gz",
-            "cigar_sdk-1.0.0.dev1-py3-none-any.whl",
-            builder.BUILD_RECEIPT,
+            "cigar_sdk-0.9.0.dev1.tar.gz",
+            "cigar_sdk-0.9.0.dev1-py3-none-any.whl",
+            "python-sdk-build-receipt.json",
         }
         self.assertEqual(first, second)
         for filename in filenames:
@@ -232,12 +237,12 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         )
         self.assertTrue(first["package_validation"]["core_metadata_identical"])
         self.assertEqual(
-            json.loads((first_root / builder.BUILD_RECEIPT).read_bytes()),
+            json.loads((first_root / "python-sdk-build-receipt.json").read_bytes()),
             first,
         )
 
     def test_sdist_tests_and_fixtures_are_self_contained(self) -> None:
-        prefix = "cigar_sdk-1.0.0.dev1"
+        prefix = "cigar_sdk-0.9.0.dev1"
         with tarfile.open(fileobj=io.BytesIO(self.sdist_bytes), mode="r:gz") as archive:
             members = {
                 member.name: archive.extractfile(member).read()
@@ -257,7 +262,7 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
             for name, payload in members.items()
             if name.startswith(f"{prefix}/tests/") and name.endswith(".py")
         ]
-        self.assertEqual(len(test_payloads), 4)
+        self.assertEqual(len(test_payloads), 5)
         self.assertTrue(
             all(
                 b"importlib" in payload or b"resources" not in payload
@@ -274,7 +279,7 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         wheel.write_bytes(self.wheel_bytes)
         os.chmod(wheel, 0o600)
         payloads, _ = builder._read_wheel(wheel, self.configuration, 1_700_000_000)
-        record = "cigar_sdk-1.0.0.dev1.dist-info/RECORD"
+        record = "cigar_sdk-0.9.0.dev1.dist-info/RECORD"
         tampered = dict(payloads)
         tampered["cigar_sdk/client.py"] += b"\n"
         with self.assertRaisesRegex(ReleaseError, "RECORD binding differs"):
