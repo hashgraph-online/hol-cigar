@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 from contextlib import ExitStack
 import hashlib
+import importlib.util
+import io
 import json
 from pathlib import Path
 import stat
 import sys
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -19,6 +22,21 @@ sys.path.insert(0, str(RELEASE_SCRIPTS))
 import build_honey_evidence as honey  # noqa: E402
 import build_honey_gate_reports as gate_reports  # noqa: E402
 from release_lib import canonical_json_bytes  # noqa: E402
+
+
+def _load_module(name: str, path: Path):
+    specification = importlib.util.spec_from_file_location(name, path)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+demo = _load_module(
+    "cigar_honey_evidence_demo_contract_tests",
+    REPOSITORY_ROOT / "demos" / "run_honey.py",
+)
 
 
 def _private_directory(path: Path) -> None:
@@ -371,6 +389,146 @@ class HoneyEvidenceTests(unittest.TestCase):
                 if call.args[1] != fixture.candidate_root
             )
         )
+
+    def test_claude_plugin_producer_matches_the_evidence_attachment_contract(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+            root = Path(temporary)
+            source = {
+                "revision": "1" * 40,
+                "tree_sha256": "2" * 64,
+                "committed": True,
+                "clean": True,
+            }
+            binaries = {
+                "mcp": root / "cigar-mcp",
+                "hook": root / "cigar-claude-hook",
+            }
+            binaries["mcp"].write_bytes(b"fixture mcp\n")
+            binaries["hook"].write_bytes(b"fixture hook\n")
+            plugin_root = "cigar-honey-plugin"
+            payloads = {
+                f"{plugin_root}/.claude-plugin/plugin.json": demo.canonical(
+                    {"version": demo.PRODUCT_VERSION}
+                ),
+                f"{plugin_root}/compatibility.json": demo.canonical(
+                    {"context_abi": demo.CONTEXT_ABI}
+                ),
+                f"{plugin_root}/RELEASE-METADATA.json": demo.canonical(
+                    {
+                        "product_version": demo.PRODUCT_VERSION,
+                        "source": source,
+                    }
+                ),
+                f"{plugin_root}/bin/cigar-mcp": binaries["mcp"].read_bytes(),
+                f"{plugin_root}/bin/cigar-claude-hook": binaries["hook"].read_bytes(),
+            }
+            archive = root / "claude-plugin.tar.gz"
+            with tarfile.open(archive, "w:gz") as handle:
+                for relative, payload in sorted(payloads.items()):
+                    member = tarfile.TarInfo(relative)
+                    member.size = len(payload)
+                    member.mode = 0o755 if "/bin/" in relative else 0o644
+                    handle.addfile(member, io.BytesIO(payload))
+
+            digest = demo.sha256_bytes(archive.read_bytes())
+            identity, installed_root = demo.install_plugin(
+                archive,
+                digest,
+                root / "installed-plugin",
+                binaries,
+                source,
+            )
+            artifact = {
+                "filename": archive.name,
+                "sha256": digest,
+                "bytes": archive.stat().st_size,
+            }
+            runtime_identity = {"sha256": "4" * 64, "bytes": 1}
+            artifacts = {
+                "macos-runtime-aarch64": {
+                    "filename": "runtime.tar.gz",
+                    **runtime_identity,
+                },
+                "claude-code-plugin": artifact,
+            }
+            self.assertEqual(
+                identity,
+                {"sha256": digest, "bytes": archive.stat().st_size},
+            )
+            self.assertEqual(installed_root, root / "installed-plugin" / plugin_root)
+            self.assertTrue(
+                honey._attachment_matches(identity, artifact, require_path=False)
+            )
+
+            scenario_ids = [
+                "offline-context",
+                "effect-recovery-replay",
+                "claude-mcp",
+            ]
+            report = {
+                "schema_version": "cigar.honey-installed-demo-report.v1",
+                "status": "installed_demo_passed",
+                "product_version": demo.PRODUCT_VERSION,
+                "context_abi": demo.CONTEXT_ABI,
+                "evidence_class": demo.EVIDENCE_CLASS,
+                "suite": {
+                    "manifest": "demos/honey-manifest.v1.json",
+                    "sha256": "5" * 64,
+                },
+                "selected_scenarios": scenario_ids,
+                "runtime": runtime_identity,
+                "source": source,
+                "supporting_artifacts": {"claude_plugin": identity},
+                "scenarios": [
+                    {
+                        "scenario_id": scenario_id,
+                        "status": "installed_story_passed_twice",
+                        "components": [{"status": "installed_component_passed_twice"}],
+                    }
+                    for scenario_id in scenario_ids
+                ],
+                "installed_artifact_qualified": True,
+            }
+            report["report_digest"] = demo.multihash(demo.canonical(report))
+            honey._validate_demo("other-demo-reports", report, artifacts, source)
+
+            legacy_report = json.loads(json.dumps(report))
+            legacy_report["supporting_artifacts"]["claude_plugin"]["source"] = source
+            legacy_report["report_digest"] = demo.multihash(
+                demo.canonical(
+                    {
+                        key: value
+                        for key, value in legacy_report.items()
+                        if key != "report_digest"
+                    }
+                )
+            )
+            with self.assertRaisesRegex(
+                honey.HoneyEvidenceError,
+                "other Honey demos are not bound",
+            ):
+                honey._validate_demo(
+                    "other-demo-reports",
+                    legacy_report,
+                    artifacts,
+                    source,
+                )
+
+            stale_source = dict(source)
+            stale_source["revision"] = "3" * 40
+            with self.assertRaisesRegex(
+                demo.HoneyDemoError,
+                "plugin identity does not match",
+            ):
+                demo.install_plugin(
+                    archive,
+                    digest,
+                    root / "stale-plugin",
+                    binaries,
+                    stale_source,
+                )
 
     def test_true_production_claim_in_bound_report_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp") as raw:

@@ -296,7 +296,6 @@ def install_plugin(
             binaries[runtime_name].read_bytes()
         ):
             fail("Claude plugin runtime bytes differ from the installed runtime")
-    identity["source"] = plugin_source
     return identity, plugin_root
 
 
