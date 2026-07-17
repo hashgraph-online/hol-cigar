@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from evidence_workspace import (
+    EvidenceLimits,
     EvidenceWorkspace,
     EvidenceWorkspaceError,
     canonical_json_bytes as workspace_canonical_json_bytes,
@@ -238,6 +239,19 @@ UTC_TIMESTAMP = re.compile(
     r"T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z\Z"
 )
 MAX_FILE_BYTES = 64 * 1024 * 1024
+# Public Honey attachments are already constrained by the closed artifact
+# contracts and verifier to 512 MiB each. Give only the candidate workspace
+# that bounded headroom; authority, source, and report inputs keep the tighter
+# EvidenceLimits defaults.
+MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
+MAX_CANDIDATE_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
+CANDIDATE_WORKSPACE_LIMITS = EvidenceLimits(
+    max_files=13,
+    max_directories=1,
+    max_file_bytes=MAX_ARTIFACT_BYTES,
+    max_total_bytes=MAX_CANDIDATE_TOTAL_BYTES,
+    max_path_depth=1,
+)
 
 
 class HoneyEvidenceError(RuntimeError):
@@ -569,10 +583,16 @@ def _open_exact_workspace(
     root: Path,
     repository: Path,
     expected: set[str],
+    *,
+    limits: EvidenceLimits | None = None,
 ) -> tuple[EvidenceWorkspace, dict[str, bytes]]:
     try:
         workspace = stack.enter_context(
-            EvidenceWorkspace.create(root, repository_root=repository)
+            EvidenceWorkspace.create(
+                root,
+                repository_root=repository,
+                limits=limits,
+            )
         )
         payloads = workspace.read_files(frozenset(expected))
     except EvidenceWorkspaceError as error:
@@ -1603,7 +1623,11 @@ def _read_inputs(
         resolved: set[Path] = {control_root.resolve(strict=True)}
         for name in sorted(paths):
             _, snapshot = _open_exact_workspace(
-                stack, paths[name], root, requested[name]
+                stack,
+                paths[name],
+                root,
+                requested[name],
+                limits=(CANDIDATE_WORKSPACE_LIMITS if name == "candidate" else None),
             )
             real = paths[name].resolve(strict=True)
             if real in resolved:

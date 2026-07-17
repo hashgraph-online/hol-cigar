@@ -35,7 +35,7 @@ OWNERSHIP_PATH = "packaging/honey/capability-ownership.v1.json"
 ARCHIVES_PATH = "packaging/honey/local-archives.v1.json"
 EVIDENCE_SCHEMA_PATH = "packaging/honey/schemas/honey-evidence.v1.schema.json"
 EVIDENCE_SCHEMA_SHA256 = (
-    "9523fa71fc517472747d6bbefc8e9d47321b7ad0e10042b23b3fb39233f3d196"
+    "a59741883178fa6ea5f9dbcd2190086fc9553e7ee93a9e2284dc237392b34045"
 )
 
 OPERATION_SOURCE = "spec/api/operations-v1.json"

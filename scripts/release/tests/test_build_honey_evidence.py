@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 from pathlib import Path
@@ -286,6 +287,91 @@ class HoneyEvidenceTests(unittest.TestCase):
             self.assertFalse(result["production_qualified"])
             self.assertEqual(before, after)
 
+    def test_candidate_workspace_uses_the_artifact_contract_size_bound(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as raw:
+            base = Path(raw).resolve(strict=True)
+            accepted_root = base / "accepted"
+            _private_directory(accepted_root)
+            accepted = accepted_root / "artifact.bin"
+            with accepted.open("wb") as output:
+                output.truncate((64 * 1024 * 1024) + 1)
+            accepted.chmod(0o400)
+
+            with ExitStack() as stack:
+                _, payloads = honey._open_exact_workspace(
+                    stack,
+                    accepted_root,
+                    REPOSITORY_ROOT,
+                    {accepted.name},
+                    limits=honey.CANDIDATE_WORKSPACE_LIMITS,
+                )
+                self.assertEqual(len(payloads[accepted.name]), accepted.stat().st_size)
+
+            rejected_root = base / "rejected"
+            _private_directory(rejected_root)
+            rejected = rejected_root / "artifact.bin"
+            with rejected.open("wb") as output:
+                output.truncate(honey.MAX_ARTIFACT_BYTES + 1)
+            rejected.chmod(0o400)
+
+            with (
+                ExitStack() as stack,
+                self.assertRaisesRegex(
+                    honey.HoneyEvidenceError, "exceeds the per-file limit"
+                ),
+            ):
+                honey._open_exact_workspace(
+                    stack,
+                    rejected_root,
+                    REPOSITORY_ROOT,
+                    {rejected.name},
+                    limits=honey.CANDIDATE_WORKSPACE_LIMITS,
+                )
+
+        self.assertEqual(
+            honey.CANDIDATE_WORKSPACE_LIMITS.max_file_bytes,
+            honey.MAX_ARTIFACT_BYTES,
+        )
+        self.assertEqual(
+            honey.CANDIDATE_WORKSPACE_LIMITS.max_total_bytes,
+            honey.MAX_CANDIDATE_TOTAL_BYTES,
+        )
+        self.assertEqual(honey.CANDIDATE_WORKSPACE_LIMITS.max_files, 13)
+        self.assertEqual(honey.CANDIDATE_WORKSPACE_LIMITS.max_directories, 1)
+        self.assertEqual(honey.CANDIDATE_WORKSPACE_LIMITS.max_path_depth, 1)
+        self.assertEqual(honey.EvidenceLimits().max_file_bytes, 64 * 1024 * 1024)
+
+    def test_only_candidate_inputs_receive_the_expanded_workspace_limits(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as raw:
+            fixture = self._fixture(raw)
+            with (
+                mock.patch.object(
+                    honey,
+                    "_open_exact_workspace",
+                    wraps=honey._open_exact_workspace,
+                ) as opened,
+                mock.patch.object(honey, "_validate_evidence_report"),
+            ):
+                honey._build(fixture.build_arguments())
+
+        candidate_calls = [
+            call
+            for call in opened.call_args_list
+            if call.args[1] == fixture.candidate_root
+        ]
+        self.assertEqual(len(candidate_calls), 1)
+        self.assertIs(
+            candidate_calls[0].kwargs["limits"],
+            honey.CANDIDATE_WORKSPACE_LIMITS,
+        )
+        self.assertTrue(
+            all(
+                call.kwargs.get("limits") is None
+                for call in opened.call_args_list
+                if call.args[1] != fixture.candidate_root
+            )
+        )
+
     def test_true_production_claim_in_bound_report_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp") as raw:
             fixture = self._fixture(raw)
@@ -379,6 +465,10 @@ class HoneyEvidenceTests(unittest.TestCase):
     def test_schema_is_strict_and_forbids_true_release_claims(self) -> None:
         schema = json.loads((REPOSITORY_ROOT / honey.SCHEMA_PATH).read_text())
         self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(
+            schema["$defs"]["artifact"]["properties"]["bytes"]["maximum"],
+            honey.MAX_ARTIFACT_BYTES,
+        )
         product = schema["$defs"]["product"]
         self.assertEqual(product["properties"]["supported"], {"const": False})
         self.assertEqual(
