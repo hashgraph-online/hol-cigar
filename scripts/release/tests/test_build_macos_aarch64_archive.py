@@ -178,9 +178,17 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
                 "scripts/release/verify_package.py",
                 "conformance/runner/**",
                 "sdk/rust/**",
+                "schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json",
                 "spec/api/**",
             },
             set(builder.SOURCE_INCLUDES),
+        )
+
+    def test_source_snapshot_contains_runtime_compile_time_schema(self) -> None:
+        snapshot_paths = {entry.path for entry in builder._source_snapshot(self.root)}
+        self.assertIn(
+            "schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json",
+            snapshot_paths,
         )
 
     def test_native_build_command_selects_only_the_full_runtime_profile(self) -> None:
