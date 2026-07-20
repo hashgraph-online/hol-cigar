@@ -355,6 +355,32 @@ pub struct InvalidationRegistration {
     pub compiler_profile_digest: ContentDigest,
 }
 
+/// Protected content-equivalence accounting retained outside the frozen v1 protocol records.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContentEquivalenceDiagnostic {
+    /// Stable representative used by the plan and selected block.
+    pub representative_version: VersionId,
+    /// Sorted source versions represented by the class, including the representative.
+    pub member_versions: BTreeSet<VersionId>,
+    /// Sorted exact provenance commitments retained for every member manifest entry.
+    pub provenance_digests: BTreeSet<ContentDigest>,
+    /// Selected shared block, or `None` when the class was not packed.
+    pub selected_block_id: Option<VersionId>,
+}
+
+/// Exact protected citation resolution for one source version represented by a shared block.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CitationResolution {
+    /// Version cited by the caller.
+    pub cited_version: VersionId,
+    /// Exact source version whose lineage the citation retains.
+    pub source_version: VersionId,
+    /// Stable class representative named by the v1 plan.
+    pub representative_version: VersionId,
+    /// Shared selected block containing the source version in its provenance.
+    pub block_id: VersionId,
+}
+
 /// Caller-safe explanation entry after disclosure filtering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifestViewEntry {
@@ -384,6 +410,8 @@ pub struct CompileOutput {
     pub bundle: ContextBundle,
     /// Dependency roots for invalidation.
     pub invalidation: InvalidationRegistration,
+    /// Protected non-wire accounting for content-equivalent candidates and citations.
+    pub content_equivalence: Vec<ContentEquivalenceDiagnostic>,
 }
 
 impl CompileOutput {
@@ -402,6 +430,26 @@ impl CompileOutput {
                 })
                 .collect(),
         }
+    }
+
+    /// Resolves an authorized source-version citation to its exact lineage and shared block.
+    ///
+    /// The caller must apply the same disclosure authorization used for manifest explanations
+    /// before invoking this protected lookup.
+    #[must_use]
+    pub fn resolve_citation(&self, cited_version: &VersionId) -> Option<CitationResolution> {
+        self.content_equivalence.iter().find_map(|class| {
+            let block_id = class.selected_block_id.as_ref()?;
+            class
+                .member_versions
+                .contains(cited_version)
+                .then(|| CitationResolution {
+                    cited_version: cited_version.clone(),
+                    source_version: cited_version.clone(),
+                    representative_version: class.representative_version.clone(),
+                    block_id: block_id.clone(),
+                })
+        })
     }
 }
 

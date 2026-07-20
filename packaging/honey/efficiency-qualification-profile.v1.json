@@ -1,0 +1,104 @@
+{
+  "schema_version": "cigar.honey-efficiency-qualification-profile.v1",
+  "profile_id": "cigar.honey.0.9.1.efficiency-reliability.macos-arm64.v1",
+  "product_version": "0.9.1-honey.1",
+  "release_state": "developer-preview",
+  "context_abi": "cigar.context.v1",
+  "fail_closed": true,
+  "claims": {
+    "prerelease": true,
+    "supported": false,
+    "production_qualified": false
+  },
+  "authenticated_inputs": [
+    {
+      "id": "H91-INPUT-EFFICIENCY-HANDOFF",
+      "path": "docs/cigar-honey-release-efficiency-handoff.md",
+      "bytes": 22903,
+      "sha256": "cab11afc84b36cfe4929a3946cc25d5d14f77d413a687f675cc23d4a69dea813"
+    },
+    {
+      "id": "H91-INPUT-090-HANDOFF-ZIP",
+      "external": true,
+      "artifact_name": "cigar-honey-0.9.0-honey.1-developer-handoff.zip",
+      "bytes": 116927188,
+      "sha256": "53f484ae7e2be6a51a0dd613731986bfda926688b0dcff21462a2bdb8da7f421"
+    },
+    {
+      "id": "H91-INPUT-QUALIFICATION-FIXTURES",
+      "path": "benches/honey-efficiency/qualification-fixtures.v1.json",
+      "bytes": 3939,
+      "sha256": "3d8337c5fa20ad035983a3d3fc8b15026e9b5dec203550078d4ea5b0da917a86"
+    },
+    {
+      "id": "H91-INPUT-VERIFIED-COPY-DESCRIPTOR",
+      "path": "packaging/honey/verified-copy-input.v1.json",
+      "bytes": 310,
+      "sha256": "e8b59c505e71a02d78d14884ee4402c95932f5ab1225a6aec4f14f99d13ebc23"
+    },
+    {
+      "id": "H91-INPUT-QUALIFICATION-REPORT-SCHEMA",
+      "path": "packaging/honey/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
+      "bytes": 11548,
+      "sha256": "e1920d7d85944321a53e42cd2eb2e4af75d5b79c814f9d9fa1b8534d9710c38d"
+    },
+    {
+      "id": "H91-INPUT-PAIRED-RAW-BENCHMARK",
+      "external": true,
+      "sha256": "776b84c8cce3b11915b53947f3bb21a86c8a9819fc43ef0d1c85362ca62a3455"
+    }
+  ],
+  "findings": [
+    {"id":"H91-F001","name":"full-residual-snapshot-write-amplification","workstreams":["H91-200","H91-210"],"release_gates":["storage-format-v5","storage-amplification"]},
+    {"id":"H91-F002","name":"excess-durable-commits-per-compile","workstreams":["H91-220","H91-500"],"release_gates":["storage-amplification"]},
+    {"id":"H91-F003","name":"startup-restart-readiness-failure","workstreams":["H91-300","H91-340"],"release_gates":["startup-readiness","revision-recovery"]},
+    {"id":"H91-F004","name":"duplicate-selected-content","workstreams":["H91-400","H91-410"],"release_gates":["context-quality-efficiency"]},
+    {"id":"H91-F005","name":"excess-candidate-displacement","workstreams":["H91-400","H91-420"],"release_gates":["context-quality-efficiency"]},
+    {"id":"H91-F006","name":"correlation-prevents-semantic-reuse","workstreams":["H91-430","H91-500"],"release_gates":["context-quality-efficiency"]},
+    {"id":"H91-F007","name":"quality-advantage-must-not-regress","workstreams":["H91-600","H91-640"],"release_gates":["context-quality-efficiency"]},
+    {"id":"H91-F008","name":"progressive-operational-latency","workstreams":["H91-600","H91-630"],"release_gates":["serial-latency","startup-readiness"]}
+  ],
+  "required_gates": [
+    {"id":"H91-G001","release_gate_id":"storage-format-v5","criterion":"ordinary mutations do not persist complete catalog-free residual snapshots"},
+    {"id":"H91-G002","release_gate_id":"v4-v5-migration","criterion":"every migrated retained revision preserves revision, state checksum, semantic root, and catalog root"},
+    {"id":"H91-G003","release_gate_id":"revision-recovery","criterion":"every durable-boundary failpoint recovers to the prior or complete committed revision, never a hybrid"},
+    {"id":"H91-G004","release_gate_id":"storage-amplification","criterion":"steady-state physical growth is less than 1048576 bytes per Hiero-shaped compilation after the frozen bounded checkpoint procedure"},
+    {"id":"H91-G005","release_gate_id":"serial-latency","criterion":"100-request OLS latency slope point estimate and deterministic moving-block bootstrap 95 percent upper bound are at most 10 milliseconds per request"},
+    {"id":"H91-G006","release_gate_id":"serial-latency","criterion":"compile p95 meets the stricter objective frozen before execution: below 10 seconds or no more than twice paired-local p95"},
+    {"id":"H91-G007","release_gate_id":"startup-readiness","criterion":"clean and crash-recovery readiness are each at most 30 seconds at the retention ceiling"},
+    {"id":"H91-G008","release_gate_id":"storage-amplification","criterion":"checkpoint and delta chain count and encoded bytes remain within the frozen bounds after 10000 serial mutations"},
+    {"id":"H91-G009","release_gate_id":"context-quality-efficiency","criterion":"completion is exactly 100 percent for the frozen 100-request cohort"},
+    {"id":"H91-G010","release_gate_id":"context-quality-efficiency","criterion":"duplicate selected content is at most 5 percent by representation kind and content digest"},
+    {"id":"H91-G011","release_gate_id":"context-quality-efficiency","criterion":"paired aggregate and every workflow lineage-diversity delta are nonnegative"},
+    {"id":"H91-G012","release_gate_id":"context-quality-efficiency","criterion":"budget-displaced to selected ratio is below 10 to 1 globally and is reported per workflow"},
+    {"id":"H91-G013","release_gate_id":"context-quality-efficiency","criterion":"citation resolvability is at least 99 percent"},
+    {"id":"H91-G014","release_gate_id":"context-quality-efficiency","criterion":"required-source coverage is exactly 100 percent"},
+    {"id":"H91-G015","release_gate_id":"context-quality-efficiency","criterion":"required, policy, security, provenance, tokenizer, materializer, and budget validation remain fail closed"},
+    {"id":"H91-G016","release_gate_id":"v4-v5-migration","criterion":"backup create and verification, distinct-target restore, activation rollback, and downgrade rejection pass"},
+    {"id":"H91-G017","release_gate_id":"revision-recovery","criterion":"compaction preserves pins and rejects preview, head, policy, backup, and pin drift"},
+    {"id":"H91-G018","release_gate_id":"revision-recovery","criterion":"forced deep verification authenticates every retained checkpoint and delta plus external bound records"},
+    {"id":"H91-G019","release_gate_id":"protocol-drift","criterion":"the public v1 registry remains exactly 45 operations and 70 nominal payload types"},
+    {"id":"H91-G020","release_gate_id":"authority-drift","criterion":"all granular v1 clients remain compatible with 0.9.1 and no future RPC is added to v1"},
+    {"id":"H91-G021","release_gate_id":"developer-preview-claims","criterion":"prerelease remains true and supported and production-qualified remain false"},
+    {"id":"H91-G022","release_gate_id":"legacy-honey-gates","criterion":"every mandatory 0.9.0 source, artifact, installed, SDK, adapter, demo, documentation, safety, license, and checksum gate passes on exact 0.9.1 bytes"},
+    {"id":"H91-G023","release_gate_id":"closed-overall-status","criterion":"every mandatory gate is pass; failed, skipped, waived, unknown, unevaluated, or absent is not pass"}
+  ],
+  "input_policy": {
+    "retained_hiero_v4": {
+      "id": "H91-EVIDENCE-RETAINED-HIERO-V4",
+      "repository_presence": false,
+      "classification": "read-only-external-evidence",
+      "initial_mutation_authorized": false
+    },
+    "initial_mutable_workload_ids": [
+      "H91-FIXTURE-SMALL-GENERATED",
+      "H91-FIXTURE-BOUNDARY-GENERATED",
+      "H91-FIXTURE-HIERO-SHAPED-GENERATED"
+    ],
+    "conditional_workload": {
+      "id": "H91-WORKLOAD-VERIFIED-COPY",
+      "authorized_only_after_generated_gates_pass": true,
+      "descriptor_complete": false
+    }
+  }
+}

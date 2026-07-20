@@ -88,7 +88,7 @@ component = {
 report = {
     "schema_version": "cigar.honey-installed-demo-report.v1",
     "status": "installed_demo_passed",
-    "product_version": "0.9.0-honey.1",
+    "product_version": "0.9.1-honey.1",
     "context_abi": "cigar.context.v1",
     "evidence_class": "cigar.honey-installed-demo.v1",
     "suite": {

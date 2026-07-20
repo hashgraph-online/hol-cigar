@@ -26,7 +26,7 @@ BASELINE_ID = "cigar.development.protocol-baseline.v1"
 BASELINE_PATH = "packaging/development/protocol-baseline.v1.json"
 SCHEMA_PATH = "packaging/development/schemas/protocol-baseline.v1.schema.json"
 SCHEMA_SHA256 = "35f9bc9eb346fec90e75be1a626d1d0d62cba29440e25ad2c713cb295018a945"
-BASELINE_SHA256 = "3df2b60c2e4daf07891c86d36a11d634ea2862c8bc8358a53a3edd8e2820065f"
+BASELINE_SHA256 = "4f969dd83d1737db073b28dc62244ba0b65f4760649058f157b1246fc88cef28"
 
 CONTEXT_ABI = "cigar.context.v1"
 PROTOCOL_MIN = "1.0"
@@ -96,6 +96,7 @@ GENERATED_JSON_SCHEMAS = (
     "schemas/json/replay-request-v1.schema.json",
     "schemas/json/selection-manifest-v1.schema.json",
     "schemas/json/source-snapshot-v1.schema.json",
+    "schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json",
     "schemas/json/verification-receipt-v1.schema.json",
 )
 
@@ -259,7 +260,7 @@ def _inventory_digest(values: Any) -> str:
 
 def _validate_inventory_definition() -> None:
     paths = _all_bound_paths()
-    if len(BINDING_GROUPS) != 9 or len(paths) != 82:
+    if len(BINDING_GROUPS) != 9 or len(paths) != 83:
         raise ReleaseError("protocol binding inventory count drifted")
     if len(set(paths)) != len(paths):
         raise ReleaseError("protocol binding inventory contains duplicate paths")

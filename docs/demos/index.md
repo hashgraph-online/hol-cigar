@@ -1,6 +1,6 @@
 # Demo walkthroughs
 
-Honey v0.9 packages four installed-artifact stories: offline deterministic context compilation with
+Honey v0.9.1 packages four installed-artifact stories: offline deterministic context compilation with
 prompt-injection/secret-canary defense, two-agent handoff, effect recovery with observational replay,
 and Claude/MCP lifecycle. Its runner verifies independently supplied artifact digests, uses the
 installed runtime and SDK/plugin bytes, runs each component twice from clean state under no-egress
@@ -13,6 +13,13 @@ scans outputs and state, performs teardown, and emits stable content-free JSON. 
 release qualification only when every declared assertion is observed through a public product
 surface and the runner records an enforced OS no-egress boundary. A successful fixture driver alone
 is not a release pass.
+
+## Generated v4-to-v5 storage migration
+
+The source POC at `demos/storage-migration/README.md` runs the real generated v4-to-v5 workflow
+twice with no protected input: 1,028 revisions, a separate signed backup, a distinct target,
+activation, bounded restart readiness, compaction, and deep verification. It is intentionally
+reported as source-product evidence, not installed-candidate evidence.
 
 ## Offline context compiler
 

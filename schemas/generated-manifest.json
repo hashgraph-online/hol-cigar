@@ -45,6 +45,7 @@
     "json/replay-request-v1.schema.json",
     "json/selection-manifest-v1.schema.json",
     "json/source-snapshot-v1.schema.json",
+    "json/sqlite-v4-v5-migration-receipt-v1.schema.json",
     "json/verification-receipt-v1.schema.json"
   ],
   "error_artifacts": [

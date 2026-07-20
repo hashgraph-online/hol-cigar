@@ -2,8 +2,8 @@
 
 use crate::{
     CompileOutput, CompileRequest, CompilerCandidate, CompilerError, CompilerErrorCode,
-    CompilerProfile, DispositionRecord, FrozenInputs, InvalidationRegistration, LossClass,
-    RepresentationVariant, Selection, manifest_entries,
+    CompilerProfile, ContentEquivalenceDiagnostic, DispositionRecord, FrozenInputs,
+    InvalidationRegistration, LossClass, RepresentationVariant, Selection, manifest_entries,
 };
 use cigar_canon::{
     SemanticEnvelopeProfile, normalize_nfc, parse_strict_json, semantic_multihash_v1,
@@ -23,6 +23,58 @@ const MAX_CANDIDATES: usize = 10_000;
 const MAX_DEPENDENCY_VISITS: usize = 100_000;
 const MAX_BALANCED_SCORE: i64 = 10_100_000;
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct RepresentationEquivalenceKey {
+    kind: RepresentationKind,
+    content_digest: ContentDigest,
+    token_count: u32,
+    loss: LossClass,
+    transform_receipt: Option<ContentDigest>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ClaimEquivalenceKey {
+    key: String,
+    value_digest: ContentDigest,
+    valid_at_unix_nanos: i128,
+    observed_at_unix_nanos: i128,
+    authority: u16,
+    verified: bool,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ContentEquivalenceKey {
+    lane: LaneKind,
+    policy_outcome: PolicyOutcome,
+    classification: cigar_protocol::Classification,
+    instruction_authority: cigar_protocol::InstructionAuthority,
+    claim: Option<ClaimEquivalenceKey>,
+    representations: Vec<RepresentationEquivalenceKey>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ContentEquivalenceState {
+    members_by_representative: BTreeMap<VersionId, BTreeSet<VersionId>>,
+    provenance_by_representative: BTreeMap<VersionId, BTreeSet<ContentDigest>>,
+    representative_by_member: BTreeMap<VersionId, VersionId>,
+}
+
+impl ContentEquivalenceState {
+    fn representative_for(&self, version: &VersionId) -> VersionId {
+        self.representative_by_member
+            .get(version)
+            .cloned()
+            .unwrap_or_else(|| version.clone())
+    }
+
+    fn members_for(&self, representative: &VersionId) -> BTreeSet<VersionId> {
+        self.members_by_representative
+            .get(representative)
+            .cloned()
+            .unwrap_or_else(|| BTreeSet::from([representative.clone()]))
+    }
+}
+
 /// Stateless default deterministic compiler; it performs no model or network calls.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DeterministicCompiler;
@@ -39,6 +91,7 @@ impl DeterministicCompiler {
         let mut dispositions = initial_dispositions(&candidates)?;
         reconcile_logical_duplicates(&mut candidates, &mut dispositions);
         reconcile_claims(&mut candidates, &mut dispositions)?;
+        let equivalence = group_content_equivalent_candidates(&mut candidates, &mut dispositions)?;
 
         let eligible: BTreeMap<_, _> = candidates
             .iter()
@@ -66,6 +119,7 @@ impl DeterministicCompiler {
             request.frozen,
             selected,
             dispositions,
+            equivalence,
         )
     }
 }
@@ -304,6 +358,233 @@ fn reconcile_claims(
         }
     }
     Ok(())
+}
+
+fn group_content_equivalent_candidates(
+    candidates: &mut BTreeMap<VersionId, CompilerCandidate>,
+    dispositions: &mut BTreeMap<VersionId, DispositionRecord>,
+) -> Result<ContentEquivalenceState, CompilerError> {
+    let mut keyed = BTreeMap::<ContentEquivalenceKey, Vec<VersionId>>::new();
+    let mut groups = Vec::<Vec<VersionId>>::new();
+    for (version, candidate) in candidates.iter() {
+        if dispositions.contains_key(version) {
+            continue;
+        }
+        if let Some(key) = content_equivalence_key(candidate) {
+            keyed.entry(key).or_default().push(version.clone());
+        } else {
+            groups.push(vec![version.clone()]);
+        }
+    }
+    groups.extend(keyed.into_values());
+    canonicalize_content_groups(&mut groups, candidates);
+
+    // A class containing a direct member-to-member dependency would erase a charged dependency.
+    // Keep that complete compatibility bucket separate instead of weakening dependency semantics.
+    let proposed_state = content_equivalence_state(&groups, candidates);
+    let unsafe_representatives: BTreeSet<_> = groups
+        .iter()
+        .filter(|group| group.len() > 1)
+        .filter_map(|group| group.first())
+        .filter(|representative| {
+            group_has_internal_dependency(&proposed_state.members_for(representative), candidates)
+        })
+        .cloned()
+        .collect();
+    if !unsafe_representatives.is_empty() {
+        groups = groups
+            .into_iter()
+            .flat_map(|group| {
+                if group
+                    .first()
+                    .is_some_and(|representative| unsafe_representatives.contains(representative))
+                {
+                    group.into_iter().map(|version| vec![version]).collect()
+                } else {
+                    vec![group]
+                }
+            })
+            .collect();
+        canonicalize_content_groups(&mut groups, candidates);
+    }
+
+    let mut state = content_equivalence_state(&groups, candidates);
+    let mut grouped = apply_content_groups(candidates, &groups, &state)?;
+    if validate_dependencies(&grouped).is_err() {
+        // Contracting independently acyclic classes can expose a cycle between classes. The
+        // original graph was already validated, so a singleton fallback preserves prior behavior.
+        groups = candidates
+            .iter()
+            .filter(|(version, _candidate)| !dispositions.contains_key(*version))
+            .map(|(version, _candidate)| vec![version.clone()])
+            .collect();
+        canonicalize_content_groups(&mut groups, candidates);
+        state = content_equivalence_state(&groups, candidates);
+        grouped = apply_content_groups(candidates, &groups, &state)?;
+        validate_dependencies(&grouped)?;
+    }
+
+    for group in &groups {
+        let Some(representative) = group.first() else {
+            return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
+        };
+        let aggregate = grouped
+            .get(representative)
+            .cloned()
+            .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+        candidates.insert(representative.clone(), aggregate);
+        for non_representative in group.iter().skip(1) {
+            let candidate = candidates
+                .get(non_representative)
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+            dispositions.insert(
+                non_representative.clone(),
+                excluded(
+                    candidate,
+                    DispositionReason::BudgetDisplaced,
+                    BTreeSet::from([DispositionReason::BudgetDisplaced]),
+                ),
+            );
+        }
+    }
+    Ok(state)
+}
+
+fn content_equivalence_key(candidate: &CompilerCandidate) -> Option<ContentEquivalenceKey> {
+    // A redacted marker is not sufficient evidence that two disclosure decisions are equivalent.
+    if candidate
+        .representations
+        .iter()
+        .any(|representation| representation.kind == RepresentationKind::Redacted)
+    {
+        return None;
+    }
+    let claim = candidate.claim.as_ref().map(|claim| ClaimEquivalenceKey {
+        key: claim.key.clone(),
+        value_digest: claim.value_digest.clone(),
+        valid_at_unix_nanos: claim.valid_at.unix_nanos(),
+        observed_at_unix_nanos: claim.observed_at.unix_nanos(),
+        authority: claim.authority,
+        verified: claim.verified,
+    });
+    let representations = candidate
+        .representations
+        .iter()
+        .map(|representation| RepresentationEquivalenceKey {
+            kind: representation.kind,
+            content_digest: representation.content_digest.clone(),
+            token_count: representation.token_count,
+            loss: representation.loss,
+            transform_receipt: representation.transform_receipt.clone(),
+        })
+        .collect();
+    Some(ContentEquivalenceKey {
+        lane: candidate.lane,
+        policy_outcome: candidate.policy_outcome,
+        classification: candidate.classification,
+        instruction_authority: candidate.instruction_authority,
+        claim,
+        representations,
+    })
+}
+
+fn canonicalize_content_groups(
+    groups: &mut [Vec<VersionId>],
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+) {
+    for group in groups.iter_mut() {
+        group.sort_by(|left, right| candidate_order(&candidates[left], &candidates[right]));
+    }
+    groups.sort_by(|left, right| left.first().cmp(&right.first()));
+}
+
+fn content_equivalence_state(
+    groups: &[Vec<VersionId>],
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+) -> ContentEquivalenceState {
+    let mut state = ContentEquivalenceState::default();
+    for group in groups {
+        let Some(representative) = group.first() else {
+            continue;
+        };
+        let members: BTreeSet<_> = group.iter().cloned().collect();
+        let provenance = group
+            .iter()
+            .filter_map(|version| candidates.get(version))
+            .map(|candidate| candidate.provenance_digest.clone())
+            .collect();
+        for member in &members {
+            state
+                .representative_by_member
+                .insert(member.clone(), representative.clone());
+        }
+        state
+            .members_by_representative
+            .insert(representative.clone(), members);
+        state
+            .provenance_by_representative
+            .insert(representative.clone(), provenance);
+    }
+    state
+}
+
+fn group_has_internal_dependency(
+    members: &BTreeSet<VersionId>,
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+) -> bool {
+    members.iter().any(|member| {
+        candidates
+            .get(member)
+            .is_some_and(|candidate| !candidate.dependencies.is_disjoint(members))
+    })
+}
+
+fn apply_content_groups(
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+    groups: &[Vec<VersionId>],
+    state: &ContentEquivalenceState,
+) -> Result<BTreeMap<VersionId, CompilerCandidate>, CompilerError> {
+    let mut output = candidates.clone();
+    for group in groups {
+        let representative = group
+            .first()
+            .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+        let mut aggregate = candidates
+            .get(representative)
+            .cloned()
+            .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+        let mut dependencies = BTreeSet::new();
+        for member in group {
+            let candidate = candidates
+                .get(member)
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+            aggregate.mandatory |= candidate.mandatory;
+            aggregate
+                .requirement_indices
+                .extend(candidate.requirement_indices.iter().copied());
+            aggregate.entity_coverage_bits |= candidate.entity_coverage_bits;
+            dependencies.extend(candidate.dependencies.iter().cloned());
+        }
+        aggregate.dependencies = dependencies
+            .into_iter()
+            .map(|dependency| state.representative_for(&dependency))
+            .collect();
+        if aggregate.dependencies.contains(representative) {
+            return Err(CompilerError::new(CompilerErrorCode::InvalidDependency));
+        }
+        for non_representative in group.iter().skip(1) {
+            output.remove(non_representative);
+        }
+        output.insert(representative.clone(), aggregate);
+    }
+    for candidate in output.values_mut() {
+        candidate.dependencies = candidate
+            .dependencies
+            .iter()
+            .map(|dependency| state.representative_for(dependency))
+            .collect();
+    }
+    Ok(output)
 }
 
 fn claim_rank(candidate: &CompilerCandidate) -> (i128, i128, u16, bool) {
@@ -941,6 +1222,7 @@ fn seal(
     frozen: FrozenInputs,
     selected: BTreeMap<VersionId, Selection>,
     dispositions: BTreeMap<VersionId, DispositionRecord>,
+    equivalence: ContentEquivalenceState,
 ) -> Result<CompileOutput, CompilerError> {
     let lanes = contract
         .budget
@@ -1002,9 +1284,11 @@ fn seal(
         .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
 
     let mut blocks = Vec::with_capacity(selected.len());
-    for selection in selected.values() {
-        let provenance = closure_provenance(&selection.candidate, &selected)?;
+    let mut selected_block_ids = BTreeMap::new();
+    for (version, selection) in &selected {
+        let provenance = closure_provenance(&selection.candidate, &selected, &equivalence)?;
         let block_id = block_id(selection, &provenance)?;
+        selected_block_ids.insert(version.clone(), block_id.clone());
         blocks.push(ContextBlock {
             block_id,
             lane: selection.candidate.lane,
@@ -1042,27 +1326,48 @@ fn seal(
     bundle
         .validate()
         .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
+    let catalog_versions = bundle
+        .blocks
+        .iter()
+        .flat_map(|block| block.provenance.iter().cloned())
+        .collect();
     let invalidation = InvalidationRegistration {
-        catalog_versions: selected.keys().cloned().collect(),
+        catalog_versions,
         policy_digest: frozen.policy_digest,
         index_fingerprints: frozen.index_fingerprints,
         retrieval_plan_digest: frozen.retrieval_plan_digest,
         compiler_profile_digest: frozen.compiler_profile_digest,
     };
+    let content_equivalence = equivalence
+        .members_by_representative
+        .iter()
+        .map(|(representative, members)| ContentEquivalenceDiagnostic {
+            representative_version: representative.clone(),
+            member_versions: members.clone(),
+            provenance_digests: equivalence
+                .provenance_by_representative
+                .get(representative)
+                .cloned()
+                .unwrap_or_default(),
+            selected_block_id: selected_block_ids.get(representative).cloned(),
+        })
+        .collect();
     Ok(CompileOutput {
         normalized_contract: contract,
         plan,
         manifest,
         bundle,
         invalidation,
+        content_equivalence,
     })
 }
 
 fn closure_provenance(
     candidate: &CompilerCandidate,
     selected: &BTreeMap<VersionId, Selection>,
+    equivalence: &ContentEquivalenceState,
 ) -> Result<Vec<VersionId>, CompilerError> {
-    let mut provenance = BTreeSet::from([candidate.version_id.clone()]);
+    let mut provenance = equivalence.members_for(&candidate.version_id);
     let mut frontier: Vec<_> = candidate.dependencies.iter().cloned().collect();
     let mut visits = 0_usize;
     while let Some(version) = frontier.pop() {
@@ -1072,10 +1377,15 @@ fn closure_provenance(
         if visits > MAX_DEPENDENCY_VISITS {
             return Err(CompilerError::new(CompilerErrorCode::LimitExceeded));
         }
-        if provenance.insert(version.clone()) {
-            let dependency = selected
-                .get(&version)
-                .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidDependency))?;
+        let dependency = selected
+            .get(&version)
+            .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidDependency))?;
+        let dependency_members = equivalence.members_for(&version);
+        let newly_observed = dependency_members
+            .iter()
+            .any(|member| !provenance.contains(member));
+        provenance.extend(dependency_members);
+        if newly_observed {
             frontier.extend(dependency.candidate.dependencies.iter().cloned());
         }
     }
@@ -1112,7 +1422,9 @@ fn contract_digest(contract: &ContextContract) -> Result<ContentDigest, Compiler
 
 fn profile_digest(profile: &CompilerProfile) -> Result<ContentDigest, CompilerError> {
     let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-COMPILER-PROFILE\0v1\0");
+    // v2 binds the Honey 0.9.1 content-equivalence stage so pre-0.9.1 artifacts cannot be reused
+    // under the same numeric tuning values.
+    hasher.update(b"CIGAR-COMPILER-PROFILE\0v2\0");
     hasher.update(profile.profile_id.as_bytes());
     for (lane, value) in &profile.minimum_items {
         hasher.update(format!("{lane:?}"));

@@ -3,19 +3,19 @@
   "id": "cargo-crate-v1",
   "formats": ["tar.gz"],
   "allow": [
-    "cigar-sdk-0.9.0-honey.1/Cargo.toml", "cigar-sdk-0.9.0-honey.1/Cargo.toml.orig", "cigar-sdk-0.9.0-honey.1/Cargo.lock", "cigar-sdk-0.9.0-honey.1/README.md",
-    "cigar-sdk-0.9.0-honey.1/.cargo_vcs_info.json", "cigar-sdk-0.9.0-honey.1/LICENSE", "cigar-sdk-0.9.0-honey.1/NOTICE", "cigar-sdk-0.9.0-honey.1/release.json",
-    "cigar-sdk-0.9.0-honey.1/examples/quickstart.rs", "cigar-sdk-0.9.0-honey.1/examples/agent_a_coordinator.rs",
-    "cigar-sdk-0.9.0-honey.1/fixtures/semantic-bundle-v1.json", "cigar-sdk-0.9.0-honey.1/src/**"
+    "cigar-sdk-0.9.1-honey.1/Cargo.toml", "cigar-sdk-0.9.1-honey.1/Cargo.toml.orig", "cigar-sdk-0.9.1-honey.1/Cargo.lock", "cigar-sdk-0.9.1-honey.1/README.md",
+    "cigar-sdk-0.9.1-honey.1/.cargo_vcs_info.json", "cigar-sdk-0.9.1-honey.1/LICENSE", "cigar-sdk-0.9.1-honey.1/NOTICE", "cigar-sdk-0.9.1-honey.1/release.json",
+    "cigar-sdk-0.9.1-honey.1/examples/quickstart.rs", "cigar-sdk-0.9.1-honey.1/examples/agent_a_coordinator.rs",
+    "cigar-sdk-0.9.1-honey.1/fixtures/semantic-bundle-v1.json", "cigar-sdk-0.9.1-honey.1/src/**"
   ],
   "deny": ["**/.git/**", "**/.env*", "**/*.key", "**/*.pem", "**/target/**", "**/tests/**", "**/*.profraw"],
   "required": [
-    "cigar-sdk-0.9.0-honey.1/Cargo.toml", "cigar-sdk-0.9.0-honey.1/Cargo.toml.orig", "cigar-sdk-0.9.0-honey.1/Cargo.lock", "cigar-sdk-0.9.0-honey.1/README.md",
-    "cigar-sdk-0.9.0-honey.1/.cargo_vcs_info.json", "cigar-sdk-0.9.0-honey.1/LICENSE", "cigar-sdk-0.9.0-honey.1/NOTICE", "cigar-sdk-0.9.0-honey.1/release.json",
-    "cigar-sdk-0.9.0-honey.1/examples/quickstart.rs", "cigar-sdk-0.9.0-honey.1/examples/agent_a_coordinator.rs",
-    "cigar-sdk-0.9.0-honey.1/fixtures/semantic-bundle-v1.json", "cigar-sdk-0.9.0-honey.1/src/lib.rs"
+    "cigar-sdk-0.9.1-honey.1/Cargo.toml", "cigar-sdk-0.9.1-honey.1/Cargo.toml.orig", "cigar-sdk-0.9.1-honey.1/Cargo.lock", "cigar-sdk-0.9.1-honey.1/README.md",
+    "cigar-sdk-0.9.1-honey.1/.cargo_vcs_info.json", "cigar-sdk-0.9.1-honey.1/LICENSE", "cigar-sdk-0.9.1-honey.1/NOTICE", "cigar-sdk-0.9.1-honey.1/release.json",
+    "cigar-sdk-0.9.1-honey.1/examples/quickstart.rs", "cigar-sdk-0.9.1-honey.1/examples/agent_a_coordinator.rs",
+    "cigar-sdk-0.9.1-honey.1/fixtures/semantic-bundle-v1.json", "cigar-sdk-0.9.1-honey.1/src/lib.rs"
   ],
-  "required_patterns": ["cigar-sdk-0.9.0-honey.1/src/*.rs"],
+  "required_patterns": ["cigar-sdk-0.9.1-honey.1/src/*.rs"],
   "symlinks": "forbid",
   "line_endings": "lf",
   "modes": ["0644"],
@@ -24,6 +24,6 @@
   "max_total_bytes": 67108864,
   "content_scan": true,
   "content_scan_exemptions": [],
-  "version_binding": {"path_pattern": "cigar-sdk-0.9.0-honey.1/release.json", "format": "json", "json_pointer": "/version"},
-  "abi_binding": {"path_pattern": "cigar-sdk-0.9.0-honey.1/release.json", "format": "json", "json_pointer": "/context_abi"}
+  "version_binding": {"path_pattern": "cigar-sdk-0.9.1-honey.1/release.json", "format": "json", "json_pointer": "/version"},
+  "abi_binding": {"path_pattern": "cigar-sdk-0.9.1-honey.1/release.json", "format": "json", "json_pointer": "/context_abi"}
 }

@@ -1,7 +1,7 @@
 # Honey Python SDK
 
-Honey ships `cigar_sdk-0.9.0.dev1-py3-none-any.whl` and
-`cigar_sdk-0.9.0.dev1.tar.gz`. Install an exact GitHub attachment into a new virtual environment;
+Honey ships `cigar_sdk-0.9.1.dev1-py3-none-any.whl` and
+`cigar_sdk-0.9.1.dev1.tar.gz`. Install an exact GitHub attachment into a new virtual environment;
 Honey does not publish to PyPI.
 
 ## Offline installation
@@ -14,7 +14,7 @@ registry fallback.
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --no-index ./cigar_sdk-0.9.0.dev1-py3-none-any.whl
+python -m pip install --no-index ./cigar_sdk-0.9.1.dev1-py3-none-any.whl
 python -c 'import cigar_sdk; print(cigar_sdk.__version__)'
 ```
 

@@ -1,4 +1,4 @@
-.TH CIGAR 1 "2026-07-12" "CIGAR 0.9.0-honey.1" "User Commands"
+.TH CIGAR 1 "2026-07-12" "CIGAR 0.9.1-honey.1" "User Commands"
 .SH NAME
 cigar \- deterministic context, coordination, effect, and replay client
 .SH SYNOPSIS
@@ -85,6 +85,11 @@ Run the bounded local security checks supported by
 Run the complete content-integrity and projection checks supported by
 .BR doctor .
 .TP
+.B --force-full
+Ignore an existing signed v5 verified-prefix sidecar and authenticate every
+retained checkpoint and delta again. Valid only with
+.BR "integrity deep" .
+.TP
 .BR --help ,
 .B -h
 Show command help.
@@ -142,6 +147,65 @@ effect checkpoint, or restore it to an explicit empty target only when that
 checkpoint still equals current external monotonic truth.
 Create and verify take one archive path; restore takes the archive and target
 paths.
+.TP
+.B migration preflight
+.I "v4-source.sqlite3 verified-backup new-v5-target.sqlite3"
+Re-verify the signed format-two backup and authenticate every retained v4
+revision, latest roots, source byte identity, external revision anchor, target
+path separation, owner-only modes, and conservative free space. This local
+offline preview never creates or mutates the target or source.
+.TP
+.B migration run
+.I "v4-source.sqlite3 verified-backup new-v5-target.sqlite3 --yes"
+Repeat preflight under an exclusive runtime lock, construct and deeply verify
+the distinct v5 target, retain the unchanged v4 source, and publish a signed
+.I .cigar-migration-receipt.json
+beside the target. This command does not activate the target.
+.TP
+.B migration activate
+.I "v4-source.sqlite3 verified-backup v5-target.sqlite3 signed-receipt.json active-store.json --yes"
+Reacquire exclusive source and target runtime locks; reauthenticate the
+retained v4 source, signed backup, signed migration receipt, v5 database,
+revision anchor, and complete v5 chain; then atomically publish an owner-only
+checksum-protected active-store descriptor. The command fsyncs the descriptor
+and parent directory,
+reopens the selected v5 target read-only through the published descriptor, and
+never deletes the v4 source or backup.
+.TP
+.B migration cleanup
+.I "v4-source.sqlite3 verified-backup incomplete-v5-target.sqlite3 active-store.json --yes"
+Explicitly remove only a distinct interrupted target and its closed set of
+SQLite, runtime-lock, and revision-anchor sidecars. Cleanup reauthenticates the
+retained source and signed backup under exclusive locks, rejects any target
+with a signed receipt or active descriptor, and verifies the source remains
+byte-identical after target-only deletion.
+.TP
+.B compaction preview
+.I "v5-source.sqlite3 migration-receipt.json new-target.sqlite3 active-store.json new-preview.json --yes"
+Create an expiring signed offline preview bound to exact source bytes, active
+descriptor generation, migration backup proof, head, policy, pins, candidate
+checkpoint/delta range, retained range, and estimated reclaimable bytes.
+.TP
+.B compaction execute
+.I "signed-preview.json --yes"
+Reverify every preview binding under the exclusive source lock, copy into the
+exact distinct target, remove only the authorized prefix, verify every retained
+revision and root, publish a separate signed compaction receipt, and atomically
+activate the compacted target. The pre-compaction database remains retained.
+.TP
+.B compaction status
+.I active-store.json
+Authenticate and report the current owner-only active descriptor generation,
+checksum, and selected database without running maintenance.
+.TP
+.B integrity deep
+.I "v5-database.sqlite3 [--force-full] --yes"
+Run SQLite integrity, authenticate every retained checkpoint/delta not already
+covered by an unchanged trusted prefix, verify catalog history and the current
+projection, and atomically publish a purpose-signed owner-only verified-prefix
+sidecar. The prefix is invalidated by database identity, retained origin,
+chain, policy, verifier-version, or signature drift. With \fB--force-full\fR
+the entire retained range is checked and a corrupt/stale prefix can be replaced.
 .TP
 .B gc plan|run
 Plan or execute bounded, repository-owned encrypted-blob mark-and-sweep.

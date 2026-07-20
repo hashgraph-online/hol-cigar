@@ -1,13 +1,14 @@
 //! Deterministic bounded expansion of semantic requirements into retrieval stages.
 
 use crate::{
-    AuthorizedPartition, QueryVectorProcessor, RetrievalConsistency, RetrievalError,
-    RetrievalErrorCode, RetrievalRequest, RetrievalStage,
+    AuthorizedPartition, CandidateBounds, CandidateSelectionProfile, QueryVectorProcessor,
+    RetrievalCapacity, RetrievalConsistency, RetrievalError, RetrievalErrorCode, RetrievalRequest,
+    RetrievalStage,
 };
-use cigar_protocol::{ContentDigest, ContextRequirement, RequirementSelector};
+use cigar_protocol::{AtomKind, ContentDigest, ContextRequirement, LaneKind, RequirementSelector};
 use cigar_store::StoreRevision;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::time::Duration;
 
@@ -33,6 +34,8 @@ pub struct QueryPlannerProfile {
     pub lexical_timeout: Duration,
     /// Timeout assigned to every optional vector stage.
     pub vector_timeout: Duration,
+    /// Post-governance compiler-intake bounds and deterministic diversity policy.
+    pub candidate_selection: CandidateSelectionProfile,
 }
 
 impl Default for QueryPlannerProfile {
@@ -46,6 +49,7 @@ impl Default for QueryPlannerProfile {
             metadata_timeout: Duration::from_millis(500),
             lexical_timeout: Duration::from_millis(750),
             vector_timeout: Duration::from_millis(1_000),
+            candidate_selection: CandidateSelectionProfile::default(),
         }
     }
 }
@@ -88,12 +92,23 @@ pub struct QueryPlan {
     pub plan_fingerprint: ContentDigest,
     /// Exact catalog revision required by the plan.
     pub required_revision: StoreRevision,
+    /// Fully derived post-governance candidate bounds bound into `plan_fingerprint`.
+    pub candidate_bounds: CandidateBounds,
 }
 
 /// Stateless deterministic query planner.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct QueryPlanner {
     profile: QueryPlannerProfile,
+}
+
+struct PlanInputs<'a> {
+    partition: &'a AuthorizedPartition,
+    required_revision: StoreRevision,
+    consistency: RetrievalConsistency,
+    vector_available: bool,
+    vector_processor: Option<&'a dyn QueryVectorProcessor>,
+    capacity: Option<&'a RetrievalCapacity>,
 }
 
 impl QueryPlanner {
@@ -118,6 +133,7 @@ impl QueryPlanner {
         {
             return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
         }
+        profile.candidate_selection.validate()?;
         Ok(Self { profile })
     }
 
@@ -132,11 +148,14 @@ impl QueryPlanner {
     ) -> Result<QueryPlan, RetrievalError> {
         self.plan_internal(
             requirements,
-            partition,
-            required_revision,
-            consistency,
-            vector_available,
-            None,
+            PlanInputs {
+                partition,
+                required_revision,
+                consistency,
+                vector_available,
+                vector_processor: None,
+                capacity: None,
+            },
         )
     }
 
@@ -154,24 +173,84 @@ impl QueryPlanner {
     ) -> Result<QueryPlan, RetrievalError> {
         self.plan_internal(
             requirements,
-            partition,
-            required_revision,
-            consistency,
-            vector_processor.is_some(),
-            vector_processor,
+            PlanInputs {
+                partition,
+                required_revision,
+                consistency,
+                vector_available: vector_processor.is_some(),
+                vector_processor,
+                capacity: None,
+            },
+        )
+    }
+
+    /// Expands requirements with token/item-derived optional allowances and no vector processor.
+    pub fn plan_bounded(
+        &self,
+        requirements: &[ContextRequirement],
+        capacity: &RetrievalCapacity,
+        partition: &AuthorizedPartition,
+        required_revision: StoreRevision,
+        consistency: RetrievalConsistency,
+        vector_available: bool,
+    ) -> Result<QueryPlan, RetrievalError> {
+        self.plan_internal(
+            requirements,
+            PlanInputs {
+                partition,
+                required_revision,
+                consistency,
+                vector_available,
+                vector_processor: None,
+                capacity: Some(capacity),
+            },
+        )
+    }
+
+    /// Expands requirements with token/item-derived allowances and an optional approved vector.
+    pub fn plan_bounded_with_vector_processor(
+        &self,
+        requirements: &[ContextRequirement],
+        capacity: &RetrievalCapacity,
+        partition: &AuthorizedPartition,
+        required_revision: StoreRevision,
+        consistency: RetrievalConsistency,
+        vector_processor: Option<&dyn QueryVectorProcessor>,
+    ) -> Result<QueryPlan, RetrievalError> {
+        self.plan_internal(
+            requirements,
+            PlanInputs {
+                partition,
+                required_revision,
+                consistency,
+                vector_available: vector_processor.is_some(),
+                vector_processor,
+                capacity: Some(capacity),
+            },
         )
     }
 
     fn plan_internal(
         &self,
         requirements: &[ContextRequirement],
-        partition: &AuthorizedPartition,
-        required_revision: StoreRevision,
-        consistency: RetrievalConsistency,
-        vector_available: bool,
-        vector_processor: Option<&dyn QueryVectorProcessor>,
+        inputs: PlanInputs<'_>,
     ) -> Result<QueryPlan, RetrievalError> {
+        let PlanInputs {
+            partition,
+            required_revision,
+            consistency,
+            vector_available,
+            vector_processor,
+            capacity,
+        } = inputs;
         partition.validate()?;
+        self.profile.candidate_selection.validate()?;
+        let candidate_bounds = capacity.map_or_else(
+            || legacy_candidate_bounds(requirements, self.profile),
+            |capacity| {
+                derive_candidate_bounds(requirements, capacity, self.profile.candidate_selection)
+            },
+        )?;
         let mut stages = Vec::new();
         for (requirement_index, requirement) in requirements.iter().enumerate() {
             match &requirement.selector {
@@ -195,7 +274,15 @@ impl QueryPlanner {
                 }
                 RequirementSelector::Query(query) => {
                     let terms = normalize_query(query)?;
-                    for (stage, cap, timeout) in [
+                    let available_channels =
+                        2_usize + usize::from(vector_available && partition.vector_allowed());
+                    let requirement_limit = candidate_bounds
+                        .requirement_limits
+                        .get(&requirement_index)
+                        .copied()
+                        .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::InvalidMetadata))?;
+                    let mut channel_index = 0_usize;
+                    for (stage, configured_cap, timeout) in [
                         (
                             RetrievalStage::Metadata,
                             self.profile.metadata_cap,
@@ -207,6 +294,28 @@ impl QueryPlanner {
                             self.profile.lexical_timeout,
                         ),
                     ] {
+                        let cap = if capacity.is_some() {
+                            let optional = distributed_channel_limit(
+                                requirement_limit,
+                                available_channels,
+                                channel_index,
+                            )?
+                            .min(configured_cap)
+                            .min(self.profile.candidate_selection.maximum_per_stage);
+                            optional
+                                .checked_add(
+                                    self.profile
+                                        .candidate_selection
+                                        .maximum_protected_per_requirement,
+                                )
+                                .ok_or_else(|| {
+                                    RetrievalError::new(RetrievalErrorCode::LimitExceeded)
+                                })?
+                                .min(configured_cap)
+                        } else {
+                            configured_cap
+                        };
+                        channel_index = channel_index.saturating_add(1);
                         let mut request = base_request(
                             stage,
                             partition,
@@ -225,12 +334,33 @@ impl QueryPlanner {
                         )?;
                     }
                     if vector_available && partition.vector_allowed() {
+                        let vector_cap = if capacity.is_some() {
+                            let optional = distributed_channel_limit(
+                                requirement_limit,
+                                available_channels,
+                                channel_index,
+                            )?
+                            .min(self.profile.vector_cap)
+                            .min(self.profile.candidate_selection.maximum_per_stage);
+                            optional
+                                .checked_add(
+                                    self.profile
+                                        .candidate_selection
+                                        .maximum_protected_per_requirement,
+                                )
+                                .ok_or_else(|| {
+                                    RetrievalError::new(RetrievalErrorCode::LimitExceeded)
+                                })?
+                                .min(self.profile.vector_cap)
+                        } else {
+                            self.profile.vector_cap
+                        };
                         let mut request = base_request(
                             RetrievalStage::Vector,
                             partition,
                             required_revision,
                             consistency,
-                            self.profile.vector_cap,
+                            vector_cap,
                             true,
                         );
                         request.terms = terms;
@@ -252,12 +382,143 @@ impl QueryPlanner {
                 return Err(RetrievalError::new(RetrievalErrorCode::LimitExceeded));
             }
         }
-        let plan_fingerprint = plan_fingerprint(&stages, required_revision)?;
+        let plan_fingerprint = plan_fingerprint(&stages, required_revision, &candidate_bounds)?;
         Ok(QueryPlan {
             stages,
             plan_fingerprint,
             required_revision,
+            candidate_bounds,
         })
+    }
+}
+
+fn distributed_channel_limit(
+    requirement_limit: usize,
+    channel_count: usize,
+    channel_index: usize,
+) -> Result<usize, RetrievalError> {
+    if channel_count == 0 || channel_index >= channel_count || requirement_limit < channel_count {
+        return Err(RetrievalError::new(RetrievalErrorCode::LimitExceeded));
+    }
+    Ok(requirement_limit / channel_count
+        + usize::from(channel_index < requirement_limit % channel_count))
+}
+
+fn derive_candidate_bounds(
+    requirements: &[ContextRequirement],
+    capacity: &RetrievalCapacity,
+    profile: CandidateSelectionProfile,
+) -> Result<CandidateBounds, RetrievalError> {
+    profile.validate()?;
+    let mut query_requirements_by_lane = BTreeMap::<LaneKind, Vec<usize>>::new();
+    let mut requirement_limits = BTreeMap::new();
+    for (index, requirement) in requirements.iter().enumerate() {
+        let lane = lane_for_atom_kind(requirement.semantic_type);
+        if !capacity.lane_input_tokens.contains_key(&lane) {
+            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
+        }
+        if matches!(requirement.selector, RequirementSelector::Exact(_)) {
+            requirement_limits.insert(index, profile.maximum_protected_per_requirement);
+        } else {
+            query_requirements_by_lane
+                .entry(lane)
+                .or_default()
+                .push(index);
+        }
+    }
+    let mut lane_limits = BTreeMap::new();
+    for (lane, tokens) in &capacity.lane_input_tokens {
+        let token_items = usize::try_from(*tokens / profile.token_to_item_floor)
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?
+            .max(1);
+        let maximum = capacity
+            .maximum_items
+            .get(lane)
+            .map_or(token_items, |maximum| {
+                token_items.min(usize::from(*maximum))
+            });
+        let possible_items = maximum.max(
+            capacity
+                .minimum_items
+                .get(lane)
+                .map_or(0, |minimum| usize::from(*minimum)),
+        );
+        let lane_limit = possible_items
+            .checked_mul(profile.oversubscription_factor)
+            .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?
+            .clamp(profile.minimum_per_requirement, profile.maximum_per_lane);
+        lane_limits.insert(*lane, lane_limit);
+        let query_indices = query_requirements_by_lane
+            .get(lane)
+            .map_or(&[][..], Vec::as_slice);
+        if query_indices.is_empty() {
+            continue;
+        }
+        let minimum_total = query_indices
+            .len()
+            .checked_mul(profile.minimum_per_requirement)
+            .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?;
+        if minimum_total > profile.maximum_per_lane {
+            return Err(RetrievalError::new(RetrievalErrorCode::LimitExceeded));
+        }
+        let distributed_total = lane_limit.max(minimum_total);
+        for (offset, requirement_index) in query_indices.iter().enumerate() {
+            let allowance = (distributed_total / query_indices.len()
+                + usize::from(offset < distributed_total % query_indices.len()))
+            .clamp(
+                profile.minimum_per_requirement,
+                profile.maximum_per_requirement,
+            );
+            requirement_limits.insert(*requirement_index, allowance);
+        }
+    }
+    if requirement_limits.len() != requirements.len() {
+        return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
+    }
+    Ok(CandidateBounds {
+        requirement_limits,
+        lane_limits,
+        profile,
+    })
+}
+
+fn legacy_candidate_bounds(
+    requirements: &[ContextRequirement],
+    planner: QueryPlannerProfile,
+) -> Result<CandidateBounds, RetrievalError> {
+    planner.candidate_selection.validate()?;
+    let mut requirement_limits = BTreeMap::new();
+    let mut lane_limits = BTreeMap::new();
+    for (index, requirement) in requirements.iter().enumerate() {
+        let limit = match requirement.selector {
+            RequirementSelector::Exact(_) => planner.exact_cap,
+            RequirementSelector::Query(_) => planner
+                .metadata_cap
+                .checked_add(planner.lexical_cap)
+                .and_then(|value| value.checked_add(planner.vector_cap))
+                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?,
+        };
+        requirement_limits.insert(index, limit);
+        lane_limits.insert(
+            lane_for_atom_kind(requirement.semantic_type),
+            planner.candidate_selection.maximum_per_lane,
+        );
+    }
+    Ok(CandidateBounds {
+        requirement_limits,
+        lane_limits,
+        profile: planner.candidate_selection,
+    })
+}
+
+const fn lane_for_atom_kind(kind: AtomKind) -> LaneKind {
+    match kind {
+        AtomKind::Instruction | AtomKind::Policy => LaneKind::Rules,
+        AtomKind::Decision | AtomKind::Conversation => LaneKind::History,
+        AtomKind::ToolResult | AtomKind::Schema => LaneKind::Tools,
+        AtomKind::SourceCode | AtomKind::Documentation | AtomKind::Test | AtomKind::Artifact => {
+            LaneKind::Evidence
+        }
     }
 }
 
@@ -417,9 +678,10 @@ fn update_fingerprint_field(hasher: &mut Sha256, value: &[u8]) -> Result<(), Ret
 fn plan_fingerprint(
     stages: &[PlannedStage],
     revision: StoreRevision,
+    bounds: &CandidateBounds,
 ) -> Result<ContentDigest, RetrievalError> {
     let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-RETRIEVAL-PLAN\0v1\0");
+    hasher.update(b"CIGAR-RETRIEVAL-PLAN\0v2\0");
     hasher.update(revision.0.to_be_bytes());
     hasher.update(
         u64::try_from(stages.len())
@@ -429,7 +691,60 @@ fn plan_fingerprint(
     for stage in stages {
         update_fingerprint_field(&mut hasher, stage.query_fingerprint.as_str().as_bytes())?;
     }
+    for (requirement, limit) in &bounds.requirement_limits {
+        update_usize(&mut hasher, *requirement)?;
+        update_usize(&mut hasher, *limit)?;
+    }
+    for (lane, limit) in &bounds.lane_limits {
+        hasher.update([lane_code(*lane)]);
+        update_usize(&mut hasher, *limit)?;
+    }
+    let profile = bounds.profile;
+    for value in [
+        profile.minimum_per_requirement,
+        profile.maximum_per_requirement,
+        profile.oversubscription_factor,
+        profile.maximum_per_lane,
+        profile.maximum_per_stage,
+        profile.maximum_protected_per_requirement,
+        profile.maximum_protected_per_request,
+        profile.maximum_per_source,
+        profile.maximum_per_lineage,
+        profile.maximum_per_content_family,
+        profile.maximum_raw_candidates,
+        profile.absolute_compiler_candidates,
+    ] {
+        update_usize(&mut hasher, value)?;
+    }
+    hasher.update(profile.token_to_item_floor.to_be_bytes());
+    for penalty in [
+        profile.same_source_penalty,
+        profile.same_lineage_penalty,
+        profile.same_content_penalty,
+        profile.same_kind_penalty,
+    ] {
+        hasher.update(penalty.to_be_bytes());
+    }
     finish_digest(hasher)
+}
+
+fn update_usize(hasher: &mut Sha256, value: usize) -> Result<(), RetrievalError> {
+    hasher.update(
+        u64::try_from(value)
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?
+            .to_be_bytes(),
+    );
+    Ok(())
+}
+
+const fn lane_code(lane: LaneKind) -> u8 {
+    match lane {
+        LaneKind::Rules => 0,
+        LaneKind::Task => 1,
+        LaneKind::Evidence => 2,
+        LaneKind::History => 3,
+        LaneKind::Tools => 4,
+    }
 }
 
 fn finish_digest(hasher: Sha256) -> Result<ContentDigest, RetrievalError> {

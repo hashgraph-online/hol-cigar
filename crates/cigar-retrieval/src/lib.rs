@@ -1,5 +1,6 @@
 //! Exact, lexical, temporal, graph, and optional vector candidate generation.
 
+mod bounded;
 mod contract;
 #[cfg(target_os = "macos")]
 mod durable_vector;
@@ -10,6 +11,10 @@ mod planner;
 mod vector;
 mod worker;
 
+pub use bounded::{
+    BoundedCandidate, BoundedCandidateCounts, BoundedRetrievalResult,
+    RequirementAwareCandidateReducer,
+};
 pub use contract::*;
 #[cfg(target_os = "macos")]
 pub use durable_vector::{

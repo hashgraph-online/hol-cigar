@@ -2,7 +2,8 @@
 
 The complete generated command list is in `crates/cigar-cli/assets/cigar-help.txt` and the packaged
 manual page. Core groups are source, context, project, focus, space, handoff, effect, replay, policy,
-backup, garbage collection, diagnostics, daemon/MCP service, plugin, and release verification.
+backup, migration, revision compaction, integrity, garbage collection, diagnostics, daemon/MCP
+service, plugin, and release verification.
 
 Machine output is one `cigar.cli.output.v1` JSON object on stdout. Progress is restricted to an
 interactive stderr and disabled by `--quiet`. Use `--authorization-file`; credentials in arguments,
@@ -35,6 +36,14 @@ database. `backup restore <archive> <empty-target> --yes` accepts only a nonexis
 empty target and requires the archived checkpoint to equal the current external checkpoint before
 holding its lock through restore. Older/newer/substituted checkpoint state and legacy format-one
 archives fail closed; restore never changes the live checkpoint and does not activate the target.
+
+SQLite v5 maintenance is local and explicit. Migration constructs and activates only a verified
+distinct target; revision compaction uses a separate signed preview/receipt and retains its source.
+`cigar integrity deep <v5-database.sqlite3> --yes` checks retained history and writes a signed
+verified-prefix sidecar so later checks can authenticate only a new suffix. `--force-full` ignores
+that prefix and verifies every retained checkpoint and delta again. Ordinary readiness never uses
+the full-history path: it authenticates the latest checkpoint and its bounded delta suffix, then
+verifies or recovers only the current projection and revision anchor.
 
 Local garbage collection is a signed two-step workflow. `cigar gc plan <new-plan.json> --yes`
 creates an owner-private no-clobber document binding the current SQLite revision, exact ordered

@@ -1,8 +1,8 @@
 {
   "schema_version": "cigar.docs-site.v1",
-  "product_version": "0.9.0-honey.1",
+  "product_version": "0.9.1-honey.1",
   "context_abi": "cigar.context.v1",
-  "version_selectors": ["0.9.0-honey.1"],
+  "version_selectors": ["0.9.1-honey.1"],
   "include": [
     "docs/README.md", "docs/site/**", "docs/guides/**", "docs/reference/**", "docs/operations/**",
     "docs/runbooks/**", "docs/troubleshooting/**", "docs/demos/**", "docs/release/**"
@@ -27,6 +27,7 @@
     "docs/guides/honey-typescript.md", "docs/guides/honey-rust.md",
     "docs/guides/honey-mcp-claude.md", "docs/guides/honey-effects-replay.md",
     "docs/guides/honey-troubleshooting.md", "docs/guides/honey-security-limitations.md",
+    "docs/guides/honey-storage-v5.md",
     "docs/reference/public-api.md",
     "docs/reference/cli.md", "docs/reference/configuration-errors-metrics-extensions.md",
     "docs/operations/index.md", "docs/operations/security-hardening.md", "docs/operations/daemon-lifecycle.md",

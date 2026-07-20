@@ -66,7 +66,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
     def plugin_files() -> dict[str, bytes]:
         return {
             ".claude-plugin/plugin.json": qualifier.canonical_json_bytes(
-                {"name": "cigar", "version": "0.9.0-honey.1"}
+                {"name": "cigar", "version": "0.9.1-honey.1"}
             ),
             ".mcp.json": qualifier.canonical_json_bytes(
                 {
@@ -143,7 +143,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
         )
         selected = qualifier._qualification_product(honey)
         self.assertTrue(selected.honey)
-        self.assertEqual(selected.version, "0.9.0-honey.1")
+        self.assertEqual(selected.version, "0.9.1-honey.1")
         self.assertEqual(
             selected.runtime_artifact_id, qualifier.HONEY_RUNTIME_ARTIFACT_ID
         )
@@ -164,7 +164,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             qualifier.DEVELOPMENT_RUNTIME_ARTIFACT_ID,
         )
 
-        stale_honey = {**honey, "tag": "v0.9.0-honey.2"}
+        stale_honey = {**honey, "tag": "v0.9.1-honey.2"}
         with self.assertRaisesRegex(ReleaseError, "development or Honey"):
             qualifier._qualification_product(stale_honey)
 
@@ -264,7 +264,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
         document = {
             "metadata": {
                 "artifact_id": qualifier.PLUGIN_ARTIFACT_ID,
-                "product_version": "0.9.0-honey.1",
+                "product_version": "0.9.1-honey.1",
                 "context_abi": "cigar.context.v1",
                 "source_date_epoch": 1_700_000_000,
                 "source": {
@@ -281,7 +281,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             qualifier._metadata(
                 document,
                 qualifier.PLUGIN_ARTIFACT_ID,
-                "0.9.0-honey.1",
+                "0.9.1-honey.1",
                 "cigar.context.v1",
                 1_700_000_000,
             ),
@@ -293,7 +293,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             qualifier._metadata(
                 changed,
                 qualifier.PLUGIN_ARTIFACT_ID,
-                "0.9.0-honey.1",
+                "0.9.1-honey.1",
                 "cigar.context.v1",
                 1_700_000_000,
             )
@@ -316,13 +316,13 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
         plugin = self.directory("plugin")
         self.materialize(plugin, files)
         public = qualifier._validate_plugin_authority(
-            files, "0.9.0-honey.1", "cigar.context.v1"
+            files, "0.9.1-honey.1", "cigar.context.v1"
         )
         authority_payload = qualifier.canonical_json_bytes(
             {
                 "schema_version": qualifier.FIXTURE_PROTOCOL_SCHEMA,
                 "claude_version": qualifier.CLAUDE_VERSION,
-                "product_version": "0.9.0-honey.1",
+                "product_version": "0.9.1-honey.1",
                 "context_abi": "cigar.context.v1",
                 "public_files": public["public_files"],
             }
@@ -452,7 +452,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
     def test_plugin_authority_rejects_version_abi_mcp_and_hook_drift(self) -> None:
         files = self.plugin_files()
         authority = qualifier._validate_plugin_authority(
-            files, "0.9.0-honey.1", "cigar.context.v1"
+            files, "0.9.1-honey.1", "cigar.context.v1"
         )
         self.assertEqual(authority["registered_hook_count"], 18)
         self.assertEqual(authority["mcp_tool_count"], 10)
@@ -488,7 +488,7 @@ class ClaudePluginInstalledQualifierTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 with self.assertRaisesRegex(ReleaseError, message):
                     qualifier._validate_plugin_authority(
-                        changed, "0.9.0-honey.1", "cigar.context.v1"
+                        changed, "0.9.1-honey.1", "cigar.context.v1"
                     )
 
     def test_installed_manifest_binds_exact_private_tree_and_rejects_links(

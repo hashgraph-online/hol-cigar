@@ -1,13 +1,13 @@
 {
   "schema_version": "cigar.product-version.v1",
   "product": "cigar",
-  "version": "0.9.0-honey.1",
-  "target_release_version": "0.9.0",
+  "version": "0.9.1-honey.1",
+  "target_release_version": "0.9.1",
   "context_abi": "cigar.context.v1",
   "release_state": "developer-preview",
   "channel": "honey",
   "prerelease": true,
   "published": false,
   "supported": false,
-  "tag": "v0.9.0-honey.1"
+  "tag": "v0.9.1-honey.1"
 }

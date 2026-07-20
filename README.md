@@ -9,7 +9,7 @@ Governed context, bounded agent authority, and replayable evidence for AI agent 
 [Security](#security)
 
 > [!IMPORTANT]
-> The current product identity is **CIGAR Honey v0.9** (`0.9.0-honey.1`), a local Apple-silicon
+> The current product identity is **CIGAR Honey v0.9.1** (`0.9.1-honey.1`), a local Apple-silicon
 > developer preview. It is not yet published or supported, and it is not production-qualified,
 > signed, or notarized. See [current status](#current-status) before evaluating it.
 
@@ -131,7 +131,7 @@ The checked-in product authority currently declares:
 | Property | Value |
 |---|---|
 | Marketing name | CIGAR Honey v0.9 |
-| Version | `0.9.0-honey.1` |
+| Version | `0.9.1-honey.1` |
 | Context ABI | `cigar.context.v1` |
 | Release state | `developer-preview` |
 | Target | `aarch64-apple-darwin` |

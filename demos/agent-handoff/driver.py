@@ -874,7 +874,7 @@ def run() -> None:
         teardown,
         {
             "product_version_surface_ok": isinstance(version, dict)
-            and version.get("version") == "0.9.0-honey.1",
+            and version.get("version") == "0.9.1-honey.1",
             "package_count": len(packages),
             "typed_result_count": len(receipts),
             "public_operation_count": len(operations),

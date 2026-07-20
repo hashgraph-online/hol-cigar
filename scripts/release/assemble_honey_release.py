@@ -48,7 +48,7 @@ REQUIREMENTS_PATH = "packaging/honey/release-requirements.v1.json"
 MANIFEST_NAME = "honey-release-manifest.json"
 CHECKSUM_NAME = "SHA256SUMS"
 MANIFEST_SCHEMA = "cigar.honey.release-manifest.v1"
-EXPECTED_VERSION = "0.9.0-honey.1"
+EXPECTED_VERSION = "0.9.1-honey.1"
 EXPECTED_ABI = "cigar.context.v1"
 EXPECTED_CHANNEL = "honey"
 EXPECTED_STATE = "developer-preview"
@@ -246,7 +246,7 @@ def _load_configuration(root: Path) -> Configuration:
     if (
         not isinstance(product, dict)
         or product.get("version") != EXPECTED_VERSION
-        or product.get("target_release_version") != "0.9.0"
+        or product.get("target_release_version") != "0.9.1"
         or product.get("context_abi") != EXPECTED_ABI
         or product.get("release_state") != EXPECTED_STATE
         or product.get("channel") != EXPECTED_CHANNEL

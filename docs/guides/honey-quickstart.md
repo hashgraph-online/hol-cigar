@@ -72,7 +72,7 @@ runtime artifact, source tree, seed, assertion, and semantic identity digests.
 
 <!-- docs-check: illustrative -->
 ```sh
-python3 demos/run_honey.py --runtime-archive cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz --runtime-sha256 "$RUNTIME_SHA256" --scenario offline-context --output honey-offline-context.json
+python3 demos/run_honey.py --runtime-archive cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz --runtime-sha256 "$RUNTIME_SHA256" --scenario offline-context --output honey-offline-context.json
 ```
 
 ## Read the result correctly

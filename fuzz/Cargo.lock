@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-canon"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-catalog"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "base64",
  "cap-fs-ext",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-code-intel"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cigar-canon",
  "cigar-catalog",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-compiler"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "base64",
  "cigar-canon",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-crypto"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-effects"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "base64",
  "cigar-canon",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-extension-host"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-mcp"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cigar-protocol",
  "getrandom 0.4.3",
@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-policy"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cigar-canon",
  "cigar-crypto",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-protocol"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "base64",
  "prost",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-replay"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cigar-canon",
  "cigar-protocol",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-retrieval"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "cigar-policy",
  "cigar-protocol",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "cigar-store"
-version = "0.9.0-honey.1"
+version = "0.9.1-honey.1"
 dependencies = [
  "ciborium",
  "cigar-crypto",

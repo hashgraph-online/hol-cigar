@@ -47,7 +47,7 @@ installed = _load(
 
 SUITE_SCHEMA = "cigar.honey-demo-suite.v1"
 REPORT_SCHEMA = "cigar.honey-installed-demo-report.v1"
-PRODUCT_VERSION = "0.9.0-honey.1"
+PRODUCT_VERSION = "0.9.1-honey.1"
 CONTEXT_ABI = "cigar.context.v1"
 EVIDENCE_CLASS = "cigar.honey-installed-demo.v1"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")

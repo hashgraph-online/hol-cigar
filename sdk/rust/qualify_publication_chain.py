@@ -27,7 +27,7 @@ import tomllib
 from typing import Any
 
 
-PRODUCT_VERSION = "0.9.0-honey.1"
+PRODUCT_VERSION = "0.9.1-honey.1"
 PRODUCT_PACKAGES = (
     "cigar-canon",
     "cigar-protocol",

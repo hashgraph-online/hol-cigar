@@ -23,6 +23,11 @@ revocation, exact-base merge, typed conflicts, idempotency, intent-before-dispat
 reconciliation, content-addressed evidence, secret/prompt-injection canaries, and no-egress recorded
 demos.
 
+Format v5 authenticates every retained checkpoint/delta and exact revision while readiness uses
+only the latest checkpoint plus a bounded suffix. Migration and compaction require distinct targets,
+signed authority records, backup/pin/legal-hold checks, and post-verification. These controls reduce
+corruption and rollback risk; they do not make a same-user hostile process trustworthy.
+
 Content-safe telemetry exports operation names, status classes, bounded counts, durations, queue
 state, and correlation identifiers—not prompts, source bodies, credentials, encrypted arguments, or
 handoff capsules. Telemetry is not durable application truth. Durable evidence and provenance remain

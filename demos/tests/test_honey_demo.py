@@ -98,7 +98,7 @@ class HoneyDemoTests(unittest.TestCase):
             relative: (
                 (
                     b"#!/bin/sh\n"
-                    b'printf \'%s\\n\' \'{"version":"0.9.0-honey.1",'
+                    b'printf \'%s\\n\' \'{"version":"0.9.1-honey.1",'
                     b'"context_abi":"cigar.context.v1",'
                     b'"source_revision":"1111111111111111111111111111111111111111",'
                     b'"build_profile":"release"}\'\n'

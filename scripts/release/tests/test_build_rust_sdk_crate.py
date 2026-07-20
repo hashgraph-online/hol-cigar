@@ -298,11 +298,11 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         configuration = builder._load_configuration(
             self.root, honey_local_registry_kit=True
         )
-        self.assertEqual(configuration.version, "0.9.0-honey.1")
+        self.assertEqual(configuration.version, "0.9.1-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.filename,
-            "cigar-rust-sdk-0.9.0-honey.1-local-registry.tar.gz",
+            "cigar-rust-sdk-0.9.1-honey.1-local-registry.tar.gz",
         )
         self.assertEqual(
             set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
@@ -337,7 +337,7 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         second = self.base / "second"
         first_receipt = self.produce(first)
         second_receipt = self.produce(second)
-        filename = "cigar-rust-sdk-0.9.0-honey.1-local-registry.tar.gz"
+        filename = "cigar-rust-sdk-0.9.1-honey.1-local-registry.tar.gz"
         first_archive = first / filename
         second_archive = second / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
@@ -510,17 +510,17 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
 
     def test_normalized_manifest_with_path_dependency_is_rejected(self) -> None:
         normalized = (
-            '[package]\nname = "cigar-sdk"\nversion = "0.9.0-honey.1"\n'
+            '[package]\nname = "cigar-sdk"\nversion = "0.9.1-honey.1"\n'
             'publish = ["crates-io"]\n\n[dependencies.cigar-api]\n'
-            'version = "=0.9.0-honey.1"\npath = "../../crates/cigar-api"\n'
+            'version = "=0.9.1-honey.1"\npath = "../../crates/cigar-api"\n'
         ).encode("utf-8")
         archive = self.base / "bad.crate"
         with tarfile.open(archive, mode="w:gz") as package:
-            member = tarfile.TarInfo("cigar-sdk-0.9.0-honey.1/Cargo.toml")
+            member = tarfile.TarInfo("cigar-sdk-0.9.1-honey.1/Cargo.toml")
             member.size = len(normalized)
             package.addfile(member, io.BytesIO(normalized))
         with self.assertRaisesRegex(ReleaseError, "normalized dependency"):
-            builder._normalized_manifest(archive, "cigar-sdk", "0.9.0-honey.1")
+            builder._normalized_manifest(archive, "cigar-sdk", "0.9.1-honey.1")
 
     def test_honey_local_registry_kit_is_deterministic_and_checksum_bound(self) -> None:
         first = self.base / "first-kit.tar.gz"

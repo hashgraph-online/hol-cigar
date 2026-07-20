@@ -717,8 +717,14 @@ where
             }) as Arc<dyn StartupAction>
         })
         .collect();
-    let startup = StartupCoordinator::new(startup_actions, Arc::clone(&readiness_gate))
-        .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?;
+    let startup_observer: Arc<dyn cigar_store::RepositoryStartupMetricsObserver> =
+        telemetry.clone();
+    let startup = StartupCoordinator::new_with_startup_metrics(
+        startup_actions,
+        Arc::clone(&readiness_gate),
+        startup_observer,
+    )
+    .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?;
     let probes: Vec<Arc<dyn ReadinessProbe>> = [
         ReadinessComponent::MetadataStore,
         ReadinessComponent::MigrationLevel,
@@ -1334,6 +1340,7 @@ mod tests {
         let fixture = fixture(directory.path())?;
         fixture.checks.cursor_valid.store(false, Ordering::Release);
         let readiness = Arc::clone(&fixture.dependencies.readiness_gate);
+        let telemetry = Arc::clone(&fixture.dependencies.telemetry);
         let server = DaemonServer::local(
             fixture.config,
             fixture.dependencies,
@@ -1346,6 +1353,11 @@ mod tests {
             .ok_or("startup unexpectedly succeeded")?;
         assert_eq!(error.code(), crate::DaemonErrorCode::StartupFailed);
         assert!(!readiness.is_open());
+        let metrics = telemetry.render_openmetrics(&[]);
+        assert!(metrics.contains("cigar_startup_stage_failures_total{stage=\"readiness_open\"} 1"));
+        assert!(metrics.contains("cigar_startup_outcomes_total{outcome=\"failed\"} 1"));
+        assert!(!metrics.contains("cursor_valid"));
+        assert!(!metrics.contains(directory.path().to_string_lossy().as_ref()));
         Ok(())
     }
 

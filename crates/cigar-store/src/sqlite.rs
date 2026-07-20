@@ -17,9 +17,12 @@ use crate::service_repository::{
 use crate::{
     AccessContext, AtomCursor, AtomPage, AtomSelector, BlobRecord, CancellationToken,
     CommitReceipt, EffectRecordEnvelope, GarbageCollectionPolicy, IdempotencyIdentity,
-    OutboxMessage, OutboxRecord, ReadTransaction, Repository, RepositoryGarbageCollectionCandidate,
-    RepositoryGarbageCollectionReport, SnapshotSelection, StoreError, StoreErrorCode,
-    StoreRevision, WriteTransaction,
+    OutboxMessage, OutboxRecord, ReadTransaction, Repository, RepositoryCommitBytes,
+    RepositoryCommitDurations, RepositoryCommitKind, RepositoryCommitMetrics,
+    RepositoryCommitMetricsObserver, RepositoryCommitOutcome, RepositoryGarbageCollectionCandidate,
+    RepositoryGarbageCollectionReport, RepositoryRetentionCounts, RepositoryStartupMetrics,
+    RepositoryStartupMetricsObserver, RepositoryStartupOutcome, RepositoryStartupStage,
+    SnapshotSelection, StoreError, StoreErrorCode, StoreRevision, WriteTransaction,
 };
 use crate::{
     MAX_MIGRATION_ENTRIES, MigrationCompatibility, MigrationDefinition, MigrationLedgerEntry,
@@ -42,7 +45,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const INITIAL_MIGRATION: &str = include_str!("../migrations/sqlite/0001_initial.sql");
 const COMPATIBILITY_LEDGER_MIGRATION: &str =
@@ -532,12 +535,14 @@ pub struct SqliteStore {
     connection: Mutex<Connection>,
     database_path: PathBuf,
     secure_identity: SecureSqliteIdentity,
+    _runtime_lock: Option<File>,
     capacity_profile: SqliteCapacityProfile,
     fail_next_commit: AtomicBool,
     blob_repository: Option<Arc<dyn crate::RepositoryBlobStore>>,
     failpoints: Mutex<BTreeSet<SqliteFailpoint>>,
     projection_failpoints: Mutex<BTreeSet<SqliteProjectionFailpoint>>,
     revision_anchor: Option<PathBuf>,
+    commit_metrics_observer: Option<Arc<dyn RepositoryCommitMetricsObserver>>,
 }
 
 impl fmt::Debug for SqliteStore {
@@ -552,12 +557,25 @@ impl SqliteStore {
         Self::open_with_capacity_profile(path, SqliteCapacityProfile::Standard)
     }
 
+    /// Opens or creates a database while reporting every content-free startup stage.
+    pub fn open_with_startup_metrics(
+        path: impl AsRef<Path>,
+        observer: Arc<dyn RepositoryStartupMetricsObserver>,
+    ) -> Result<Self, StoreError> {
+        Self::open_internal(
+            path.as_ref(),
+            None,
+            SqliteCapacityProfile::Standard,
+            Some(observer),
+        )
+    }
+
     /// Opens with one explicit bounded local capacity profile.
     pub fn open_with_capacity_profile(
         path: impl AsRef<Path>,
         capacity_profile: SqliteCapacityProfile,
     ) -> Result<Self, StoreError> {
-        Self::open_internal(path.as_ref(), None, capacity_profile)
+        Self::open_internal(path.as_ref(), None, capacity_profile, None)
     }
 
     /// Opens a database composed with durable encrypted blob persistence.
@@ -578,7 +596,22 @@ impl SqliteStore {
         blob_repository: Arc<dyn crate::RepositoryBlobStore>,
         capacity_profile: SqliteCapacityProfile,
     ) -> Result<Self, StoreError> {
-        Self::open_internal(path.as_ref(), Some(blob_repository), capacity_profile)
+        Self::open_internal(path.as_ref(), Some(blob_repository), capacity_profile, None)
+    }
+
+    /// Opens with encrypted blobs, a bounded capacity profile, and startup-stage observations.
+    pub fn open_with_blob_repository_capacity_and_startup_metrics(
+        path: impl AsRef<Path>,
+        blob_repository: Arc<dyn crate::RepositoryBlobStore>,
+        capacity_profile: SqliteCapacityProfile,
+        observer: Arc<dyn RepositoryStartupMetricsObserver>,
+    ) -> Result<Self, StoreError> {
+        Self::open_internal(
+            path.as_ref(),
+            Some(blob_repository),
+            capacity_profile,
+            Some(observer),
+        )
     }
 
     /// Opens an existing database only long enough to preview one store-owned blob GC operation.
@@ -620,6 +653,7 @@ impl SqliteStore {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
             false,
             capacity_profile,
+            None,
         )?;
         store.garbage_collect_blob_roots(policy, dry_run, max_files)
     }
@@ -657,6 +691,7 @@ impl SqliteStore {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
             false,
             capacity_profile,
+            None,
         )?;
         store.plan_garbage_collection_blob_roots(policy, max_files, created_at_unix_nanos)
     }
@@ -691,6 +726,7 @@ impl SqliteStore {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
             false,
             capacity_profile,
+            None,
         )?;
         store.run_garbage_collection_plan(verified, dry_run)
     }
@@ -699,6 +735,7 @@ impl SqliteStore {
         path: &Path,
         blob_repository: Option<Arc<dyn crate::RepositoryBlobStore>>,
         capacity_profile: SqliteCapacityProfile,
+        startup_observer: Option<Arc<dyn RepositoryStartupMetricsObserver>>,
     ) -> Result<Self, StoreError> {
         Self::open_internal_with_options(
             path,
@@ -706,6 +743,7 @@ impl SqliteStore {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE,
             true,
             capacity_profile,
+            startup_observer,
         )
     }
 
@@ -720,6 +758,7 @@ impl SqliteStore {
     ) -> Result<(), StoreError> {
         let path = path.as_ref();
         let secure_identity = prepare_secure_sqlite_path(path, false)?;
+        let _runtime_lock = acquire_sqlite_runtime_shared_lock(path)?;
         let mut connection =
             Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
                 .map_err(unavailable)?;
@@ -740,39 +779,75 @@ impl SqliteStore {
         flags: rusqlite::OpenFlags,
         reconcile_blobs: bool,
         capacity_profile: SqliteCapacityProfile,
+        startup_observer: Option<Arc<dyn RepositoryStartupMetricsObserver>>,
     ) -> Result<Self, StoreError> {
-        preflight_capacity_profile(path, capacity_profile)?;
-        let secure_identity = prepare_secure_sqlite_path(
-            path,
-            flags.contains(rusqlite::OpenFlags::SQLITE_OPEN_CREATE),
+        let observer = startup_observer.as_ref();
+        let (secure_identity, runtime_lock) =
+            measure_startup_stage(observer, RepositoryStartupStage::PathConfiguration, || {
+                preflight_capacity_profile(path, capacity_profile)?;
+                let secure_identity = prepare_secure_sqlite_path(
+                    path,
+                    flags.contains(rusqlite::OpenFlags::SQLITE_OPEN_CREATE),
+                )?;
+                let runtime_lock = acquire_sqlite_runtime_shared_lock(path)?;
+                Ok((secure_identity, runtime_lock))
+            })?;
+        let mut connection = measure_startup_stage(
+            observer,
+            RepositoryStartupStage::SqliteOpenConfigure,
+            || {
+                let connection = Connection::open_with_flags(path, flags).map_err(unavailable)?;
+                verify_secure_sqlite_path(path, secure_identity)?;
+                configure(&connection, capacity_profile)?;
+                Ok(connection)
+            },
         )?;
-        let mut connection = Connection::open_with_flags(path, flags).map_err(unavailable)?;
-        verify_secure_sqlite_path(path, secure_identity)?;
-        configure(&connection, capacity_profile)?;
-        migrate(&mut connection)?;
-        activate_normalized_catalog(&mut connection, capacity_profile)?;
+        measure_startup_stage(observer, RepositoryStartupStage::MigrationLedger, || {
+            migrate(&mut connection)?;
+            activate_normalized_catalog(&mut connection, capacity_profile)
+        })?;
         // Startup authenticates and decodes the latest bounded catalog-free residual before any
         // caller can observe the repository. Catalog rows remain stream-verified by the explicit
         // integrity pass, so this check does not reintroduce whole-graph startup hydration.
-        let _ = load_residual_state(&connection, SnapshotSelection::Latest)?;
-        verify_secure_sqlite_path(path, secure_identity)?;
+        let _ = load_residual_state_for_startup(&connection, path, secure_identity, observer)?;
         let store = Self {
             connection: Mutex::new(connection),
             database_path: path.to_path_buf(),
             secure_identity,
+            _runtime_lock: runtime_lock,
             capacity_profile,
             fail_next_commit: AtomicBool::new(false),
             blob_repository,
             failpoints: Mutex::new(BTreeSet::new()),
             projection_failpoints: Mutex::new(BTreeSet::new()),
             revision_anchor: revision_anchor_path(path),
+            commit_metrics_observer: None,
         };
-        store.verify_or_advance_revision_anchor()?;
-        store.recover_atom_projection()?;
+        measure_startup_stage(observer, RepositoryStartupStage::RevisionAnchor, || {
+            store.verify_or_advance_revision_anchor()
+        })?;
+        measure_startup_stage(observer, RepositoryStartupStage::CatalogProjection, || {
+            store.recover_atom_projection()
+        })?;
         if reconcile_blobs {
-            store.reconcile_blobs()?;
+            measure_startup_stage(observer, RepositoryStartupStage::BlobReconciliation, || {
+                store.reconcile_blobs()
+            })?;
         }
         Ok(store)
+    }
+
+    /// Attaches one content-free observer before the store is shared with runtime workers.
+    ///
+    /// The observer receives successful commits and idempotent replays only. It cannot change the
+    /// repository result and must not perform repository I/O.
+    #[must_use]
+    pub fn with_commit_metrics_observer(
+        mut self,
+        observer: Arc<dyn RepositoryCommitMetricsObserver>,
+    ) -> Self {
+        self.commit_metrics_observer = Some(observer);
+        self
     }
 
     /// Arms a one-shot abort after validation and before durable publication.
@@ -951,6 +1026,106 @@ impl SqliteStore {
             latest_snapshot_bytes: u64::try_from(latest_snapshot_bytes)
                 .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?,
         })
+    }
+
+    /// Opens an existing v5 target read-only and returns authenticated content-free retention state.
+    ///
+    /// This does not activate, migrate, compact, pin, or otherwise mutate the target. Ordinary v4
+    /// databases fail closed because they do not contain authenticated v5 authority.
+    pub fn v5_retention_statistics_at(
+        path: impl AsRef<Path>,
+    ) -> Result<crate::SqliteRetentionStatisticsV5, StoreError> {
+        let path = path.as_ref();
+        let secure_identity = prepare_secure_sqlite_path(path, false)?;
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(unavailable)?;
+        verify_secure_sqlite_path(path, secure_identity)?;
+        connection
+            .pragma_update(None, "foreign_keys", true)
+            .map_err(unavailable)?;
+        if !connection
+            .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+            .map_err(unavailable)?
+        {
+            return Err(StoreError::new(StoreErrorCode::Unavailable));
+        }
+        crate::sqlite_v5::retention_statistics_v5(&connection)
+    }
+
+    /// Authenticates only the latest v5 checkpoint and its bounded delta suffix for readiness.
+    ///
+    /// Historical retained payloads are deliberately not scanned by this path. Use the explicit
+    /// deep-integrity workflow when every retained checkpoint and delta must be authenticated.
+    pub fn v5_bounded_startup_at(
+        path: impl AsRef<Path>,
+    ) -> Result<crate::SqliteStartupVerificationV5, StoreError> {
+        let path = path.as_ref();
+        let secure_identity = prepare_secure_sqlite_path(path, false)?;
+        let _runtime_lock = acquire_sqlite_runtime_shared_lock(path)?;
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(unavailable)?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(30))
+            .map_err(unavailable)?;
+        connection
+            .pragma_update(None, "synchronous", "FULL")
+            .map_err(unavailable)?;
+        connection
+            .pragma_update(None, "foreign_keys", true)
+            .map_err(unavailable)?;
+        connection
+            .pragma_update(None, "query_only", true)
+            .map_err(unavailable)?;
+        if !connection
+            .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+            .map_err(unavailable)?
+        {
+            return Err(StoreError::new(StoreErrorCode::Unavailable));
+        }
+        let report = crate::sqlite_v5::bounded_startup_verification_v5(&connection)?;
+        verify_secure_sqlite_path(path, secure_identity)?;
+        Ok(report)
+    }
+
+    /// Authenticates the bounded v5 head, repairs only the current projection/anchor when needed,
+    /// and repeats the bounded verification before returning a readiness-safe report.
+    pub fn v5_recover_bounded_startup_at(
+        path: impl AsRef<Path>,
+    ) -> Result<crate::SqliteStartupVerificationV5, StoreError> {
+        let path = path.as_ref();
+        let secure_identity = prepare_secure_sqlite_path(path, false)?;
+        let _runtime_lock = acquire_sqlite_runtime_shared_lock(path)?;
+        let mut connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
+                .map_err(unavailable)?;
+        let capacity_profile = connection
+            .query_row(
+                "SELECT capacity_profile FROM repository_authority_v5
+                 WHERE singleton = 1 AND format_version = 5 AND activated = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(unavailable)
+            .and_then(|value| {
+                SqliteCapacityProfile::from_name(&value)
+                    .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidRecord))
+            })?;
+        configure(&connection, capacity_profile)?;
+        verify_secure_sqlite_path(path, secure_identity)?;
+        let report = crate::sqlite_v5::recover_bounded_startup_v5(&mut connection)?;
+        let anchor = revision_anchor_path(path)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidContext))?;
+        match read_revision_anchor(&anchor)? {
+            Some(revision) if revision.0 > report.current_revision.0 => {
+                return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+            }
+            Some(revision) if revision == report.current_revision => {}
+            _ => write_revision_anchor(&anchor, report.current_revision)?,
+        }
+        verify_secure_sqlite_path(path, secure_identity)?;
+        Ok(report)
     }
 
     /// Returns the checksum-protected roots and exact logical totals persisted for the latest
@@ -1672,6 +1847,12 @@ impl SqliteStore {
         self.trip(SqliteFailpoint::AfterRevisionAnchor)
     }
 
+    fn observe_commit(&self, metrics: RepositoryCommitMetrics) {
+        if let Some(observer) = &self.commit_metrics_observer {
+            observer.observe_repository_commit(metrics);
+        }
+    }
+
     fn trip(&self, failpoint: SqliteFailpoint) -> Result<(), StoreError> {
         if self
             .failpoints
@@ -1798,6 +1979,12 @@ fn verify_secure_sqlite_path(
     Ok(())
 }
 
+#[cfg(test)]
+pub(crate) fn verify_secure_sqlite_identity_for_test(path: &Path) -> Result<(), StoreError> {
+    let identity = prepare_secure_sqlite_path(path, false)?;
+    verify_secure_sqlite_path(path, identity)
+}
+
 #[cfg(not(unix))]
 fn verify_secure_sqlite_path(
     _path: &Path,
@@ -1829,10 +2016,415 @@ fn secure_sqlite_file_identity(
     })
 }
 
+fn sqlite_runtime_lock_path(database: &Path) -> Option<PathBuf> {
+    if database == Path::new(":memory:") {
+        return None;
+    }
+    let mut value = database.as_os_str().to_os_string();
+    value.push(".cigar-runtime.lock");
+    Some(PathBuf::from(value))
+}
+
+#[cfg(unix)]
+fn open_secure_sqlite_runtime_lock(database: &Path) -> Result<Option<File>, StoreError> {
+    use rustix::fs::{Mode, OFlags};
+    use std::os::unix::fs::MetadataExt as _;
+
+    let Some(path) = sqlite_runtime_lock_path(database) else {
+        return Ok(None);
+    };
+    let descriptor = rustix::fs::open(
+        &path,
+        OFlags::CREATE | OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+        Mode::RUSR | Mode::WUSR,
+    )
+    .map(File::from)
+    .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?;
+    let descriptor_metadata = descriptor
+        .metadata()
+        .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?;
+    let path_metadata = fs::symlink_metadata(&path)
+        .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?;
+    let expected_uid = rustix::process::geteuid().as_raw();
+    for metadata in [&descriptor_metadata, &path_metadata] {
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.uid() != expected_uid
+            || metadata.mode() & 0o7777 != 0o600
+            || metadata.nlink() != 1
+        {
+            return Err(StoreError::new(StoreErrorCode::Unavailable));
+        }
+    }
+    if descriptor_metadata.dev() != path_metadata.dev()
+        || descriptor_metadata.ino() != path_metadata.ino()
+    {
+        return Err(StoreError::new(StoreErrorCode::Unavailable));
+    }
+    Ok(Some(descriptor))
+}
+
+#[cfg(not(unix))]
+fn open_secure_sqlite_runtime_lock(_database: &Path) -> Result<Option<File>, StoreError> {
+    Ok(None)
+}
+
+pub(crate) fn acquire_sqlite_runtime_shared_lock(
+    database: &Path,
+) -> Result<Option<File>, StoreError> {
+    let descriptor = open_secure_sqlite_runtime_lock(database)?;
+    #[cfg(unix)]
+    if let Some(file) = descriptor.as_ref() {
+        rustix::fs::flock(file, rustix::fs::FlockOperation::NonBlockingLockShared)
+            .map_err(|_error| StoreError::new(StoreErrorCode::RevisionConflict))?;
+    }
+    Ok(descriptor)
+}
+
+#[cfg(unix)]
+pub(crate) fn acquire_sqlite_runtime_exclusive_lock(database: &Path) -> Result<File, StoreError> {
+    let descriptor = open_secure_sqlite_runtime_lock(database)?
+        .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidContext))?;
+    rustix::fs::flock(
+        &descriptor,
+        rustix::fs::FlockOperation::NonBlockingLockExclusive,
+    )
+    .map_err(|_error| StoreError::new(StoreErrorCode::RevisionConflict))?;
+    Ok(descriptor)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn acquire_sqlite_runtime_exclusive_lock(_database: &Path) -> Result<File, StoreError> {
+    Err(StoreError::new(StoreErrorCode::InvalidContext))
+}
+
 pub(crate) fn verify_sqlite_file(path: &Path) -> Result<(), StoreError> {
     let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(unavailable)?;
     verify_connection(&connection)
+}
+
+pub(crate) struct AuthenticatedV4MigrationDatabase {
+    pub(crate) capacity_profile: String,
+    pub(crate) first_revision: StoreRevision,
+    pub(crate) latest_revision: StoreRevision,
+    pub(crate) retained_revisions: u64,
+    pub(crate) residual_checksum: ContentDigest,
+    pub(crate) catalog_root: ContentDigest,
+    pub(crate) semantic_root: ContentDigest,
+    pub(crate) atom_count: u64,
+    pub(crate) edge_count: u64,
+    pub(crate) referenced_blob_bytes: u64,
+}
+
+pub(crate) struct AuthenticatedV4MigrationRevision {
+    pub(crate) state: CommittedState,
+    pub(crate) residual_checksum: ContentDigest,
+    pub(crate) catalog_root: ContentDigest,
+    pub(crate) semantic_root: ContentDigest,
+    pub(crate) atom_count: u64,
+    pub(crate) edge_count: u64,
+    pub(crate) referenced_blob_bytes: u64,
+}
+
+pub(crate) fn for_each_authenticated_v4_migration_revision(
+    path: &Path,
+    mut consume: impl FnMut(AuthenticatedV4MigrationRevision) -> Result<(), StoreError>,
+) -> Result<u64, StoreError> {
+    let secure_identity = prepare_secure_sqlite_path(path, false)?;
+    let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(unavailable)?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(30))
+        .map_err(unavailable)?;
+    connection
+        .pragma_update(None, "foreign_keys", true)
+        .map_err(unavailable)?;
+    if !connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+        .map_err(unavailable)?
+    {
+        return Err(StoreError::new(StoreErrorCode::Unavailable));
+    }
+    connection
+        .execute_batch("PRAGMA query_only = ON; BEGIN DEFERRED;")
+        .map_err(unavailable)?;
+    verify_migration_connection(&connection)?;
+    let revisions = {
+        let mut statement = connection
+            .prepare("SELECT revision FROM cigar_repository_revisions_v4 ORDER BY revision")
+            .map_err(unavailable)?;
+        let rows = statement
+            .query_map([], |row| row.get::<_, i64>(0))
+            .map_err(unavailable)?;
+        let mut revisions = Vec::new();
+        for row in rows {
+            if revisions.len() >= MAX_RETAINED_SQLITE_SNAPSHOTS {
+                return Err(StoreError::new(StoreErrorCode::LimitExceeded));
+            }
+            revisions.push(
+                u64::try_from(row.map_err(unavailable)?)
+                    .map(StoreRevision)
+                    .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))?,
+            );
+        }
+        revisions
+    };
+    if revisions.is_empty()
+        || revisions.windows(2).any(|pair| {
+            pair.first()
+                .zip(pair.get(1))
+                .is_none_or(|(left, right)| left.0.checked_add(1) != Some(right.0))
+        })
+    {
+        return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+    }
+    for revision in revisions.iter().copied() {
+        let metadata =
+            load_catalog_revision_metadata(&connection, SnapshotSelection::Revision(revision))?;
+        let state = load_residual_state(&connection, SnapshotSelection::Revision(revision))?;
+        let (catalog_root, atom_count, edge_count, referenced_blob_bytes) =
+            calculate_catalog_snapshot(&connection, revision, true)?;
+        if state.revision != revision
+            || catalog_root != metadata.catalog_root
+            || atom_count != metadata.atom_count
+            || edge_count != metadata.edge_count
+            || referenced_blob_bytes != metadata.referenced_blob_bytes
+        {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+        consume(AuthenticatedV4MigrationRevision {
+            state,
+            residual_checksum: metadata.residual_checksum,
+            catalog_root: metadata.catalog_root,
+            semantic_root: metadata.semantic_root,
+            atom_count,
+            edge_count,
+            referenced_blob_bytes,
+        })?;
+    }
+    verify_secure_sqlite_path(path, secure_identity)?;
+    u64::try_from(revisions.len()).map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))
+}
+
+pub(crate) fn verify_migrated_v5_catalog_history(
+    connection: &Connection,
+) -> Result<u64, StoreError> {
+    let (first, last) = connection
+        .query_row(
+            "SELECT MIN(revision), MAX(revision) FROM repository_revisions_v5",
+            [],
+            |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, Option<i64>>(1)?)),
+        )
+        .map_err(unavailable)?;
+    let first = first
+        .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidRecord))
+        .and_then(|value| {
+            u64::try_from(value)
+                .map(StoreRevision)
+                .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))
+        })?;
+    let last = last
+        .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidRecord))
+        .and_then(|value| {
+            u64::try_from(value)
+                .map(StoreRevision)
+                .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))
+        })?;
+    verify_migrated_v5_catalog_history_range(connection, first, last)
+}
+
+pub(crate) fn verify_migrated_v5_catalog_history_range(
+    connection: &Connection,
+    first: StoreRevision,
+    last: StoreRevision,
+) -> Result<u64, StoreError> {
+    let expected = last
+        .0
+        .checked_sub(first.0)
+        .and_then(|distance| distance.checked_add(1))
+        .filter(|count| *count <= crate::sqlite_v5::MAXIMUM_RETAINED_REVISIONS_V5)
+        .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+    let mut statement = connection
+        .prepare(
+            "SELECT revision, catalog_root, atom_count, edge_count, referenced_blob_bytes
+             FROM repository_revisions_v5 WHERE revision BETWEEN ?1 AND ?2 ORDER BY revision",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map(
+            params![sqlite_revision(first)?, sqlite_revision(last)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .map_err(unavailable)?;
+    let mut checked = 0_u64;
+    for row in rows {
+        checked = checked
+            .checked_add(1)
+            .filter(|count| *count <= expected)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        let row = row.map_err(unavailable)?;
+        let revision = u64::try_from(row.0)
+            .map(StoreRevision)
+            .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))?;
+        let expected_revision = first
+            .0
+            .checked_add(checked.saturating_sub(1))
+            .map(StoreRevision)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        let expected_root = ContentDigest::new(row.1)
+            .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))?;
+        let expected_atoms = catalog_count_u64(row.2)?;
+        let expected_edges = catalog_count_u64(row.3)?;
+        let expected_blob_bytes = catalog_count_u64(row.4)?;
+        let (root, atoms, edges, blob_bytes) =
+            calculate_catalog_snapshot(connection, revision, true)?;
+        if revision != expected_revision
+            || root != expected_root
+            || atoms != expected_atoms
+            || edges != expected_edges
+            || blob_bytes != expected_blob_bytes
+        {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+    }
+    if checked != expected {
+        return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+    }
+    Ok(checked)
+}
+
+pub(crate) fn verify_migrated_v5_latest_state_and_projection(
+    connection: &Connection,
+    expected: &CommittedState,
+) -> Result<SqliteDeepIntegrityReport, StoreError> {
+    let compatibility = load_residual_state(connection, SnapshotSelection::Latest)?;
+    if &compatibility != expected {
+        return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+    }
+    verify_latest_state_and_projections(connection, expected)
+}
+
+pub(crate) fn authenticate_v4_migration_database(
+    path: &Path,
+    require_revision_anchor: bool,
+) -> Result<AuthenticatedV4MigrationDatabase, StoreError> {
+    let secure_identity = prepare_secure_sqlite_path(path, false)?;
+    let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(unavailable)?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(30))
+        .map_err(unavailable)?;
+    connection
+        .pragma_update(None, "foreign_keys", true)
+        .map_err(unavailable)?;
+    if !connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+        .map_err(unavailable)?
+    {
+        return Err(StoreError::new(StoreErrorCode::Unavailable));
+    }
+    connection
+        .execute_batch("PRAGMA query_only = ON; BEGIN DEFERRED;")
+        .map_err(unavailable)?;
+    verify_migration_connection(&connection)?;
+    verify_connection(&connection)?;
+    verify_all_v4_migration_revision_roots(&connection)?;
+    let latest = load_catalog_revision_metadata(&connection, SnapshotSelection::Latest)?;
+    let (first, retained) = connection
+        .query_row(
+            "SELECT MIN(revision), COUNT(*) FROM cigar_repository_revisions_v4",
+            [],
+            |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .map_err(unavailable)?;
+    let first = first
+        .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidRecord))
+        .and_then(|revision| {
+            u64::try_from(revision)
+                .map(StoreRevision)
+                .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))
+        })?;
+    let retained =
+        u64::try_from(retained).map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))?;
+    let contiguous = latest
+        .revision
+        .0
+        .checked_sub(first.0)
+        .and_then(|distance| distance.checked_add(1));
+    if retained == 0 || contiguous != Some(retained) {
+        return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+    }
+    let capacity_profile = connection
+        .query_row(
+            "SELECT capacity_profile FROM cigar_catalog_authority
+             WHERE singleton = 1 AND format_version = 4 AND activated = 1",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(unavailable)?;
+    if require_revision_anchor {
+        let anchor_path = revision_anchor_path(path)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::InvalidContext))?;
+        if read_revision_anchor(&anchor_path)? != Some(latest.revision) {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+    }
+    verify_secure_sqlite_path(path, secure_identity)?;
+    Ok(AuthenticatedV4MigrationDatabase {
+        capacity_profile,
+        first_revision: first,
+        latest_revision: latest.revision,
+        retained_revisions: retained,
+        residual_checksum: latest.residual_checksum,
+        catalog_root: latest.catalog_root,
+        semantic_root: latest.semantic_root,
+        atom_count: latest.atom_count,
+        edge_count: latest.edge_count,
+        referenced_blob_bytes: latest.referenced_blob_bytes,
+    })
+}
+
+fn verify_all_v4_migration_revision_roots(connection: &Connection) -> Result<(), StoreError> {
+    let mut statement = connection
+        .prepare("SELECT revision FROM cigar_repository_revisions_v4 ORDER BY revision")
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, i64>(0))
+        .map_err(unavailable)?;
+    let mut checked = 0_usize;
+    for row in rows {
+        checked = checked
+            .checked_add(1)
+            .filter(|count| *count <= MAX_RETAINED_SQLITE_SNAPSHOTS)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        let revision = u64::try_from(row.map_err(unavailable)?)
+            .map(StoreRevision)
+            .map_err(|_error| StoreError::new(StoreErrorCode::InvalidRecord))?;
+        let metadata =
+            load_catalog_revision_metadata(connection, SnapshotSelection::Revision(revision))?;
+        let (catalog_root, atom_count, edge_count, referenced_blob_bytes) =
+            calculate_catalog_snapshot(connection, revision, true)?;
+        if catalog_root != metadata.catalog_root
+            || atom_count != metadata.atom_count
+            || edge_count != metadata.edge_count
+            || referenced_blob_bytes != metadata.referenced_blob_bytes
+        {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+    }
+    if checked == 0 {
+        return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+    }
+    Ok(())
 }
 
 /// Returns the exact external blob set reachable from the latest checksum-protected snapshot.
@@ -2080,7 +2672,7 @@ fn verify_migration_connection(connection: &Connection) -> Result<(), StoreError
     }
 }
 
-fn sqlite_migration_plan() -> Result<MigrationPlan, StoreError> {
+pub(crate) fn sqlite_migration_plan() -> Result<MigrationPlan, StoreError> {
     SQLITE_MIGRATIONS
         .iter()
         .enumerate()
@@ -2171,6 +2763,218 @@ fn verify_latest_state_and_projections(
 ) -> Result<SqliteDeepIntegrityReport, StoreError> {
     let catalog_metadata =
         load_catalog_revision_metadata(connection, SnapshotSelection::Revision(state.revision))?;
+    let projection_checksum = catalog_metadata.semantic_root.clone();
+    verify_state_and_projections(connection, state, &catalog_metadata, &projection_checksum)
+}
+
+pub(crate) fn verify_v5_latest_state_and_projection(
+    connection: &Connection,
+    state: &CommittedState,
+    state_digest: &ContentDigest,
+    catalog_root: &ContentDigest,
+    semantic_root: &ContentDigest,
+    totals: crate::revision_delta::RepositoryLogicalTotalsV5,
+) -> Result<SqliteDeepIntegrityReport, StoreError> {
+    let catalog_metadata = CatalogRevisionMetadata {
+        revision: state.revision,
+        residual_checksum: state_digest.clone(),
+        catalog_root: catalog_root.clone(),
+        semantic_root: semantic_root.clone(),
+        semantic_root_format: 5,
+        atom_count: totals.atom_count,
+        edge_count: totals.edge_count,
+        referenced_blob_bytes: totals.referenced_blob_bytes,
+    };
+    verify_state_and_projections(connection, state, &catalog_metadata, semantic_root)
+}
+
+pub(crate) fn recover_v5_latest_projection(
+    connection: &mut Connection,
+    state: &CommittedState,
+    state_digest: &ContentDigest,
+    catalog_root: &ContentDigest,
+    semantic_root: &ContentDigest,
+    totals: crate::revision_delta::RepositoryLogicalTotalsV5,
+) -> Result<SqliteProjectionStatus, StoreError> {
+    let metadata = CatalogRevisionMetadata {
+        revision: state.revision,
+        residual_checksum: state_digest.clone(),
+        catalog_root: catalog_root.clone(),
+        semantic_root: semantic_root.clone(),
+        semantic_root_format: 5,
+        atom_count: totals.atom_count,
+        edge_count: totals.edge_count,
+        referenced_blob_bytes: totals.referenced_blob_bytes,
+    };
+    match verify_active_projection(connection, &metadata, semantic_root) {
+        Ok(status) => return Ok(status),
+        Err(error) if error.code() == StoreErrorCode::LimitExceeded => return Err(error),
+        Err(_error) => {}
+    }
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(unavailable)?;
+    let stored_generations = transaction
+        .query_row(
+            "SELECT COUNT(*) FROM atom_projection_generations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(unavailable)?;
+    if stored_generations < 0
+        || u64::try_from(stored_generations)
+            .ok()
+            .is_none_or(|count| count > MAX_STORED_SQLITE_PROJECTION_GENERATIONS)
+    {
+        return Err(StoreError::new(StoreErrorCode::LimitExceeded));
+    }
+    let maximum_generation = transaction
+        .query_row(
+            "SELECT MAX(generation) FROM atom_projection_generations",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .map_err(unavailable)?
+        .unwrap_or(0);
+    let generation = u64::try_from(maximum_generation)
+        .ok()
+        .and_then(|value| value.checked_add(1))
+        .filter(|value| *value <= i64::MAX as u64)
+        .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+    let generation_i64 = projection_generation_i64(generation)?;
+    let revision_i64 = sqlite_revision(metadata.revision)?;
+    transaction
+        .execute(
+            "INSERT INTO atom_projection_generations
+               (generation, source_revision, state_checksum, atom_count,
+                projection_root, complete, created_at_unix_nanos)
+             VALUES (?1, ?2, ?3, 0, ?4, 0, ?5)",
+            params![
+                generation_i64,
+                revision_i64,
+                semantic_root.as_str(),
+                empty_projection_root(),
+                unix_nanos_text()?
+            ],
+        )
+        .map_err(unavailable)?;
+    let mut root = projection_root_builder(generation, metadata.revision, semantic_root)?;
+    let mut atom_count = 0_u64;
+    {
+        let mut row_statement = transaction
+            .prepare(
+                "INSERT INTO atom_projection_rows
+                   (generation, tenant_id, version_id, lineage_id, lifecycle,
+                    exact_text, record, record_checksum)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )
+            .map_err(unavailable)?;
+        let mut fts_statement = transaction
+            .prepare(
+                "INSERT INTO atom_projection_fts
+                   (generation, tenant_id, version_id, exact_text)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )
+            .map_err(unavailable)?;
+        let mut authoritative = transaction
+            .prepare(
+                "SELECT tenant_id, record, record_checksum, exact_text
+                 FROM cigar_catalog_atoms WHERE published_revision <= ?1
+                 ORDER BY tenant_id, version_id",
+            )
+            .map_err(unavailable)?;
+        let mut rows = authoritative
+            .query(params![revision_i64])
+            .map_err(unavailable)?;
+        while let Some(row) = rows.next().map_err(unavailable)? {
+            let tenant_id = row.get::<_, String>(0).map_err(unavailable)?;
+            let record = row.get::<_, Vec<u8>>(1).map_err(unavailable)?;
+            let record_checksum = row.get::<_, String>(2).map_err(unavailable)?;
+            let exact_text = row.get::<_, String>(3).map_err(unavailable)?;
+            let atom = decode_catalog_atom(&record, &record_checksum)?;
+            if atom.scope.tenant_id.as_str() != tenant_id
+                || projection_exact_text(&atom) != exact_text
+            {
+                return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+            }
+            validate_projection_payload_bounds(&exact_text, &record)?;
+            update_projection_root(&mut root, &tenant_id, &atom, &exact_text, &record_checksum)?;
+            row_statement
+                .execute(params![
+                    generation_i64,
+                    tenant_id,
+                    atom.version_id.as_str(),
+                    atom.lineage_id.as_str(),
+                    lifecycle_name(atom.lifecycle),
+                    exact_text,
+                    record,
+                    record_checksum,
+                ])
+                .map_err(unavailable)?;
+            fts_statement
+                .execute(params![
+                    generation_i64,
+                    atom.scope.tenant_id.as_str(),
+                    atom.version_id.as_str(),
+                    projection_exact_text(&atom),
+                ])
+                .map_err(unavailable)?;
+            atom_count = atom_count
+                .checked_add(1)
+                .filter(|count| *count <= MAX_SQLITE_PROJECTION_ATOMS)
+                .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        }
+    }
+    let projection_root = finish_projection_root(root)?;
+    transaction
+        .execute(
+            "UPDATE atom_projection_generations
+             SET atom_count = ?2, projection_root = ?3, complete = 1
+             WHERE generation = ?1 AND complete = 0",
+            params![
+                generation_i64,
+                projection_count_i64(atom_count)?,
+                projection_root.as_str()
+            ],
+        )
+        .map_err(unavailable)?;
+    let status = SqliteProjectionStatus {
+        generation,
+        source_revision: metadata.revision,
+        state_checksum: semantic_root.clone(),
+        atom_count,
+        projection_root,
+    };
+    verify_projection_generation(&transaction, &metadata, &status)?;
+    transaction
+        .execute(
+            "INSERT INTO atom_projection_activation
+               (singleton, generation, source_revision, state_checksum, activated_at_unix_nanos)
+             VALUES (1, ?1, ?2, ?3, ?4)
+             ON CONFLICT(singleton) DO UPDATE SET
+               generation = excluded.generation,
+               source_revision = excluded.source_revision,
+               state_checksum = excluded.state_checksum,
+               activated_at_unix_nanos = excluded.activated_at_unix_nanos",
+            params![
+                generation_i64,
+                revision_i64,
+                semantic_root.as_str(),
+                unix_nanos_text()?
+            ],
+        )
+        .map_err(unavailable)?;
+    prune_projection_generations(&transaction)?;
+    transaction.commit().map_err(unavailable)?;
+    verify_active_projection(connection, &metadata, semantic_root)
+}
+
+fn verify_state_and_projections(
+    connection: &Connection,
+    state: &CommittedState,
+    catalog_metadata: &CatalogRevisionMetadata,
+    projection_checksum: &ContentDigest,
+) -> Result<SqliteDeepIntegrityReport, StoreError> {
     let tenant_count = u64::try_from(state.tenants.len())
         .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?;
     let atom_count = catalog_metadata.atom_count;
@@ -2244,7 +3048,8 @@ fn verify_latest_state_and_projections(
         }
     }
 
-    let projection_atom_count = verify_atom_projection(connection, state.revision)?;
+    let projection_atom_count =
+        verify_active_projection(connection, catalog_metadata, projection_checksum)?.atom_count;
     if projection_atom_count != atom_count {
         return Err(StoreError::new(StoreErrorCode::InvalidRecord));
     }
@@ -2311,16 +3116,6 @@ fn journal_preimage(event: &EffectJournalEvent) -> Result<Vec<u8>, StoreError> {
     let mut preimage = b"CIGAR-EFFECT-KERNEL\0v1\0effect-journal-event\0".to_vec();
     preimage.extend_from_slice(&payload);
     Ok(preimage)
-}
-
-fn verify_atom_projection(
-    connection: &Connection,
-    revision: StoreRevision,
-) -> Result<u64, StoreError> {
-    let metadata =
-        load_catalog_revision_metadata(connection, SnapshotSelection::Revision(revision))?;
-    let state_checksum = authoritative_state_checksum(connection, revision)?;
-    verify_active_projection(connection, &metadata, &state_checksum).map(|status| status.atom_count)
 }
 
 fn authoritative_projection_state(
@@ -2788,6 +3583,27 @@ impl fmt::Debug for SqliteReadTransaction {
 }
 
 impl SqliteReadTransaction {
+    #[cfg(test)]
+    pub(crate) fn from_v5_state(
+        connection: Connection,
+        state: CommittedState,
+        context: AccessContext,
+        cancellation: CancellationToken,
+        blob_repository: Option<Arc<dyn crate::RepositoryBlobStore>>,
+    ) -> Self {
+        let revision = state.revision;
+        Self {
+            connection,
+            residual: InMemoryReadTransaction {
+                state: Arc::new(state),
+                context,
+                cancellation,
+                blob_repository,
+            },
+            revision,
+        }
+    }
+
     fn check(&self) -> Result<(), StoreError> {
         self.residual.cancellation.check()
     }
@@ -3172,17 +3988,57 @@ impl ServiceRepository for SqliteStore {
         batch: ServiceBatch,
         cancellation: &CancellationToken,
     ) -> Result<ServiceBatchReceipt, ServiceError> {
+        let total_started = Instant::now();
         check_cancellation(cancellation)?;
+        let logical_changed = batch.logical_bytes();
+        let lock_started = Instant::now();
         let mut connection = self.lock().map_err(map_store_error)?;
+        let lock_wait = lock_started.elapsed();
+        let before = sqlite_commit_footprint(&connection, &self.database_path);
+        let transaction_started = Instant::now();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(service_unavailable)?;
         self.trip(SqliteFailpoint::AfterBeginImmediate)
             .map_err(map_store_error)?;
-        let latest = load_residual_state(&transaction, SnapshotSelection::Latest)
-            .map_err(map_store_error)?;
+        let load_started = Instant::now();
+        let (latest, residual_decode) =
+            load_residual_state_profiled(&transaction, SnapshotSelection::Latest)
+                .map_err(map_store_error)?;
+        let repository_load = load_started.elapsed().saturating_sub(residual_decode);
+        let revision_before = latest.revision;
+        let staged_mutation_started = Instant::now();
         let (next, receipt) = apply_service_batch(&latest, batch)?;
+        let staged_mutation = staged_mutation_started.elapsed();
         if receipt.replayed {
+            drop(transaction);
+            let sqlite_transaction = transaction_started.elapsed();
+            let after = sqlite_commit_footprint(&connection, &self.database_path);
+            drop(connection);
+            self.observe_commit(RepositoryCommitMetrics {
+                kind: RepositoryCommitKind::Service,
+                outcome: RepositoryCommitOutcome::Replayed,
+                revision_before,
+                revision_after: revision_before,
+                receipt_only: false,
+                durations: RepositoryCommitDurations {
+                    total: total_started.elapsed(),
+                    lock_wait,
+                    repository_load,
+                    residual_decode,
+                    staged_mutation,
+                    sqlite_transaction,
+                    ..RepositoryCommitDurations::default()
+                },
+                bytes: RepositoryCommitBytes {
+                    database_before: before.database_bytes,
+                    database_after: after.database_bytes,
+                    wal_before: before.wal_bytes,
+                    wal_after: after.wal_bytes,
+                    ..RepositoryCommitBytes::default()
+                },
+                retained: after.retained,
+            });
             return Ok(receipt);
         }
         let next = next.ok_or_else(|| ServiceError::new(ServiceErrorCode::Unavailable))?;
@@ -3192,15 +4048,44 @@ impl ServiceRepository for SqliteStore {
         }
         self.trip(SqliteFailpoint::BeforeStateInsert)
             .map_err(map_store_error)?;
-        persist_normalized_revision(&transaction, &next, self.capacity_profile)
+        let persisted = persist_normalized_revision(&transaction, &next, self.capacity_profile)
             .map_err(map_store_error)?;
         self.trip(SqliteFailpoint::AfterStateInsert)
             .map_err(map_store_error)?;
         self.trip(SqliteFailpoint::BeforeCommit)
             .map_err(map_store_error)?;
+        let commit_started = Instant::now();
         transaction.commit().map_err(service_unavailable)?;
+        let commit_fsync = commit_started.elapsed();
+        let sqlite_transaction = transaction_started.elapsed();
+        let after = sqlite_commit_footprint(&connection, &self.database_path);
+        let anchor_started = Instant::now();
         self.publish_revision_anchor(next.revision)
             .map_err(map_store_error)?;
+        let revision_anchor = anchor_started.elapsed();
+        drop(connection);
+        self.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Service,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: next.revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                residual_decode,
+                staged_mutation,
+                delta_encode: Duration::ZERO,
+                full_encode: persisted.full_encode,
+                catalog_root: persisted.catalog_root,
+                sqlite_transaction,
+                commit_fsync,
+                revision_anchor,
+            },
+            bytes: commit_bytes(logical_changed, persisted, before, after),
+            retained: after.retained,
+        });
         Ok(receipt)
     }
 
@@ -3250,31 +4135,72 @@ impl ServiceRepository for SqliteStore {
         update: WorkerUpdate,
         cancellation: &CancellationToken,
     ) -> Result<WorkerState, ServiceError> {
+        let total_started = Instant::now();
         check_cancellation(cancellation)?;
+        let logical_changed = update.logical_bytes(locator);
+        let lock_started = Instant::now();
         let mut connection = self.lock().map_err(map_store_error)?;
+        let lock_wait = lock_started.elapsed();
+        let before = sqlite_commit_footprint(&connection, &self.database_path);
+        let transaction_started = Instant::now();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(service_unavailable)?;
         self.trip(SqliteFailpoint::AfterBeginImmediate)
             .map_err(map_store_error)?;
-        let latest = load_residual_state(&transaction, SnapshotSelection::Latest)
-            .map_err(map_store_error)?;
+        let load_started = Instant::now();
+        let (latest, residual_decode) =
+            load_residual_state_profiled(&transaction, SnapshotSelection::Latest)
+                .map_err(map_store_error)?;
+        let repository_load = load_started.elapsed().saturating_sub(residual_decode);
+        let revision_before = latest.revision;
+        let staged_mutation_started = Instant::now();
         let (next, state) = apply_worker_update(&latest, locator, update)?;
+        let staged_mutation = staged_mutation_started.elapsed();
         check_cancellation(cancellation)?;
         if self.fail_next_commit.swap(false, Ordering::AcqRel) {
             return Err(ServiceError::new(ServiceErrorCode::InjectedAbort));
         }
         self.trip(SqliteFailpoint::BeforeStateInsert)
             .map_err(map_store_error)?;
-        persist_normalized_revision(&transaction, &next, self.capacity_profile)
+        let persisted = persist_normalized_revision(&transaction, &next, self.capacity_profile)
             .map_err(map_store_error)?;
         self.trip(SqliteFailpoint::AfterStateInsert)
             .map_err(map_store_error)?;
         self.trip(SqliteFailpoint::BeforeCommit)
             .map_err(map_store_error)?;
+        let commit_started = Instant::now();
         transaction.commit().map_err(service_unavailable)?;
+        let commit_fsync = commit_started.elapsed();
+        let sqlite_transaction = transaction_started.elapsed();
+        let after = sqlite_commit_footprint(&connection, &self.database_path);
+        let anchor_started = Instant::now();
         self.publish_revision_anchor(next.revision)
             .map_err(map_store_error)?;
+        let revision_anchor = anchor_started.elapsed();
+        drop(connection);
+        self.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Worker,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: next.revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                residual_decode,
+                staged_mutation,
+                delta_encode: Duration::ZERO,
+                full_encode: persisted.full_encode,
+                catalog_root: persisted.catalog_root,
+                sqlite_transaction,
+                commit_fsync,
+                revision_anchor,
+            },
+            bytes: commit_bytes(logical_changed, persisted, before, after),
+            retained: after.retained,
+        });
         Ok(state)
     }
 }
@@ -3368,14 +4294,24 @@ impl WriteTransaction for SqliteWriteTransaction<'_> {
     }
 
     fn commit(self, idempotency: Option<IdempotencyIdentity>) -> Result<CommitReceipt, StoreError> {
+        let total_started = Instant::now();
         self.cancellation.check()?;
         validate_staged_shape(&self.staged)?;
+        let logical_changed = staged_logical_bytes(&self.staged)?;
+        let lock_started = Instant::now();
         let mut connection = self.store.lock()?;
+        let lock_wait = lock_started.elapsed();
+        let before = sqlite_commit_footprint(&connection, &self.store.database_path);
+        let transaction_started = Instant::now();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(unavailable)?;
         self.store.trip(SqliteFailpoint::AfterBeginImmediate)?;
-        let latest = load_residual_state(&transaction, SnapshotSelection::Latest)?;
+        let load_started = Instant::now();
+        let (latest, residual_decode) =
+            load_residual_state_profiled(&transaction, SnapshotSelection::Latest)?;
+        let repository_load = load_started.elapsed().saturating_sub(residual_decode);
+        let revision_before = latest.revision;
         if let Some(identity) = &idempotency
             && let Some((digest, receipt)) =
                 latest
@@ -3390,10 +4326,38 @@ impl WriteTransaction for SqliteWriteTransaction<'_> {
             if digest != &identity.request_digest {
                 return Err(StoreError::new(StoreErrorCode::InvalidRecord));
             }
-            return Ok(CommitReceipt {
+            let replayed = CommitReceipt {
                 revision: receipt.revision,
                 replayed: true,
+            };
+            drop(transaction);
+            let sqlite_transaction = transaction_started.elapsed();
+            let after = sqlite_commit_footprint(&connection, &self.store.database_path);
+            drop(connection);
+            self.store.observe_commit(RepositoryCommitMetrics {
+                kind: RepositoryCommitKind::Repository,
+                outcome: RepositoryCommitOutcome::Replayed,
+                revision_before,
+                revision_after: revision_before,
+                receipt_only: false,
+                durations: RepositoryCommitDurations {
+                    total: total_started.elapsed(),
+                    lock_wait,
+                    repository_load,
+                    residual_decode,
+                    sqlite_transaction,
+                    ..RepositoryCommitDurations::default()
+                },
+                bytes: RepositoryCommitBytes {
+                    database_before: before.database_bytes,
+                    database_after: after.database_bytes,
+                    wal_before: before.wal_bytes,
+                    wal_after: after.wal_bytes,
+                    ..RepositoryCommitBytes::default()
+                },
+                retained: after.retained,
             });
+            return Ok(replayed);
         }
         if latest.revision != self.expected_revision {
             return Err(StoreError::new(StoreErrorCode::RevisionConflict));
@@ -3409,6 +4373,7 @@ impl WriteTransaction for SqliteWriteTransaction<'_> {
         next.revision = revision;
         let tenant_id = self.context.tenant_id().clone();
         next.tenants.entry(tenant_id.clone()).or_default();
+        let staged_mutation_started = Instant::now();
         if self
             .staged
             .iter()
@@ -3465,24 +4430,57 @@ impl WriteTransaction for SqliteWriteTransaction<'_> {
                 (identity.request_digest, receipt),
             );
         }
+        let staged_mutation = staged_mutation_started.elapsed();
         self.cancellation.check()?;
         if self.store.fail_next_commit.swap(false, Ordering::AcqRel) {
             return Err(StoreError::new(StoreErrorCode::InjectedAbort));
         }
+        let catalog_bucket_started = Instant::now();
         for bucket in touched_buckets {
             persist_catalog_bucket(&transaction, bucket, revision)?;
         }
+        let catalog_bucket = catalog_bucket_started.elapsed();
         self.store.trip(SqliteFailpoint::BeforeStateInsert)?;
-        persist_normalized_revision(&transaction, &next, self.store.capacity_profile)?;
+        let persisted =
+            persist_normalized_revision(&transaction, &next, self.store.capacity_profile)?;
         self.store.trip(SqliteFailpoint::AfterStateInsert)?;
         self.store.trip(SqliteFailpoint::BeforeCommit)?;
+        let commit_started = Instant::now();
         transaction.commit().map_err(unavailable)?;
+        let commit_fsync = commit_started.elapsed();
+        let sqlite_transaction = transaction_started.elapsed();
+        let after = sqlite_commit_footprint(&connection, &self.store.database_path);
+        let anchor_started = Instant::now();
         self.store.publish_revision_anchor(revision)?;
+        let revision_anchor = anchor_started.elapsed();
+        drop(connection);
+        self.store.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Repository,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                residual_decode,
+                staged_mutation,
+                delta_encode: Duration::ZERO,
+                full_encode: persisted.full_encode,
+                catalog_root: catalog_bucket.saturating_add(persisted.catalog_root),
+                sqlite_transaction,
+                commit_fsync,
+                revision_anchor,
+            },
+            bytes: commit_bytes(logical_changed, persisted, before, after),
+            retained: after.retained,
+        });
         Ok(receipt)
     }
 }
 
-fn apply_catalog_batch(
+pub(crate) fn apply_catalog_batch(
     connection: &Connection,
     tenant_id: &RecordId,
     atoms: Vec<ContextAtomV1>,
@@ -3642,11 +4640,25 @@ fn creates_catalog_derivation_cycle(
     Ok(false)
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct PersistNormalizedRevisionMeasurement {
+    full_state_bytes: u64,
+    full_encode: Duration,
+    catalog_root: Duration,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct SqliteCommitFootprint {
+    database_bytes: Option<u64>,
+    wal_bytes: Option<u64>,
+    retained: RepositoryRetentionCounts,
+}
+
 fn persist_normalized_revision(
     connection: &Connection,
     state: &CommittedState,
     capacity_profile: SqliteCapacityProfile,
-) -> Result<(), StoreError> {
+) -> Result<PersistNormalizedRevisionMeasurement, StoreError> {
     if state.tenants.values().any(|tenant| {
         !tenant.atoms.is_empty()
             || !tenant.atom_versions_by_id.is_empty()
@@ -3655,6 +4667,7 @@ fn persist_normalized_revision(
     }) {
         return Err(StoreError::new(StoreErrorCode::InvalidRecord));
     }
+    let catalog_root_started = Instant::now();
     let catalog_root = catalog_root_from_table(connection)?;
     let (atom_count, edge_count, referenced_blob_bytes) = connection
         .query_row(
@@ -3674,7 +4687,13 @@ fn persist_normalized_revision(
     let atom_count = catalog_count_u64(atom_count)?;
     let edge_count = catalog_count_u64(edge_count)?;
     let referenced_blob_bytes = catalog_count_u64(referenced_blob_bytes)?;
+    let mut catalog_root_elapsed = catalog_root_started.elapsed();
+    let full_encode_started = Instant::now();
     let residual_state = encode_catalog_free_state(state)?;
+    let full_encode = full_encode_started.elapsed();
+    let full_state_bytes = u64::try_from(residual_state.len())
+        .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?;
+    let root_finalize_started = Instant::now();
     let residual_checksum = ContentDigest::new(state_checksum(&residual_state))
         .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?;
     let semantic_root = normalized_semantic_root(
@@ -3696,6 +4715,7 @@ fn persist_normalized_revision(
         referenced_blob_bytes,
     };
     enforce_catalog_capacity(&metadata, capacity_profile)?;
+    catalog_root_elapsed = catalog_root_elapsed.saturating_add(root_finalize_started.elapsed());
     connection
         .execute(
             "INSERT INTO cigar_repository_revisions_v4
@@ -3714,7 +4734,12 @@ fn persist_normalized_revision(
             ],
         )
         .map_err(unavailable)?;
-    prune_normalized_revisions(connection)
+    prune_normalized_revisions(connection)?;
+    Ok(PersistNormalizedRevisionMeasurement {
+        full_state_bytes,
+        full_encode,
+        catalog_root: catalog_root_elapsed,
+    })
 }
 
 fn prune_normalized_revisions(connection: &Connection) -> Result<(), StoreError> {
@@ -3731,6 +4756,99 @@ fn prune_normalized_revisions(connection: &Connection) -> Result<(), StoreError>
         )
         .map(|_deleted| ())
         .map_err(unavailable)
+}
+
+fn sqlite_commit_footprint(connection: &Connection, path: &Path) -> SqliteCommitFootprint {
+    let full_states = connection
+        .query_row(
+            "SELECT COUNT(*) FROM cigar_repository_revisions_v4",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .ok()
+        .and_then(|count| u64::try_from(count).ok());
+    SqliteCommitFootprint {
+        database_bytes: sqlite_file_bytes(path),
+        wal_bytes: sqlite_file_bytes(&sqlite_sidecar_path(path, "-wal")),
+        retained: RepositoryRetentionCounts {
+            full_states,
+            checkpoints: Some(0),
+            deltas: Some(0),
+        },
+    }
+}
+
+fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut value = path.as_os_str().to_os_string();
+    value.push(suffix);
+    PathBuf::from(value)
+}
+
+fn sqlite_file_bytes(path: &Path) -> Option<u64> {
+    match fs::metadata(path) {
+        Ok(metadata) => Some(metadata.len()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+        Err(_error) => None,
+    }
+}
+
+pub(crate) fn staged_logical_bytes(staged: &[StagedMutation]) -> Result<u64, StoreError> {
+    staged.iter().try_fold(0_u64, |total, mutation| {
+        let bytes = match mutation {
+            StagedMutation::Snapshot(record) => encode_record(record)?,
+            StagedMutation::Atoms(atoms, edges) => encode_record(&(atoms, edges))?,
+            StagedMutation::Bundle(record) => encode_record(record)?,
+            StagedMutation::ContextCommit(record) => encode_record(record)?,
+            StagedMutation::EffectEvent(record) => encode_record(record)?,
+            StagedMutation::EffectRecord(record) => encode_record(record)?,
+            StagedMutation::Blob(record) => encode_record(&record.reference)?,
+            StagedMutation::Outbox(record) => encode_record(record)?,
+        };
+        let bytes = u64::try_from(bytes.len())
+            .map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))?;
+        total
+            .checked_add(bytes)
+            .ok_or_else(|| StoreError::new(StoreErrorCode::LimitExceeded))
+    })
+}
+
+fn commit_bytes(
+    logical_changed: u64,
+    persisted: PersistNormalizedRevisionMeasurement,
+    before: SqliteCommitFootprint,
+    after: SqliteCommitFootprint,
+) -> RepositoryCommitBytes {
+    RepositoryCommitBytes {
+        logical_changed,
+        encoded_delta: 0,
+        checkpoint: 0,
+        full_state: persisted.full_state_bytes,
+        database_before: before.database_bytes,
+        database_after: after.database_bytes,
+        wal_before: before.wal_bytes,
+        wal_after: after.wal_bytes,
+    }
+}
+
+fn measure_startup_stage<T>(
+    observer: Option<&Arc<dyn RepositoryStartupMetricsObserver>>,
+    stage: RepositoryStartupStage,
+    operation: impl FnOnce() -> Result<T, StoreError>,
+) -> Result<T, StoreError> {
+    let started = Instant::now();
+    let result = operation();
+    if let Some(observer) = observer {
+        observer.observe_repository_startup(RepositoryStartupMetrics {
+            stage,
+            outcome: if result.is_ok() {
+                RepositoryStartupOutcome::Completed
+            } else {
+                RepositoryStartupOutcome::Failed
+            },
+            duration: started.elapsed(),
+        });
+    }
+    result
 }
 
 fn preflight_capacity_profile(
@@ -4226,6 +5344,54 @@ fn load_residual_state(
     connection: &Connection,
     selection: SnapshotSelection,
 ) -> Result<CommittedState, StoreError> {
+    load_residual_state_profiled(connection, selection).map(|(state, _decode)| state)
+}
+
+fn load_residual_state_for_startup(
+    connection: &Connection,
+    path: &Path,
+    secure_identity: SecureSqliteIdentity,
+    observer: Option<&Arc<dyn RepositoryStartupMetricsObserver>>,
+) -> Result<CommittedState, StoreError> {
+    let (metadata, bytes) = measure_startup_stage(
+        observer,
+        RepositoryStartupStage::LatestCheckpointRead,
+        || {
+            let metadata = load_catalog_revision_metadata(connection, SnapshotSelection::Latest)?;
+            let bytes = connection
+                .query_row(
+                    "SELECT residual_state FROM cigar_repository_revisions_v4 WHERE revision = ?1",
+                    params![sqlite_revision(metadata.revision)?],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+                .map_err(unavailable)?;
+            Ok((metadata, bytes))
+        },
+    )?;
+    measure_startup_stage(
+        observer,
+        RepositoryStartupStage::ChecksumVerification,
+        || {
+            if state_checksum(&bytes) != metadata.residual_checksum.as_str() {
+                return Err(StoreError::new(StoreErrorCode::Unavailable));
+            }
+            verify_secure_sqlite_path(path, secure_identity)
+        },
+    )?;
+    measure_startup_stage(observer, RepositoryStartupStage::DeltaReplay, || Ok(()))?;
+    measure_startup_stage(observer, RepositoryStartupStage::ResidualDecode, || {
+        let state = decode_catalog_free_state(&bytes)?;
+        if state.revision != metadata.revision {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+        Ok(state)
+    })
+}
+
+fn load_residual_state_profiled(
+    connection: &Connection,
+    selection: SnapshotSelection,
+) -> Result<(CommittedState, Duration), StoreError> {
     let metadata = load_catalog_revision_metadata(connection, selection)?;
     let bytes = connection
         .query_row(
@@ -4237,11 +5403,13 @@ fn load_residual_state(
     if state_checksum(&bytes) != metadata.residual_checksum.as_str() {
         return Err(StoreError::new(StoreErrorCode::Unavailable));
     }
+    let decode_started = Instant::now();
     let state = decode_catalog_free_state(&bytes)?;
+    let decode_elapsed = decode_started.elapsed();
     if state.revision != metadata.revision {
         return Err(StoreError::new(StoreErrorCode::InvalidRecord));
     }
-    Ok(state)
+    Ok((state, decode_elapsed))
 }
 
 fn insert_catalog_from_state(
@@ -4678,7 +5846,7 @@ fn rebuild_all_catalog_buckets(
     Ok(())
 }
 
-fn persist_catalog_bucket(
+pub(crate) fn persist_catalog_bucket(
     connection: &Connection,
     bucket: u16,
     revision: StoreRevision,
@@ -4717,7 +5885,9 @@ fn persist_catalog_bucket(
     Ok(())
 }
 
-fn catalog_root_from_table(connection: &Connection) -> Result<ContentDigest, StoreError> {
+pub(crate) fn catalog_root_from_table(
+    connection: &Connection,
+) -> Result<ContentDigest, StoreError> {
     let mut states = BTreeMap::new();
     let mut statement = connection
         .prepare(
@@ -5165,7 +6335,7 @@ fn sqlite_revision(revision: StoreRevision) -> Result<i64, StoreError> {
     i64::try_from(revision.0).map_err(|_error| StoreError::new(StoreErrorCode::LimitExceeded))
 }
 
-fn validate_staged_shape(staged: &[StagedMutation]) -> Result<(), StoreError> {
+pub(crate) fn validate_staged_shape(staged: &[StagedMutation]) -> Result<(), StoreError> {
     if staged.is_empty()
         || (staged
             .iter()
@@ -5197,7 +6367,7 @@ fn revision_anchor_path(database: &Path) -> Option<PathBuf> {
     Some(PathBuf::from(value))
 }
 
-fn read_revision_anchor(path: &Path) -> Result<Option<StoreRevision>, StoreError> {
+pub(crate) fn read_revision_anchor(path: &Path) -> Result<Option<StoreRevision>, StoreError> {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -5236,7 +6406,10 @@ fn read_revision_anchor(path: &Path) -> Result<Option<StoreRevision>, StoreError
     Ok(Some(StoreRevision(revision)))
 }
 
-fn write_revision_anchor(path: &Path, revision: StoreRevision) -> Result<(), StoreError> {
+pub(crate) fn write_revision_anchor(
+    path: &Path,
+    revision: StoreRevision,
+) -> Result<(), StoreError> {
     let parent = path
         .parent()
         .ok_or_else(|| StoreError::new(StoreErrorCode::Unavailable))?;
@@ -5282,6 +6455,103 @@ fn sync_parent_directory(_path: &Path) -> Result<(), StoreError> {
 impl crate::conformance::ConformanceRepository for SqliteStore {
     fn inject_commit_abort(&self) {
         self.fail_next_commit();
+    }
+}
+
+#[cfg(test)]
+mod startup_metrics_tests {
+    use super::SqliteStore;
+    use crate::{
+        RepositoryStartupMetrics, RepositoryStartupMetricsObserver, RepositoryStartupOutcome,
+        RepositoryStartupStage,
+    };
+    use rusqlite::Connection;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct CapturingStartupObserver {
+        observations: Mutex<Vec<RepositoryStartupMetrics>>,
+    }
+
+    impl RepositoryStartupMetricsObserver for CapturingStartupObserver {
+        fn observe_repository_startup(&self, metrics: RepositoryStartupMetrics) {
+            if let Ok(mut observations) = self.observations.lock() {
+                observations.push(metrics);
+            }
+        }
+    }
+
+    #[test]
+    fn observed_sqlite_startup_reports_each_authenticated_stage_in_order()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let observer = Arc::new(CapturingStartupObserver::default());
+        let observer_handle: Arc<dyn RepositoryStartupMetricsObserver> = observer.clone();
+        let _store = SqliteStore::open_with_startup_metrics(
+            directory.path().join("observed-startup.sqlite3"),
+            observer_handle,
+        )?;
+        let observations = observer
+            .observations
+            .lock()
+            .map_err(|_| std::io::Error::other("startup observer lock poisoned"))?;
+        let stages = observations
+            .iter()
+            .map(|measurement| measurement.stage)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            stages,
+            vec![
+                RepositoryStartupStage::PathConfiguration,
+                RepositoryStartupStage::SqliteOpenConfigure,
+                RepositoryStartupStage::MigrationLedger,
+                RepositoryStartupStage::LatestCheckpointRead,
+                RepositoryStartupStage::ChecksumVerification,
+                RepositoryStartupStage::DeltaReplay,
+                RepositoryStartupStage::ResidualDecode,
+                RepositoryStartupStage::RevisionAnchor,
+                RepositoryStartupStage::CatalogProjection,
+                RepositoryStartupStage::BlobReconciliation,
+            ]
+        );
+        assert!(
+            observations
+                .iter()
+                .all(|measurement| measurement.outcome == RepositoryStartupOutcome::Completed)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn corrupt_latest_residual_reports_only_the_closed_checksum_stage_and_fails()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("corrupt-startup.sqlite3");
+        drop(SqliteStore::open(&path)?);
+        let connection = Connection::open(&path)?;
+        connection.execute(
+            "UPDATE cigar_repository_revisions_v4 SET residual_state = x'00' WHERE revision = 0",
+            [],
+        )?;
+        drop(connection);
+
+        let observer = Arc::new(CapturingStartupObserver::default());
+        let observer_handle: Arc<dyn RepositoryStartupMetricsObserver> = observer.clone();
+        assert!(SqliteStore::open_with_startup_metrics(&path, observer_handle).is_err());
+        let observations = observer
+            .observations
+            .lock()
+            .map_err(|_| std::io::Error::other("startup observer lock poisoned"))?;
+        let failed = observations
+            .iter()
+            .filter(|measurement| measurement.outcome == RepositoryStartupOutcome::Failed)
+            .collect::<Vec<_>>();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(
+            failed.first().map(|measurement| measurement.stage),
+            Some(RepositoryStartupStage::ChecksumVerification)
+        );
+        Ok(())
     }
 }
 

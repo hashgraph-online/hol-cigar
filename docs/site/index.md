@@ -23,7 +23,7 @@ Developers evaluating the local Apple-silicon Honey profile should begin with th
 [Honey's security and qualification limitations](../guides/honey-security-limitations.md) before
 using it with private repositories or mediated effects.
 
-This site describes product version 0.9.0-honey.1 and Context ABI `cigar.context.v1`. The selector is
+This site describes product version 0.9.1-honey.1 and Context ABI `cigar.context.v1`. The selector is
 development-only; `latest` remains absent until an approved version is published.
 
 <!-- docs-check: command docs-build-local -->

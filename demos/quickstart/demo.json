@@ -4,15 +4,15 @@
   "title": "Offline deterministic context compiler",
   "fixed_seed": 41001,
   "fixture": "fixture.json",
-  "fixture_digest": "12204665f7c33908d3b36daea2c43c43e9e34891f37351e22a1f398bc365e7fd9ab8",
+  "fixture_digest": "12207261c80c89e6ed9bc244cc9abb77cb0280e5c0a2c6d25fd4d8cf685685ea99f5",
   "driver": "driver.py",
-  "driver_digest": "1220a63f890b7127e119e49b31f31af4814adbda8074e9ff143d8db7290507aa94e3",
+  "driver_digest": "12206fa80a10fa86b30ea11f17ff2e8a7c1ec2da6c9d69cd537d1b880235cd439614",
   "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
   "recorded_mode": true,
   "setup": ["isolated-home", "generated-120-file-repository", "network-disabled", "fixed-clock-and-seed"],
   "expected_assertions": [
     "bundle-digest-deterministic", "index-watermark-strong", "superseded-decision-absent",
-    "selected-provenance-complete", "delta-roundtrip-exact", "physical-input-reduction-at-least-40-percent"
+    "selected-provenance-complete", "equivalent-content-single-block", "equivalent-provenance-aliases-retained", "equivalent-citation-aliases-resolve", "delta-roundtrip-exact", "physical-input-reduction-at-least-40-percent"
   ],
   "checks": [
     {
@@ -21,6 +21,13 @@
       "timeout_seconds": 900,
       "minimum_passed_tests": 1,
       "assertions": ["index-watermark-strong", "superseded-decision-absent", "selected-provenance-complete", "physical-input-reduction-at-least-40-percent"]
+    },
+    {
+      "check_id": "compiler-content-equivalence",
+      "command": ["cargo", "test", "--offline", "-p", "cigar-compiler", "--test", "compiler", "content_equivalence_unions_obligations_provenance_citations_and_invalidation"],
+      "timeout_seconds": 300,
+      "minimum_passed_tests": 1,
+      "assertions": ["equivalent-content-single-block", "equivalent-provenance-aliases-retained", "equivalent-citation-aliases-resolve"]
     },
     {
       "check_id": "compiler-permutation-identity",

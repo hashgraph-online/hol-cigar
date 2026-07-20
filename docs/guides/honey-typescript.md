@@ -1,6 +1,6 @@
 # Honey TypeScript SDK
 
-Honey distributes `cigar-sdk-0.9.0-honey.1.tgz` as a direct GitHub attachment. It is an ESM package
+Honey distributes `cigar-sdk-0.9.1-honey.1.tgz` as a direct GitHub attachment. It is an ESM package
 and is not published to the public npm registry.
 
 ## Offline clean-project install
@@ -13,7 +13,7 @@ resolution disabled. Use the exact Node and package-manager cohort recorded by t
 mkdir honey-typescript-client
 cd honey-typescript-client
 pnpm init
-pnpm add --offline ../cigar-sdk-0.9.0-honey.1.tgz
+pnpm add --offline ../cigar-sdk-0.9.1-honey.1.tgz
 node -e 'import("@cigar/sdk").then(m => console.log(m.PRODUCT_VERSION))'
 ```
 

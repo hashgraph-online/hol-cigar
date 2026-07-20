@@ -27,7 +27,7 @@ from release_lib import ReleaseError, reject_evidence_directory
 
 MANIFEST_PATH = "packaging/product-version.v1.json"
 DEVELOPMENT_TARGET_RELEASE = "1.0.0"
-HONEY_TARGET_RELEASE = "0.9.0"
+HONEY_TARGET_RELEASE = "0.9.1"
 HONEY_CHANNEL = "honey"
 EXPECTED_CONTEXT_ABI = "cigar.context.v1"
 MAX_JSON_BYTES = 16 * 1024 * 1024
@@ -299,6 +299,10 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
     ),
     "demos/agent-handoff/driver.py": (
         _surrounded('version.get("version") == "', '",'),
+        1,
+    ),
+    "demos/storage-migration/run.py": (
+        _surrounded('"product_version": "', '",'),
         1,
     ),
     "demos/README.md": (
@@ -702,7 +706,7 @@ def load_manifest(root: Path) -> dict[str, Any]:
     honey_valid = (
         target == HONEY_TARGET_RELEASE
         and isinstance(version, str)
-        and re.fullmatch(r"0\.9\.0-honey\.[1-9][0-9]*", version) is not None
+        and re.fullmatch(r"0\.9\.1-honey\.[1-9][0-9]*", version) is not None
         and document.get("release_state") == "developer-preview"
         and document.get("channel") == HONEY_CHANNEL
         and document.get("tag") == f"v{version}"

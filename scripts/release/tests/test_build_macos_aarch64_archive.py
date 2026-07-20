@@ -162,11 +162,11 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
 
     def test_configuration_is_bound_to_honey_authorities(self) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "0.9.0-honey.1")
+        self.assertEqual(configuration.version, "0.9.1-honey.1")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.filename,
-            "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
+            "cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz",
         )
         self.assertEqual(set(configuration.authority), set(builder.AUTHORITY_PATHS))
         self.assertEqual(set(configuration.assets), set(builder.ASSET_PATHS))
@@ -248,7 +248,7 @@ class MacosAarch64ArchiveBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
+        filename = "cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())

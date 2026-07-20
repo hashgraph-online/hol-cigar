@@ -228,6 +228,14 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     CommandSpec::administration("backup.create", true, false),
     CommandSpec::administration("backup.verify", false, false),
     CommandSpec::administration("backup.restore", true, true),
+    CommandSpec::administration("migration.preflight", false, false),
+    CommandSpec::administration("migration.run", true, false),
+    CommandSpec::administration("migration.activate", true, false),
+    CommandSpec::administration("migration.cleanup", true, true),
+    CommandSpec::administration("compaction.preview", true, false),
+    CommandSpec::administration("compaction.execute", true, true),
+    CommandSpec::administration("compaction.status", false, false),
+    CommandSpec::administration("integrity.deep", true, false),
     CommandSpec::administration("gc.plan", true, false),
     CommandSpec::administration("gc.run", true, true),
     CommandSpec::administration("diagnostics.bundle", true, false),
@@ -342,9 +350,9 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert_eq!(paths.len(), COMMANDS.len());
         #[cfg(unix)]
-        assert_eq!(paths.len(), 60);
+        assert_eq!(paths.len(), 68);
         #[cfg(not(unix))]
-        assert_eq!(paths.len(), 58);
+        assert_eq!(paths.len(), 66);
         for command in COMMANDS {
             assert_eq!(lookup(command.path()), Some(*command));
             if !command.is_administration() {
@@ -398,9 +406,9 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let expected_groups = expected_command_groups();
         #[cfg(unix)]
-        assert_eq!(public_command_paths().len(), 68);
+        assert_eq!(public_command_paths().len(), 76);
         #[cfg(not(unix))]
-        assert_eq!(public_command_paths().len(), 66);
+        assert_eq!(public_command_paths().len(), 74);
         let help = super::help_text();
         assert_eq!(help_command_groups(&help)?, expected_groups);
         assert_eq!(man_command_groups(man_page())?, expected_groups);

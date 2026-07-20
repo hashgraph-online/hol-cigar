@@ -102,6 +102,40 @@ pub const COMPILE_PHASE_VALUES: &[&str] = &[
     "pack",
     "materialize",
 ];
+/// Stable repository commit path vocabulary.
+pub const REPOSITORY_COMMIT_KIND_VALUES: &[&str] = &["repository", "service", "worker"];
+/// Stable repository commit outcome vocabulary.
+pub const REPOSITORY_COMMIT_OUTCOME_VALUES: &[&str] = &["committed", "replayed"];
+/// Stable repository commit timing phases.
+pub const REPOSITORY_COMMIT_PHASE_VALUES: &[&str] = &[
+    "total",
+    "lock_wait",
+    "repository_load",
+    "residual_decode",
+    "staged_mutation",
+    "delta_encode",
+    "full_encode",
+    "catalog_root",
+    "sqlite_transaction",
+    "commit_fsync",
+    "revision_anchor",
+];
+/// Stable repository/readiness startup timing stages.
+pub const STARTUP_STAGE_VALUES: &[&str] = &[
+    "path_configuration",
+    "sqlite_open_configure",
+    "migration_ledger",
+    "latest_checkpoint_read",
+    "checksum_verification",
+    "delta_replay",
+    "residual_decode",
+    "catalog_projection",
+    "revision_anchor",
+    "blob_reconciliation",
+    "readiness_open",
+];
+/// Stable terminal startup outcomes.
+pub const STARTUP_OUTCOME_VALUES: &[&str] = &["ready", "failed"];
 /// Stable effect-state vocabulary, identical to `cigar_protocol::EffectState` serialization.
 pub const EFFECT_STATE_VALUES: &[&str] = &[
     "prepared",
@@ -124,7 +158,35 @@ pub const EFFECT_STATE_VALUES: &[&str] = &[
 
 const ATOM_OUTCOMES: &[&str] = &["published", "tombstoned"];
 const PARSER_STAGES: &[&str] = &["source", "atomizer", "code_intelligence"];
-const CACHE_OUTCOMES: &[&str] = &["hit", "miss"];
+/// Closed candidate-count checkpoints through retrieval and compilation.
+pub const COMPILE_CANDIDATE_STAGE_VALUES: &[&str] = &[
+    "before_governance",
+    "after_governance",
+    "after_logical_coalescing",
+    "after_content_grouping",
+    "after_budget_selection",
+];
+/// Closed content-free result counts from one completed compilation.
+pub const COMPILE_RESULT_VALUES: &[&str] = &[
+    "selected_blocks",
+    "unique_content_keys",
+    "unique_source_versions",
+    "unique_lineages",
+    "budget_displaced",
+    "mandatory_candidates",
+    "blocking_requirements_satisfied",
+];
+/// Closed cache hit, miss, and bypass reason shared by four fixed layer-specific families.
+pub const CACHE_REASON_VALUES: &[&str] = &[
+    "hit",
+    "absent_entry",
+    "policy_mismatch",
+    "watermark_mismatch",
+    "tokenizer_mismatch",
+    "materializer_mismatch",
+    "unknown_semantic_extension",
+    "not_configured",
+];
 const CACHE_TOKEN_KINDS: &[&str] = &["read", "write"];
 const HANDOFF_OUTCOMES: &[&str] = &["accepted", "rejected", "expired"];
 const RECONCILIATION_OUTCOMES: &[&str] = &["resolved", "unresolved", "failed"];
@@ -134,6 +196,9 @@ const API_OUTCOMES: &[&str] = &["accepted", "rejected", "failed"];
 const STREAM_EVENTS: &[&str] = &["opened", "blocked", "cancelled"];
 const BLOCKING_STATES: &[&str] = &["active", "queued", "active_capacity", "queue_capacity"];
 const BLOCKING_OUTCOMES: &[&str] = &["completed", "rejected", "cancelled", "deadline"];
+const REPOSITORY_ENCODING_VALUES: &[&str] = &["delta", "checkpoint", "full_state"];
+const REPOSITORY_FILE_VALUES: &[&str] = &["database", "wal"];
+const REPOSITORY_RETAINED_VALUES: &[&str] = &["full_state", "checkpoint", "delta"];
 
 const fn label(key: &'static str, values: &'static [&'static str]) -> Option<MetricLabelDomain> {
     Some(MetricLabelDomain { key, values })
@@ -210,6 +275,16 @@ pub const DAEMON_METRICS: &[MetricDefinition] = &[
         None,
     ),
     MetricDefinition::counter(
+        "cigar_context_candidate_stage_total",
+        "Content-free candidate counts at closed retrieval and compilation checkpoints.",
+        label("stage", COMPILE_CANDIDATE_STAGE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_context_compile_results_total",
+        "Content-free selected, uniqueness, displacement, and requirement counts.",
+        label("kind", COMPILE_RESULT_VALUES),
+    ),
+    MetricDefinition::counter(
         "cigar_context_lane_tokens_total",
         "Selected logical tokens by standard context lane.",
         label("lane", LANE_VALUES),
@@ -235,9 +310,24 @@ pub const DAEMON_METRICS: &[MetricDefinition] = &[
         None,
     ),
     MetricDefinition::counter(
-        "cigar_cache_events_total",
-        "Governed materialization-cache outcomes.",
-        label("outcome", CACHE_OUTCOMES),
+        "cigar_retrieval_cache_events_total",
+        "Governed retrieval-cache observations by closed reason.",
+        label("reason", CACHE_REASON_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_plan_cache_events_total",
+        "Governed plan-cache observations by closed reason.",
+        label("reason", CACHE_REASON_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_bundle_cache_events_total",
+        "Governed bundle-cache observations by closed reason.",
+        label("reason", CACHE_REASON_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_materialization_cache_events_total",
+        "Governed materialization-cache observations by closed reason.",
+        label("reason", CACHE_REASON_VALUES),
     ),
     MetricDefinition::counter(
         "cigar_context_physical_tokens_total",
@@ -307,6 +397,91 @@ pub const DAEMON_METRICS: &[MetricDefinition] = &[
     MetricDefinition::counter(
         "cigar_database_pool_waits_total",
         "Database pool acquisition waits.",
+        None,
+    ),
+    MetricDefinition::counter(
+        "cigar_startup_duration_nanoseconds_total",
+        "Monotonic elapsed time across measured startup stages.",
+        None,
+    ),
+    MetricDefinition::counter(
+        "cigar_startup_stage_duration_nanoseconds_total",
+        "Monotonic elapsed startup time by closed stage.",
+        label("stage", STARTUP_STAGE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_startup_stage_runs_total",
+        "Completed or failed startup stage observations.",
+        label("stage", STARTUP_STAGE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_startup_stage_failures_total",
+        "Fail-closed startup observations by stable closed stage.",
+        label("stage", STARTUP_STAGE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_startup_outcomes_total",
+        "Terminal startup outcomes after readiness or a fail-closed stage.",
+        label("outcome", STARTUP_OUTCOME_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_commit_kinds_total",
+        "Durable repository observations by closed mutation path.",
+        label("kind", REPOSITORY_COMMIT_KIND_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_commit_outcomes_total",
+        "Durable repository observations by closed outcome.",
+        label("outcome", REPOSITORY_COMMIT_OUTCOME_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_commit_duration_nanoseconds_total",
+        "Monotonic elapsed repository commit time by closed phase.",
+        label("phase", REPOSITORY_COMMIT_PHASE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_commit_phase_runs_total",
+        "Observed repository commit phases.",
+        label("phase", REPOSITORY_COMMIT_PHASE_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_logical_bytes_total",
+        "Bounded logical mutation bytes observed by durable commits.",
+        None,
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_encoded_bytes_total",
+        "Canonical repository bytes encoded by closed record class.",
+        label("encoding", REPOSITORY_ENCODING_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_file_growth_bytes_total",
+        "Positive physical repository-file growth by closed file class.",
+        label("file", REPOSITORY_FILE_VALUES),
+    ),
+    MetricDefinition::gauge(
+        "cigar_repository_file_bytes",
+        "Last observed physical repository-file bytes by closed file class.",
+        label("file", REPOSITORY_FILE_VALUES),
+    ),
+    MetricDefinition::gauge(
+        "cigar_repository_retained_records",
+        "Last observed retained revision records by closed class.",
+        label("record", REPOSITORY_RETAINED_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_revision_delta_total",
+        "Monotonic durable repository revisions added.",
+        None,
+    ),
+    MetricDefinition::gauge(
+        "cigar_repository_write_amplification_millionths",
+        "Last available positive durable-byte to logical-byte ratio in millionths.",
+        None,
+    ),
+    MetricDefinition::counter(
+        "cigar_repository_zero_logical_commits_total",
+        "Committed receipt-only revisions with zero semantic mutation bytes.",
         None,
     ),
     MetricDefinition::counter(
@@ -386,8 +561,8 @@ mod tests {
 
     #[test]
     fn metric_catalog_is_unique_bounded_and_content_free() {
-        assert_eq!(DAEMON_METRICS.len(), 43);
-        assert_eq!(maximum_daemon_series(), 137);
+        assert_eq!(DAEMON_METRICS.len(), 65);
+        assert_eq!(maximum_daemon_series(), 256);
         let names: BTreeSet<_> = DAEMON_METRICS.iter().map(|metric| metric.name).collect();
         assert_eq!(names.len(), DAEMON_METRICS.len());
         assert!(maximum_daemon_series() <= 256);

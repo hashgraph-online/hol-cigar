@@ -8,9 +8,9 @@ use crate::compiler_control_plane::{
     VerifiedTargetOverflow,
 };
 use crate::{
-    AuthorityClock, BlockingPool, BlockingPoolErrorCode, CacheOutcome, CompilePhase,
-    DaemonTelemetry, DomainIdentityResolver, ParserStage, ProductionApplicationBuilder,
-    ResolvedDomainIdentity,
+    AuthorityClock, BlockingPool, BlockingPoolErrorCode, CacheLayer as TelemetryCacheLayer,
+    CacheReason, CompileCandidateStage, CompilePhase, CompileResultCounts, DaemonTelemetry,
+    DomainIdentityResolver, ParserStage, ProductionApplicationBuilder, ResolvedDomainIdentity,
 };
 use cigar_api::{
     ApiError, AtomBatchResponse, AtomIdRequest, AtomLookupResult, BatchAtomsOperation,
@@ -48,7 +48,8 @@ use cigar_protocol::{
     SelectionManifest, SourceUri, UtcTimestamp, Validate, VersionId,
 };
 use cigar_retrieval::{
-    AuthorizedPartition, CandidateFeatures, CandidateRef, QueryPlanner, QueryVectorProcessor,
+    AuthorizedPartition, BoundedRetrievalResult, CandidateFeatures, CandidateRef, QueryPlanner,
+    QueryVectorProcessor, RequirementAwareCandidateReducer, RetrievalCapacity,
     RetrievalConsistency, RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalRequest,
     RetrievalStage, Retriever, StagedRetrieval, StagedRetrievalResult,
 };
@@ -474,8 +475,20 @@ struct RetainedCompileRecord {
     authorized_projects: Vec<RecordId>,
     processor: String,
     selected_candidates: BTreeMap<VersionId, RetainedCandidate>,
+    #[serde(default)]
+    invalidation_candidates: BTreeMap<VersionId, RetainedCandidate>,
     block_sources: BTreeMap<VersionId, VersionId>,
     created_at: UtcTimestamp,
+}
+
+impl RetainedCompileRecord {
+    fn effective_invalidation_candidates(&self) -> &BTreeMap<VersionId, RetainedCandidate> {
+        if self.invalidation_candidates.is_empty() {
+            &self.selected_candidates
+        } else {
+            &self.invalidation_candidates
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1396,11 +1409,19 @@ where
                 }
             }
         };
+        let profile = CompilerProfile::default();
+        let retrieval_capacity = RetrievalCapacity::new(
+            contract.budget.lane_input_tokens.clone(),
+            profile.maximum_items.clone(),
+            profile.minimum_items.clone(),
+        )
+        .map_err(map_retrieval_error)?;
         self.record_compile_phase(CompilePhase::Scope, phase_started.elapsed());
         let phase_started = Instant::now();
         let retrieval_plan = QueryPlanner::default()
-            .plan_with_vector_processor(
+            .plan_bounded_with_vector_processor(
                 &contract.requirements,
+                &retrieval_capacity,
                 &partition,
                 revision,
                 consistency,
@@ -1410,23 +1431,25 @@ where
                     .flatten(),
             )
             .map_err(map_retrieval_error)?;
+        let retrieval_context = RetrievalContext {
+            cancellation: request.store_cancellation.clone(),
+            deadline: request.monotonic_deadline,
+        };
         let retrieval = StagedRetrieval
-            .execute(
-                &retrieval_plan,
-                self.retriever.as_ref(),
-                &RetrievalContext {
-                    cancellation: request.store_cancellation.clone(),
-                    deadline: request.monotonic_deadline,
-                },
-            )
+            .execute(&retrieval_plan, self.retriever.as_ref(), &retrieval_context)
             .map_err(map_retrieval_error)?;
+        let bounded_retrieval = RequirementAwareCandidateReducer
+            .reduce(&retrieval_plan, &retrieval, &retrieval_context)
+            .map_err(map_retrieval_error)?;
+        let before_governance_count =
+            u64::try_from(bounded_retrieval.counts.raw_stage_candidates).unwrap_or(u64::MAX);
         self.record_compile_phase(CompilePhase::Retrieve, phase_started.elapsed());
         let phase_started = Instant::now();
         let tokenizer = self
             .tokenizers
             .tokenizer(&contract.target)
             .ok_or(cigar_protocol::ErrorCode::DependencyUnavailable)?;
-        let mut seeds = candidate_seeds(&retrieval);
+        let mut seeds = candidate_seeds(&bounded_retrieval);
         let mut index_authorized_versions: BTreeSet<_> = seeds.keys().cloned().collect();
         let mut atoms = BTreeMap::new();
         let mut dependencies = BTreeMap::<VersionId, BTreeSet<VersionId>>::new();
@@ -1436,7 +1459,13 @@ where
             if atoms.contains_key(&version_id) {
                 continue;
             }
-            if atoms.len() >= MAX_COMPILE_CANDIDATES {
+            if atoms.len()
+                >= retrieval_plan
+                    .candidate_bounds
+                    .profile
+                    .absolute_compiler_candidates
+                    .min(MAX_COMPILE_CANDIDATES)
+            {
                 return Err(cigar_protocol::ErrorCode::LimitExceeded);
             }
             if !index_authorized_versions.contains(&version_id) {
@@ -1476,7 +1505,6 @@ where
         let catalog_watermark = authorized_catalog_watermark(&retrieval, &atoms, &dependencies)?;
         let retrieval_plan_digest = retained_retrieval_digest(&contract, &retrieval)?;
         let index_fingerprints = retained_index_fingerprints(&retrieval, &catalog_watermark)?;
-        let profile = CompilerProfile::default();
         let profile_digest = compiler_profile_digest(&profile).map_err(map_compiler_error)?;
         self.record_compile_phase(CompilePhase::Reconcile, phase_started.elapsed());
         let phase_started = Instant::now();
@@ -1539,6 +1567,41 @@ where
             });
         }
         self.record_compile_phase(CompilePhase::Transform, phase_started.elapsed());
+        let blocking_requirement_indices = contract
+            .requirements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, requirement)| requirement.blocking.then_some(index))
+            .collect::<BTreeSet<_>>();
+        let candidate_requirements = candidates
+            .iter()
+            .map(|candidate| {
+                (
+                    candidate.version_id.clone(),
+                    candidate.requirement_indices.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mandatory_candidates = candidates
+            .iter()
+            .filter(|candidate| {
+                candidate.mandatory
+                    || candidate
+                        .requirement_indices
+                        .iter()
+                        .any(|index| blocking_requirement_indices.contains(index))
+            })
+            .count();
+        let logical_candidate_count = candidates
+            .iter()
+            .map(|candidate| &candidate.logical_id)
+            .collect::<BTreeSet<_>>()
+            .len();
+        let compile_cache_reason = if contract.extensions.is_empty() {
+            CacheReason::NotConfigured
+        } else {
+            CacheReason::UnknownSemanticExtension
+        };
         let frozen = FrozenInputs {
             catalog_watermark: catalog_watermark.clone(),
             graph_revision: graph_digest(&dependencies)?,
@@ -1559,11 +1622,100 @@ where
             })
             .map_err(map_compiler_error)?;
         self.record_compile_phase(CompilePhase::Pack, phase_started.elapsed());
+        let selected_versions: BTreeSet<VersionId> = output
+            .plan
+            .dispositions
+            .iter()
+            .filter_map(|(version_id, disposition)| {
+                matches!(disposition, CandidateDisposition::Selected { .. })
+                    .then_some(version_id.clone())
+            })
+            .collect();
+        let represented_versions = output.invalidation.catalog_versions.clone();
         if let Some(telemetry) = &self.telemetry {
             telemetry.record_compile_selection(
                 u64::try_from(output.plan.dispositions.len()).unwrap_or(u64::MAX),
                 u64::try_from(output.bundle.blocks.len()).unwrap_or(u64::MAX),
             );
+            let budget_displaced = output
+                .plan
+                .dispositions
+                .iter()
+                .filter(|(_version, disposition)| {
+                    matches!(
+                        disposition,
+                        CandidateDisposition::Excluded {
+                            reason: DispositionReason::BudgetDisplaced
+                        }
+                    )
+                })
+                .count();
+            let unique_content_keys = output
+                .bundle
+                .blocks
+                .iter()
+                .map(|block| (block.representation, block.content_digest.clone()))
+                .collect::<BTreeSet<_>>()
+                .len();
+            let unique_lineages = represented_versions
+                .iter()
+                .filter_map(|version| atoms.get(version))
+                .map(|atom| &atom.lineage_id)
+                .collect::<BTreeSet<_>>()
+                .len();
+            let blocking_requirements_satisfied = blocking_requirement_indices
+                .iter()
+                .filter(|index| {
+                    represented_versions.iter().any(|version| {
+                        candidate_requirements
+                            .get(version)
+                            .is_some_and(|requirements| requirements.contains(index))
+                    })
+                })
+                .count();
+            telemetry.record_compile_measurements(
+                [
+                    (
+                        CompileCandidateStage::BeforeGovernance,
+                        before_governance_count,
+                    ),
+                    (
+                        CompileCandidateStage::AfterGovernance,
+                        u64::try_from(bounded_retrieval.counts.after_version_coalescing)
+                            .unwrap_or(u64::MAX),
+                    ),
+                    (
+                        CompileCandidateStage::AfterLogicalCoalescing,
+                        u64::try_from(logical_candidate_count).unwrap_or(u64::MAX),
+                    ),
+                    (
+                        CompileCandidateStage::AfterContentGrouping,
+                        u64::try_from(output.content_equivalence.len()).unwrap_or(u64::MAX),
+                    ),
+                    (
+                        CompileCandidateStage::AfterBudgetSelection,
+                        u64::try_from(output.bundle.blocks.len()).unwrap_or(u64::MAX),
+                    ),
+                ],
+                CompileResultCounts {
+                    selected_blocks: u64::try_from(output.bundle.blocks.len()).unwrap_or(u64::MAX),
+                    unique_content_keys: u64::try_from(unique_content_keys).unwrap_or(u64::MAX),
+                    unique_source_versions: u64::try_from(represented_versions.len())
+                        .unwrap_or(u64::MAX),
+                    unique_lineages: u64::try_from(unique_lineages).unwrap_or(u64::MAX),
+                    budget_displaced: u64::try_from(budget_displaced).unwrap_or(u64::MAX),
+                    mandatory_candidates: u64::try_from(mandatory_candidates).unwrap_or(u64::MAX),
+                    blocking_requirements_satisfied: u64::try_from(blocking_requirements_satisfied)
+                        .unwrap_or(u64::MAX),
+                },
+            );
+            for layer in [
+                TelemetryCacheLayer::Retrieval,
+                TelemetryCacheLayer::Plan,
+                TelemetryCacheLayer::Bundle,
+            ] {
+                telemetry.record_cache_observation(layer, compile_cache_reason);
+            }
             for lane in [
                 LaneKind::Rules,
                 LaneKind::Task,
@@ -1596,16 +1748,23 @@ where
                 .count();
             telemetry.record_compile_conflicts(u64::try_from(conflicts).unwrap_or(u64::MAX));
         }
-        let selected_versions: BTreeSet<VersionId> = output
-            .plan
-            .dispositions
-            .iter()
-            .filter_map(|(version_id, disposition)| {
-                matches!(disposition, CandidateDisposition::Selected { .. })
-                    .then_some(version_id.clone())
-            })
-            .collect();
         let selected_candidates = selected_versions
+            .iter()
+            .map(|version_id| {
+                let atom = atoms
+                    .get(version_id)
+                    .ok_or(cigar_protocol::ErrorCode::Internal)?;
+                Ok((
+                    version_id.clone(),
+                    RetainedCandidate {
+                        atom_id: atom.atom_id.clone(),
+                        version_id: version_id.clone(),
+                        content_digest: atom.content_digest.clone(),
+                    },
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, cigar_protocol::ErrorCode>>()?;
+        let invalidation_candidates = represented_versions
             .iter()
             .map(|version_id| {
                 let atom = atoms
@@ -1647,7 +1806,7 @@ where
             }
             block_sources.insert(block.block_id.clone(), source);
         }
-        for version_id in &selected_versions {
+        for version_id in &represented_versions {
             let atom = atoms
                 .get(version_id)
                 .ok_or(cigar_protocol::ErrorCode::Internal)?;
@@ -1670,6 +1829,7 @@ where
             authorized_projects: authorization.project_ids.iter().cloned().collect(),
             processor: authorization.processor.clone(),
             selected_candidates,
+            invalidation_candidates,
             block_sources,
             created_at: request.observed_at,
         };
@@ -2186,7 +2346,7 @@ where
             cache_fingerprint,
         )
         .ok_or(cigar_protocol::ErrorCode::Internal)?;
-        let cached = self
+        let cached_bytes = self
             .compiler_control_plane
             .cache_get(
                 &cache_key,
@@ -2195,25 +2355,43 @@ where
                 |candidate| candidate == &cache_key,
             )
             .ok()
-            .flatten()
-            .and_then(|bytes| serde_json::from_slice::<MaterializationResponse>(&bytes).ok())
-            .filter(|response| {
-                response.context.validate().is_ok()
-                    && response.context.bundle_id == bundle.bundle_id
-                    && response.context.tokenizer_fingerprint
-                        == retained
+            .flatten();
+        let (cached, cache_miss_reason) = match cached_bytes {
+            None => (None, CacheReason::AbsentEntry),
+            Some(bytes) => match serde_json::from_slice::<MaterializationResponse>(&bytes) {
+                Err(_error) => (None, CacheReason::AbsentEntry),
+                Ok(response) if response.context.validate().is_err() => {
+                    (None, CacheReason::UnknownSemanticExtension)
+                }
+                Ok(response) if response.context.bundle_id != bundle.bundle_id => {
+                    (None, CacheReason::WatermarkMismatch)
+                }
+                Ok(response)
+                    if response.context.tokenizer_fingerprint
+                        != retained
                             .value
                             .normalized_contract
                             .target
-                            .tokenizer_fingerprint
-                    && response.context.materializer_fingerprint
-                        == retained
+                            .tokenizer_fingerprint =>
+                {
+                    (None, CacheReason::TokenizerMismatch)
+                }
+                Ok(response)
+                    if response.context.materializer_fingerprint
+                        != retained
                             .value
                             .normalized_contract
                             .target
-                            .materializer_fingerprint
-                    && response.physical_input_tokens == response.context.token_count
-            });
+                            .materializer_fingerprint =>
+                {
+                    (None, CacheReason::MaterializerMismatch)
+                }
+                Ok(response) if response.physical_input_tokens != response.context.token_count => {
+                    (None, CacheReason::WatermarkMismatch)
+                }
+                Ok(response) => (Some(response), CacheReason::Hit),
+            },
+        };
         if let Some(response) = cached {
             require_selected_atoms_authorized(
                 &read,
@@ -2235,7 +2413,10 @@ where
                 return Err(cigar_protocol::ErrorCode::BudgetUnsatisfiable);
             }
             if let Some(telemetry) = &self.telemetry {
-                telemetry.record_cache_outcome(CacheOutcome::Hit);
+                telemetry.record_cache_observation(
+                    TelemetryCacheLayer::Materialization,
+                    CacheReason::Hit,
+                );
                 telemetry.record_materialization_tokens(
                     u64::from(response.physical_input_tokens),
                     0,
@@ -2246,7 +2427,8 @@ where
             return Ok(response);
         }
         if let Some(telemetry) = &self.telemetry {
-            telemetry.record_cache_outcome(CacheOutcome::Miss);
+            telemetry
+                .record_cache_observation(TelemetryCacheLayer::Materialization, cache_miss_reason);
         }
         let (materialized, accounting) = materialize(profile, &bundle, &bodies, tokenizer.as_ref())
             .map_err(map_materialization_error)?;
@@ -2374,7 +2556,7 @@ where
                 reasons.insert("bundle_missing".to_owned());
             }
         }
-        for candidate in retained.selected_candidates.values() {
+        for candidate in retained.effective_invalidation_candidates().values() {
             request.check()?;
             match require_index_authorized_version(
                 self.retriever.as_ref(),
@@ -2420,16 +2602,29 @@ where
                 }
             }
         }
-        let current_retrieval = QueryPlanner::default().plan_with_vector_processor(
-            &retained.normalized_contract.requirements,
-            &partition,
-            retained.catalog_store_revision,
-            RetrievalConsistency::Strong,
-            authorization
-                .vector_allowed
-                .then_some(self.query_vector_processor.as_deref())
-                .flatten(),
+        let current_profile = CompilerProfile::default();
+        let current_capacity = RetrievalCapacity::new(
+            retained
+                .normalized_contract
+                .budget
+                .lane_input_tokens
+                .clone(),
+            current_profile.maximum_items,
+            current_profile.minimum_items,
         );
+        let current_retrieval = current_capacity.and_then(|capacity| {
+            QueryPlanner::default().plan_bounded_with_vector_processor(
+                &retained.normalized_contract.requirements,
+                &capacity,
+                &partition,
+                retained.catalog_store_revision,
+                RetrievalConsistency::Strong,
+                authorization
+                    .vector_allowed
+                    .then_some(self.query_vector_processor.as_deref())
+                    .flatten(),
+            )
+        });
         match current_retrieval.and_then(|plan| {
             StagedRetrieval.execute(
                 &plan,
@@ -2933,20 +3128,16 @@ struct CandidateSeed {
     requirement_indices: BTreeSet<usize>,
 }
 
-fn candidate_seeds(retrieval: &StagedRetrievalResult) -> BTreeMap<VersionId, CandidateSeed> {
+fn candidate_seeds(retrieval: &BoundedRetrievalResult) -> BTreeMap<VersionId, CandidateSeed> {
     let mut seeds = BTreeMap::<VersionId, CandidateSeed>::new();
-    for stage in &retrieval.stages {
-        for candidate in &stage.batch.candidates {
-            let seed = seeds.entry(candidate.version_id.clone()).or_default();
-            seed.requirement_indices.insert(stage.requirement_index);
-            let replace = seed
-                .candidate
-                .as_ref()
-                .is_none_or(|current| candidate.total_score > current.total_score);
-            if replace {
-                seed.candidate = Some(candidate.clone());
-            }
-        }
+    for bounded in &retrieval.candidates {
+        seeds.insert(
+            bounded.candidate.version_id.clone(),
+            CandidateSeed {
+                candidate: Some(bounded.candidate.clone()),
+                requirement_indices: bounded.requirement_indices.clone(),
+            },
+        );
     }
     seeds
 }
@@ -3260,7 +3451,7 @@ fn require_selected_atoms_authorized<T: ReadTransaction>(
     retriever: &dyn Retriever,
     request: &ApplicationRequest,
 ) -> Result<(), cigar_protocol::ErrorCode> {
-    for candidate in retained.selected_candidates.values() {
+    for candidate in retained.effective_invalidation_candidates().values() {
         require_index_authorized_version(
             retriever,
             partition,
@@ -3411,7 +3602,23 @@ fn validate_compile_record(
         .map(|block| &block.block_id)
         .collect();
     let retained_block_ids: BTreeSet<_> = record.block_sources.keys().collect();
+    let provenance_versions: BTreeSet<_> = record
+        .bundle
+        .blocks
+        .iter()
+        .flat_map(|block| block.provenance.iter().cloned())
+        .collect();
+    let invalidation_versions: BTreeSet<_> = record
+        .effective_invalidation_candidates()
+        .keys()
+        .cloned()
+        .collect();
     if block_ids != retained_block_ids
+        || provenance_versions != invalidation_versions
+        || record
+            .effective_invalidation_candidates()
+            .iter()
+            .any(|(version_id, candidate)| version_id != &candidate.version_id)
         || record
             .block_sources
             .values()

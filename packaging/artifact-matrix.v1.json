@@ -1,14 +1,14 @@
 {
   "schema_version": "cigar.artifact-matrix.v1",
   "product": "cigar",
-  "product_version": "0.9.0-honey.1",
+  "product_version": "0.9.1-honey.1",
   "context_abi": "cigar.context.v1",
   "release_state": "development",
   "artifacts": [
     {
       "id": "source",
       "kind": "source-archive",
-      "filename": "cigar-0.9.0-honey.1-source.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-source.tar.gz",
       "contract": "contracts/source-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -17,7 +17,7 @@
     {
       "id": "docs",
       "kind": "documentation-archive",
-      "filename": "cigar-0.9.0-honey.1-docs.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-docs.tar.gz",
       "contract": "contracts/docs-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -26,7 +26,7 @@
     {
       "id": "schemas",
       "kind": "schema-archive",
-      "filename": "cigar-0.9.0-honey.1-schemas.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-schemas.tar.gz",
       "contract": "contracts/schemas-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -35,7 +35,7 @@
     {
       "id": "conformance",
       "kind": "conformance-archive",
-      "filename": "cigar-0.9.0-honey.1-conformance.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-conformance.tar.gz",
       "contract": "contracts/conformance-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -44,7 +44,7 @@
     {
       "id": "benchmarks",
       "kind": "benchmark-fixture-archive",
-      "filename": "cigar-0.9.0-honey.1-benchmarks.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-benchmarks.tar.gz",
       "contract": "contracts/benchmark-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -53,7 +53,7 @@
     {
       "id": "licenses",
       "kind": "license-archive",
-      "filename": "cigar-0.9.0-honey.1-licenses.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-licenses.tar.gz",
       "contract": "contracts/license-archive.v1.json",
       "producer": "python3 scripts/release/build_archives.py",
       "required_for_release": true,
@@ -62,7 +62,7 @@
     {
       "id": "cli-daemon-linux-x86_64-gnu",
       "kind": "binary-archive",
-      "filename": "cigar-0.9.0-honey.1-x86_64-unknown-linux-gnu.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-x86_64-unknown-linux-gnu.tar.gz",
       "contract": "contracts/binary-archive.v1.json",
       "platform": "x86_64-unknown-linux-gnu",
       "required_for_release": true,
@@ -71,7 +71,7 @@
     {
       "id": "cli-daemon-linux-aarch64-gnu",
       "kind": "binary-archive",
-      "filename": "cigar-0.9.0-honey.1-aarch64-unknown-linux-gnu.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-aarch64-unknown-linux-gnu.tar.gz",
       "contract": "contracts/binary-archive.v1.json",
       "platform": "aarch64-unknown-linux-gnu",
       "required_for_release": true,
@@ -80,7 +80,7 @@
     {
       "id": "cli-daemon-macos-x86_64",
       "kind": "binary-archive",
-      "filename": "cigar-0.9.0-honey.1-x86_64-apple-darwin.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-x86_64-apple-darwin.tar.gz",
       "contract": "contracts/binary-archive.v1.json",
       "platform": "x86_64-apple-darwin",
       "required_for_release": true,
@@ -89,7 +89,7 @@
     {
       "id": "cli-daemon-macos-aarch64",
       "kind": "binary-archive",
-      "filename": "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz",
       "contract": "contracts/macos-runtime-archive.v1.json",
       "platform": "aarch64-apple-darwin",
       "producer": "python3 scripts/release/build_macos_aarch64_archive.py",
@@ -102,7 +102,7 @@
     {
       "id": "cigar-conformance-macos-aarch64",
       "kind": "conformance-runner-archive",
-      "filename": "cigar-conformance-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
+      "filename": "cigar-conformance-0.9.1-honey.1-aarch64-apple-darwin.tar.gz",
       "contract": "contracts/macos-conformance-runner.v1.json",
       "platform": "aarch64-apple-darwin",
       "producer": "python3 scripts/release/build_macos_qualification_tools.py conformance",
@@ -115,7 +115,7 @@
     {
       "id": "cigarbench-macos-aarch64",
       "kind": "benchmark-tool-archive",
-      "filename": "cigarbench-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
+      "filename": "cigarbench-0.9.1-honey.1-aarch64-apple-darwin.tar.gz",
       "contract": "contracts/macos-cigarbench-tool.v1.json",
       "platform": "aarch64-apple-darwin",
       "producer": "python3 scripts/release/build_macos_qualification_tools.py cigarbench",
@@ -128,7 +128,7 @@
     {
       "id": "macos-homebrew-formula-arm64",
       "kind": "homebrew-tap-archive",
-      "filename": "cigar-0.9.0-honey.1-homebrew-tap.tar.gz",
+      "filename": "cigar-0.9.1-honey.1-homebrew-tap.tar.gz",
       "contract": "contracts/homebrew-tap.v1.json",
       "platform": "aarch64-apple-darwin",
       "ecosystem": "homebrew",
@@ -142,13 +142,13 @@
     {
       "id": "macos-installer-arm64",
       "kind": "homebrew-bottle",
-      "filename": "cigar--0.9.0-honey.1.arm64_sequoia.bottle.tar.gz",
+      "filename": "cigar--0.9.1-honey.1.arm64_sequoia.bottle.tar.gz",
       "contract": "contracts/homebrew-bottle.v1.json",
       "platform": "aarch64-apple-darwin",
       "ecosystem": "homebrew",
       "producer": "python3 scripts/release/build_macos_homebrew_artifacts.py",
       "signature_purpose": "homebrew-bottle-distribution",
-      "install_target": "homebrew-cellar/cigar/0.9.0-honey.1",
+      "install_target": "homebrew-cellar/cigar/0.9.1-honey.1",
       "evidence_map": ["package-contract", "native-archive-binding", "installed-artifact", "unprivileged", "offline", "upgrade", "uninstall", "sbom", "license", "signature", "platform-signing", "notarization", "provenance"],
       "required_for_release": true,
       "qualification": ["homebrew-bottle", "installed-artifact", "unprivileged", "offline", "upgrade", "uninstall", "sbom", "license", "signature", "platform-signing", "notarization", "provenance"]
@@ -156,7 +156,7 @@
     {
       "id": "cli-daemon-windows-x86_64",
       "kind": "binary-archive",
-      "filename": "cigar-0.9.0-honey.1-x86_64-pc-windows-msvc.zip",
+      "filename": "cigar-0.9.1-honey.1-x86_64-pc-windows-msvc.zip",
       "contract": "contracts/binary-archive.v1.json",
       "platform": "x86_64-pc-windows-msvc",
       "required_for_release": true,
@@ -165,7 +165,7 @@
     {
       "id": "typescript-sdk",
       "kind": "npm-package",
-      "filename": "cigar-sdk-0.9.0-honey.1.tgz",
+      "filename": "cigar-sdk-0.9.1-honey.1.tgz",
       "contract": "contracts/npm-package.v1.json",
       "ecosystem": "npm",
       "producer": "python3 scripts/release/build_typescript_sdk.py",
@@ -175,7 +175,7 @@
     {
       "id": "rust-sdk-crate",
       "kind": "cargo-crate",
-      "filename": "cigar-sdk-0.9.0-honey.1.crate",
+      "filename": "cigar-sdk-0.9.1-honey.1.crate",
       "contract": "contracts/cargo-crate.v1.json",
       "ecosystem": "crates.io",
       "producer": "python3 scripts/release/build_rust_sdk_crate.py",
@@ -185,7 +185,7 @@
     {
       "id": "python-sdk-sdist",
       "kind": "python-sdist",
-      "filename": "cigar_sdk-0.9.0.dev1.tar.gz",
+      "filename": "cigar_sdk-0.9.1.dev1.tar.gz",
       "contract": "contracts/python-sdist.v1.json",
       "ecosystem": "python",
       "producer": "python3 scripts/release/build_python_sdk_artifacts.py",
@@ -195,7 +195,7 @@
     {
       "id": "python-sdk-wheel",
       "kind": "python-wheel",
-      "filename": "cigar_sdk-0.9.0.dev1-py3-none-any.whl",
+      "filename": "cigar_sdk-0.9.1.dev1-py3-none-any.whl",
       "contract": "contracts/python-wheel.v1.json",
       "ecosystem": "python",
       "producer": "python3 scripts/release/build_python_sdk_artifacts.py",
@@ -205,7 +205,7 @@
     {
       "id": "go-sdk",
       "kind": "go-module",
-      "filename": "cigar-go-sdk-0.9.0-honey.1.zip",
+      "filename": "cigar-go-sdk-0.9.1-honey.1.zip",
       "contract": "contracts/go-module.v1.json",
       "ecosystem": "go",
       "producer": "python3 scripts/release/build_go_sdk.py",
@@ -215,7 +215,7 @@
     {
       "id": "claude-code-plugin",
       "kind": "plugin-archive",
-      "filename": "cigar-claude-code-0.9.0-honey.1.tar.gz",
+      "filename": "cigar-claude-code-0.9.1-honey.1.tar.gz",
       "producer": "python3 scripts/release/build_claude_code_plugin.py",
       "contract": "contracts/plugin-archive.v1.json",
       "required_for_release": true,
@@ -224,7 +224,7 @@
     {
       "id": "shared-oci",
       "kind": "oci-index",
-      "filename": "cigar-cigard-0.9.0-honey.1.oci.tar",
+      "filename": "cigar-cigard-0.9.1-honey.1.oci.tar",
       "contract": "contracts/oci-image.v1.json",
       "platform": "linux/amd64,linux/arm64",
       "required_for_release": true,

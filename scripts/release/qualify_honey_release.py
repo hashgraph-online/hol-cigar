@@ -38,14 +38,14 @@ from source_descriptor import SourceDescriptorError, build_source_descriptor
 from verify_honey_release import verify as verify_public_candidate
 
 
-VERSION = "0.9.0-honey.1"
+VERSION = "0.9.1-honey.1"
 ABI = "cigar.context.v1"
 TARGET = "aarch64-apple-darwin"
 RUNTIME_NAME = f"cigar-{VERSION}-{TARGET}.tar.gz"
 TOOL_NAME = f"cigar-conformance-{VERSION}-{TARGET}.tar.gz"
 TYPESCRIPT_NAME = f"cigar-sdk-{VERSION}.tgz"
-PYTHON_WHEEL_NAME = "cigar_sdk-0.9.0.dev1-py3-none-any.whl"
-PYTHON_SDIST_NAME = "cigar_sdk-0.9.0.dev1.tar.gz"
+PYTHON_WHEEL_NAME = "cigar_sdk-0.9.1.dev1-py3-none-any.whl"
+PYTHON_SDIST_NAME = "cigar_sdk-0.9.1.dev1.tar.gz"
 RUST_NAME = f"cigar-rust-sdk-{VERSION}-local-registry.tar.gz"
 CLAUDE_NAME = f"cigar-claude-code-{VERSION}.tar.gz"
 DEMO_NAME = f"cigar-honey-demos-{VERSION}.tar.gz"
@@ -56,6 +56,10 @@ POLICY_INPUTS = (
     "packaging/honey/capability-profile.v1.json",
     "packaging/honey/artifact-matrix.v1.json",
     "packaging/honey/release-requirements.v1.json",
+    "packaging/honey/efficiency-qualification-profile.v1.json",
+    "packaging/honey/verified-copy-input.v1.json",
+    "packaging/honey/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
+    "benches/honey-efficiency/qualification-fixtures.v1.json",
     "packaging/honey/capability-ownership.v1.json",
     "packaging/honey/local-archives.v1.json",
     "packaging/honey/schemas/honey-evidence.v1.schema.json",
@@ -87,6 +91,8 @@ TOOL_INPUTS = (
     "scripts/release/qualify_honey_docs.py",
     "scripts/release/build_honey_gate_reports.py",
     "scripts/release/build_honey_evidence.py",
+    "scripts/release/honey_efficiency_contract.py",
+    "scripts/release/qualify_honey_efficiency.py",
     "scripts/release/qualify_honey_release.py",
     "demos/run_honey.py",
     "scripts/release/check_docs.py",
@@ -156,6 +162,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--source-date-epoch", type=int)
+    parser.add_argument(
+        "--efficiency-raw-observations",
+        type=Path,
+        help="owner-private raw observations required by qualify/all",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("build", help="build the exact unqualified candidate")
     subparsers.add_parser(
@@ -506,6 +517,10 @@ def _evidence_rows(
             "claude-code-plugin-installed-development-qualification.json",
         ),
         "documentation-report": ("docs-report", "documentation-report.json"),
+        "efficiency-reliability-report": (
+            "efficiency-qualification",
+            "honey-efficiency-reliability-report.json",
+        ),
         "installed-runtime-report": ("installed", "installed-runtime-report.json"),
         "license-inventory": (
             "static-reports",
@@ -552,6 +567,11 @@ def _evidence_rows(
         "bounded-safety-report": capabilities,
         "claude-lifecycle-report": ["claude-code", "mcp"],
         "documentation-report": ["cli"],
+        "efficiency-reliability-report": [
+            "governed-context",
+            "local-daemon",
+            "operations-observability",
+        ],
         "installed-runtime-report": capabilities,
         "license-inventory": ["cli"],
         "offline-dependency-check": ["python-sdk", "rust-sdk", "typescript-sdk"],
@@ -604,6 +624,7 @@ def _workspace_arguments(layout: Layout) -> list[str]:
         ("demo-two-agent", layout.path("demo-two-agent")),
         ("demo-other", layout.path("demo-other")),
         ("docs-report", layout.path("docs-report")),
+        ("efficiency-qualification", layout.path("efficiency-qualification")),
         ("gate-reports", layout.path("gate-reports")),
         ("static-reports", layout.path("static-reports")),
     )
@@ -768,7 +789,12 @@ def _extract_candidate_archives(layout: Layout) -> None:
     )
 
 
-def _qualify(root: Path, layout: Layout, epoch: int) -> dict[str, Any]:
+def _qualify(
+    root: Path,
+    layout: Layout,
+    epoch: int,
+    efficiency_raw_observations: Path | None,
+) -> dict[str, Any]:
     before = _source_identity(root)
     environment = _environment(epoch)
     environment["CIGAR_NO_EGRESS_ENFORCED"] = "1"
@@ -831,6 +857,30 @@ def _qualify(root: Path, layout: Layout, epoch: int) -> dict[str, Any]:
         label="Claude Code installed lifecycle",
     )
     _extract_candidate_archives(layout)
+    if efficiency_raw_observations is None:
+        raise HoneyQualificationError(
+            "qualify requires --efficiency-raw-observations from the frozen installed cohort"
+        )
+    _run(
+        root,
+        [
+            python,
+            "scripts/release/qualify_honey_efficiency.py",
+            "--root",
+            os.fspath(root),
+            "--raw-observations",
+            os.fspath(efficiency_raw_observations),
+            "--candidate-manifest",
+            os.fspath(layout.candidate / "honey-release-manifest.json"),
+            "--installed-runtime",
+            os.fspath(layout.path("docs-installed-runtime") / "bin/cigar"),
+            "--output",
+            os.fspath(layout.path("efficiency-qualification")),
+        ],
+        environment=environment,
+        label="installed efficiency and reliability qualification",
+        timeout=14_400,
+    )
     _run_demos(root, layout, environment, python)
     variables = _docs_variables(root, layout)
     variables_workspace = layout.path("docs-variables-file")
@@ -960,9 +1010,37 @@ def _check_evidence(
     return document
 
 
-def _verify(root: Path, layout: Layout, epoch: int) -> dict[str, Any]:
+def _verify(
+    root: Path,
+    layout: Layout,
+    epoch: int,
+    efficiency_raw_observations: Path | None,
+) -> dict[str, Any]:
     before = _source_identity(root)
     public = verify_public_candidate(layout.candidate, root)
+    if efficiency_raw_observations is None:
+        raise HoneyQualificationError(
+            "verify requires --efficiency-raw-observations to authenticate the raw digest"
+        )
+    _run(
+        root,
+        [
+            sys.executable,
+            "scripts/release/honey_efficiency_contract.py",
+            "validate-report",
+            "--root",
+            os.fspath(root),
+            "--report",
+            os.fspath(
+                layout.path("efficiency-qualification")
+                / "honey-efficiency-reliability-report.json"
+            ),
+            "--raw-observations",
+            os.fspath(efficiency_raw_observations),
+        ],
+        environment=_environment(epoch),
+        label="non-mutating efficiency evidence reconstruction",
+    )
     check = _check_evidence(root, layout, _environment(epoch), sys.executable)
     qualification_path = layout.path("qualification") / QUALIFICATION_RESULT
     qualification = load_json(qualification_path)
@@ -1008,12 +1086,27 @@ def main() -> int:
     if arguments.command == "build":
         result = _build(root, layout, epoch)
     elif arguments.command == "qualify":
-        result = _qualify(root, layout, epoch)
+        result = _qualify(
+            root,
+            layout,
+            epoch,
+            getattr(arguments, "efficiency_raw_observations", None),
+        )
     elif arguments.command == "verify":
-        result = _verify(root, layout, epoch)
+        result = _verify(
+            root,
+            layout,
+            epoch,
+            getattr(arguments, "efficiency_raw_observations", None),
+        )
     else:
         _build(root, layout, epoch)
-        result = _qualify(root, layout, epoch)
+        result = _qualify(
+            root,
+            layout,
+            epoch,
+            getattr(arguments, "efficiency_raw_observations", None),
+        )
     print(canonical_json_bytes(result).decode("utf-8"), end="")
     return 0
 

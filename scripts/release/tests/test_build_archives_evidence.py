@@ -87,7 +87,7 @@ class BuildArchivesEvidenceTests(unittest.TestCase):
     def minimal_honey_source(self, name: str) -> Path:
         root = self.minimal_source(name)
         manifest = json.loads((root / "manifest.json").read_bytes())
-        manifest["product_version"] = "0.9.0-honey.1"
+        manifest["product_version"] = "0.9.1-honey.1"
         honey_manifest = root / build_archives.HONEY_MANIFEST_PATH
         honey_manifest.parent.mkdir(parents=True, exist_ok=True)
         honey_manifest.write_text(json.dumps(manifest), encoding="utf-8")

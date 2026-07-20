@@ -8,8 +8,9 @@ use crate::{
 };
 use cigar_policy::RetrievalResourceAuthorizationRequest;
 use cigar_protocol::{
-    AtomPayload, Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority,
-    Lifecycle, LineageId, RecordId, RelativePath, UtcTimestamp, Validate, VersionId,
+    AtomKind, AtomPayload, Classification, ContentDigest, ContextAtomV1, ContextEdge,
+    InstructionAuthority, Lifecycle, LineageId, RecordId, RelativePath, UtcTimestamp, Validate,
+    VersionId,
 };
 use cigar_store::StoreRevision;
 use sha2::{Digest, Sha256};
@@ -612,16 +613,22 @@ impl InMemoryIndexManager {
             let total_score = features.balanced_score()?;
             candidates.push(CandidateRef {
                 version_id: version,
+                lineage_id: document.atom.lineage_id.clone(),
+                content_digest: document.atom.content_digest.clone(),
+                atom_kind: document.atom.kind,
                 canonical_uri: document.atom.source.uri.clone(),
                 relative_path: document.atom.source.relative_path.clone(),
                 instruction_authority: document.atom.governance.instruction_authority,
+                classification: document.atom.governance.classification,
                 features,
                 total_score,
                 evidence,
             });
             work.scored_candidates = work.scored_candidates.saturating_add(1);
         }
-        candidates.sort_by(candidate_order);
+        candidates.sort_by(|left, right| {
+            intrinsic_protection_order(left, right).then_with(|| candidate_order(left, right))
+        });
         candidates.truncate(request.limit);
         request.partition.validate()?;
         let partition_semantic_root = partition_semantic_root(
@@ -1206,6 +1213,16 @@ fn candidate_order(left: &CandidateRef, right: &CandidateRef) -> std::cmp::Order
         .then_with(|| left.version_id.cmp(&right.version_id))
 }
 
+fn intrinsic_protection_order(left: &CandidateRef, right: &CandidateRef) -> std::cmp::Ordering {
+    intrinsic_protected(right).cmp(&intrinsic_protected(left))
+}
+
+fn intrinsic_protected(candidate: &CandidateRef) -> bool {
+    candidate.evidence.contains(&MatchEvidence::ExactIdentity)
+        || candidate.atom_kind == AtomKind::Policy
+        || candidate.instruction_authority >= InstructionAuthority::Project
+}
+
 fn revision_lag(
     built: StoreRevision,
     required: StoreRevision,
@@ -1383,8 +1400,8 @@ mod tests {
         Retriever, VectorAdapter, VectorIndexBinding, VectorNeighbor, VectorQuery,
     };
     use cigar_protocol::{
-        Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority, Lifecycle,
-        RecordId, RelativePath, SourceUri, UtcTimestamp, VersionId,
+        AtomKind, Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority,
+        Lifecycle, RecordId, RelativePath, SourceUri, UtcTimestamp, VersionId,
     };
     use cigar_store::{CancellationToken, StoreRevision};
     use cigar_testkit::deterministic_protocol_fixture;
@@ -1863,6 +1880,37 @@ mod tests {
         let diagnostic = format!("{lexical:?} {batch:?} {manager:?}");
         assert!(!diagnostic.contains("secret_term"));
         assert!(!diagnostic.contains("project-b-secret"));
+        Ok(())
+    }
+
+    #[test]
+    fn low_rank_policy_evidence_survives_ordinary_stage_truncation() -> Result<(), Box<dyn Error>> {
+        let tenant = record(8)?;
+        let project = record(9)?;
+        let mut ordinary = atom(90, &tenant, &project, "protected_term ordinary")?;
+        ordinary.source.uri = SourceUri::new("file:///project/00-ordinary.md")?;
+        let mut policy = atom(91, &tenant, &project, "protected_term policy")?;
+        policy.kind = AtomKind::Policy;
+        policy.source.uri = SourceUri::new("file:///project/ff-policy.md")?;
+        let manager = InMemoryIndexManager::default();
+        let descriptor = manager.build_generation(
+            build(vec![ordinary, policy.clone()], Vec::new(), 21, false)?,
+            &context(),
+        )?;
+        manager.activate(&descriptor.generation_id, None)?;
+        let mut lexical = request(RetrievalStage::Lexical, partition(&tenant, [project])?, 21);
+        lexical.terms.insert("protected_term".to_owned());
+        lexical.limit = 1;
+        let batch = manager.retrieve(&lexical, &context())?;
+        assert_eq!(batch.candidates.len(), 1);
+        assert_eq!(
+            batch
+                .candidates
+                .first()
+                .ok_or("protected policy candidate is absent")?
+                .version_id,
+            policy.version_id
+        );
         Ok(())
     }
 

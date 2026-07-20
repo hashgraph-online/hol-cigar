@@ -540,11 +540,11 @@ def _qualification_product(product: Any) -> QualificationProduct:
     if (
         set(product) == honey_keys
         and product.get("product") == "cigar"
-        and product.get("target_release_version") == "0.9.0"
+        and product.get("target_release_version") == "0.9.1"
         and product.get("release_state") == "developer-preview"
         and product.get("channel") == "honey"
         and product.get("prerelease") is True
-        and re.fullmatch(r"0\.9\.0-honey\.[1-9][0-9]*", version) is not None
+        and re.fullmatch(r"0\.9\.1-honey\.[1-9][0-9]*", version) is not None
         and product.get("tag") == f"v{version}"
     ):
         return QualificationProduct(

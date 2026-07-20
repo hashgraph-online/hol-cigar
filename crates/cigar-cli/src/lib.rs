@@ -575,7 +575,7 @@ mod tests {
     async fn version_and_help_are_stable_without_a_target() {
         let version = run(args(&["version"]), TerminalContext::default()).await;
         assert_eq!(version.status, 0);
-        assert!(version.stdout.contains("\"version\":\"0.9.0-honey.1\""));
+        assert!(version.stdout.contains("\"version\":\"0.9.1-honey.1\""));
         assert!(version.stderr.is_empty());
 
         let help = run(Vec::new(), TerminalContext::default()).await;

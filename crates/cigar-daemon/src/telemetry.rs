@@ -4,6 +4,11 @@ use crate::worker::{BlockingPoolMetrics, QueueMetricsSnapshot, WorkerKind};
 use cigar_api::{TransportMetricEvent, TransportMetricsObserver};
 use cigar_observe::{DAEMON_METRICS, MetricKind, metric_definition};
 use cigar_protocol::{EffectState, LaneKind};
+use cigar_store::{
+    RepositoryCommitKind, RepositoryCommitMetrics, RepositoryCommitMetricsObserver,
+    RepositoryCommitOutcome, RepositoryStartupMetrics, RepositoryStartupMetricsObserver,
+    RepositoryStartupOutcome, RepositoryStartupStage,
+};
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _};
 use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
@@ -25,6 +30,14 @@ const MAX_OTLP_CA_CERTIFICATES: usize = 128;
 const EFFECT_STATE_COUNT: usize = 16;
 const LANE_COUNT: usize = 5;
 const COMPILE_PHASE_COUNT: usize = 7;
+const COMPILE_CANDIDATE_STAGE_COUNT: usize = 5;
+const COMPILE_RESULT_COUNT: usize = 7;
+const CACHE_OBSERVATION_COUNT: usize = 32;
+const REPOSITORY_COMMIT_KIND_COUNT: usize = 3;
+const REPOSITORY_COMMIT_OUTCOME_COUNT: usize = 2;
+const REPOSITORY_COMMIT_PHASE_COUNT: usize = 11;
+const STARTUP_STAGE_COUNT: usize = 11;
+const STARTUP_OUTCOME_COUNT: usize = 2;
 
 #[derive(Clone, Eq, PartialEq)]
 struct OtlpTlsConfig {
@@ -485,27 +498,131 @@ impl CompilePhase {
     }
 }
 
-/// Closed materialization-cache outcome.
+/// Closed candidate-count checkpoint through retrieval and compilation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CacheOutcome {
-    /// An authenticated cache entry was reused.
-    Hit,
-    /// No valid cache entry existed.
-    Miss,
+pub enum CompileCandidateStage {
+    /// Raw bounded candidates returned across retrieval channels, including channel duplicates.
+    BeforeGovernance,
+    /// Unique candidates loaded and reauthorized against current governance.
+    AfterGovernance,
+    /// Unique logical candidates after deterministic lineage/logical coalescing.
+    AfterLogicalCoalescing,
+    /// Unique content keys after the content-equivalence checkpoint.
+    AfterContentGrouping,
+    /// Blocks retained by deterministic budget selection.
+    AfterBudgetSelection,
 }
 
-impl CacheOutcome {
+impl CompileCandidateStage {
+    const fn index(self) -> usize {
+        match self {
+            Self::BeforeGovernance => 0,
+            Self::AfterGovernance => 1,
+            Self::AfterLogicalCoalescing => 2,
+            Self::AfterContentGrouping => 3,
+            Self::AfterBudgetSelection => 4,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::BeforeGovernance => "before_governance",
+            Self::AfterGovernance => "after_governance",
+            Self::AfterLogicalCoalescing => "after_logical_coalescing",
+            Self::AfterContentGrouping => "after_content_grouping",
+            Self::AfterBudgetSelection => "after_budget_selection",
+        }
+    }
+}
+
+/// Content-free counts emitted once after a successful deterministic compilation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CompileResultCounts {
+    /// Selected context blocks.
+    pub selected_blocks: u64,
+    /// Unique selected normalized content keys.
+    pub unique_content_keys: u64,
+    /// Unique selected source versions.
+    pub unique_source_versions: u64,
+    /// Unique selected lineages.
+    pub unique_lineages: u64,
+    /// Candidates excluded by the deterministic budget.
+    pub budget_displaced: u64,
+    /// Candidates protected by an explicit mandatory flag or blocking requirement.
+    pub mandatory_candidates: u64,
+    /// Blocking contract requirements represented by selected candidates.
+    pub blocking_requirements_satisfied: u64,
+}
+
+/// Closed governed cache layer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CacheLayer {
+    /// Authorized retrieval transcript.
+    Retrieval,
+    /// Deterministic context plan.
+    Plan,
+    /// Sealed context bundle.
+    Bundle,
+    /// Provider-ready materialization.
+    Materialization,
+}
+
+impl CacheLayer {
+    const fn index(self) -> usize {
+        match self {
+            Self::Retrieval => 0,
+            Self::Plan => 1,
+            Self::Bundle => 2,
+            Self::Materialization => 3,
+        }
+    }
+}
+
+/// Closed cache hit, miss, or bypass reason.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CacheReason {
+    /// A fully authenticated entry was reused.
+    Hit,
+    /// No entry existed for the exact key.
+    AbsentEntry,
+    /// Current policy or revocation state did not match.
+    PolicyMismatch,
+    /// Catalog or index watermark did not match.
+    WatermarkMismatch,
+    /// Tokenizer identity did not match.
+    TokenizerMismatch,
+    /// Materializer identity did not match.
+    MaterializerMismatch,
+    /// A semantic extension prevented safe reuse.
+    UnknownSemanticExtension,
+    /// This release has no cache implementation for the layer.
+    NotConfigured,
+}
+
+impl CacheReason {
     const fn index(self) -> usize {
         match self {
             Self::Hit => 0,
-            Self::Miss => 1,
+            Self::AbsentEntry => 1,
+            Self::PolicyMismatch => 2,
+            Self::WatermarkMismatch => 3,
+            Self::TokenizerMismatch => 4,
+            Self::MaterializerMismatch => 5,
+            Self::UnknownSemanticExtension => 6,
+            Self::NotConfigured => 7,
         }
     }
 
     const fn as_str(self) -> &'static str {
         match self {
             Self::Hit => "hit",
-            Self::Miss => "miss",
+            Self::AbsentEntry => "absent_entry",
+            Self::PolicyMismatch => "policy_mismatch",
+            Self::WatermarkMismatch => "watermark_mismatch",
+            Self::TokenizerMismatch => "tokenizer_mismatch",
+            Self::MaterializerMismatch => "materializer_mismatch",
+            Self::UnknownSemanticExtension => "unknown_semantic_extension",
+            Self::NotConfigured => "not_configured",
         }
     }
 }
@@ -698,12 +815,14 @@ pub struct DaemonTelemetry {
     invalidation_oldest_age_seconds: AtomicU64,
     candidates: AtomicU64,
     selected_blocks: AtomicU64,
+    compile_candidate_stages: [AtomicU64; COMPILE_CANDIDATE_STAGE_COUNT],
+    compile_results: [AtomicU64; COMPILE_RESULT_COUNT],
     lane_tokens: [AtomicU64; LANE_COUNT],
     compile_phase_duration_nanos: [AtomicU64; COMPILE_PHASE_COUNT],
     compile_phase_runs: [AtomicU64; COMPILE_PHASE_COUNT],
     compile_conflicts: AtomicU64,
     compile_stale: AtomicU64,
-    cache_events: [AtomicU64; 2],
+    cache_events: [AtomicU64; CACHE_OBSERVATION_COUNT],
     physical_tokens: AtomicU64,
     cache_tokens: [AtomicU64; 2],
     handoff_acceptance: [AtomicU64; 3],
@@ -714,6 +833,23 @@ pub struct DaemonTelemetry {
     worker_lease_remaining_seconds: [AtomicU64; 9],
     database_connections: [AtomicU64; 3],
     database_pool_waits: AtomicU64,
+    startup_duration_nanos: AtomicU64,
+    startup_stage_duration_nanos: [AtomicU64; STARTUP_STAGE_COUNT],
+    startup_stage_runs: [AtomicU64; STARTUP_STAGE_COUNT],
+    startup_stage_failures: [AtomicU64; STARTUP_STAGE_COUNT],
+    startup_outcomes: [AtomicU64; STARTUP_OUTCOME_COUNT],
+    repository_commit_kinds: [AtomicU64; REPOSITORY_COMMIT_KIND_COUNT],
+    repository_commit_outcomes: [AtomicU64; REPOSITORY_COMMIT_OUTCOME_COUNT],
+    repository_commit_duration_nanos: [AtomicU64; REPOSITORY_COMMIT_PHASE_COUNT],
+    repository_commit_phase_runs: [AtomicU64; REPOSITORY_COMMIT_PHASE_COUNT],
+    repository_logical_bytes: AtomicU64,
+    repository_encoded_bytes: [AtomicU64; 3],
+    repository_file_growth_bytes: [AtomicU64; 2],
+    repository_file_bytes: [AtomicU64; 2],
+    repository_retained_records: [AtomicU64; 3],
+    repository_revision_delta: AtomicU64,
+    repository_write_amplification_millionths: AtomicU64,
+    repository_zero_logical_commits: AtomicU64,
     blob_integrity: [AtomicU64; 3],
     api_requests: [AtomicU64; 3],
     stream_backpressure: [AtomicU64; 3],
@@ -743,6 +879,8 @@ impl DaemonTelemetry {
             invalidation_oldest_age_seconds: AtomicU64::new(0),
             candidates: AtomicU64::new(0),
             selected_blocks: AtomicU64::new(0),
+            compile_candidate_stages: std::array::from_fn(|_index| AtomicU64::new(0)),
+            compile_results: std::array::from_fn(|_index| AtomicU64::new(0)),
             lane_tokens: std::array::from_fn(|_index| AtomicU64::new(0)),
             compile_phase_duration_nanos: std::array::from_fn(|_index| AtomicU64::new(0)),
             compile_phase_runs: std::array::from_fn(|_index| AtomicU64::new(0)),
@@ -759,6 +897,23 @@ impl DaemonTelemetry {
             worker_lease_remaining_seconds: std::array::from_fn(|_index| AtomicU64::new(0)),
             database_connections: std::array::from_fn(|_index| AtomicU64::new(0)),
             database_pool_waits: AtomicU64::new(0),
+            startup_duration_nanos: AtomicU64::new(0),
+            startup_stage_duration_nanos: std::array::from_fn(|_index| AtomicU64::new(0)),
+            startup_stage_runs: std::array::from_fn(|_index| AtomicU64::new(0)),
+            startup_stage_failures: std::array::from_fn(|_index| AtomicU64::new(0)),
+            startup_outcomes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_commit_kinds: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_commit_outcomes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_commit_duration_nanos: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_commit_phase_runs: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_logical_bytes: AtomicU64::new(0),
+            repository_encoded_bytes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_file_growth_bytes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_file_bytes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_retained_records: std::array::from_fn(|_index| AtomicU64::new(0)),
+            repository_revision_delta: AtomicU64::new(0),
+            repository_write_amplification_millionths: AtomicU64::new(0),
+            repository_zero_logical_commits: AtomicU64::new(0),
             blob_integrity: std::array::from_fn(|_index| AtomicU64::new(0)),
             api_requests: std::array::from_fn(|_index| AtomicU64::new(0)),
             stream_backpressure: std::array::from_fn(|_index| AtomicU64::new(0)),
@@ -912,6 +1067,46 @@ impl DaemonTelemetry {
         );
     }
 
+    /// Records candidate reduction checkpoints and content-free compile result counts.
+    pub fn record_compile_measurements(
+        &self,
+        candidate_counts: [(CompileCandidateStage, u64); COMPILE_CANDIDATE_STAGE_COUNT],
+        results: CompileResultCounts,
+    ) {
+        for (stage, count) in candidate_counts {
+            self.record_closed_counter(
+                &self.compile_candidate_stages,
+                stage.index(),
+                "cigar_context_candidate_stage_total",
+                count,
+                Some(("stage", stage.as_str())),
+            );
+        }
+        for (index, (label, count)) in [
+            ("selected_blocks", results.selected_blocks),
+            ("unique_content_keys", results.unique_content_keys),
+            ("unique_source_versions", results.unique_source_versions),
+            ("unique_lineages", results.unique_lineages),
+            ("budget_displaced", results.budget_displaced),
+            ("mandatory_candidates", results.mandatory_candidates),
+            (
+                "blocking_requirements_satisfied",
+                results.blocking_requirements_satisfied,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            self.record_closed_counter(
+                &self.compile_results,
+                index,
+                "cigar_context_compile_results_total",
+                count,
+                Some(("kind", label)),
+            );
+        }
+    }
+
     /// Records exact selected logical tokens for one standard context lane.
     pub fn record_lane_tokens(&self, lane: LaneKind, tokens: u64) {
         let (index, label) = lane_index_label(lane);
@@ -963,15 +1158,22 @@ impl DaemonTelemetry {
         );
     }
 
-    /// Records one governed materialization-cache outcome.
-    pub fn record_cache_outcome(&self, outcome: CacheOutcome) {
-        self.record_closed_counter(
-            &self.cache_events,
-            outcome.index(),
-            "cigar_cache_events_total",
-            1,
-            Some(("outcome", outcome.as_str())),
-        );
+    /// Records one governed cache observation in its fixed layer family.
+    pub fn record_cache_observation(&self, layer: CacheLayer, reason: CacheReason) {
+        let index = layer
+            .index()
+            .saturating_mul(8)
+            .saturating_add(reason.index());
+        let Some(local) = self.cache_events.get(index) else {
+            return;
+        };
+        let name = match layer {
+            CacheLayer::Retrieval => "cigar_retrieval_cache_events_total",
+            CacheLayer::Plan => "cigar_plan_cache_events_total",
+            CacheLayer::Bundle => "cigar_bundle_cache_events_total",
+            CacheLayer::Materialization => "cigar_materialization_cache_events_total",
+        };
+        self.record_counter(local, name, 1, Some(("reason", reason.as_str())));
     }
 
     /// Records exact physical, provider cache-read, and provider cache-write tokens.
@@ -1196,6 +1398,214 @@ impl DaemonTelemetry {
         );
     }
 
+    /// Records one content-free startup stage and terminal readiness/failure outcome.
+    pub fn record_startup_stage(&self, metrics: RepositoryStartupMetrics) {
+        let (index, label) = repository_startup_stage_index_label(metrics.stage);
+        let duration = duration_nanoseconds(metrics.duration);
+        self.record_counter(
+            &self.startup_duration_nanos,
+            "cigar_startup_duration_nanoseconds_total",
+            duration,
+            None,
+        );
+        self.record_closed_counter(
+            &self.startup_stage_duration_nanos,
+            index,
+            "cigar_startup_stage_duration_nanoseconds_total",
+            duration,
+            Some(("stage", label)),
+        );
+        self.record_closed_counter(
+            &self.startup_stage_runs,
+            index,
+            "cigar_startup_stage_runs_total",
+            1,
+            Some(("stage", label)),
+        );
+        match metrics.outcome {
+            RepositoryStartupOutcome::Completed
+                if metrics.stage == RepositoryStartupStage::ReadinessOpen =>
+            {
+                self.record_closed_counter(
+                    &self.startup_outcomes,
+                    0,
+                    "cigar_startup_outcomes_total",
+                    1,
+                    Some(("outcome", "ready")),
+                );
+            }
+            RepositoryStartupOutcome::Completed => {}
+            RepositoryStartupOutcome::Failed => {
+                self.record_closed_counter(
+                    &self.startup_stage_failures,
+                    index,
+                    "cigar_startup_stage_failures_total",
+                    1,
+                    Some(("stage", label)),
+                );
+                self.record_closed_counter(
+                    &self.startup_outcomes,
+                    1,
+                    "cigar_startup_outcomes_total",
+                    1,
+                    Some(("outcome", "failed")),
+                );
+            }
+        }
+    }
+
+    /// Records one successful durable commit or idempotent replay using only closed numeric data.
+    pub fn record_repository_commit(&self, metrics: RepositoryCommitMetrics) {
+        let (kind_index, kind_label) = repository_commit_kind_index_label(metrics.kind);
+        self.record_closed_counter(
+            &self.repository_commit_kinds,
+            kind_index,
+            "cigar_repository_commit_kinds_total",
+            1,
+            Some(("kind", kind_label)),
+        );
+        let (outcome_index, outcome_label) = repository_commit_outcome_index_label(metrics.outcome);
+        self.record_closed_counter(
+            &self.repository_commit_outcomes,
+            outcome_index,
+            "cigar_repository_commit_outcomes_total",
+            1,
+            Some(("outcome", outcome_label)),
+        );
+        let committed = metrics.outcome == RepositoryCommitOutcome::Committed;
+        let phases = [
+            (metrics.durations.total, true),
+            (metrics.durations.lock_wait, true),
+            (metrics.durations.repository_load, true),
+            (metrics.durations.residual_decode, true),
+            (metrics.durations.staged_mutation, true),
+            (
+                metrics.durations.delta_encode,
+                metrics.bytes.encoded_delta > 0,
+            ),
+            (
+                metrics.durations.full_encode,
+                metrics.bytes.checkpoint > 0 || metrics.bytes.full_state > 0,
+            ),
+            (metrics.durations.catalog_root, committed),
+            (metrics.durations.sqlite_transaction, true),
+            (metrics.durations.commit_fsync, committed),
+            (metrics.durations.revision_anchor, committed),
+        ];
+        for (index, (duration, executed)) in phases.into_iter().enumerate() {
+            if !executed {
+                continue;
+            }
+            let Some(label) = cigar_observe::REPOSITORY_COMMIT_PHASE_VALUES.get(index) else {
+                continue;
+            };
+            self.record_closed_counter(
+                &self.repository_commit_duration_nanos,
+                index,
+                "cigar_repository_commit_duration_nanoseconds_total",
+                duration_nanoseconds(duration),
+                Some(("phase", label)),
+            );
+            self.record_closed_counter(
+                &self.repository_commit_phase_runs,
+                index,
+                "cigar_repository_commit_phase_runs_total",
+                1,
+                Some(("phase", label)),
+            );
+        }
+        self.record_counter(
+            &self.repository_logical_bytes,
+            "cigar_repository_logical_bytes_total",
+            metrics.bytes.logical_changed,
+            None,
+        );
+        for (index, (label, value)) in [
+            ("delta", metrics.bytes.encoded_delta),
+            ("checkpoint", metrics.bytes.checkpoint),
+            ("full_state", metrics.bytes.full_state),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            self.record_closed_counter(
+                &self.repository_encoded_bytes,
+                index,
+                "cigar_repository_encoded_bytes_total",
+                value,
+                Some(("encoding", label)),
+            );
+        }
+        for (index, (label, before, after)) in [
+            (
+                "database",
+                metrics.bytes.database_before,
+                metrics.bytes.database_after,
+            ),
+            ("wal", metrics.bytes.wal_before, metrics.bytes.wal_after),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if let (Some(before), Some(after)) = (before, after) {
+                self.record_closed_counter(
+                    &self.repository_file_growth_bytes,
+                    index,
+                    "cigar_repository_file_growth_bytes_total",
+                    after.saturating_sub(before),
+                    Some(("file", label)),
+                );
+                self.observe_closed_gauge(
+                    &self.repository_file_bytes,
+                    index,
+                    "cigar_repository_file_bytes",
+                    after,
+                    Some(("file", label)),
+                );
+            }
+        }
+        for (index, (label, count)) in [
+            ("full_state", metrics.retained.full_states),
+            ("checkpoint", metrics.retained.checkpoints),
+            ("delta", metrics.retained.deltas),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if let Some(count) = count {
+                self.observe_closed_gauge(
+                    &self.repository_retained_records,
+                    index,
+                    "cigar_repository_retained_records",
+                    count,
+                    Some(("record", label)),
+                );
+            }
+        }
+        self.record_counter(
+            &self.repository_revision_delta,
+            "cigar_repository_revision_delta_total",
+            metrics.revision_delta(),
+            None,
+        );
+        if let Some(ratio) = metrics.bytes.write_amplification_millionths() {
+            self.observe_gauge(
+                &self.repository_write_amplification_millionths,
+                "cigar_repository_write_amplification_millionths",
+                ratio,
+                None,
+            );
+        }
+        if metrics.receipt_only && metrics.outcome == RepositoryCommitOutcome::Committed {
+            self.record_counter(
+                &self.repository_zero_logical_commits,
+                "cigar_repository_zero_logical_commits_total",
+                1,
+                None,
+            );
+        }
+    }
+
     fn record_counter(
         &self,
         local: &AtomicU64,
@@ -1371,6 +1781,16 @@ impl DaemonTelemetry {
             }
             "cigar_context_candidates_total" => self.candidates.load(Ordering::Relaxed),
             "cigar_context_selected_blocks_total" => self.selected_blocks.load(Ordering::Relaxed),
+            "cigar_context_candidate_stage_total" => indexed_value(
+                &self.compile_candidate_stages,
+                label,
+                cigar_observe::COMPILE_CANDIDATE_STAGE_VALUES,
+            ),
+            "cigar_context_compile_results_total" => indexed_value(
+                &self.compile_results,
+                label,
+                cigar_observe::COMPILE_RESULT_VALUES,
+            ),
             "cigar_context_lane_tokens_total" => indexed_value(
                 &self.lane_tokens,
                 label,
@@ -1404,8 +1824,17 @@ impl DaemonTelemetry {
             ),
             "cigar_compile_conflicts_total" => self.compile_conflicts.load(Ordering::Relaxed),
             "cigar_compile_stale_total" => self.compile_stale.load(Ordering::Relaxed),
-            "cigar_cache_events_total" => {
-                indexed_value(&self.cache_events, label, &["hit", "miss"])
+            "cigar_retrieval_cache_events_total" => {
+                cache_value(&self.cache_events, CacheLayer::Retrieval, label)
+            }
+            "cigar_plan_cache_events_total" => {
+                cache_value(&self.cache_events, CacheLayer::Plan, label)
+            }
+            "cigar_bundle_cache_events_total" => {
+                cache_value(&self.cache_events, CacheLayer::Bundle, label)
+            }
+            "cigar_materialization_cache_events_total" => {
+                cache_value(&self.cache_events, CacheLayer::Materialization, label)
             }
             "cigar_context_physical_tokens_total" => self.physical_tokens.load(Ordering::Relaxed),
             "cigar_context_cache_tokens_total" => {
@@ -1455,6 +1884,79 @@ impl DaemonTelemetry {
                 &["active", "idle", "maximum"],
             ),
             "cigar_database_pool_waits_total" => self.database_pool_waits.load(Ordering::Relaxed),
+            "cigar_startup_duration_nanoseconds_total" => {
+                self.startup_duration_nanos.load(Ordering::Relaxed)
+            }
+            "cigar_startup_stage_duration_nanoseconds_total" => indexed_value(
+                &self.startup_stage_duration_nanos,
+                label,
+                cigar_observe::STARTUP_STAGE_VALUES,
+            ),
+            "cigar_startup_stage_runs_total" => indexed_value(
+                &self.startup_stage_runs,
+                label,
+                cigar_observe::STARTUP_STAGE_VALUES,
+            ),
+            "cigar_startup_stage_failures_total" => indexed_value(
+                &self.startup_stage_failures,
+                label,
+                cigar_observe::STARTUP_STAGE_VALUES,
+            ),
+            "cigar_startup_outcomes_total" => indexed_value(
+                &self.startup_outcomes,
+                label,
+                cigar_observe::STARTUP_OUTCOME_VALUES,
+            ),
+            "cigar_repository_commit_kinds_total" => indexed_value(
+                &self.repository_commit_kinds,
+                label,
+                cigar_observe::REPOSITORY_COMMIT_KIND_VALUES,
+            ),
+            "cigar_repository_commit_outcomes_total" => indexed_value(
+                &self.repository_commit_outcomes,
+                label,
+                cigar_observe::REPOSITORY_COMMIT_OUTCOME_VALUES,
+            ),
+            "cigar_repository_commit_duration_nanoseconds_total" => indexed_value(
+                &self.repository_commit_duration_nanos,
+                label,
+                cigar_observe::REPOSITORY_COMMIT_PHASE_VALUES,
+            ),
+            "cigar_repository_commit_phase_runs_total" => indexed_value(
+                &self.repository_commit_phase_runs,
+                label,
+                cigar_observe::REPOSITORY_COMMIT_PHASE_VALUES,
+            ),
+            "cigar_repository_logical_bytes_total" => {
+                self.repository_logical_bytes.load(Ordering::Relaxed)
+            }
+            "cigar_repository_encoded_bytes_total" => indexed_value(
+                &self.repository_encoded_bytes,
+                label,
+                &["delta", "checkpoint", "full_state"],
+            ),
+            "cigar_repository_file_growth_bytes_total" => indexed_value(
+                &self.repository_file_growth_bytes,
+                label,
+                &["database", "wal"],
+            ),
+            "cigar_repository_file_bytes" => {
+                indexed_value(&self.repository_file_bytes, label, &["database", "wal"])
+            }
+            "cigar_repository_retained_records" => indexed_value(
+                &self.repository_retained_records,
+                label,
+                &["full_state", "checkpoint", "delta"],
+            ),
+            "cigar_repository_revision_delta_total" => {
+                self.repository_revision_delta.load(Ordering::Relaxed)
+            }
+            "cigar_repository_write_amplification_millionths" => self
+                .repository_write_amplification_millionths
+                .load(Ordering::Relaxed),
+            "cigar_repository_zero_logical_commits_total" => {
+                self.repository_zero_logical_commits.load(Ordering::Relaxed)
+            }
             "cigar_blob_integrity_total" => indexed_value(
                 &self.blob_integrity,
                 label,
@@ -1487,6 +1989,18 @@ impl DaemonTelemetry {
             ),
             _ => 0,
         }
+    }
+}
+
+impl RepositoryCommitMetricsObserver for DaemonTelemetry {
+    fn observe_repository_commit(&self, metrics: RepositoryCommitMetrics) {
+        self.record_repository_commit(metrics);
+    }
+}
+
+impl RepositoryStartupMetricsObserver for DaemonTelemetry {
+    fn observe_repository_startup(&self, metrics: RepositoryStartupMetrics) {
+        self.record_startup_stage(metrics);
     }
 }
 
@@ -1561,6 +2075,27 @@ fn indexed_value<const N: usize>(
         .map_or(0, |value| value.load(Ordering::Relaxed))
 }
 
+fn cache_value(
+    values: &[AtomicU64; CACHE_OBSERVATION_COUNT],
+    layer: CacheLayer,
+    label: Option<&str>,
+) -> u64 {
+    label
+        .and_then(|value| {
+            cigar_observe::CACHE_REASON_VALUES
+                .iter()
+                .position(|candidate| *candidate == value)
+        })
+        .and_then(|reason| {
+            layer
+                .index()
+                .checked_mul(cigar_observe::CACHE_REASON_VALUES.len())
+                .and_then(|base| base.checked_add(reason))
+        })
+        .and_then(|index| values.get(index))
+        .map_or(0, |value| value.load(Ordering::Relaxed))
+}
+
 fn queue_value(
     queues: &[QueueMetricsSnapshot],
     label: Option<&str>,
@@ -1579,6 +2114,45 @@ fn atomic_saturating_add(target: &AtomicU64, value: u64) {
             Ok(_) => return,
             Err(observed) => current = observed,
         }
+    }
+}
+
+fn duration_nanoseconds(duration: Duration) -> u64 {
+    u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
+}
+
+const fn repository_startup_stage_index_label(
+    stage: RepositoryStartupStage,
+) -> (usize, &'static str) {
+    match stage {
+        RepositoryStartupStage::PathConfiguration => (0, "path_configuration"),
+        RepositoryStartupStage::SqliteOpenConfigure => (1, "sqlite_open_configure"),
+        RepositoryStartupStage::MigrationLedger => (2, "migration_ledger"),
+        RepositoryStartupStage::LatestCheckpointRead => (3, "latest_checkpoint_read"),
+        RepositoryStartupStage::ChecksumVerification => (4, "checksum_verification"),
+        RepositoryStartupStage::DeltaReplay => (5, "delta_replay"),
+        RepositoryStartupStage::ResidualDecode => (6, "residual_decode"),
+        RepositoryStartupStage::CatalogProjection => (7, "catalog_projection"),
+        RepositoryStartupStage::RevisionAnchor => (8, "revision_anchor"),
+        RepositoryStartupStage::BlobReconciliation => (9, "blob_reconciliation"),
+        RepositoryStartupStage::ReadinessOpen => (10, "readiness_open"),
+    }
+}
+
+const fn repository_commit_kind_index_label(kind: RepositoryCommitKind) -> (usize, &'static str) {
+    match kind {
+        RepositoryCommitKind::Repository => (0, "repository"),
+        RepositoryCommitKind::Service => (1, "service"),
+        RepositoryCommitKind::Worker => (2, "worker"),
+    }
+}
+
+const fn repository_commit_outcome_index_label(
+    outcome: RepositoryCommitOutcome,
+) -> (usize, &'static str) {
+    match outcome {
+        RepositoryCommitOutcome::Committed => (0, "committed"),
+        RepositoryCommitOutcome::Replayed => (1, "replayed"),
     }
 }
 
@@ -1653,13 +2227,18 @@ fn process_values(process: ProcessSnapshot) -> [(&'static str, u64); 5] {
 #[cfg(test)]
 mod tests {
     use super::{
-        BlobIntegrityOutcome, CacheOutcome, CompilePhase, DaemonTelemetry,
-        HandoffAcceptanceOutcome, OtlpConfig, ParserStage, ReconciliationOutcome, TelemetryError,
-        atomic_saturating_add, strip_ambient_otlp_metadata,
+        BlobIntegrityOutcome, CacheLayer, CacheReason, CompileCandidateStage, CompilePhase,
+        CompileResultCounts, DaemonTelemetry, HandoffAcceptanceOutcome, OtlpConfig, ParserStage,
+        ReconciliationOutcome, TelemetryError, atomic_saturating_add, strip_ambient_otlp_metadata,
     };
     use crate::{BlockingPoolMetrics, OverflowPolicy, QueueMetricsSnapshot, WorkerKind};
     use cigar_api::{TransportMetricEvent, TransportMetricsObserver};
     use cigar_observe::{DAEMON_METRICS, maximum_daemon_series};
+    use cigar_store::{
+        RepositoryCommitBytes, RepositoryCommitDurations, RepositoryCommitKind,
+        RepositoryCommitMetrics, RepositoryCommitOutcome, RepositoryRetentionCounts,
+        RepositoryStartupMetrics, RepositoryStartupOutcome, RepositoryStartupStage, StoreRevision,
+    };
     use std::collections::BTreeSet;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1723,10 +2302,28 @@ mod tests {
         telemetry.observe_index_lag(11);
         telemetry.record_invalidation(13, 17);
         telemetry.record_compile_selection(19, 23);
+        telemetry.record_compile_measurements(
+            [
+                (CompileCandidateStage::BeforeGovernance, 101),
+                (CompileCandidateStage::AfterGovernance, 83),
+                (CompileCandidateStage::AfterLogicalCoalescing, 79),
+                (CompileCandidateStage::AfterContentGrouping, 67),
+                (CompileCandidateStage::AfterBudgetSelection, 23),
+            ],
+            CompileResultCounts {
+                selected_blocks: 23,
+                unique_content_keys: 21,
+                unique_source_versions: 23,
+                unique_lineages: 17,
+                budget_displaced: 44,
+                mandatory_candidates: 3,
+                blocking_requirements_satisfied: 2,
+            },
+        );
         telemetry.record_compile_phase(CompilePhase::Pack, Duration::from_nanos(29));
         telemetry.record_compile_conflicts(31);
         telemetry.record_compile_stale(37);
-        telemetry.record_cache_outcome(CacheOutcome::Hit);
+        telemetry.record_cache_observation(CacheLayer::Materialization, CacheReason::Hit);
         telemetry.record_materialization_tokens(41, 43, 47);
         telemetry.record_handoff_acceptance(HandoffAcceptanceOutcome::Expired);
         telemetry.record_handoff_merge_conflicts(53);
@@ -1735,6 +2332,51 @@ mod tests {
         telemetry.record_blob_integrity(BlobIntegrityOutcome::Verified);
         telemetry.observe_database_pool(2, 3, 5);
         telemetry.record_database_pool_waits(61);
+        telemetry.record_startup_stage(RepositoryStartupMetrics {
+            stage: RepositoryStartupStage::MigrationLedger,
+            outcome: RepositoryStartupOutcome::Completed,
+            duration: Duration::from_nanos(43),
+        });
+        telemetry.record_startup_stage(RepositoryStartupMetrics {
+            stage: RepositoryStartupStage::ReadinessOpen,
+            outcome: RepositoryStartupOutcome::Completed,
+            duration: Duration::from_nanos(47),
+        });
+        telemetry.record_repository_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Repository,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before: StoreRevision(4),
+            revision_after: StoreRevision(5),
+            receipt_only: false,
+            durations: RepositoryCommitDurations {
+                total: Duration::from_nanos(71),
+                lock_wait: Duration::from_nanos(2),
+                repository_load: Duration::from_nanos(3),
+                residual_decode: Duration::from_nanos(5),
+                staged_mutation: Duration::from_nanos(7),
+                delta_encode: Duration::from_nanos(11),
+                full_encode: Duration::from_nanos(13),
+                catalog_root: Duration::from_nanos(17),
+                sqlite_transaction: Duration::from_nanos(19),
+                commit_fsync: Duration::from_nanos(23),
+                revision_anchor: Duration::from_nanos(29),
+            },
+            bytes: RepositoryCommitBytes {
+                logical_changed: 10,
+                encoded_delta: 31,
+                checkpoint: 37,
+                full_state: 0,
+                database_before: Some(100),
+                database_after: Some(130),
+                wal_before: Some(20),
+                wal_after: Some(40),
+            },
+            retained: RepositoryRetentionCounts {
+                full_states: Some(3),
+                checkpoints: Some(2),
+                deltas: Some(4),
+            },
+        });
         telemetry.record_transport_metric(TransportMetricEvent::ApiFailure);
         telemetry.record_transport_metric(TransportMetricEvent::StreamOpened);
         let queues = WorkerKind::ALL.map(|kind| QueueMetricsSnapshot {
@@ -1795,9 +2437,23 @@ mod tests {
         for expected in [
             "cigar_ingestion_atoms_total{outcome=\"published\"} 2",
             "cigar_compile_phase_runs_total{phase=\"pack\"} 1",
+            "cigar_context_candidate_stage_total{stage=\"after_content_grouping\"} 67",
+            "cigar_context_compile_results_total{kind=\"budget_displaced\"} 44",
+            "cigar_materialization_cache_events_total{reason=\"hit\"} 1",
             "cigar_handoff_acceptance_total{outcome=\"expired\"} 1",
             "cigar_api_requests_total{outcome=\"failed\"} 1",
             "cigar_api_stream_backpressure_total{event=\"opened\"} 1",
+            "cigar_startup_duration_nanoseconds_total 90",
+            "cigar_startup_stage_runs_total{stage=\"migration_ledger\"} 1",
+            "cigar_startup_outcomes_total{outcome=\"ready\"} 1",
+            "cigar_repository_commit_kinds_total{kind=\"repository\"} 1",
+            "cigar_repository_commit_outcomes_total{outcome=\"committed\"} 1",
+            "cigar_repository_commit_phase_runs_total{phase=\"delta_encode\"} 1",
+            "cigar_repository_encoded_bytes_total{encoding=\"checkpoint\"} 37",
+            "cigar_repository_file_growth_bytes_total{file=\"database\"} 30",
+            "cigar_repository_retained_records{record=\"delta\"} 4",
+            "cigar_repository_revision_delta_total 1",
+            "cigar_repository_write_amplification_millionths 5000000",
             "cigar_invalidation_oldest_age_seconds 67",
             "cigar_blocking_pool_outcomes_total{outcome=\"deadline\"} 11",
         ] {
@@ -1937,6 +2593,32 @@ mod tests {
         telemetry.record_rejected_request();
         telemetry.record_listener_failure();
         telemetry.record_graceful_shutdown();
+        telemetry.record_startup_stage(RepositoryStartupMetrics {
+            stage: RepositoryStartupStage::ChecksumVerification,
+            outcome: RepositoryStartupOutcome::Failed,
+            duration: Duration::from_nanos(1),
+        });
+        telemetry.record_repository_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Worker,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before: StoreRevision(8),
+            revision_after: StoreRevision(9),
+            receipt_only: false,
+            durations: RepositoryCommitDurations::default(),
+            bytes: RepositoryCommitBytes {
+                logical_changed: 1,
+                full_state: 1,
+                database_before: Some(1),
+                database_after: Some(2),
+                wal_before: Some(0),
+                wal_after: Some(0),
+                ..RepositoryCommitBytes::default()
+            },
+            retained: RepositoryRetentionCounts {
+                full_states: Some(1),
+                ..RepositoryRetentionCounts::default()
+            },
+        });
         let queues = WorkerKind::ALL.map(|kind| QueueMetricsSnapshot {
             kind,
             capacity: 8,

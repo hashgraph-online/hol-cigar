@@ -1,27 +1,27 @@
-# CIGAR Honey v0.9
+# CIGAR Honey v0.9.1
 
-CIGAR Honey `0.9.0-honey.1` is a functional developer preview of CIGAR's local context,
+CIGAR Honey `0.9.1-honey.1` is a functional developer preview of CIGAR's local context,
 coordination, effect, and replay workflow. It is intended for developers evaluating CIGAR on
 Apple-silicon macOS. Honey is not a production-supported or independently audited release.
 
 ## Five-minute path
 
 1. Download `SHA256SUMS`,
-   `cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz`, and
-   `cigar-honey-demos-0.9.0-honey.1.tar.gz` from the same GitHub prerelease.
+   `cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz`, and
+   `cigar-honey-demos-0.9.1-honey.1.tar.gz` from the same GitHub prerelease.
 2. Verify both archives before opening either one.
 3. Extract the runtime into a new user-owned directory and add its `bin` directory to `PATH`.
-4. Run `cigar --output json version` and require `0.9.0-honey.1` and
+4. Run `cigar --output json version` and require `0.9.1-honey.1` and
    `cigar.context.v1`.
 5. Run the packaged offline quickstart twice and compare its semantic identity.
 
 <!-- docs-check: illustrative -->
 ```sh
-grep '  cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
-grep '  cigar-honey-demos-0.9.0-honey.1.tar.gz$' SHA256SUMS | shasum -a 256 -c -
-mkdir -p "$HOME/.local/opt/cigar-honey-0.9.0-honey.1"
-tar -xzf cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz -C "$HOME/.local/opt/cigar-honey-0.9.0-honey.1"
-export PATH="$HOME/.local/opt/cigar-honey-0.9.0-honey.1/bin:$PATH"
+grep '  cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
+grep '  cigar-honey-demos-0.9.1-honey.1.tar.gz$' SHA256SUMS | shasum -a 256 -c -
+mkdir -p "$HOME/.local/opt/cigar-honey-0.9.1-honey.1"
+tar -xzf cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz -C "$HOME/.local/opt/cigar-honey-0.9.1-honey.1"
+export PATH="$HOME/.local/opt/cigar-honey-0.9.1-honey.1/bin:$PATH"
 cigar --output json version
 ```
 
@@ -64,7 +64,7 @@ PostgreSQL/S3 deployment, Kubernetes, OCI, Homebrew, public package registries, 
 remote OTLP export, arbitrary extensions, or HTTPS effects. Vector retrieval may be absent; exact,
 path, symbol, graph, and lexical retrieval remain usable.
 
-The v0.9 gate is deliberately bounded. It includes functional, conformance, policy, canary,
+The v0.9.1 gate is deliberately bounded. It includes functional, conformance, policy, canary,
 installed-byte, and recovery checks, but omits seven-day fuzzing, four-hour mutation qualification,
 24-hour soak, million-atom scale, and efficacy claims. See
 [security and limitations](docs/guides/honey-security-limitations.md).
@@ -72,6 +72,7 @@ installed-byte, and recovery checks, but omits seven-day fuzzing, four-hour muta
 ## Start here
 
 - [Install, verify, upgrade, and uninstall](docs/guides/honey-install.md)
+- [Storage v5 migration, compaction, and telemetry](docs/guides/honey-storage-v5.md)
 - [Offline quickstart](docs/guides/honey-quickstart.md)
 - [Two-agent coordination](docs/guides/honey-two-agent.md)
 - [Python](docs/guides/honey-python.md), [TypeScript](docs/guides/honey-typescript.md), and

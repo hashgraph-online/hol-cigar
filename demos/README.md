@@ -10,6 +10,16 @@ requires independently supplied SHA-256 values, extracts only bounded regular me
 runtime's exact member and internal-checksum inventory, and binds the Python wheel and Claude plugin
 for stories that use them.
 
+The 0.9.1 offline-context fixture includes two governed versions with equivalent selected content.
+It requires one emitted block, both provenance aliases, and both citation/explanation identities;
+the owning compiler check proves the same contraction, obligation union, invalidation, and citation
+behavior in the real kernel.
+
+The source-only [`storage-migration`](storage-migration/README.md) POC runs a generated v4 store,
+separate verified backup, distinct v5 target, restart readiness, and deep-integrity workflow twice.
+It deliberately remains separate from the installed-artifact receipt until exact candidate bytes
+exist.
+
 Every selected component runs twice from separate clean state under the macOS no-egress boundary.
 The report is qualified only when every public flow/assertion is observed and both executions return
 the same semantic identity. It binds product/ABI, clean source revision and tree, runtime and
@@ -19,11 +29,11 @@ and the no-egress mechanism.
 <!-- docs-check: illustrative -->
 ```sh
 python3 demos/run_honey.py \
-  --runtime-archive dist/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
+  --runtime-archive dist/cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz \
   --runtime-sha256 "$RUNTIME_SHA256" \
-  --python-wheel dist/cigar_sdk-0.9.0.dev1-py3-none-any.whl \
+  --python-wheel dist/cigar_sdk-0.9.1.dev1-py3-none-any.whl \
   --python-wheel-sha256 "$PYTHON_WHEEL_SHA256" \
-  --claude-plugin-archive dist/cigar-claude-code-0.9.0-honey.1.tar.gz \
+  --claude-plugin-archive dist/cigar-claude-code-0.9.1-honey.1.tar.gz \
   --claude-plugin-sha256 "$CLAUDE_PLUGIN_SHA256" \
   --output honey-installed-demos.json
 ```
@@ -162,15 +172,15 @@ installs each into a clean temporary root, and never falls back to source:
 ```sh
 python3 demos/installed_artifact_test.py \
   --cigar-binary dist/bin/cigar \
-  --expected-version 0.9.0-honey.1 \
-  --rust-archive dist/sdk/cigar-sdk-0.9.0-honey.1.crate \
+  --expected-version 0.9.1-honey.1 \
+  --rust-archive dist/sdk/cigar-sdk-0.9.1-honey.1.crate \
   --cargo-home dist/offline/cargo-home \
   --rustup-home dist/offline/rustup-home \
-  --typescript-tarball dist/sdk/cigar-sdk-0.9.0-honey.1.tgz \
+  --typescript-tarball dist/sdk/cigar-sdk-0.9.1-honey.1.tgz \
   --pnpm-store dist/offline/pnpm-store \
-  --python-wheel dist/sdk/cigar_sdk-0.9.0.dev1-py3-none-any.whl \
+  --python-wheel dist/sdk/cigar_sdk-0.9.1.dev1-py3-none-any.whl \
   --python-wheelhouse dist/sdk/wheelhouse \
-  --go-archive dist/sdk/cigar-go-sdk-0.9.0-honey.1.tar.gz \
+  --go-archive dist/sdk/cigar-go-sdk-0.9.1-honey.1.tar.gz \
   --go-mod-cache dist/offline/go-mod-cache \
   --output reports/demos/installed-artifacts.json
 ```

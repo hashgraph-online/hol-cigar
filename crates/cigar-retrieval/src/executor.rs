@@ -14,6 +14,8 @@ use std::time::Instant;
 pub struct ExecutedStage {
     /// Requirement that introduced the stage.
     pub requirement_index: usize,
+    /// Whether absence from this stage contributes to a compile-blocking requirement failure.
+    pub blocking: bool,
     /// Channel that ran.
     pub stage: RetrievalStage,
     /// Query fingerprint recorded by the planner.
@@ -27,6 +29,7 @@ impl fmt::Debug for ExecutedStage {
         formatter
             .debug_struct("ExecutedStage")
             .field("requirement_index", &self.requirement_index)
+            .field("blocking", &self.blocking)
             .field("stage", &self.stage)
             .field("query_fingerprint", &self.query_fingerprint)
             .field("candidate_count", &self.batch.candidates.len())
@@ -81,6 +84,7 @@ impl StagedRetrieval {
             }
             stages.push(ExecutedStage {
                 requirement_index: planned.requirement_index,
+                blocking: planned.blocking,
                 stage: planned.request.stage,
                 query_fingerprint: planned.query_fingerprint.clone(),
                 batch,
@@ -156,11 +160,18 @@ mod tests {
                     .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
                 batch.candidates.push(CandidateRef {
                     version_id,
+                    lineage_id: cigar_protocol::LineageId::new(
+                        "01890f47-8e7d-7b42-a1d2-3c4d5e6f7805",
+                    )
+                    .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?,
+                    content_digest: digest('e')?,
+                    atom_kind: cigar_protocol::AtomKind::Documentation,
                     canonical_uri: SourceUri::new("file:///authorized/document.md").map_err(
                         |_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration),
                     )?,
                     relative_path: None,
                     instruction_authority: InstructionAuthority::Data,
+                    classification: Classification::Internal,
                     features: CandidateFeatures::default(),
                     total_score: 0,
                     evidence: BTreeSet::from([MatchEvidence::Lexical]),

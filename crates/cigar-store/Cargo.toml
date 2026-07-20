@@ -20,6 +20,7 @@ projection-fault-injection = []
 
 [dependencies]
 ciborium.workspace = true
+cigar-canon.workspace = true
 cigar-crypto.workspace = true
 cigar-protocol.workspace = true
 fallible-iterator.workspace = true

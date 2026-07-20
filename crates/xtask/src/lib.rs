@@ -65,6 +65,7 @@ const GENERATED_MANIFEST: &str = concat!(
     "    \"json/replay-request-v1.schema.json\",\n",
     "    \"json/selection-manifest-v1.schema.json\",\n",
     "    \"json/source-snapshot-v1.schema.json\",\n",
+    "    \"json/sqlite-v4-v5-migration-receipt-v1.schema.json\",\n",
     "    \"json/verification-receipt-v1.schema.json\"\n",
     "  ],\n",
     "  \"error_artifacts\": [\n",
@@ -5584,6 +5585,11 @@ fn generated_artifacts() -> Result<Vec<(PathBuf, String)>, TaskError> {
         (
             PathBuf::from("schemas/json/source-snapshot-v1.schema.json"),
             render_schema::<cigar_protocol::SourceSnapshot>("SourceSnapshot")?,
+        ),
+        (
+            PathBuf::from("schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json"),
+            include_str!("../../../schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json")
+                .to_owned(),
         ),
         (
             PathBuf::from("schemas/json/verification-receipt-v1.schema.json"),

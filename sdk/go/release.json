@@ -1,6 +1,6 @@
 {
   "schema_version": "cigar.sdk-release.v1",
   "name": "github.com/CIGAR/cigar/sdk/go",
-  "version": "0.9.0-honey.1",
+  "version": "0.9.1-honey.1",
   "context_abi": "cigar.context.v1"
 }

@@ -169,7 +169,7 @@ def validate_plugin() -> None:
     require(metadata == ["plugin.json"], ".claude-plugin must contain only plugin.json")
     plugin = load_json(ROOT / ".claude-plugin/plugin.json")
     require(plugin.get("name") == "cigar", "plugin name mismatch")
-    require(plugin.get("version") == "0.9.0-honey.1", "plugin version mismatch")
+    require(plugin.get("version") == "0.9.1-honey.1", "plugin version mismatch")
     for redundant in ["skills", "agents", "hooks", "mcpServers", "commands"]:
         require(
             redundant not in plugin,

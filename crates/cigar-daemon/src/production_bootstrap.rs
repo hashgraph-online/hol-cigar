@@ -236,6 +236,23 @@ fn compose_production_server_internal(
         .map_err(|_error| bootstrap_failure())?,
     );
 
+    let otlp_ca = config
+        .telemetry
+        .otlp_ca_certificate_file
+        .as_ref()
+        .map(|path| read_trusted_file(path, MAX_OTLP_CA_BYTES))
+        .transpose()?;
+    let telemetry = Arc::new(
+        match config
+            .telemetry
+            .otlp_config(otlp_ca)
+            .map_err(|_error| bootstrap_failure())?
+        {
+            Some(otlp) => DaemonTelemetry::with_otlp(otlp).map_err(|_error| bootstrap_failure())?,
+            None => DaemonTelemetry::local(),
+        },
+    );
+
     let (blob_repository, store) = match config.mode {
         DeploymentMode::Local => {
             let blob_store = Arc::new(
@@ -248,13 +265,19 @@ fn compose_production_server_internal(
                 .map_err(|_error| bootstrap_failure())?,
             );
             let blob_repository: Arc<dyn RepositoryBlobStore> = blob_store;
+            let commit_observer: Arc<dyn cigar_store::RepositoryCommitMetricsObserver> =
+                telemetry.clone();
+            let startup_observer: Arc<dyn cigar_store::RepositoryStartupMetricsObserver> =
+                telemetry.clone();
             let store = ProductionStore::local(
-                SqliteStore::open_with_blob_repository_and_capacity_profile(
+                SqliteStore::open_with_blob_repository_capacity_and_startup_metrics(
                     &config.production.metadata_database,
                     Arc::clone(&blob_repository),
                     config.local_sqlite_capacity_profile,
+                    startup_observer,
                 )
-                .map_err(|_error| bootstrap_failure())?,
+                .map_err(|_error| bootstrap_failure())?
+                .with_commit_metrics_observer(commit_observer),
             );
             (blob_repository, store)
         }
@@ -324,23 +347,6 @@ fn compose_production_server_internal(
         )
         .map_err(|_error| bootstrap_failure())?,
     );
-    let otlp_ca = config
-        .telemetry
-        .otlp_ca_certificate_file
-        .as_ref()
-        .map(|path| read_trusted_file(path, MAX_OTLP_CA_BYTES))
-        .transpose()?;
-    let telemetry = Arc::new(
-        match config
-            .telemetry
-            .otlp_config(otlp_ca)
-            .map_err(|_error| bootstrap_failure())?
-        {
-            Some(otlp) => DaemonTelemetry::with_otlp(otlp).map_err(|_error| bootstrap_failure())?,
-            None => DaemonTelemetry::local(),
-        },
-    );
-
     #[cfg(target_os = "macos")]
     let local_vector = if config.local_vector.enabled {
         Some(Arc::new(

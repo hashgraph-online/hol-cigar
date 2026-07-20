@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
+  "title": "CIGAR Honey 0.9.1 efficiency and reliability qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "authorities",
+    "product",
+    "source",
+    "candidate",
+    "fixtures",
+    "raw_observations",
+    "environment",
+    "execution",
+    "stage_metrics",
+    "gate_results",
+    "workflows",
+    "overall_status",
+    "fail_closed"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.honey-efficiency-reliability-qualification.v1"},
+    "report_id": {"$ref": "#/$defs/identifier"},
+    "generated_at": {"$ref": "#/$defs/timestamp"},
+    "authorities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qualification_profile_sha256", "report_schema_sha256"],
+      "properties": {
+        "qualification_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "report_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "release_state", "context_abi", "target_triple", "prerelease", "supported", "production_qualified"],
+      "properties": {
+        "version": {"const": "0.9.1-honey.1"},
+        "release_state": {"const": "developer-preview"},
+        "context_abi": {"const": "cigar.context.v1"},
+        "target_triple": {"const": "aarch64-apple-darwin"},
+        "prerelease": {"const": true},
+        "supported": {"const": false},
+        "production_qualified": {"const": false}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "clean"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "clean": {"const": true}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256", "installed_runtime_sha256"],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "installed_runtime_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "fixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256", "entries"],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "entries": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "sha256", "kind"],
+            "properties": {
+              "id": {"$ref": "#/$defs/fixtureId"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "kind": {"enum": ["generated", "verified-copy"]}
+            }
+          }
+        }
+      }
+    },
+    "raw_observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attachment_id", "sha256", "bytes"],
+      "properties": {
+        "attachment_id": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824}
+      }
+    },
+    "environment": {"$ref": "#/$defs/environment"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "stage_metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/stageMetric"}
+    },
+    "gate_results": {
+      "type": "array",
+      "minItems": 23,
+      "maxItems": 23,
+      "items": {"$ref": "#/$defs/gateResult"}
+    },
+    "workflows": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/workflow"}
+    },
+    "overall_status": {"enum": ["pass", "fail"]},
+    "fail_closed": {"const": true}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitObject": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "fixtureId": {
+      "enum": [
+        "H91-FIXTURE-SMALL-GENERATED",
+        "H91-FIXTURE-BOUNDARY-GENERATED",
+        "H91-FIXTURE-HIERO-SHAPED-GENERATED",
+        "H91-WORKLOAD-VERIFIED-COPY"
+      ]
+    },
+    "scalar": {"oneOf": [{"type": "boolean"}, {"type": "integer", "minimum": -9223372036854775808, "maximum": 18446744073709551615}]},
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "unit"],
+      "properties": {
+        "name": {"$ref": "#/$defs/identifier"},
+        "value": {"$ref": "#/$defs/scalar"},
+        "unit": {"enum": ["boolean", "bytes", "count", "millionths", "nanoseconds", "nanoseconds_per_request", "percent_millionths", "ratio_millionths", "revisions"]}
+      }
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "operator", "value", "unit"],
+      "properties": {
+        "name": {"$ref": "#/$defs/identifier"},
+        "operator": {"enum": ["eq", "ge", "gt", "le", "lt"]},
+        "value": {"$ref": "#/$defs/scalar"},
+        "unit": {"enum": ["boolean", "bytes", "count", "millionths", "nanoseconds", "nanoseconds_per_request", "percent_millionths", "ratio_millionths", "revisions"]}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\x00-\\x1f\\x7f]+$"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_os", "os_version", "kernel", "architecture", "cpu_model", "filesystem", "power_source", "low_power_mode", "thermal_state", "network_used", "tools"],
+      "properties": {
+        "host_os": {"const": "macos"},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "kernel": {"type": "string", "minLength": 1, "maxLength": 128},
+        "architecture": {"const": "arm64"},
+        "cpu_model": {"const": "Apple M3 Ultra"},
+        "filesystem": {"const": "apfs"},
+        "power_source": {"const": "ac"},
+        "low_power_mode": {"const": false},
+        "thermal_state": {"const": "nominal"},
+        "network_used": {"const": false},
+        "tools": {"type": "array", "minItems": 4, "maxItems": 32, "items": {"$ref": "#/$defs/tool"}}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maximum_delta_operations", "maximum_delta_bytes", "maximum_checkpoint_bytes", "maximum_deltas_since_checkpoint", "maximum_accumulated_delta_bytes", "maximum_retained_revisions", "maximum_retained_age_nanos", "maximum_physical_retained_bytes", "minimum_reconstructable_revisions", "minimum_verified_replay_revisions"],
+      "properties": {
+        "maximum_delta_operations": {"const": 4096},
+        "maximum_delta_bytes": {"const": 67108864},
+        "maximum_checkpoint_bytes": {"const": 268435456},
+        "maximum_deltas_since_checkpoint": {"const": 256},
+        "maximum_accumulated_delta_bytes": {"const": 268435456},
+        "maximum_retained_revisions": {"const": 100000},
+        "maximum_retained_age_nanos": {"const": 2592000000000000},
+        "maximum_physical_retained_bytes": {"const": 3221225472},
+        "minimum_reconstructable_revisions": {"const": 256},
+        "minimum_verified_replay_revisions": {"const": 256}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capacity_profile", "workload_order", "warmup_requests", "serial_request_count", "serial_repetitions", "serial_mutation_count", "mixed_concurrency_workers", "mixed_concurrency_mutations_per_worker", "retention_policy"],
+      "properties": {
+        "capacity_profile": {"const": "standard"},
+        "workload_order": {"type": "array", "prefixItems": [{"const": "H91-FIXTURE-SMALL-GENERATED"}, {"const": "H91-FIXTURE-BOUNDARY-GENERATED"}, {"const": "H91-FIXTURE-HIERO-SHAPED-GENERATED"}], "items": false, "minItems": 3, "maxItems": 3},
+        "warmup_requests": {"const": 5},
+        "serial_request_count": {"const": 100},
+        "serial_repetitions": {"const": 1},
+        "serial_mutation_count": {"const": 10000},
+        "mixed_concurrency_workers": {"const": 4},
+        "mixed_concurrency_mutations_per_worker": {"const": 2500},
+        "retention_policy": {"$ref": "#/$defs/retention"}
+      }
+    },
+    "stageMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "samples", "unit", "minimum", "maximum", "mean", "p50", "p95"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "samples": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "unit": {"enum": ["bytes", "count", "nanoseconds"]},
+        "minimum": {"type": "integer", "minimum": 0},
+        "maximum": {"type": "integer", "minimum": 0},
+        "mean": {"type": "integer", "minimum": 0},
+        "p50": {"type": "integer", "minimum": 0},
+        "p95": {"type": "integer", "minimum": 0}
+      }
+    },
+    "gateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "release_gate_id", "status", "thresholds", "measurements", "evidence_sha256"],
+      "properties": {
+        "gate_id": {"type": "string", "pattern": "^H91-G0(?:0[1-9]|1[0-9]|2[0-3])$"},
+        "release_gate_id": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["pass", "fail"]},
+        "thresholds": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/threshold"}},
+        "measurements": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/measurement"}},
+        "evidence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requests", "completed", "selected", "duplicate_selected", "budget_displaced", "citation_total", "citation_resolved", "required_source_total", "required_source_resolved", "local_lineages", "cigar_lineages", "lineage_delta", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "requests": {"const": 20},
+        "completed": {"type": "integer", "minimum": 0, "maximum": 20},
+        "selected": {"type": "integer", "minimum": 0},
+        "duplicate_selected": {"type": "integer", "minimum": 0},
+        "budget_displaced": {"type": "integer", "minimum": 0},
+        "citation_total": {"type": "integer", "minimum": 0},
+        "citation_resolved": {"type": "integer", "minimum": 0},
+        "required_source_total": {"type": "integer", "minimum": 0},
+        "required_source_resolved": {"type": "integer", "minimum": 0},
+        "local_lineages": {"type": "integer", "minimum": 0},
+        "cigar_lineages": {"type": "integer", "minimum": 0},
+        "lineage_delta": {"type": "integer", "minimum": -9223372036854775808, "maximum": 9223372036854775807},
+        "status": {"enum": ["pass", "fail"]}
+      }
+    }
+  }
+}
