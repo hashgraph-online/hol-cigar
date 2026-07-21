@@ -1142,6 +1142,29 @@ snapshot attempts and one later root preserves the Rust package-inventory failur
 never assembled or reused. The corrected runtime snapshot and self-contained `cigar-store`/Rust SDK
 local-registry path pass their real offline producers and clean external-consumer checks.
 
+### H91-995 — Reject and repair the first integration handoff
+
+- [x] Exercise the first 13-file candidate through the independent `cigar-cloud` installed-demo
+  integration instead of relying on artifact-integrity verification alone.
+- [x] Reject that candidate after its packaged two-agent story reported
+  `honey two-agent driver dependency does not match`; do not represent its developer-handoff ZIP
+  as ready or reuse any of its source/demo bindings.
+- [x] Update the two-agent wrapper's shared-driver SHA-256 pin and its manifest digest together.
+- [x] Add a regression test that derives the current shared-driver digest independently and fails
+  on future wrapper drift.
+- [x] Run the repaired source two-agent story twice against the first candidate's exact runtime and
+  Python wheel; require `installed_artifact_qualified=true`.
+- [~] Commit the repair, rebuild all source-bound attachments into a new create-new candidate root,
+  and independently verify its 13-file inventory.
+- [ ] Replace the rejected local developer-handoff ZIP only after all four rebuilt installed-demo
+  stories pass twice from the rebuilt demo attachment.
+
+Progress evidence (2026-07-20): independent POC integration found a stale wrapper pin
+(`bc366d...` versus the current shared driver `223620...`) that internal checksums could not detect.
+The repaired wrapper and manifest pass seven focused demo tests, and the exact two-agent story now
+passes twice with report digest `12206042cea02b002c6557d8808acad083a1ef69a15979f9f4d01fb465ee2cdb0eb4`.
+The first handoff remains rejected pending a clean committed rebuild.
+
 ## H91-1000 — Qualify exact installed bytes
 
 ### H91-1010 — Required environment
