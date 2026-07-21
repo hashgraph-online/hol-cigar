@@ -4068,12 +4068,12 @@ mod macos {
             || activation_count != 1
             || activation.0 != 1
             || activation.1 != expected_revision
-            || activation.2 != retained.semantic_root
+            || activation.2 != retained.catalog_root
             || usize::try_from(activation.3).ok() != Some(retained.atoms.len())
             || activation.4 != expected_projection_root
             || activation.5 != 1
             || activation.6 != expected_revision
-            || activation.7 != retained.semantic_root
+            || activation.7 != retained.catalog_root
         {
             return Err("atom projection activation is not exactly fixture-bound".into());
         }
@@ -4155,7 +4155,7 @@ mod macos {
         root.update(b"CIGAR-SQLITE-ATOM-PROJECTION\0v1\0");
         root.update(generation.to_be_bytes());
         root.update(retained.revision.0.to_be_bytes());
-        catalog_hash_field_fixture(&mut root, retained.semantic_root.as_bytes())?;
+        catalog_hash_field_fixture(&mut root, retained.catalog_root.as_bytes())?;
         for row in &retained.atoms {
             for field in [
                 retained.tenant_id.as_str(),
@@ -4399,13 +4399,15 @@ mod macos {
                 .position(|window| window == b"--deadline")
                 .ok_or("full help contains deadline")?;
             let mut changed_option_help = full.to_vec();
-            changed_option_help[changed_option] = b'+';
+            *changed_option_help
+                .get_mut(changed_option)
+                .ok_or("full help option index is unavailable")? = b'+';
             assert!(validate_full_surface_help(&changed_option_help).is_err());
             Ok(())
         }
 
         #[test]
-        fn complete_provenance_probe_rejects_a_later_block_without_provenance() {
+        fn complete_provenance_probe_rejects_a_later_block_without_provenance() -> Result<()> {
             let first = format!("1220{}", "1".repeat(64));
             let second = format!("1220{}", "2".repeat(64));
             let plan = json!({
@@ -4431,7 +4433,9 @@ mod macos {
             assert!(validate_plan_and_compiled_provenance(&plan, &compiled, &authorized).is_ok());
 
             let mut missing_later_provenance = compiled;
-            missing_later_provenance["result"]["blocks"][1]["provenance"] = json!([]);
+            *missing_later_provenance
+                .pointer_mut("/result/blocks/1/provenance")
+                .ok_or("fixture provenance path is unavailable")? = json!([]);
             assert!(
                 validate_plan_and_compiled_provenance(
                     &plan,
@@ -4457,6 +4461,7 @@ mod macos {
                 )
                 .is_err()
             );
+            Ok(())
         }
 
         #[test]

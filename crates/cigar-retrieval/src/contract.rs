@@ -526,6 +526,8 @@ pub struct RetrievalRequest {
     pub required_revision: StoreRevision,
     /// Strong or explicitly bounded-stale behavior.
     pub consistency: RetrievalConsistency,
+    /// Optional semantic atom-kind scope applied before channel ranking and caps.
+    pub atom_kinds: BTreeSet<AtomKind>,
     /// Sorted exact semantic versions.
     pub exact_versions: BTreeSet<VersionId>,
     /// Sorted exact immutable atom record identities.
@@ -651,6 +653,7 @@ impl fmt::Debug for RetrievalRequest {
             .field("partition", &self.partition)
             .field("required_revision", &self.required_revision)
             .field("consistency", &self.consistency)
+            .field("atom_kind_count", &self.atom_kinds.len())
             .field("exact_count", &self.exact_versions.len())
             .field("atom_id_count", &self.atom_ids.len())
             .field("lineage_id_count", &self.lineage_ids.len())

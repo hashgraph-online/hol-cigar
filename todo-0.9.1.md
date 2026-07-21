@@ -1055,7 +1055,8 @@ Run on the clean intended candidate commit before artifact construction:
   package-negative, and local-admin-loopback tests from the 0.9.0 bounded gate report.
 - [ ] New generated-fixture efficiency smoke with thresholds relaxed only for sample size, never
   redefined metrics.
-- [x] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes.
+- [ ] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes for the
+  replacement source commit.
 
 Exit gate:
 
@@ -1074,6 +1075,16 @@ with three explicit qualification helpers ignored, and the modified store/xtask 
 warnings-denied Clippy. The exact committed tree is clean. The generated-fixture efficiency smoke
 and candidate-bound efficiency producer remain open and are not represented as installed-byte
 proof.
+
+Replacement-source progress (2026-07-21): after upstreaming the seven downstream compatibility
+repairs, the complete workspace test sweep passes, including 103 store tests with three declared
+ignored helpers. Supported-feature warnings-denied workspace Clippy passes. The diagnostic
+`--all-features` union is intentionally not a supported profile because `cigar-rust-s3`'s sync and
+Tokio backends are mutually exclusive. The sweep also found and repaired two stale authorities:
+the retained v1-to-v4 projection qualifier now binds the catalog root, and every string in the
+v4-to-v5 migration-receipt schema is explicitly bounded with its schema digest, valid vector, and
+reviewed development baseline updated together. Replacement commit freeze and the source
+efficiency producer remain pending.
 
 ## H91-900 — Build and assemble the exact candidate
 
@@ -1130,8 +1141,9 @@ python3 scripts/release/qualify_honey_release.py \
 
 Exit gate:
 
-- [x] One immutable candidate directory contains exactly the selected 0.9.1 attachments and passes
-  independent offline artifact verification without claiming installed qualification.
+- [ ] One immutable replacement candidate directory contains exactly the selected 0.9.1
+  attachments and passes independent offline artifact verification without claiming installed
+  qualification.
 
 Progress evidence (2026-07-20): the complete producer topology built all 13 selected attachments and
 returned only `built-unqualified`. Independent public verification counted 13 attachments (11
@@ -1170,6 +1182,23 @@ demo attachment passed twice with installed report digest
 `1220eb8c9c492f1ec5187f36a61da121ce20425b1b6efbeb19607d1e966aaa5b8306`. The first handoff
 remains rejected; the completed checklist is committed and source-bound again before the final
 handoff rebuild.
+
+### H91-997 — Supersede candidates invalidated by downstream integration
+
+- [x] Mark commit `0c90976f88e1e6844b44f26d22361b87e4f0978c` and its wheel/sdist/13-file
+  candidate as historical after the seven Hiero compatibility fixes were upstreamed.
+- [x] Retain its UTM Python wheel/sdist qualification only as historical diagnostic evidence; it
+  cannot qualify replacement bytes.
+- [ ] Freeze the replacement source commit after the remaining H91-800 source-efficiency gate.
+- [ ] Rebuild all 13 attachments into a new create-new root and independently verify them.
+- [ ] Replace the developer-handoff ZIP only after exact replacement bytes pass their applicable
+  installed gates.
+
+Progress evidence (2026-07-21): the old Python artifacts passed offline clean wheel/sdist installs
+under Python 3.14.6 as standard user `cigarqualification` in the disconnected Apple-silicon UTM VM.
+The result binds wheel SHA-256 `77722f92cca497de373ca58ab09a1aac285657e0261b2c18fec42c41085e9495`
+and sdist SHA-256 `16f6fc6a603da130a7eb326ac702910536f2b7898454f8f7b8a916d14df99c1c`.
+Those exact bytes predate the upstream compatibility repairs, so the PASS is not carried forward.
 
 ## H91-1000 — Qualify exact installed bytes
 
@@ -1232,6 +1261,14 @@ Exit gate:
 This phase occurs only after exact installed 0.9.1 bytes exist. It validates the integration seam
 that produced the feedback; it does not authorize Honey to modify the retained evidence store.
 
+- [x] Ingest the downstream compatibility findings into upstream Honey source rather than shipping
+  a Hiero-local runtime fork. The reviewed patch repairs mandatory-index reconstruction after
+  pruning, sparse-graph hashing, per-channel allowance multiplication, pre-ranking semantic-type
+  filtering, combined blocking-requirement allocation, content-equivalent displaced provenance,
+  and projection binding across non-catalog revisions.
+- [ ] Rebuild and requalify after that upstream integration; evidence from source commit
+  `1478bbac7dbbe8d3bdef4d5a8f90c9cbd736f422` and the Hiero-local compatibility runtime is historical
+  diagnostic evidence, not evidence for the replacement candidate.
 - [ ] Keep `HIERO_AUDIT_CIGAR_MODE=shadow` throughout qualification.
 - [ ] Update `hiero_audit_core/cigar_client.py::CigarHoneyClient.compile_context` to reuse a
   persistent SDK client/connection pool.
@@ -1260,6 +1297,14 @@ Exit gate:
 
 - [ ] The exact 0.9.1 installed candidate removes progressive latency/storage growth on the same
   integration seam while preserving the measured context-quality floor.
+
+Progress evidence (2026-07-21): the exact-input 100-pair Hiero checkpoint has SHA-256
+`9072171072822f1bdeff689f74916874c6e9936ed2e2566714ae58e084ac0794`, but it used source commit
+`1478bbac7dbbe8d3bdef4d5a8f90c9cbd736f422` plus local patch SHA-256
+`69f54651943ddb5ef45b21e300be432aca89394fa3eddc6a89a1b2879cf61c09`. It therefore rejected the
+upstream candidate while providing reproducible repair input. The patch now applies in upstream
+Honey, where all affected daemon, retrieval, and store tests and warnings-denied all-target Clippy
+pass. No installed-byte, efficiency, or downstream exit gate is closed by these source tests.
 
 ## H91-1100 — Evidence, residual risk, and authorized prerelease cut
 

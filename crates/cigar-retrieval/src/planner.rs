@@ -260,6 +260,7 @@ impl QueryPlanner {
                         partition,
                         required_revision,
                         consistency,
+                        requirement.semantic_type,
                         self.profile.exact_cap,
                         false,
                     );
@@ -295,23 +296,13 @@ impl QueryPlanner {
                         ),
                     ] {
                         let cap = if capacity.is_some() {
-                            let optional = distributed_channel_limit(
+                            distributed_channel_limit(
                                 requirement_limit,
                                 available_channels,
                                 channel_index,
                             )?
                             .min(configured_cap)
-                            .min(self.profile.candidate_selection.maximum_per_stage);
-                            optional
-                                .checked_add(
-                                    self.profile
-                                        .candidate_selection
-                                        .maximum_protected_per_requirement,
-                                )
-                                .ok_or_else(|| {
-                                    RetrievalError::new(RetrievalErrorCode::LimitExceeded)
-                                })?
-                                .min(configured_cap)
+                            .min(self.profile.candidate_selection.maximum_per_stage)
                         } else {
                             configured_cap
                         };
@@ -321,6 +312,7 @@ impl QueryPlanner {
                             partition,
                             required_revision,
                             consistency,
+                            requirement.semantic_type,
                             cap,
                             false,
                         );
@@ -335,23 +327,13 @@ impl QueryPlanner {
                     }
                     if vector_available && partition.vector_allowed() {
                         let vector_cap = if capacity.is_some() {
-                            let optional = distributed_channel_limit(
+                            distributed_channel_limit(
                                 requirement_limit,
                                 available_channels,
                                 channel_index,
                             )?
                             .min(self.profile.vector_cap)
-                            .min(self.profile.candidate_selection.maximum_per_stage);
-                            optional
-                                .checked_add(
-                                    self.profile
-                                        .candidate_selection
-                                        .maximum_protected_per_requirement,
-                                )
-                                .ok_or_else(|| {
-                                    RetrievalError::new(RetrievalErrorCode::LimitExceeded)
-                                })?
-                                .min(self.profile.vector_cap)
+                            .min(self.profile.candidate_selection.maximum_per_stage)
                         } else {
                             self.profile.vector_cap
                         };
@@ -360,6 +342,7 @@ impl QueryPlanner {
                             partition,
                             required_revision,
                             consistency,
+                            requirement.semantic_type,
                             vector_cap,
                             true,
                         );
@@ -527,6 +510,7 @@ fn base_request(
     partition: &AuthorizedPartition,
     required_revision: StoreRevision,
     consistency: RetrievalConsistency,
+    atom_kind: AtomKind,
     limit: usize,
     allow_fallback: bool,
 ) -> RetrievalRequest {
@@ -535,6 +519,7 @@ fn base_request(
         partition: partition.clone(),
         required_revision,
         consistency,
+        atom_kinds: BTreeSet::from([atom_kind]),
         exact_versions: BTreeSet::new(),
         atom_ids: BTreeSet::new(),
         lineage_ids: BTreeSet::new(),
@@ -613,6 +598,9 @@ fn query_fingerprint(
         request.partition.partition_digest().as_str().as_bytes(),
     )?;
     hasher.update(request.required_revision.0.to_be_bytes());
+    for atom_kind in &request.atom_kinds {
+        hasher.update([atom_kind_code(*atom_kind)]);
+    }
     hasher.update(
         u64::try_from(request.limit)
             .map_err(|_error| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?
@@ -662,6 +650,21 @@ const fn stage_code(stage: RetrievalStage) -> u8 {
         RetrievalStage::Vector => 3,
         RetrievalStage::Graph => 4,
         RetrievalStage::Augment => 5,
+    }
+}
+
+const fn atom_kind_code(kind: AtomKind) -> u8 {
+    match kind {
+        AtomKind::Instruction => 0,
+        AtomKind::SourceCode => 1,
+        AtomKind::Documentation => 2,
+        AtomKind::Decision => 3,
+        AtomKind::Conversation => 4,
+        AtomKind::ToolResult => 5,
+        AtomKind::Schema => 6,
+        AtomKind::Policy => 7,
+        AtomKind::Test => 8,
+        AtomKind::Artifact => 9,
     }
 }
 
@@ -761,11 +764,15 @@ fn finish_digest(hasher: Sha256) -> Result<ContentDigest, RetrievalError> {
 #[cfg(test)]
 mod tests {
     use super::{QueryPlanner, QueryPlannerProfile};
-    use crate::{AuthorizedPartition, RetrievalConsistency, RetrievalErrorCode, RetrievalStage};
+    use crate::{
+        AuthorizedPartition, RetrievalCapacity, RetrievalConsistency, RetrievalErrorCode,
+        RetrievalStage,
+    };
     use cigar_protocol::{
-        Classification, ContextRequirement, InstructionAuthority, RecordId, UtcTimestamp,
+        Classification, ContextRequirement, InstructionAuthority, LaneKind, RecordId, UtcTimestamp,
     };
     use cigar_store::StoreRevision;
+    use std::collections::BTreeMap;
     use std::error::Error;
 
     fn partition() -> Result<AuthorizedPartition, Box<dyn Error>> {
@@ -894,6 +901,33 @@ mod tests {
                 .map_err(|error| error.code()),
             Err(RetrievalErrorCode::LimitExceeded)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn bounded_query_distributes_one_requirement_allowance_across_channels()
+    -> Result<(), Box<dyn Error>> {
+        let query = requirement(
+            serde_json::json!({"type":"query", "value":"bounded context"}),
+            true,
+        )?;
+        let capacity = RetrievalCapacity::new(
+            BTreeMap::from([(LaneKind::Evidence, 4_000)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )?;
+        let plan = QueryPlanner::default().plan_bounded(
+            &[query],
+            &capacity,
+            &partition()?,
+            StoreRevision(42),
+            RetrievalConsistency::Strong,
+            true,
+        )?;
+        let total: usize = plan.stages.iter().map(|stage| stage.request.limit).sum();
+        assert_eq!(plan.stages.len(), 3);
+        assert_eq!(total, 8);
+        assert!(plan.stages.iter().all(|stage| stage.request.limit <= 3));
         Ok(())
     }
 }

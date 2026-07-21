@@ -2763,7 +2763,7 @@ fn verify_latest_state_and_projections(
 ) -> Result<SqliteDeepIntegrityReport, StoreError> {
     let catalog_metadata =
         load_catalog_revision_metadata(connection, SnapshotSelection::Revision(state.revision))?;
-    let projection_checksum = catalog_metadata.semantic_root.clone();
+    let projection_checksum = catalog_metadata.catalog_root.clone();
     verify_state_and_projections(connection, state, &catalog_metadata, &projection_checksum)
 }
 
@@ -2785,7 +2785,7 @@ pub(crate) fn verify_v5_latest_state_and_projection(
         edge_count: totals.edge_count,
         referenced_blob_bytes: totals.referenced_blob_bytes,
     };
-    verify_state_and_projections(connection, state, &catalog_metadata, semantic_root)
+    verify_state_and_projections(connection, state, &catalog_metadata, catalog_root)
 }
 
 pub(crate) fn recover_v5_latest_projection(
@@ -2806,7 +2806,7 @@ pub(crate) fn recover_v5_latest_projection(
         edge_count: totals.edge_count,
         referenced_blob_bytes: totals.referenced_blob_bytes,
     };
-    match verify_active_projection(connection, &metadata, semantic_root) {
+    match verify_active_projection(connection, &metadata, catalog_root) {
         Ok(status) => return Ok(status),
         Err(error) if error.code() == StoreErrorCode::LimitExceeded => return Err(error),
         Err(_error) => {}
@@ -2852,13 +2852,13 @@ pub(crate) fn recover_v5_latest_projection(
             params![
                 generation_i64,
                 revision_i64,
-                semantic_root.as_str(),
+                catalog_root.as_str(),
                 empty_projection_root(),
                 unix_nanos_text()?
             ],
         )
         .map_err(unavailable)?;
-    let mut root = projection_root_builder(generation, metadata.revision, semantic_root)?;
+    let mut root = projection_root_builder(generation, metadata.revision, catalog_root)?;
     let mut atom_count = 0_u64;
     {
         let mut row_statement = transaction
@@ -2941,7 +2941,7 @@ pub(crate) fn recover_v5_latest_projection(
     let status = SqliteProjectionStatus {
         generation,
         source_revision: metadata.revision,
-        state_checksum: semantic_root.clone(),
+        state_checksum: catalog_root.clone(),
         atom_count,
         projection_root,
     };
@@ -2959,14 +2959,14 @@ pub(crate) fn recover_v5_latest_projection(
             params![
                 generation_i64,
                 revision_i64,
-                semantic_root.as_str(),
+                catalog_root.as_str(),
                 unix_nanos_text()?
             ],
         )
         .map_err(unavailable)?;
     prune_projection_generations(&transaction)?;
     transaction.commit().map_err(unavailable)?;
-    verify_active_projection(connection, &metadata, semantic_root)
+    verify_active_projection(connection, &metadata, catalog_root)
 }
 
 fn verify_state_and_projections(
@@ -3125,26 +3125,8 @@ fn authoritative_projection_state(
     if metadata.atom_count > MAX_SQLITE_PROJECTION_ATOMS {
         return Err(StoreError::new(StoreErrorCode::LimitExceeded));
     }
-    let checksum = authoritative_state_checksum(connection, metadata.revision)?;
+    let checksum = metadata.catalog_root.clone();
     Ok((metadata, checksum))
-}
-
-fn authoritative_state_checksum(
-    connection: &Connection,
-    revision: StoreRevision,
-) -> Result<ContentDigest, StoreError> {
-    let checksum = connection
-        .query_row(
-            "SELECT CASE
-                WHEN typeof(semantic_root) = 'text'
-                 AND length(CAST(semantic_root AS BLOB)) = 68
-                THEN semantic_root ELSE NULL END
-             FROM cigar_repository_revisions_v4 WHERE revision = ?1",
-            params![sqlite_revision(revision)?],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(unavailable)?;
-    ContentDigest::new(checksum).map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))
 }
 
 fn active_projection_status(connection: &Connection) -> Result<SqliteProjectionStatus, StoreError> {
@@ -3225,7 +3207,7 @@ fn load_active_projection_status(
     if generation == 0
         || row.5 != 1
         || atom_count > MAX_SQLITE_PROJECTION_ATOMS
-        || source_revision != expected_revision
+        || source_revision > expected_revision
         || state_checksum != *expected_state_checksum
         || generation_source_revision != source_revision
         || generation_state_checksum != state_checksum
@@ -6688,7 +6670,7 @@ mod projection_generation_tests {
         AccessContext, CancellationToken, Repository, StoreErrorCode, StoreRevision,
         WriteTransaction,
     };
-    use cigar_protocol::ContextAtomV1;
+    use cigar_protocol::{ContextAtomV1, ContextBundle};
     use rusqlite::{Connection, params};
     use std::time::Duration;
 
@@ -6758,6 +6740,45 @@ mod projection_generation_tests {
                 atom.version_id.as_str()
             )?
         );
+        Ok(())
+    }
+
+    #[test]
+    fn non_catalog_revision_does_not_invalidate_an_unchanged_projection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let store = SqliteStore::open(directory.path().join("non-catalog.sqlite3"))?;
+        let atom = publish_fixture_atom(&store)
+            .map_err(|error| format!("publish fixture atom: {error}"))?;
+        let projection = store
+            .rebuild_atom_projection_generation(&CancellationToken::default())
+            .map_err(|error| format!("rebuild projection: {error}"))?;
+        assert_eq!(projection.source_revision, StoreRevision(1));
+        let context = AccessContext::new(atom.scope.tenant_id.clone(), "projection-test")?;
+        let bundle_fixture = cigar_testkit::deterministic_protocol_fixture("ContextBundle")
+            .ok_or("missing ContextBundle fixture")?;
+        let bundle: ContextBundle = serde_json::from_value(bundle_fixture.input)?;
+        let mut write =
+            store.begin_write(context, StoreRevision(1), CancellationToken::default())?;
+        write.put_bundle(bundle)?;
+        assert_eq!(
+            write
+                .commit(None)
+                .map_err(|error| format!("bundle commit: {error}"))?
+                .revision,
+            StoreRevision(2)
+        );
+
+        let current = store
+            .projection_status()
+            .map_err(|error| format!("projection status: {error}"))?;
+        assert_eq!(current, projection);
+        let report = store
+            .deep_integrity_check()
+            .map_err(|error| format!("deep integrity: {error}"))?;
+        assert_eq!(report.revision, StoreRevision(2));
+        assert_eq!(report.atom_count, 1);
+        assert_eq!(report.projection_atom_count, 1);
         Ok(())
     }
 

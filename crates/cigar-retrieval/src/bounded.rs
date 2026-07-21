@@ -606,10 +606,7 @@ mod tests {
                 .iter()
                 .map(|stage| (stage.request.stage, stage.request.limit))
                 .collect::<Vec<_>>(),
-            vec![
-                (RetrievalStage::Metadata, 36),
-                (RetrievalStage::Lexical, 36)
-            ]
+            vec![(RetrievalStage::Metadata, 4), (RetrievalStage::Lexical, 4)]
         );
         let smaller = QueryPlanner::default().plan_bounded(
             &requirements,
@@ -631,7 +628,7 @@ mod tests {
                 .ok_or("missing smaller bounded stage")?
                 .request
                 .limit,
-            34
+            2
         );
         Ok(())
     }
@@ -781,8 +778,8 @@ mod tests {
         let mut maximum_displaced_per_selected = 0_usize;
         for workflow in 0..100_u64 {
             let mut stage_candidates = Vec::new();
-            for _stage in 0..2 {
-                let candidates = (0..36_u64)
+            for stage in &plan.stages {
+                let candidates = (0..u64::try_from(stage.request.limit)?)
                     .map(|index| {
                         candidate(
                             10_000 + workflow * 100 + index,

@@ -3,7 +3,7 @@
   "valid": {
     "receipt": {
       "schema_version": "cigar.sqlite-v4-v5-migration-receipt.v1",
-      "schema_digest": "1220748f285f56a3d900050661a37e1f83d7e39cf3b98a7593947d62f929c137eefe",
+      "schema_digest": "12207a6aede04c1c8a98b226a2f65df79fd8ab7d71d5249e60d267b9e0cd182cea2d",
       "created_at_unix_nanos": "4",
       "tool_name": "cigar",
       "tool_version": "0.9.1-honey.1",

@@ -84,7 +84,7 @@ class DevelopmentProtocolBaselineTests(unittest.TestCase):
             [binding["path"] for binding in projection_group["files"]],
             list(baseline.INTERFACE_PROJECTIONS),
         )
-        self.assertEqual(document["binding_inventory"]["total_bytes"], 2_573_667)
+        self.assertEqual(document["binding_inventory"]["total_bytes"], 2_573_837)
         self.assertEqual(
             document["binding_inventory"]["path_inventory_sha256"],
             "fc422b6870a8613ca44e4eb96c969b6584b8d10b2004532da7d4f071a8c28f1f",

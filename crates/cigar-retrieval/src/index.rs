@@ -530,13 +530,17 @@ impl InMemoryIndexManager {
             &request.partition,
             &mut work,
         );
-        let authorized = authorized_current_documents(
+        let mut authorized = authorized_current_documents(
             &generation.documents,
             &generation.lineage_projection,
             &lineages,
             request,
             &mut work,
         )?;
+        if !request.atom_kinds.is_empty() {
+            authorized
+                .retain(|_version, document| request.atom_kinds.contains(&document.atom.kind));
+        }
         let mut evidence_by_version: BTreeMap<VersionId, BTreeSet<MatchEvidence>> = BTreeMap::new();
         let mut semantic_scores = BTreeMap::new();
         let mut fallback_used = false;
@@ -1273,42 +1277,26 @@ fn partition_semantic_root(
         hasher.update(document.atom.content_digest.as_str().as_bytes());
         hasher.update([document.atom.lifecycle as u8]);
     }
-    let documents: Vec<_> = documents.iter().collect();
-    for (left_index, (left_version, left_document)) in documents.iter().enumerate() {
-        for (right_version, right_document) in documents.iter().skip(left_index) {
-            work.graph_lineage_pair_lookups = work.graph_lineage_pair_lookups.saturating_add(1);
-            let (first_lineage, second_lineage) =
-                if left_document.atom.lineage_id <= right_document.atom.lineage_id {
-                    (
-                        left_document.atom.lineage_id.clone(),
-                        right_document.atom.lineage_id.clone(),
-                    )
-                } else {
-                    (
-                        right_document.atom.lineage_id.clone(),
-                        left_document.atom.lineage_id.clone(),
-                    )
-                };
-            let (first_version, second_version) = if left_version <= right_version {
-                ((*left_version).clone(), (*right_version).clone())
-            } else {
-                ((*right_version).clone(), (*left_version).clone())
-            };
-            if edge_projection
-                .get(&LineageEdgeKey {
-                    tenant_id: tenant_id.clone(),
-                    first_lineage,
-                    second_lineage,
-                })
-                .is_some_and(|edges| {
-                    edges.contains(&(first_version.clone(), second_version.clone()))
-                })
-            {
-                work.authorized_graph_edges = work.authorized_graph_edges.saturating_add(1);
-                hasher.update(first_version.as_str().as_bytes());
-                hasher.update(second_version.as_str().as_bytes());
+    // The projection already contains only real edges. Walking every authorized document pair
+    // makes disclosure generation quadratic even for an empty or sparse graph. Collect the
+    // authorized projected edges instead; the tuple set preserves the exact version-pair order
+    // used by the former nested scan and therefore preserves the fingerprint contract.
+    let mut authorized_edges = BTreeSet::new();
+    for (key, edges) in edge_projection {
+        if key.tenant_id != *tenant_id {
+            continue;
+        }
+        for (first_version, second_version) in edges {
+            if documents.contains_key(first_version) && documents.contains_key(second_version) {
+                work.graph_lineage_pair_lookups = work.graph_lineage_pair_lookups.saturating_add(1);
+                authorized_edges.insert((first_version, second_version));
             }
         }
+    }
+    for (first_version, second_version) in authorized_edges {
+        work.authorized_graph_edges = work.authorized_graph_edges.saturating_add(1);
+        hasher.update(first_version.as_str().as_bytes());
+        hasher.update(second_version.as_str().as_bytes());
     }
     finish_digest(hasher)
 }
@@ -1542,6 +1530,7 @@ mod tests {
             partition,
             required_revision: StoreRevision(revision),
             consistency: RetrievalConsistency::Strong,
+            atom_kinds: BTreeSet::new(),
             exact_versions: BTreeSet::new(),
             atom_ids: BTreeSet::new(),
             lineage_ids: BTreeSet::new(),

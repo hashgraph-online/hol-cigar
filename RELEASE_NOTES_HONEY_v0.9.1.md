@@ -39,10 +39,19 @@ The public candidate contains exactly these 13 files:
   Full retained-history authentication is an explicit deep-integrity operation.
 - Generated migration, crash-boundary recovery, backup/restore, compaction, pin, and downgrade
   tests fail closed on revision, checksum, semantic-root, catalog-root, or policy drift.
+- The signed v4-to-v5 migration-receipt schema now declares explicit maximum lengths for every
+  string field, and its reviewed schema digest/test vector are updated together.
 - Compiler selection groups content-equivalent candidates, preserves every governed provenance and
   citation alias, and deterministically chooses one emitted representation.
 - Retrieval applies requirement/lane budgets, protected mandatory evidence, alias coalescing,
   source/lineage/content caps, and deterministic diversity before compiler budget displacement.
+- Downstream shadow testing exposed and repaired seven additional integration defects: restart now
+  reconstructs a pruned mandatory index from authenticated repository state; sparse graph hashing
+  walks authorized edges instead of every document pair; per-requirement allowance is distributed
+  once across retrieval channels; semantic kind filtering occurs before ranking; combined blocking
+  requirements retain their protected allowance; equivalent displaced provenance remains valid; and
+  projection integrity is bound to the catalog root so non-catalog revisions do not invalidate an
+  otherwise exact projection.
 - The SDK documents a stable semantic request key that excludes run/job/trace correlation while
   retaining authorization, disclosure, policy, catalog, tokenizer, materializer, target, and
   compiler pins. Correlation remains in a separate execution receipt.

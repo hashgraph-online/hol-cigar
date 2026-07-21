@@ -22,7 +22,7 @@
       "properties": {
         "schema_version": {"const": "cigar.sqlite-v4-v5-migration-receipt.v1"},
         "schema_digest": {"$ref": "#/$defs/digest"},
-        "created_at_unix_nanos": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$"},
+        "created_at_unix_nanos": {"type": "string", "minLength": 1, "maxLength": 39, "pattern": "^(0|[1-9][0-9]{0,38})$"},
         "tool_name": {"const": "cigar"},
         "tool_version": {"type": "string", "minLength": 1, "maxLength": 64},
         "product_version": {"type": "string", "minLength": 1, "maxLength": 64},
@@ -67,13 +67,13 @@
         "tenant": {"type": "string", "minLength": 1, "maxLength": 256},
         "signer": {"type": "string", "minLength": 1, "maxLength": 256},
         "purpose": {"const": "sqlite-v4-v5-migration-receipt-v1"},
-        "signed_at_unix_nanos": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$"},
-        "payload_digest_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "signature_hex": {"type": "string", "pattern": "^[0-9a-f]{128}$"}
+        "signed_at_unix_nanos": {"type": "string", "minLength": 1, "maxLength": 39, "pattern": "^(0|[1-9][0-9]{0,38})$"},
+        "payload_digest_hex": {"type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$"},
+        "signature_hex": {"type": "string", "minLength": 128, "maxLength": 128, "pattern": "^[0-9a-f]{128}$"}
       }
     }
   },
   "$defs": {
-    "digest": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"}
+    "digest": {"type": "string", "minLength": 68, "maxLength": 68, "pattern": "^1220[0-9a-f]{64}$"}
   }
 }
