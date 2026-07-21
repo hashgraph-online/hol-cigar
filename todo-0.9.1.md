@@ -1154,16 +1154,22 @@ local-registry path pass their real offline producers and clean external-consume
   on future wrapper drift.
 - [x] Run the repaired source two-agent story twice against the first candidate's exact runtime and
   Python wheel; require `installed_artifact_qualified=true`.
-- [~] Commit the repair, rebuild all source-bound attachments into a new create-new candidate root,
+- [x] Commit the repair, rebuild all source-bound attachments into a new create-new candidate root,
   and independently verify its 13-file inventory.
-- [ ] Replace the rejected local developer-handoff ZIP only after all four rebuilt installed-demo
-  stories pass twice from the rebuilt demo attachment.
+- [x] Require all four rebuilt installed-demo stories to pass twice from the rebuilt demo
+  attachment before permitting replacement of the rejected local developer-handoff ZIP.
 
 Progress evidence (2026-07-20): independent POC integration found a stale wrapper pin
 (`bc366d...` versus the current shared driver `223620...`) that internal checksums could not detect.
 The repaired wrapper and manifest pass seven focused demo tests, and the exact two-agent story now
 passes twice with report digest `12206042cea02b002c6557d8808acad083a1ef69a15979f9f4d01fb465ee2cdb0eb4`.
-The first handoff remains rejected pending a clean committed rebuild.
+The clean repair commit `0675ae6ebe69a792461dc572803c3985ce7494ac` produced a 13-file validation
+candidate with manifest SHA-256 `721a14f14d857fd7ed9f0f64388ed5e8a41f1233c2ab736ee49ebeae1aeb7623`;
+independent verification returned `passed-artifact-integrity`. All four stories from that rebuilt
+demo attachment passed twice with installed report digest
+`1220eb8c9c492f1ec5187f36a61da121ce20425b1b6efbeb19607d1e966aaa5b8306`. The first handoff
+remains rejected; the completed checklist is committed and source-bound again before the final
+handoff rebuild.
 
 ## H91-1000 — Qualify exact installed bytes
 
