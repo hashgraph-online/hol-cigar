@@ -37,6 +37,9 @@ The public candidate contains exactly these 13 files:
   persist a complete catalog-free residual state.
 - Startup authenticates the latest checkpoint and bounded delta suffix needed for readiness.
   Full retained-history authentication is an explicit deep-integrity operation.
+- Local daemon startup selects an activated v5 target only through the explicit owner-private
+  `production.active_store_descriptor`; v4 remains the default when that field is absent, and
+  shared deployments reject the setting.
 - Generated migration, crash-boundary recovery, backup/restore, compaction, pin, and downgrade
   tests fail closed on revision, checksum, semantic-root, catalog-root, or policy drift.
 - The signed v4-to-v5 migration-receipt schema now declares explicit maximum lengths for every
@@ -71,6 +74,12 @@ anchor authenticate. An interrupted migration resumes its signed operation or le
 source active. Rollback restores the verified backup into another distinct empty target and then
 activates that target; v5 is never opened by an older v4 runtime and in-place downgrade is rejected.
 The original v4 source remains untouched until an owner separately authorizes removal.
+
+After activation, keep `production.metadata_database` pointed at the retained v4 source and set
+`production.active_store_descriptor` to the descriptor under `state_directory`. On restart the
+local daemon opens only the descriptor-selected v5 target, verifies bounded readiness, reconciles
+the revision anchor and encrypted blob roots, and fails closed on descriptor, path, capacity, lock,
+chain, or projection mismatch. See `docs/guides/honey-storage-v5.md` for the exact configuration.
 
 Retention is governed by authenticated count, age, byte, checkpoint, replay-window, pin, legal-hold,
 and backup constraints. Compaction is explicit preview/execute/status administration. It rejects an

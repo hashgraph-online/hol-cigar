@@ -11,15 +11,18 @@ use cigar_store::{
     OutboxRecoveryQuery, PostgresStore, PostgresWriteTransaction, ReadTransaction, Repository,
     ServiceBatch, ServiceBatchReceipt, ServiceError, ServiceListPage, ServiceListQuery,
     ServiceRecord, ServiceRecordLocator, ServiceRecordSelection, ServiceRepository,
-    SnapshotSelection, SqliteReadTransaction, SqliteStore, SqliteWriteTransaction, StoreError,
-    StoreRevision, WorkerLocator, WorkerState, WorkerUpdate, WriteTransaction,
+    SnapshotSelection, SqliteReadTransaction, SqliteStore, SqliteV5Store, SqliteV5WriteTransaction,
+    SqliteWriteTransaction, StoreError, StoreRevision, WorkerLocator, WorkerState, WorkerUpdate,
+    WriteTransaction,
 };
 use std::fmt;
 
 /// Exact local SQLite or shared PostgreSQL repository selected by validated composition.
 pub enum ProductionStore {
-    /// Durable single-node local profile.
+    /// Durable single-node local v4 compatibility profile.
     Local(SqliteStore),
+    /// Activated incremental single-node local v5 profile.
+    LocalV5(SqliteV5Store),
     /// Transactional shared PostgreSQL/object profile.
     Shared(PostgresStore),
 }
@@ -29,6 +32,12 @@ impl ProductionStore {
     #[must_use]
     pub const fn local(store: SqliteStore) -> Self {
         Self::Local(store)
+    }
+
+    /// Wraps an authenticated activated local v5 repository.
+    #[must_use]
+    pub const fn local_v5(store: SqliteV5Store) -> Self {
+        Self::LocalV5(store)
     }
 
     /// Wraps a verified shared repository.
@@ -41,6 +50,7 @@ impl ProductionStore {
     pub fn revision(&self) -> Result<StoreRevision, StoreError> {
         match self {
             Self::Local(store) => store.revision(),
+            Self::LocalV5(store) => store.revision(),
             Self::Shared(store) => store.revision(),
         }
     }
@@ -49,6 +59,7 @@ impl ProductionStore {
     pub fn verify_migration_level(&self) -> Result<(), StoreError> {
         match self {
             Self::Local(store) => store.verify_migration_level(),
+            Self::LocalV5(store) => store.verify_migration_level(),
             Self::Shared(store) => store.verify_migration_level(),
         }
     }
@@ -61,6 +72,7 @@ impl ProductionStore {
     ) -> Result<(), StoreError> {
         match self {
             Self::Local(store) => store.blob_readiness_probe(tenant, blob),
+            Self::LocalV5(store) => store.blob_readiness_probe(tenant, blob),
             Self::Shared(store) => store.blob_readiness_probe(tenant, blob),
         }
     }
@@ -69,6 +81,7 @@ impl ProductionStore {
     pub fn reconcile_blob_roots(&self, tenants: &[RecordId]) -> Result<(), StoreError> {
         match self {
             Self::Local(store) => store.reconcile_blob_roots(),
+            Self::LocalV5(store) => store.reconcile_blob_roots(),
             Self::Shared(store) => store.reconcile_blob_roots(tenants),
         }
     }
@@ -78,6 +91,7 @@ impl fmt::Debug for ProductionStore {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Local(_store) => formatter.write_str("ProductionStore::Local"),
+            Self::LocalV5(_store) => formatter.write_str("ProductionStore::LocalV5"),
             Self::Shared(_store) => formatter.write_str("ProductionStore::Shared"),
         }
     }
@@ -224,8 +238,10 @@ impl ReadTransaction for ProductionReadTransaction {
 
 /// Closed mutable transaction for the selected production repository.
 pub enum ProductionWriteTransaction<'store> {
-    /// SQLite write transaction.
+    /// SQLite v4 compatibility write transaction.
     Local(SqliteWriteTransaction<'store>),
+    /// SQLite v5 incremental write transaction.
+    LocalV5(SqliteV5WriteTransaction<'store>),
     /// PostgreSQL write transaction.
     Shared(PostgresWriteTransaction<'store>),
 }
@@ -234,6 +250,7 @@ impl fmt::Debug for ProductionWriteTransaction<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Local(transaction) => transaction.fmt(formatter),
+            Self::LocalV5(transaction) => transaction.fmt(formatter),
             Self::Shared(transaction) => transaction.fmt(formatter),
         }
     }
@@ -243,6 +260,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn stage_snapshot(&mut self, snapshot: SourceSnapshot) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.stage_snapshot(snapshot),
+            Self::LocalV5(transaction) => transaction.stage_snapshot(snapshot),
             Self::Shared(transaction) => transaction.stage_snapshot(snapshot),
         }
     }
@@ -254,6 +272,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     ) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.publish_atoms(atoms, edges),
+            Self::LocalV5(transaction) => transaction.publish_atoms(atoms, edges),
             Self::Shared(transaction) => transaction.publish_atoms(atoms, edges),
         }
     }
@@ -261,6 +280,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn put_bundle(&mut self, bundle: ContextBundle) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.put_bundle(bundle),
+            Self::LocalV5(transaction) => transaction.put_bundle(bundle),
             Self::Shared(transaction) => transaction.put_bundle(bundle),
         }
     }
@@ -268,6 +288,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn append_context_commit(&mut self, commit: ContextCommit) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.append_context_commit(commit),
+            Self::LocalV5(transaction) => transaction.append_context_commit(commit),
             Self::Shared(transaction) => transaction.append_context_commit(commit),
         }
     }
@@ -275,6 +296,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn append_effect_event(&mut self, event: EffectJournalEvent) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.append_effect_event(event),
+            Self::LocalV5(transaction) => transaction.append_effect_event(event),
             Self::Shared(transaction) => transaction.append_effect_event(event),
         }
     }
@@ -282,6 +304,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn put_effect_record(&mut self, record: EffectRecordEnvelope) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.put_effect_record(record),
+            Self::LocalV5(transaction) => transaction.put_effect_record(record),
             Self::Shared(transaction) => transaction.put_effect_record(record),
         }
     }
@@ -289,6 +312,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn put_blob(&mut self, blob: BlobRecord) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.put_blob(blob),
+            Self::LocalV5(transaction) => transaction.put_blob(blob),
             Self::Shared(transaction) => transaction.put_blob(blob),
         }
     }
@@ -296,6 +320,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn enqueue_outbox(&mut self, message: OutboxMessage) -> Result<(), StoreError> {
         match self {
             Self::Local(transaction) => transaction.enqueue_outbox(message),
+            Self::LocalV5(transaction) => transaction.enqueue_outbox(message),
             Self::Shared(transaction) => transaction.enqueue_outbox(message),
         }
     }
@@ -303,6 +328,7 @@ impl WriteTransaction for ProductionWriteTransaction<'_> {
     fn commit(self, idempotency: Option<IdempotencyIdentity>) -> Result<CommitReceipt, StoreError> {
         match self {
             Self::Local(transaction) => transaction.commit(idempotency),
+            Self::LocalV5(transaction) => transaction.commit(idempotency),
             Self::Shared(transaction) => transaction.commit(idempotency),
         }
     }
@@ -328,6 +354,9 @@ impl Repository for ProductionStore {
             Self::Local(store) => store
                 .begin_read(context, selection, cancellation)
                 .map(ProductionReadTransaction::Local),
+            Self::LocalV5(store) => store
+                .begin_read(context, selection, cancellation)
+                .map(ProductionReadTransaction::Local),
             Self::Shared(store) => store
                 .begin_read(context, selection, cancellation)
                 .map(ProductionReadTransaction::Shared),
@@ -344,6 +373,9 @@ impl Repository for ProductionStore {
             Self::Local(store) => store
                 .begin_write(context, expected_revision, cancellation)
                 .map(ProductionWriteTransaction::Local),
+            Self::LocalV5(store) => store
+                .begin_write(context, expected_revision, cancellation)
+                .map(ProductionWriteTransaction::LocalV5),
             Self::Shared(store) => store
                 .begin_write(context, expected_revision, cancellation)
                 .map(ProductionWriteTransaction::Shared),
@@ -360,6 +392,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<Option<ServiceRecord>, ServiceError> {
         match self {
             Self::Local(store) => store.service_get(locator, selection, cancellation),
+            Self::LocalV5(store) => store.service_get(locator, selection, cancellation),
             Self::Shared(store) => store.service_get(locator, selection, cancellation),
         }
     }
@@ -371,6 +404,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<ServiceListPage, ServiceError> {
         match self {
             Self::Local(store) => store.service_list(query, cancellation),
+            Self::LocalV5(store) => store.service_list(query, cancellation),
             Self::Shared(store) => store.service_list(query, cancellation),
         }
     }
@@ -382,6 +416,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<ServiceBatchReceipt, ServiceError> {
         match self {
             Self::Local(store) => store.service_commit(batch, cancellation),
+            Self::LocalV5(store) => store.service_commit(batch, cancellation),
             Self::Shared(store) => store.service_commit(batch, cancellation),
         }
     }
@@ -393,6 +428,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<EffectRecoveryPage, ServiceError> {
         match self {
             Self::Local(store) => store.effect_recovery(query, cancellation),
+            Self::LocalV5(store) => store.effect_recovery(query, cancellation),
             Self::Shared(store) => store.effect_recovery(query, cancellation),
         }
     }
@@ -404,6 +440,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<OutboxRecoveryPage, ServiceError> {
         match self {
             Self::Local(store) => store.outbox_recovery(query, cancellation),
+            Self::LocalV5(store) => store.outbox_recovery(query, cancellation),
             Self::Shared(store) => store.outbox_recovery(query, cancellation),
         }
     }
@@ -415,6 +452,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<Option<WorkerState>, ServiceError> {
         match self {
             Self::Local(store) => store.worker_get(locator, cancellation),
+            Self::LocalV5(store) => store.worker_get(locator, cancellation),
             Self::Shared(store) => store.worker_get(locator, cancellation),
         }
     }
@@ -427,6 +465,7 @@ impl ServiceRepository for ProductionStore {
     ) -> Result<WorkerState, ServiceError> {
         match self {
             Self::Local(store) => store.worker_update(locator, update, cancellation),
+            Self::LocalV5(store) => store.worker_update(locator, update, cancellation),
             Self::Shared(store) => store.worker_update(locator, update, cancellation),
         }
     }

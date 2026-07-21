@@ -1452,6 +1452,7 @@ mod macos {
                 production: ProductionPaths {
                     project_directory: project.clone(),
                     metadata_database: metadata_database.clone(),
+                    active_store_descriptor: None,
                     blob_directory: state.join("blobs"),
                     blob_key_reference_directory: state.join("blob-keys"),
                     keystore_file,

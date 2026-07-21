@@ -97,6 +97,7 @@ pub use sqlite::{
 };
 pub use sqlite_v5::{
     SqliteDeepIntegrityReportV5, SqliteRetentionStatisticsV5, SqliteStartupVerificationV5,
+    SqliteV5Store, SqliteV5WriteTransaction,
 };
 
 /// Reusable black-box repository behavior suite.

@@ -493,6 +493,7 @@ mod tests {
             production: cigar_daemon::ProductionPaths {
                 project_directory: project,
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file,

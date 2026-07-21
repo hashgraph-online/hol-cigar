@@ -1098,6 +1098,7 @@ mod tests {
             production: crate::ProductionPaths {
                 project_directory: root.to_path_buf(),
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file: state.join("keystore.cigar"),

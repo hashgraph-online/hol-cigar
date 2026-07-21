@@ -30,9 +30,11 @@ use cigar_replay::{
     LiveReplayInvocation, LiveReplayOutput, LiveReplayProvider, ReplayError, ReplayErrorCode,
 };
 use cigar_retrieval::{InMemoryIndexManager, IndexWorker, Retriever};
+use cigar_store::migrate_v5::read_active_store_descriptor_v1;
 use cigar_store::{
     MultiTenantLocalRepositoryBlobStore, ObjectRepositoryBlobStore, PostgresConfiguration,
     PostgresStore, RepositoryBlobStore, S3CompatibleObjectStorage, ServiceRepository, SqliteStore,
+    SqliteV5Store,
 };
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -269,16 +271,38 @@ fn compose_production_server_internal(
                 telemetry.clone();
             let startup_observer: Arc<dyn cigar_store::RepositoryStartupMetricsObserver> =
                 telemetry.clone();
-            let store = ProductionStore::local(
-                SqliteStore::open_with_blob_repository_capacity_and_startup_metrics(
-                    &config.production.metadata_database,
-                    Arc::clone(&blob_repository),
-                    config.local_sqlite_capacity_profile,
-                    startup_observer,
-                )
-                .map_err(|_error| bootstrap_failure())?
-                .with_commit_metrics_observer(commit_observer),
-            );
+            let store =
+                if let Some(descriptor_path) = config.production.active_store_descriptor.as_ref() {
+                    let descriptor = read_active_store_descriptor_v1(descriptor_path)
+                        .map_err(|_error| bootstrap_failure())?;
+                    let database = Path::new(descriptor.database_path());
+                    if database == config.state_directory
+                        || !database.starts_with(&config.state_directory)
+                    {
+                        return Err(bootstrap_failure());
+                    }
+                    ProductionStore::local_v5(
+                        SqliteV5Store::open_with_blob_repository_capacity_and_startup_metrics(
+                            database,
+                            Arc::clone(&blob_repository),
+                            config.local_sqlite_capacity_profile,
+                            startup_observer,
+                        )
+                        .map_err(|_error| bootstrap_failure())?
+                        .with_commit_metrics_observer(commit_observer),
+                    )
+                } else {
+                    ProductionStore::local(
+                        SqliteStore::open_with_blob_repository_capacity_and_startup_metrics(
+                            &config.production.metadata_database,
+                            Arc::clone(&blob_repository),
+                            config.local_sqlite_capacity_profile,
+                            startup_observer,
+                        )
+                        .map_err(|_error| bootstrap_failure())?
+                        .with_commit_metrics_observer(commit_observer),
+                    )
+                };
             (blob_repository, store)
         }
         DeploymentMode::Shared => compose_shared_store(
@@ -917,6 +941,9 @@ fn effect_store_is_empty(store: &ProductionStore) -> Result<bool, DaemonError> {
         ProductionStore::Local(store) => store
             .effect_store_is_empty()
             .map_err(|_error| bootstrap_failure()),
+        ProductionStore::LocalV5(store) => store
+            .effect_store_is_empty()
+            .map_err(|_error| bootstrap_failure()),
         ProductionStore::Shared(_store) => Err(bootstrap_failure()),
     }
 }
@@ -1385,9 +1412,17 @@ mod tests {
         Capability, Classification, ContentDigest, InstructionAuthority, RecordId, UtcTimestamp,
     };
     use cigar_replay::LiveReplayAuthorization;
+    use cigar_store::migrate_v5::{
+        MigrationActivationPathsV5, MigrationPathsV5, MigrationReceiptIdentity,
+        activate_v5_migration, migrate_v4_to_v5, preflight_v4_to_v5_migration,
+        sign_migration_receipt_v1,
+    };
     use cigar_store::{
-        AccessContext, CancellationToken, EffectRecordEnvelope, Repository, SqliteStore,
-        StoreRevision, WriteTransaction,
+        AccessContext, BackupErrorCode, BackupIdentity, CancellationToken, EffectRecordEnvelope,
+        MultiTenantLocalRepositoryBlobStore, Repository, RepositoryBlobStore, ServiceBatch,
+        ServiceExpectedVersion, ServiceRecordWrite, ServiceRepository, ServiceResponse,
+        SqliteCapacityProfile, SqliteStore, SqliteV5Store, StoreRevision, WriteTransaction,
+        create_backup_with_effect_checkpoint,
     };
     use sha2::{Digest as _, Sha256};
     use std::error::Error;
@@ -1665,6 +1700,7 @@ mod tests {
             production: ProductionPaths {
                 project_directory: project,
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file,
@@ -1737,6 +1773,152 @@ mod tests {
         assert_eq!(
             std::fs::read(&fixture.config.production.cursor_signing_key_file)?,
             cursor_key
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn activated_v5_descriptor_drives_production_restarts_and_only_v5_writes()
+    -> Result<(), Box<dyn Error>> {
+        use std::io::Write as _;
+        use std::os::unix::fs::OpenOptionsExt as _;
+
+        let mut fixture = fixture()?;
+        let initialized = compose_production_server(fixture.config.clone())?
+            .start()
+            .await?;
+        assert!(initialized.shutdown().await?.shutdown.failed.is_none());
+        let source = fixture.config.production.metadata_database.clone();
+        let target = fixture.config.state_directory.join("cigar-v5.sqlite3");
+        let descriptor = fixture.config.state_directory.join("active-store.json");
+        let backup = fixture.config.state_directory.join("verified-v4-backup");
+        let passphrase = std::fs::read(&fixture.config.production.keystore_passphrase_file)?;
+        let provider = Arc::new(EncryptedDevelopmentKeystore::open(
+            &fixture.config.production.keystore_file,
+            SecretBytes::new(passphrase.clone()),
+        )?);
+        let signing = provider.create(CreateKeyRequest {
+            tenant: "migration-tenant".to_owned(),
+            purpose: KeyPurpose::Signing,
+            algorithm: KeyAlgorithm::Ed25519,
+            created_at: 1,
+            activated_at: 1,
+        })?;
+        let checkpoint_bytes = std::fs::read(&fixture.config.production.effect_checkpoint_file)?;
+        let source_store = SqliteStore::open(&source)?;
+        create_backup_with_effect_checkpoint(
+            &source_store,
+            &fixture.config.production.blob_directory,
+            &backup,
+            provider.as_ref(),
+            BackupIdentity {
+                signing_key: &signing.key_ref,
+                tenant: "migration-tenant",
+                signer: "migration-operator",
+                created_at_unix_nanos: 2,
+            },
+            |_database, checkpoint| {
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .open(checkpoint)
+                    .map_err(|_error| BackupErrorCode::Unavailable)?;
+                file.write_all(&checkpoint_bytes)
+                    .map_err(|_error| BackupErrorCode::Unavailable)?;
+                file.sync_all()
+                    .map_err(|_error| BackupErrorCode::Unavailable)
+            },
+        )?;
+        drop(source_store);
+        let preflight = preflight_v4_to_v5_migration(
+            MigrationPathsV5::resolve(&source, &backup, &target)?,
+            provider.as_ref(),
+            3,
+            |_identity| true,
+        )
+        .map_err(|error| std::io::Error::other(format!("migration preflight: {error:?}")))?;
+        let migrated = migrate_v4_to_v5(preflight, 4)
+            .map_err(|error| std::io::Error::other(format!("migration build: {error:?}")))?;
+        let migrated_head = migrated.latest_revision;
+        let signed = sign_migration_receipt_v1(
+            migrated.completed_receipt(),
+            provider.as_ref(),
+            MigrationReceiptIdentity {
+                signing_key: &signing.key_ref,
+                tenant: "migration-tenant",
+                signer: "migration-operator",
+            },
+        )?;
+        let mut receipt_value = target.as_os_str().to_os_string();
+        receipt_value.push(".cigar-migration-receipt.json");
+        let receipt = PathBuf::from(receipt_value);
+        restricted_write(&receipt, &serde_json::to_vec(&signed)?)?;
+        activate_v5_migration(
+            MigrationActivationPathsV5::resolve(&source, &backup, &target, &receipt, &descriptor)?,
+            provider.as_ref(),
+            5,
+            |_identity| true,
+            |_identity| true,
+        )
+        .map_err(|error| std::io::Error::other(format!("migration activation: {error:?}")))?;
+
+        let blob_store: Arc<dyn RepositoryBlobStore> =
+            Arc::new(MultiTenantLocalRepositoryBlobStore::open(
+                &fixture.config.production.blob_directory,
+                &fixture.config.production.blob_key_reference_directory,
+                Arc::clone(&provider),
+                6,
+            )?);
+        let v5 = SqliteV5Store::open_with_blob_repository_and_capacity_profile(
+            &target,
+            Arc::clone(&blob_store),
+            SqliteCapacityProfile::Standard,
+        )
+        .map_err(|error| std::io::Error::other(format!("first v5 runtime open: {error:?}")))?;
+        let receipt = v5
+            .service_commit(
+                ServiceBatch::new(
+                    record(1)?,
+                    vec![ServiceRecordWrite::new(
+                        "runtime",
+                        "activated-v5",
+                        ServiceExpectedVersion::Absent,
+                        b"v5-only".to_vec(),
+                    )?],
+                    ServiceResponse::new(200, "application/json", b"ok".to_vec())?,
+                )?,
+                &CancellationToken::default(),
+            )
+            .map_err(|error| std::io::Error::other(format!("v5 service commit: {error:?}")))?;
+        let v5_revision = StoreRevision(
+            migrated_head
+                .0
+                .checked_add(1)
+                .ok_or("test revision overflow")?,
+        );
+        assert_eq!(receipt.revision, v5_revision);
+        drop(v5);
+
+        fixture.config.production.active_store_descriptor = Some(descriptor);
+        for _restart in 0..2 {
+            let running = compose_production_server(fixture.config.clone())
+                .map_err(|error| std::io::Error::other(format!("v5 daemon compose: {error:?}")))?
+                .start()
+                .await?;
+            assert!(running.shutdown().await?.shutdown.failed.is_none());
+        }
+        assert_eq!(SqliteStore::open(&source)?.revision()?, migrated_head);
+        let restarted_v5_revision = SqliteV5Store::open_with_blob_repository_and_capacity_profile(
+            &target,
+            blob_store,
+            SqliteCapacityProfile::Standard,
+        )?
+        .revision()?;
+        assert!(
+            restarted_v5_revision.0 > v5_revision.0,
+            "production restarts must advance the selected v5 delta chain"
         );
         Ok(())
     }

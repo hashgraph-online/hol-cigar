@@ -1055,9 +1055,9 @@ Run on the clean intended candidate commit before artifact construction:
   package-negative, and local-admin-loopback tests from the 0.9.0 bounded gate report.
 - [x] New generated-fixture efficiency smoke with thresholds relaxed only for sample size, never
   redefined metrics.
-- [ ] Route the local production daemon/embedded composition through an authenticated v5 store
+- [x] Route the local production daemon/embedded composition through an authenticated v5 store
   after migration instead of unconditionally reopening the v4 `SqliteStore` path.
-- [ ] Add an end-to-end test that activates a migrated v5 descriptor, starts the production
+- [x] Add an end-to-end test that activates a migrated v5 descriptor, starts the production
   composition, performs granular repository/service mutations, restarts twice, and proves no new
   v4 residual revision was written.
 - [ ] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes for the
@@ -1092,12 +1092,16 @@ reviewed development baseline updated together. The frozen small-fixture smoke n
 8-record seed and 12-by-4 granular v5 workload with the unchanged 1-MiB growth, 10-ms/request
 slope, 10-second p95, 30-second readiness, and authenticated suffix bounds; 104 store tests pass.
 
-Release blocker (2026-07-21): production tracing found that local daemon bootstrap still constructs
-`ProductionStore::local(SqliteStore::open...)`, while `SqliteStore` accepts only active format v4.
-The v5 active-store descriptor is currently consumed by migration/compaction administration but
-not by daemon repository composition. Internal v5 conformance and migration tests therefore do not
-prove that a restarted developer runtime writes v5. Candidate freeze remains blocked until this
-composition seam and its end-to-end regression test pass; release notes must not imply otherwise.
+Resolved release blocker (2026-07-21): local daemon configuration now accepts an explicit
+owner-private `active_store_descriptor`, rejects it outside the local state root or in shared mode,
+and composes the activated path through the public `SqliteV5Store`. That store performs bounded v5
+startup recovery, projection/anchor/blob readiness, typed repository deltas, service and worker
+deltas, exact-revision reads, and content-free metrics. The reusable 21-method repository suite
+passes on the production type; a focused restart test proves service/worker persistence with two
+v5 deltas and no growth of the retained v4 compatibility row. A full integration regression creates
+a signed backup, migrates and activates a distinct v5 target, performs a service mutation, starts
+and shuts down the production daemon twice, proves the retained v4 source head is unchanged, and
+proves the selected v5 chain advances. Replacement freeze may proceed after the complete gate rerun.
 
 ## H91-900 — Build and assemble the exact candidate
 

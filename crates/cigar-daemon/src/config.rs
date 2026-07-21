@@ -319,6 +319,9 @@ pub struct ProductionPaths {
     pub project_directory: PathBuf,
     /// Durable SQLite metadata database.
     pub metadata_database: PathBuf,
+    /// Owner-only active-store descriptor selecting an activated SQLite v5 target.
+    #[serde(default)]
+    pub active_store_descriptor: Option<PathBuf>,
     /// Encrypted content-addressed blob root.
     pub blob_directory: PathBuf,
     /// Non-secret per-tenant blob wrapping-key reference root.
@@ -618,6 +621,19 @@ impl ProductionPaths {
         for path in paths {
             normalized_absolute(path)?;
         }
+        if let Some(descriptor) = &self.active_store_descriptor {
+            normalized_absolute(descriptor)?;
+            if descriptor == state_directory
+                || !descriptor.starts_with(state_directory)
+                || paths.contains(&descriptor)
+                || descriptor.starts_with(&self.blob_directory)
+                || descriptor.starts_with(&self.blob_key_reference_directory)
+            {
+                return Err(ConfigError::new(
+                    ConfigErrorCode::IncompleteProductionInputs,
+                ));
+            }
+        }
         for mutable in [
             &self.metadata_database,
             &self.blob_directory,
@@ -844,6 +860,7 @@ impl DaemonConfig {
 
     fn validate_shared(&self) -> Result<(), ConfigError> {
         if self.local_sqlite_capacity_profile != cigar_store::SqliteCapacityProfile::Standard
+            || self.production.active_store_descriptor.is_some()
             || self.unix_socket.is_some()
             || self.windows_named_pipe.is_some()
             || self.local_token_file.is_some()
@@ -1028,6 +1045,43 @@ max_token_bytes = 4096
         assert_eq!(
             config.local_sqlite_capacity_profile,
             cigar_store::SqliteCapacityProfile::Standard
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn active_v5_descriptor_is_explicit_local_owner_state() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let local = local_config("").replace(
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"",
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"\nactive_store_descriptor = \"/tmp/cigar-state/active-store.json\"",
+        );
+        let config = DaemonConfig::from_toml(&local)?;
+        assert_eq!(
+            config.production.active_store_descriptor.as_deref(),
+            Some(std::path::Path::new("/tmp/cigar-state/active-store.json"))
+        );
+
+        let outside = local.replace(
+            "/tmp/cigar-state/active-store.json",
+            "/tmp/cigar-config/active-store.json",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&outside)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::IncompleteProductionInputs)
+        );
+
+        let shared = shared_config().replace(
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"",
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"\nactive_store_descriptor = \"/tmp/cigar-state/active-store.json\"",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&shared)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::IncompleteSharedAuth)
         );
         Ok(())
     }

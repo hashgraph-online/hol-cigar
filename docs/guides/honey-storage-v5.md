@@ -22,8 +22,8 @@ space is below the reported requirement.
 cigar migration preflight /absolute/state-v4.sqlite3 /absolute/verified-backup /absolute/state-v5.sqlite3
 cigar migration run /absolute/state-v4.sqlite3 /absolute/verified-backup /absolute/state-v5.sqlite3 --yes
 cigar integrity deep /absolute/state-v5.sqlite3 --force-full --yes
-cigar migration activate /absolute/state-v4.sqlite3 /absolute/verified-backup /absolute/state-v5.sqlite3 /absolute/state-v5.sqlite3.cigar-migration-receipt.json /absolute/active-store.json --yes
-cigar compaction status /absolute/active-store.json
+cigar migration activate /absolute/state/state-v4.sqlite3 /absolute/verified-backup /absolute/state/state-v5.sqlite3 /absolute/state/state-v5.sqlite3.cigar-migration-receipt.json /absolute/state/active-store.json --yes
+cigar compaction status /absolute/state/active-store.json
 ```
 
 Activation is allowed only after every retained revision/root, projection, signed migration receipt,
@@ -33,6 +33,25 @@ leaves v4 active. Keep v4 untouched until the new target has restarted and passe
 Rollback does not open v5 with a v4 binary. Stop the daemon and restore the verified pre-migration
 backup into another distinct empty target, verify it, and explicitly activate that target. Never
 copy only a live database/WAL pair or downgrade in place.
+
+## Select v5 for the local daemon
+
+Keep `metadata_database` bound to the retained v4 source and add the owner-only descriptor emitted
+by `migration activate`. Both the descriptor and every target it selects must remain under the
+configured `state_directory`.
+
+<!-- docs-check: illustrative -->
+```toml
+[production]
+metadata_database = "/absolute/state/state-v4.sqlite3"
+active_store_descriptor = "/absolute/state/active-store.json"
+```
+
+Restart `cigard` only after activation succeeds. With this field present, local startup verifies
+the descriptor, opens only its activated v5 target, authenticates bounded replay and the catalog
+projection, repairs an interrupted revision anchor if safe, reconciles encrypted blob roots, and
+then admits work. A missing, malformed, outside-state, non-v5, wrong-capacity, or locked target
+fails startup. Shared deployments reject this local descriptor setting.
 
 ## Retention and revision compaction
 
@@ -44,10 +63,10 @@ blocks the operation.
 
 <!-- docs-check: illustrative -->
 ```sh
-cigar compaction preview /absolute/state-v5.sqlite3 /absolute/migration-receipt.json /absolute/compacted-v5.sqlite3 /absolute/active-store.json /absolute/compaction-preview.json --yes
+cigar compaction preview /absolute/state/state-v5.sqlite3 /absolute/state/state-v5.sqlite3.cigar-migration-receipt.json /absolute/state/compacted-v5.sqlite3 /absolute/state/active-store.json /absolute/state/compaction-preview.json --yes
 cigar compaction execute /absolute/compaction-preview.json --yes
-cigar compaction status /absolute/active-store.json
-cigar integrity deep /absolute/compacted-v5.sqlite3 --force-full --yes
+cigar compaction status /absolute/state/active-store.json
+cigar integrity deep /absolute/state/compacted-v5.sqlite3 --force-full --yes
 ```
 
 Do not use `VACUUM`, manual row deletion, blob GC, or a larger capacity ceiling as a substitute for

@@ -1882,17 +1882,17 @@ impl SqliteStore {
 
 #[cfg(unix)]
 #[derive(Clone, Copy, Eq, PartialEq)]
-struct SecureSqliteIdentity {
+pub(crate) struct SecureSqliteIdentity {
     device: u64,
     inode: u64,
 }
 
 #[cfg(not(unix))]
 #[derive(Clone, Copy)]
-struct SecureSqliteIdentity;
+pub(crate) struct SecureSqliteIdentity;
 
 #[cfg(unix)]
-fn prepare_secure_sqlite_path(
+pub(crate) fn prepare_secure_sqlite_path(
     path: &Path,
     create: bool,
 ) -> Result<SecureSqliteIdentity, StoreError> {
@@ -1948,7 +1948,7 @@ fn prepare_secure_sqlite_path(
 }
 
 #[cfg(not(unix))]
-fn prepare_secure_sqlite_path(
+pub(crate) fn prepare_secure_sqlite_path(
     _path: &Path,
     _create: bool,
 ) -> Result<SecureSqliteIdentity, StoreError> {
@@ -1956,7 +1956,7 @@ fn prepare_secure_sqlite_path(
 }
 
 #[cfg(unix)]
-fn verify_secure_sqlite_path(
+pub(crate) fn verify_secure_sqlite_path(
     path: &Path,
     expected: SecureSqliteIdentity,
 ) -> Result<(), StoreError> {
@@ -1986,7 +1986,7 @@ pub(crate) fn verify_secure_sqlite_identity_for_test(path: &Path) -> Result<(), 
 }
 
 #[cfg(not(unix))]
-fn verify_secure_sqlite_path(
+pub(crate) fn verify_secure_sqlite_path(
     _path: &Path,
     _expected: SecureSqliteIdentity,
 ) -> Result<(), StoreError> {
@@ -3565,7 +3565,6 @@ impl fmt::Debug for SqliteReadTransaction {
 }
 
 impl SqliteReadTransaction {
-    #[cfg(test)]
     pub(crate) fn from_v5_state(
         connection: Connection,
         state: CommittedState,
@@ -4812,7 +4811,7 @@ fn commit_bytes(
     }
 }
 
-fn measure_startup_stage<T>(
+pub(crate) fn measure_startup_stage<T>(
     observer: Option<&Arc<dyn RepositoryStartupMetricsObserver>>,
     stage: RepositoryStartupStage,
     operation: impl FnOnce() -> Result<T, StoreError>,
@@ -4833,7 +4832,7 @@ fn measure_startup_stage<T>(
     result
 }
 
-fn preflight_capacity_profile(
+pub(crate) fn preflight_capacity_profile(
     path: &Path,
     capacity_profile: SqliteCapacityProfile,
 ) -> Result<(), StoreError> {
@@ -4876,7 +4875,7 @@ fn available_filesystem_bytes(_path: &Path) -> Result<u64, StoreError> {
     Err(StoreError::new(StoreErrorCode::InvalidContext))
 }
 
-fn configure(
+pub(crate) fn configure(
     connection: &Connection,
     capacity_profile: SqliteCapacityProfile,
 ) -> Result<(), StoreError> {

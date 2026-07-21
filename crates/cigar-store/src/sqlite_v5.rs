@@ -1,11 +1,6 @@
 //! Fresh-target SQLite v5 activation, atomic revision publication, and bounded replay.
 
-#![allow(
-    dead_code,
-    reason = "H91-220 v5 engine is intentionally isolated until explicit target activation is wired"
-)]
-
-use crate::memory::CommittedState;
+use crate::memory::{CommittedState, StagedMutation, blob_digest, validate};
 use crate::revision_delta::{
     MAX_ACCUMULATED_DELTA_BYTES_V5, MAX_DELTAS_SINCE_CHECKPOINT_V5, MAX_REPLAY_OPERATIONS_V5,
     MAX_REPOSITORY_CHECKPOINT_BYTES_V5, MAX_REPOSITORY_DELTA_BYTES_V5,
@@ -13,24 +8,50 @@ use crate::revision_delta::{
     RepositoryCheckpointReasonV5, RepositoryCheckpointV5, RepositoryLogicalTotalsV5,
     apply_repository_delta_v5, catalog_mutation_commitment_from_records_v5,
     decode_catalog_free_state_v5, encode_catalog_free_state_v5, migration_receipt_schema_digest_v1,
-    repository_chain_head_v5, repository_genesis_parent_chain_head_v5,
+    repository_chain_head_v5, repository_delta_from_service_v5, repository_delta_from_staged_v5,
+    repository_delta_from_worker_v5, repository_genesis_parent_chain_head_v5,
     repository_result_state_digest_v5, repository_semantic_root_v5,
 };
+use crate::service_repository::{
+    EffectRecoveryPage, EffectRecoveryQuery, OutboxRecoveryPage, OutboxRecoveryQuery, ServiceBatch,
+    ServiceBatchReceipt, ServiceError, ServiceErrorCode, ServiceListPage, ServiceListQuery,
+    ServiceRecord, ServiceRecordLocator, ServiceRecordSelection, ServiceRepository, WorkerLocator,
+    WorkerState, WorkerUpdate, apply_service_batch, apply_worker_update, check_cancellation,
+    effect_recovery_from_state, map_store_error, outbox_recovery_from_state,
+    service_get_from_state, service_list_from_state, worker_get_from_state,
+};
 use crate::sqlite::{
-    catalog_root_from_table, for_each_authenticated_v4_migration_revision, read_revision_anchor,
-    verify_migrated_v5_catalog_history, verify_migrated_v5_catalog_history_range,
-    verify_migrated_v5_latest_state_and_projection, verify_v5_latest_state_and_projection,
-    write_revision_anchor,
+    acquire_sqlite_runtime_shared_lock, apply_catalog_batch, catalog_root_from_table, configure,
+    for_each_authenticated_v4_migration_revision, measure_startup_stage, persist_catalog_bucket,
+    preflight_capacity_profile, prepare_secure_sqlite_path, read_revision_anchor,
+    staged_logical_bytes, validate_staged_shape, verify_migrated_v5_catalog_history,
+    verify_migrated_v5_catalog_history_range, verify_migrated_v5_latest_state_and_projection,
+    verify_secure_sqlite_path, verify_v5_latest_state_and_projection, write_revision_anchor,
 };
 use crate::{
-    CommitReceipt, IdempotencyIdentity, MAX_LARGE_LOCAL_SQLITE_DATABASE_BYTES,
-    MAX_SQLITE_DATABASE_BYTES, SnapshotSelection, StoreError, StoreErrorCode, StoreRevision,
+    AccessContext, BlobRecord, CancellationToken, CommitReceipt, EffectRecordEnvelope,
+    IdempotencyIdentity, MAX_LARGE_LOCAL_SQLITE_DATABASE_BYTES, MAX_SQLITE_DATABASE_BYTES,
+    OutboxMessage, Repository, RepositoryBlobStore, RepositoryCommitBytes,
+    RepositoryCommitDurations, RepositoryCommitKind, RepositoryCommitMetrics,
+    RepositoryCommitMetricsObserver, RepositoryCommitOutcome, RepositoryRetentionCounts,
+    RepositoryStartupMetricsObserver, RepositoryStartupStage, SnapshotSelection,
+    SqliteCapacityProfile, SqliteReadTransaction, StoreError, StoreErrorCode, StoreRevision,
+    WriteTransaction,
 };
-use cigar_protocol::ContentDigest;
+use cigar_protocol::{
+    ContentDigest, ContextAtomV1, ContextBundle, ContextCommit, ContextEdge, EffectJournalEvent,
+    RecordId, SourceSnapshot,
+};
 use rusqlite::config::DbConfig;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use sha2::{Digest, Sha256};
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::fmt;
+use std::fs::{self, File};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
 const POLICY_DOMAIN: &[u8] = b"CIGAR-REPOSITORY-V5-RETENTION-POLICY";
 const MAXIMUM_RETENTION_AGE_NANOS_V5: u64 = 315_576_000_000_000_000;
@@ -260,6 +281,7 @@ pub(crate) fn verify_migrated_repository_v5(connection: &Connection) -> Result<u
     Ok(retained)
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RepositoryCommitAttemptV5 {
     Committed(RepositoryCommitV5),
@@ -821,6 +843,7 @@ fn insert_checkpoint(
     Ok(encoded_bytes)
 }
 
+#[cfg(test)]
 fn activate_fresh_target_repository_v5_with_policy(
     connection: &mut Connection,
     capacity_profile: &str,
@@ -946,6 +969,7 @@ fn activate_fresh_target_repository_v5_with_policy(
     })
 }
 
+#[cfg(test)]
 fn activate_fresh_target_repository_v5(
     connection: &mut Connection,
     capacity_profile: &str,
@@ -2113,6 +2137,7 @@ fn prior_idempotency_receipt_v5(
     }))
 }
 
+#[cfg(test)]
 fn commit_or_replay_repository_delta_v5(
     connection: &mut Connection,
     prepared: &PreparedRepositoryDeltaV5,
@@ -2451,34 +2476,800 @@ fn reconstruct_repository_snapshot_v5(
     reconstruct_repository_revision_v5(connection, target)
 }
 
+/// Production SQLite repository over an already activated, authenticated v5 target.
+///
+/// This opener never creates or migrates a database. The active-store descriptor remains the
+/// caller's authority for selecting `path`; this type then verifies the v5 authority chain,
+/// bounded replay, normalized catalog projection, revision anchor, local capacity profile, and
+/// encrypted blob roots before returning.
+pub struct SqliteV5Store {
+    path: PathBuf,
+    connection: Mutex<Connection>,
+    blob_repository: Arc<dyn RepositoryBlobStore>,
+    _runtime_lock: Option<File>,
+    secure_identity: crate::sqlite::SecureSqliteIdentity,
+    capacity_profile: SqliteCapacityProfile,
+    revision_anchor: PathBuf,
+    fail_next_commit: AtomicBool,
+    commit_metrics_observer: Option<Arc<dyn RepositoryCommitMetricsObserver>>,
+}
+
+impl fmt::Debug for SqliteV5Store {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("SqliteV5Store")
+    }
+}
+
+impl SqliteV5Store {
+    /// Opens one existing activated v5 target and completes bounded readiness recovery.
+    pub fn open_with_blob_repository_capacity_and_startup_metrics(
+        path: impl AsRef<Path>,
+        blob_repository: Arc<dyn RepositoryBlobStore>,
+        capacity_profile: SqliteCapacityProfile,
+        observer: Arc<dyn RepositoryStartupMetricsObserver>,
+    ) -> Result<Self, StoreError> {
+        Self::open_internal(
+            path.as_ref(),
+            blob_repository,
+            capacity_profile,
+            Some(observer),
+        )
+    }
+
+    /// Opens one existing activated v5 target without a startup observer.
+    pub fn open_with_blob_repository_and_capacity_profile(
+        path: impl AsRef<Path>,
+        blob_repository: Arc<dyn RepositoryBlobStore>,
+        capacity_profile: SqliteCapacityProfile,
+    ) -> Result<Self, StoreError> {
+        Self::open_internal(path.as_ref(), blob_repository, capacity_profile, None)
+    }
+
+    fn open_internal(
+        path: &Path,
+        blob_repository: Arc<dyn RepositoryBlobStore>,
+        capacity_profile: SqliteCapacityProfile,
+        startup_observer: Option<Arc<dyn RepositoryStartupMetricsObserver>>,
+    ) -> Result<Self, StoreError> {
+        let observer = startup_observer.as_ref();
+        let (secure_identity, runtime_lock) =
+            measure_startup_stage(observer, RepositoryStartupStage::PathConfiguration, || {
+                preflight_capacity_profile(path, capacity_profile)?;
+                let identity = prepare_secure_sqlite_path(path, false)?;
+                let lock = acquire_sqlite_runtime_shared_lock(path)?;
+                Ok((identity, lock))
+            })?;
+        let mut connection = measure_startup_stage(
+            observer,
+            RepositoryStartupStage::SqliteOpenConfigure,
+            || {
+                let connection =
+                    Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
+                        .map_err(unavailable)?;
+                verify_secure_sqlite_path(path, secure_identity)?;
+                configure(&connection, capacity_profile)?;
+                Ok(connection)
+            },
+        )?;
+        measure_startup_stage(observer, RepositoryStartupStage::MigrationLedger, || {
+            verify_capacity_profile_v5(&connection, capacity_profile)
+        })?;
+        measure_startup_stage(observer, RepositoryStartupStage::ReadinessOpen, || {
+            recover_bounded_startup_v5(&mut connection).map(|_verification| ())
+        })?;
+        let revision_anchor = revision_anchor_path(path)?;
+        measure_startup_stage(observer, RepositoryStartupStage::RevisionAnchor, || {
+            recover_revision_anchor_v5(&connection, &revision_anchor).map(|_revision| ())
+        })?;
+        verify_secure_sqlite_path(path, secure_identity)?;
+        let store = Self {
+            path: path.to_path_buf(),
+            connection: Mutex::new(connection),
+            blob_repository,
+            _runtime_lock: runtime_lock,
+            secure_identity,
+            capacity_profile,
+            revision_anchor,
+            fail_next_commit: AtomicBool::new(false),
+            commit_metrics_observer: None,
+        };
+        measure_startup_stage(observer, RepositoryStartupStage::BlobReconciliation, || {
+            store.reconcile_blob_roots()
+        })?;
+        Ok(store)
+    }
+
+    /// Attaches a non-blocking content-free commit observer.
+    #[must_use]
+    pub fn with_commit_metrics_observer(
+        mut self,
+        observer: Arc<dyn RepositoryCommitMetricsObserver>,
+    ) -> Self {
+        self.commit_metrics_observer = Some(observer);
+        self
+    }
+
+    /// Returns the authenticated current revision.
+    pub fn revision(&self) -> Result<StoreRevision, StoreError> {
+        let connection = self.lock()?;
+        Ok(load_authority(&connection)?.current_revision)
+    }
+
+    /// Reauthenticates the active v5 authority and bounded latest state without changing schema.
+    pub fn verify_migration_level(&self) -> Result<(), StoreError> {
+        let connection = self.lock()?;
+        verify_capacity_profile_v5(&connection, self.capacity_profile)?;
+        bounded_startup_verification_v5(&connection).map(|_verification| ())
+    }
+
+    /// Proves whether the authenticated latest state contains no effect envelope for any tenant.
+    pub fn effect_store_is_empty(&self) -> Result<bool, StoreError> {
+        let connection = self.lock()?;
+        let state = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)?;
+        Ok(state
+            .tenants
+            .values()
+            .all(|tenant| tenant.effect_records.is_empty()))
+    }
+
+    /// Performs an exact encrypted blob write/read/delete readiness probe.
+    pub fn blob_readiness_probe(
+        &self,
+        tenant: &RecordId,
+        blob: &BlobRecord,
+    ) -> Result<(), StoreError> {
+        self.blob_repository.readiness_probe(tenant, blob)
+    }
+
+    /// Reconciles encrypted objects against the authenticated latest metadata roots.
+    pub fn reconcile_blob_roots(&self) -> Result<(), StoreError> {
+        let connection = self.lock()?;
+        let state = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)?;
+        let live = state
+            .tenants
+            .into_iter()
+            .map(|(tenant, state)| {
+                (
+                    tenant.as_str().to_owned(),
+                    state.blobs.into_keys().collect(),
+                )
+            })
+            .collect();
+        self.blob_repository.reconcile(&live)
+    }
+
+    fn lock(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
+        self.connection
+            .lock()
+            .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))
+    }
+
+    fn observe_commit(&self, metrics: RepositoryCommitMetrics) {
+        if let Some(observer) = &self.commit_metrics_observer {
+            observer.observe_repository_commit(metrics);
+        }
+    }
+}
+
+fn capacity_profile_name(profile: SqliteCapacityProfile) -> &'static str {
+    match profile {
+        SqliteCapacityProfile::Standard => "standard",
+        SqliteCapacityProfile::LargeLocal => "large_local",
+    }
+}
+
+fn verify_capacity_profile_v5(
+    connection: &Connection,
+    profile: SqliteCapacityProfile,
+) -> Result<(), StoreError> {
+    require_full_durability(connection)?;
+    let authority = load_authority(connection)?;
+    if authority.capacity_profile != capacity_profile_name(profile) {
+        return Err(StoreError::new(StoreErrorCode::InvalidContext));
+    }
+    Ok(())
+}
+
+fn revision_anchor_path(database: &Path) -> Result<PathBuf, StoreError> {
+    let mut value = database.as_os_str().to_os_string();
+    value.push(".cigar-revision");
+    let path = PathBuf::from(value);
+    if path.parent() != database.parent() {
+        return Err(StoreError::new(StoreErrorCode::InvalidContext));
+    }
+    Ok(path)
+}
+
+#[derive(Clone, Copy, Default)]
+struct V5CommitFootprint {
+    database_bytes: Option<u64>,
+    wal_bytes: Option<u64>,
+    retained: RepositoryRetentionCounts,
+}
+
+fn v5_commit_footprint(connection: &Connection, path: &Path) -> V5CommitFootprint {
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    let retained = connection
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM repository_checkpoints_v5),
+                (SELECT COUNT(*) FROM repository_deltas_v5)",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .ok()
+        .and_then(|(checkpoints, deltas)| {
+            Some((
+                u64::try_from(checkpoints).ok()?,
+                u64::try_from(deltas).ok()?,
+            ))
+        });
+    V5CommitFootprint {
+        database_bytes: fs::metadata(path).ok().map(|metadata| metadata.len()),
+        wal_bytes: fs::metadata(PathBuf::from(wal))
+            .ok()
+            .map(|metadata| metadata.len())
+            .or(Some(0)),
+        retained: RepositoryRetentionCounts {
+            full_states: Some(0),
+            checkpoints: retained.map(|value| value.0),
+            deltas: retained.map(|value| value.1),
+        },
+    }
+}
+
+fn v5_commit_bytes(
+    logical_changed: u64,
+    committed: &RepositoryCommitV5,
+    before: V5CommitFootprint,
+    after: V5CommitFootprint,
+) -> RepositoryCommitBytes {
+    RepositoryCommitBytes {
+        logical_changed,
+        encoded_delta: committed.encoded_delta_bytes,
+        checkpoint: committed.checkpoint_bytes,
+        full_state: 0,
+        database_before: before.database_bytes,
+        database_after: after.database_bytes,
+        wal_before: before.wal_bytes,
+        wal_after: after.wal_bytes,
+    }
+}
+
+/// Mutable transaction that publishes one typed v5 repository delta and then its revision anchor.
+pub struct SqliteV5WriteTransaction<'store> {
+    store: &'store SqliteV5Store,
+    context: AccessContext,
+    expected_revision: StoreRevision,
+    cancellation: CancellationToken,
+    staged: Vec<StagedMutation>,
+}
+
+impl fmt::Debug for SqliteV5WriteTransaction<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SqliteV5WriteTransaction")
+            .field("context", &self.context)
+            .field("expected_revision", &self.expected_revision)
+            .field("staged", &self.staged.len())
+            .finish()
+    }
+}
+
+impl SqliteV5WriteTransaction<'_> {
+    fn stage(&mut self, mutation: StagedMutation) -> Result<(), StoreError> {
+        self.cancellation.check()?;
+        self.staged.push(mutation);
+        Ok(())
+    }
+}
+
+impl WriteTransaction for SqliteV5WriteTransaction<'_> {
+    fn stage_snapshot(&mut self, snapshot: SourceSnapshot) -> Result<(), StoreError> {
+        validate(&snapshot)?;
+        self.stage(StagedMutation::Snapshot(snapshot))
+    }
+
+    fn publish_atoms(
+        &mut self,
+        atoms: Vec<ContextAtomV1>,
+        edges: Vec<ContextEdge>,
+    ) -> Result<(), StoreError> {
+        if atoms.is_empty() {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+        for atom in &atoms {
+            validate(atom)?;
+            if &atom.scope.tenant_id != self.context.tenant_id() {
+                return Err(StoreError::new(StoreErrorCode::InvalidContext));
+            }
+        }
+        for edge in &edges {
+            validate(edge)?;
+        }
+        self.stage(StagedMutation::Atoms(atoms, edges))
+    }
+
+    fn put_bundle(&mut self, bundle: ContextBundle) -> Result<(), StoreError> {
+        validate(&bundle)?;
+        self.stage(StagedMutation::Bundle(bundle))
+    }
+
+    fn append_context_commit(&mut self, commit: ContextCommit) -> Result<(), StoreError> {
+        validate(&commit)?;
+        if commit.purpose != self.context.purpose() {
+            return Err(StoreError::new(StoreErrorCode::InvalidContext));
+        }
+        self.stage(StagedMutation::ContextCommit(commit))
+    }
+
+    fn append_effect_event(&mut self, event: EffectJournalEvent) -> Result<(), StoreError> {
+        validate(&event)?;
+        self.stage(StagedMutation::EffectEvent(event))
+    }
+
+    fn put_effect_record(&mut self, record: EffectRecordEnvelope) -> Result<(), StoreError> {
+        self.stage(StagedMutation::EffectRecord(record))
+    }
+
+    fn put_blob(&mut self, blob: BlobRecord) -> Result<(), StoreError> {
+        if blob_digest(blob.bytes()) != blob.reference.digest.as_str() {
+            return Err(StoreError::new(StoreErrorCode::InvalidRecord));
+        }
+        self.stage(StagedMutation::Blob(blob))
+    }
+
+    fn enqueue_outbox(&mut self, message: OutboxMessage) -> Result<(), StoreError> {
+        message.validate()?;
+        self.stage(StagedMutation::Outbox(message))
+    }
+
+    fn commit(self, idempotency: Option<IdempotencyIdentity>) -> Result<CommitReceipt, StoreError> {
+        let total_started = Instant::now();
+        self.cancellation.check()?;
+        validate_staged_shape(&self.staged)?;
+        let logical_changed = staged_logical_bytes(&self.staged)?;
+        let lock_started = Instant::now();
+        let mut connection = self.store.lock()?;
+        let lock_wait = lock_started.elapsed();
+        let before = v5_commit_footprint(&connection, &self.store.path);
+        let load_started = Instant::now();
+        let latest = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)?;
+        let repository_load = load_started.elapsed();
+        let revision_before = latest.revision;
+        if let Some(identity) = &idempotency
+            && let Some(receipt) =
+                prior_idempotency_receipt_v5(&latest, self.context.tenant_id(), identity)?
+        {
+            let after = v5_commit_footprint(&connection, &self.store.path);
+            drop(connection);
+            self.store.observe_commit(RepositoryCommitMetrics {
+                kind: RepositoryCommitKind::Repository,
+                outcome: RepositoryCommitOutcome::Replayed,
+                revision_before,
+                revision_after: revision_before,
+                receipt_only: false,
+                durations: RepositoryCommitDurations {
+                    total: total_started.elapsed(),
+                    lock_wait,
+                    repository_load,
+                    ..RepositoryCommitDurations::default()
+                },
+                bytes: RepositoryCommitBytes {
+                    database_before: before.database_bytes,
+                    database_after: after.database_bytes,
+                    wal_before: before.wal_bytes,
+                    wal_after: after.wal_bytes,
+                    ..RepositoryCommitBytes::default()
+                },
+                retained: after.retained,
+            });
+            return Ok(receipt);
+        }
+        if latest.revision != self.expected_revision {
+            return Err(StoreError::new(StoreErrorCode::RevisionConflict));
+        }
+        let delta_started = Instant::now();
+        let prepared = repository_delta_from_staged_v5(
+            self.expected_revision,
+            &self.context,
+            &self.staged,
+            idempotency.as_ref(),
+            logical_changed,
+        )?
+        .prepare()?;
+        let delta_encode = delta_started.elapsed();
+        for mutation in &self.staged {
+            if let StagedMutation::Blob(blob) = mutation {
+                self.store
+                    .blob_repository
+                    .put(self.context.tenant_id(), blob)?;
+            }
+        }
+        self.cancellation.check()?;
+        let tenant_id = self.context.tenant_id().clone();
+        let cancellation = self.cancellation;
+        let staged = self.staged;
+        let revision = prepared.delta().result_revision();
+        let fail_next_commit = &self.store.fail_next_commit;
+        let transaction_started = Instant::now();
+        let (committed, _state) = commit_then_publish_repository_delta_v5(
+            &mut connection,
+            &self.store.revision_anchor,
+            &prepared,
+            &latest,
+            move |transaction| {
+                let mut touched_buckets = BTreeSet::new();
+                for mutation in staged {
+                    if let StagedMutation::Atoms(atoms, edges) = mutation {
+                        touched_buckets.extend(apply_catalog_batch(
+                            transaction,
+                            &tenant_id,
+                            atoms,
+                            edges,
+                            revision,
+                            &cancellation,
+                        )?);
+                    }
+                }
+                for bucket in touched_buckets {
+                    persist_catalog_bucket(transaction, bucket, revision)?;
+                }
+                if fail_next_commit.swap(false, Ordering::AcqRel) {
+                    return Err(StoreError::new(StoreErrorCode::InjectedAbort));
+                }
+                Ok(())
+            },
+        )?;
+        let sqlite_transaction = transaction_started.elapsed();
+        verify_secure_sqlite_path(&self.store.path, self.store.secure_identity)?;
+        let after = v5_commit_footprint(&connection, &self.store.path);
+        drop(connection);
+        self.store.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Repository,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: committed.revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                delta_encode,
+                sqlite_transaction,
+                ..RepositoryCommitDurations::default()
+            },
+            bytes: v5_commit_bytes(logical_changed, &committed, before, after),
+            retained: after.retained,
+        });
+        Ok(CommitReceipt {
+            revision: committed.revision,
+            replayed: false,
+        })
+    }
+}
+
+impl Repository for SqliteV5Store {
+    type Read<'store>
+        = SqliteReadTransaction
+    where
+        Self: 'store;
+    type Write<'store>
+        = SqliteV5WriteTransaction<'store>
+    where
+        Self: 'store;
+
+    fn begin_read(
+        &self,
+        context: AccessContext,
+        selection: SnapshotSelection,
+        cancellation: CancellationToken,
+    ) -> Result<Self::Read<'_>, StoreError> {
+        cancellation.check()?;
+        let connection =
+            Connection::open_with_flags(&self.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(unavailable)?;
+        verify_secure_sqlite_path(&self.path, self.secure_identity)?;
+        configure(&connection, self.capacity_profile)?;
+        connection
+            .execute_batch("PRAGMA query_only = ON; BEGIN DEFERRED;")
+            .map_err(unavailable)?;
+        let state = reconstruct_repository_snapshot_v5(&connection, selection)?;
+        Ok(SqliteReadTransaction::from_v5_state(
+            connection,
+            state,
+            context,
+            cancellation,
+            Some(Arc::clone(&self.blob_repository)),
+        ))
+    }
+
+    fn begin_write(
+        &self,
+        context: AccessContext,
+        expected_revision: StoreRevision,
+        cancellation: CancellationToken,
+    ) -> Result<Self::Write<'_>, StoreError> {
+        cancellation.check()?;
+        Ok(SqliteV5WriteTransaction {
+            store: self,
+            context,
+            expected_revision,
+            cancellation,
+            staged: Vec::new(),
+        })
+    }
+}
+
+impl ServiceRepository for SqliteV5Store {
+    fn service_get(
+        &self,
+        locator: &ServiceRecordLocator,
+        selection: ServiceRecordSelection,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<ServiceRecord>, ServiceError> {
+        check_cancellation(cancellation)?;
+        let connection = self.lock().map_err(map_store_error)?;
+        let state = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)
+            .map_err(map_store_error)?;
+        service_get_from_state(&state, locator, selection)
+    }
+
+    fn service_list(
+        &self,
+        query: &ServiceListQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<ServiceListPage, ServiceError> {
+        check_cancellation(cancellation)?;
+        let selection = query
+            .revision()
+            .map_or(SnapshotSelection::Latest, SnapshotSelection::Revision);
+        let connection = self.lock().map_err(map_store_error)?;
+        let state =
+            reconstruct_repository_snapshot_v5(&connection, selection).map_err(map_store_error)?;
+        service_list_from_state(&state, query)
+    }
+
+    fn service_commit(
+        &self,
+        batch: ServiceBatch,
+        cancellation: &CancellationToken,
+    ) -> Result<ServiceBatchReceipt, ServiceError> {
+        let total_started = Instant::now();
+        check_cancellation(cancellation)?;
+        let logical_changed = batch.logical_bytes();
+        let tenant_id = batch.tenant_id().clone();
+        let lock_started = Instant::now();
+        let mut connection = self.lock().map_err(map_store_error)?;
+        let lock_wait = lock_started.elapsed();
+        let before = v5_commit_footprint(&connection, &self.path);
+        let load_started = Instant::now();
+        let latest = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)
+            .map_err(map_store_error)?;
+        let repository_load = load_started.elapsed();
+        let revision_before = latest.revision;
+        let staged_started = Instant::now();
+        let (next, receipt) = apply_service_batch(&latest, batch)?;
+        let staged_mutation = staged_started.elapsed();
+        if receipt.replayed {
+            let after = v5_commit_footprint(&connection, &self.path);
+            drop(connection);
+            self.observe_commit(RepositoryCommitMetrics {
+                kind: RepositoryCommitKind::Service,
+                outcome: RepositoryCommitOutcome::Replayed,
+                revision_before,
+                revision_after: revision_before,
+                receipt_only: false,
+                durations: RepositoryCommitDurations {
+                    total: total_started.elapsed(),
+                    lock_wait,
+                    repository_load,
+                    staged_mutation,
+                    ..RepositoryCommitDurations::default()
+                },
+                bytes: RepositoryCommitBytes {
+                    database_before: before.database_bytes,
+                    database_after: after.database_bytes,
+                    wal_before: before.wal_bytes,
+                    wal_after: after.wal_bytes,
+                    ..RepositoryCommitBytes::default()
+                },
+                retained: after.retained,
+            });
+            return Ok(receipt);
+        }
+        let next = next.ok_or_else(|| ServiceError::new(ServiceErrorCode::Unavailable))?;
+        check_cancellation(cancellation)?;
+        let delta_started = Instant::now();
+        let prepared =
+            repository_delta_from_service_v5(&latest, &next, &tenant_id, &receipt, logical_changed)
+                .and_then(|delta| delta.prepare())
+                .map_err(map_store_error)?;
+        let delta_encode = delta_started.elapsed();
+        let fail_next_commit = &self.fail_next_commit;
+        let transaction_started = Instant::now();
+        let (committed, committed_state) = commit_then_publish_repository_delta_v5(
+            &mut connection,
+            &self.revision_anchor,
+            &prepared,
+            &latest,
+            |_transaction| {
+                if fail_next_commit.swap(false, Ordering::AcqRel) {
+                    return Err(StoreError::new(StoreErrorCode::InjectedAbort));
+                }
+                Ok(())
+            },
+        )
+        .map_err(map_store_error)?;
+        if committed_state != next || committed.revision != receipt.revision {
+            return Err(ServiceError::new(ServiceErrorCode::Unavailable));
+        }
+        let sqlite_transaction = transaction_started.elapsed();
+        verify_secure_sqlite_path(&self.path, self.secure_identity).map_err(map_store_error)?;
+        let after = v5_commit_footprint(&connection, &self.path);
+        drop(connection);
+        self.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Service,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: committed.revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                staged_mutation,
+                delta_encode,
+                sqlite_transaction,
+                ..RepositoryCommitDurations::default()
+            },
+            bytes: v5_commit_bytes(logical_changed, &committed, before, after),
+            retained: after.retained,
+        });
+        Ok(receipt)
+    }
+
+    fn effect_recovery(
+        &self,
+        query: &EffectRecoveryQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<EffectRecoveryPage, ServiceError> {
+        check_cancellation(cancellation)?;
+        let selection = query
+            .revision()
+            .map_or(SnapshotSelection::Latest, SnapshotSelection::Revision);
+        let connection = self.lock().map_err(map_store_error)?;
+        let state =
+            reconstruct_repository_snapshot_v5(&connection, selection).map_err(map_store_error)?;
+        effect_recovery_from_state(&state, query)
+    }
+
+    fn outbox_recovery(
+        &self,
+        query: &OutboxRecoveryQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<OutboxRecoveryPage, ServiceError> {
+        check_cancellation(cancellation)?;
+        let selection = query
+            .revision()
+            .map_or(SnapshotSelection::Latest, SnapshotSelection::Revision);
+        let connection = self.lock().map_err(map_store_error)?;
+        let state =
+            reconstruct_repository_snapshot_v5(&connection, selection).map_err(map_store_error)?;
+        outbox_recovery_from_state(&state, query)
+    }
+
+    fn worker_get(
+        &self,
+        locator: &WorkerLocator,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<WorkerState>, ServiceError> {
+        check_cancellation(cancellation)?;
+        let connection = self.lock().map_err(map_store_error)?;
+        let state = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)
+            .map_err(map_store_error)?;
+        worker_get_from_state(&state, locator)
+    }
+
+    fn worker_update(
+        &self,
+        locator: &WorkerLocator,
+        update: WorkerUpdate,
+        cancellation: &CancellationToken,
+    ) -> Result<WorkerState, ServiceError> {
+        let total_started = Instant::now();
+        check_cancellation(cancellation)?;
+        let logical_changed = update.logical_bytes(locator);
+        let lock_started = Instant::now();
+        let mut connection = self.lock().map_err(map_store_error)?;
+        let lock_wait = lock_started.elapsed();
+        let before = v5_commit_footprint(&connection, &self.path);
+        let load_started = Instant::now();
+        let latest = reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)
+            .map_err(map_store_error)?;
+        let repository_load = load_started.elapsed();
+        let revision_before = latest.revision;
+        let staged_started = Instant::now();
+        let (next, state) = apply_worker_update(&latest, locator, update)?;
+        let staged_mutation = staged_started.elapsed();
+        check_cancellation(cancellation)?;
+        let delta_started = Instant::now();
+        let prepared =
+            repository_delta_from_worker_v5(latest.revision, state.clone(), logical_changed)
+                .and_then(|delta| delta.prepare())
+                .map_err(map_store_error)?;
+        let delta_encode = delta_started.elapsed();
+        let fail_next_commit = &self.fail_next_commit;
+        let transaction_started = Instant::now();
+        let (committed, committed_state) = commit_then_publish_repository_delta_v5(
+            &mut connection,
+            &self.revision_anchor,
+            &prepared,
+            &latest,
+            |_transaction| {
+                if fail_next_commit.swap(false, Ordering::AcqRel) {
+                    return Err(StoreError::new(StoreErrorCode::InjectedAbort));
+                }
+                Ok(())
+            },
+        )
+        .map_err(map_store_error)?;
+        if committed_state != next || committed.revision != state.store_revision() {
+            return Err(ServiceError::new(ServiceErrorCode::Unavailable));
+        }
+        let sqlite_transaction = transaction_started.elapsed();
+        verify_secure_sqlite_path(&self.path, self.secure_identity).map_err(map_store_error)?;
+        let after = v5_commit_footprint(&connection, &self.path);
+        drop(connection);
+        self.observe_commit(RepositoryCommitMetrics {
+            kind: RepositoryCommitKind::Worker,
+            outcome: RepositoryCommitOutcome::Committed,
+            revision_before,
+            revision_after: committed.revision,
+            receipt_only: logical_changed == 0,
+            durations: RepositoryCommitDurations {
+                total: total_started.elapsed(),
+                lock_wait,
+                repository_load,
+                staged_mutation,
+                delta_encode,
+                sqlite_transaction,
+                ..RepositoryCommitDurations::default()
+            },
+            bytes: v5_commit_bytes(logical_changed, &committed, before, after),
+            retained: after.retained,
+        });
+        Ok(state)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::conformance::{ConformanceRepository, run_repository_conformance};
-    use crate::memory::{StagedMutation, blob_digest, validate};
+    use crate::memory::{StagedMutation, validate};
     use crate::migrate_v5::prepare_fresh_target_schema_v5;
     use crate::revision_delta::repository_delta_from_staged_v5;
     use crate::sqlite::{
-        apply_catalog_batch, persist_catalog_bucket, staged_logical_bytes, validate_staged_shape,
+        apply_catalog_batch, persist_catalog_bucket, staged_logical_bytes,
         verify_secure_sqlite_identity_for_test,
     };
     use crate::{
-        AccessContext, BlobRecord, CancellationToken, EffectRecordEnvelope, LocalBlobStore,
-        LocalRepositoryBlobStore, OutboxMessage, Repository, RepositoryBlobStore,
-        SqliteReadTransaction, SqliteStore, StoreErrorCode, WriteTransaction,
+        AccessContext, CancellationToken, LocalBlobStore, LocalRepositoryBlobStore,
+        RepositoryBlobStore, ServiceBatch, ServiceExpectedVersion, ServiceRecordLocator,
+        ServiceRecordSelection, ServiceRecordWrite, ServiceRepository, ServiceResponse,
+        SqliteStore, StoreErrorCode, WorkerLocator, WorkerUpdate,
     };
     use cigar_crypto::{
         CreateKeyRequest, KeyAlgorithm, KeyProvider, KeyPurpose, MemoryKeyProvider,
     };
-    use cigar_protocol::{
-        ContextAtomV1, ContextBundle, ContextCommit, ContextEdge, EffectJournalEvent,
-        IdempotencyKey, RecordId, SourceSnapshot, VersionId,
-    };
+    use cigar_protocol::{ContextAtomV1, IdempotencyKey, RecordId, VersionId};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::process::Command;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Barrier, Mutex, MutexGuard};
+    use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Barrier};
 
     fn configure_v5_test_connection(
         connection: &Connection,
@@ -2503,240 +3294,24 @@ mod tests {
         verify_secure_sqlite_identity_for_test(path)
     }
 
-    struct V5ConformanceStore {
+    fn open_production_v5_store(
         path: PathBuf,
-        connection: Mutex<Connection>,
         blob_repository: Arc<dyn RepositoryBlobStore>,
-        fail_next_commit: AtomicBool,
+    ) -> Result<SqliteV5Store, StoreError> {
+        drop(SqliteStore::open(&path)?);
+        let mut connection = Connection::open(&path).map_err(unavailable)?;
+        configure_v5_test_connection(&connection, &path)?;
+        prepare_fresh_target_schema_v5(&mut connection, 1)?;
+        activate_fresh_target_repository_v5(&mut connection, "standard", 2)?;
+        drop(connection);
+        SqliteV5Store::open_with_blob_repository_and_capacity_profile(
+            path,
+            blob_repository,
+            SqliteCapacityProfile::Standard,
+        )
     }
 
-    impl V5ConformanceStore {
-        fn open(
-            path: PathBuf,
-            blob_repository: Arc<dyn RepositoryBlobStore>,
-        ) -> Result<Self, StoreError> {
-            drop(SqliteStore::open(&path)?);
-            let mut connection = Connection::open(&path).map_err(unavailable)?;
-            configure_v5_test_connection(&connection, &path)?;
-            prepare_fresh_target_schema_v5(&mut connection, 1)?;
-            activate_fresh_target_repository_v5(&mut connection, "standard", 2)?;
-            Ok(Self {
-                path,
-                connection: Mutex::new(connection),
-                blob_repository,
-                fail_next_commit: AtomicBool::new(false),
-            })
-        }
-
-        fn lock(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
-            self.connection
-                .lock()
-                .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))
-        }
-    }
-
-    struct V5ConformanceWrite<'store> {
-        store: &'store V5ConformanceStore,
-        context: AccessContext,
-        expected_revision: StoreRevision,
-        cancellation: CancellationToken,
-        staged: Vec<StagedMutation>,
-    }
-
-    impl V5ConformanceWrite<'_> {
-        fn stage(&mut self, mutation: StagedMutation) -> Result<(), StoreError> {
-            self.cancellation.check()?;
-            self.staged.push(mutation);
-            Ok(())
-        }
-    }
-
-    impl WriteTransaction for V5ConformanceWrite<'_> {
-        fn stage_snapshot(&mut self, snapshot: SourceSnapshot) -> Result<(), StoreError> {
-            validate(&snapshot)?;
-            self.stage(StagedMutation::Snapshot(snapshot))
-        }
-
-        fn publish_atoms(
-            &mut self,
-            atoms: Vec<ContextAtomV1>,
-            edges: Vec<ContextEdge>,
-        ) -> Result<(), StoreError> {
-            if atoms.is_empty() {
-                return Err(StoreError::new(StoreErrorCode::InvalidRecord));
-            }
-            for atom in &atoms {
-                validate(atom)?;
-                if &atom.scope.tenant_id != self.context.tenant_id() {
-                    return Err(StoreError::new(StoreErrorCode::InvalidContext));
-                }
-            }
-            for edge in &edges {
-                validate(edge)?;
-            }
-            self.stage(StagedMutation::Atoms(atoms, edges))
-        }
-
-        fn put_bundle(&mut self, bundle: ContextBundle) -> Result<(), StoreError> {
-            validate(&bundle)?;
-            self.stage(StagedMutation::Bundle(bundle))
-        }
-
-        fn append_context_commit(&mut self, commit: ContextCommit) -> Result<(), StoreError> {
-            validate(&commit)?;
-            if commit.purpose != self.context.purpose() {
-                return Err(StoreError::new(StoreErrorCode::InvalidContext));
-            }
-            self.stage(StagedMutation::ContextCommit(commit))
-        }
-
-        fn append_effect_event(&mut self, event: EffectJournalEvent) -> Result<(), StoreError> {
-            validate(&event)?;
-            self.stage(StagedMutation::EffectEvent(event))
-        }
-
-        fn put_effect_record(&mut self, record: EffectRecordEnvelope) -> Result<(), StoreError> {
-            self.stage(StagedMutation::EffectRecord(record))
-        }
-
-        fn put_blob(&mut self, blob: BlobRecord) -> Result<(), StoreError> {
-            if blob_digest(blob.bytes()) != blob.reference.digest.as_str() {
-                return Err(StoreError::new(StoreErrorCode::InvalidRecord));
-            }
-            self.stage(StagedMutation::Blob(blob))
-        }
-
-        fn enqueue_outbox(&mut self, message: OutboxMessage) -> Result<(), StoreError> {
-            message.validate()?;
-            self.stage(StagedMutation::Outbox(message))
-        }
-
-        fn commit(
-            self,
-            idempotency: Option<IdempotencyIdentity>,
-        ) -> Result<CommitReceipt, StoreError> {
-            self.cancellation.check()?;
-            validate_staged_shape(&self.staged)?;
-            let logical_bytes = staged_logical_bytes(&self.staged)?;
-            let mut connection = self.store.lock()?;
-            let latest =
-                reconstruct_repository_snapshot_v5(&connection, SnapshotSelection::Latest)?;
-            if let Some(identity) = &idempotency
-                && let Some(receipt) =
-                    prior_idempotency_receipt_v5(&latest, self.context.tenant_id(), identity)?
-            {
-                return Ok(receipt);
-            }
-            if latest.revision != self.expected_revision {
-                return Err(StoreError::new(StoreErrorCode::RevisionConflict));
-            }
-            let prepared = repository_delta_from_staged_v5(
-                self.expected_revision,
-                &self.context,
-                &self.staged,
-                idempotency.as_ref(),
-                logical_bytes,
-            )?
-            .prepare()?;
-            for mutation in &self.staged {
-                if let StagedMutation::Blob(blob) = mutation {
-                    self.store
-                        .blob_repository
-                        .put(self.context.tenant_id(), blob)?;
-                }
-            }
-            self.cancellation.check()?;
-            let tenant_id = self.context.tenant_id().clone();
-            let cancellation = self.cancellation;
-            let staged = self.staged;
-            let revision = prepared.delta().result_revision();
-            let fail_next_commit = &self.store.fail_next_commit;
-            let (committed, _state) = commit_prepared_repository_delta_v5(
-                &mut connection,
-                &prepared,
-                &latest,
-                move |transaction| {
-                    let mut touched_buckets = BTreeSet::new();
-                    for mutation in staged {
-                        if let StagedMutation::Atoms(atoms, edges) = mutation {
-                            touched_buckets.extend(apply_catalog_batch(
-                                transaction,
-                                &tenant_id,
-                                atoms,
-                                edges,
-                                revision,
-                                &cancellation,
-                            )?);
-                        }
-                    }
-                    for bucket in touched_buckets {
-                        persist_catalog_bucket(transaction, bucket, revision)?;
-                    }
-                    if fail_next_commit.swap(false, Ordering::AcqRel) {
-                        return Err(StoreError::new(StoreErrorCode::InjectedAbort));
-                    }
-                    Ok(())
-                },
-            )?;
-            Ok(CommitReceipt {
-                revision: committed.revision,
-                replayed: false,
-            })
-        }
-    }
-
-    impl Repository for V5ConformanceStore {
-        type Read<'store>
-            = SqliteReadTransaction
-        where
-            Self: 'store;
-        type Write<'store>
-            = V5ConformanceWrite<'store>
-        where
-            Self: 'store;
-
-        fn begin_read(
-            &self,
-            context: AccessContext,
-            selection: SnapshotSelection,
-            cancellation: CancellationToken,
-        ) -> Result<Self::Read<'_>, StoreError> {
-            cancellation.check()?;
-            let connection =
-                Connection::open_with_flags(&self.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-                    .map_err(unavailable)?;
-            configure_v5_test_connection(&connection, &self.path)?;
-            connection
-                .execute_batch("PRAGMA query_only = ON; BEGIN DEFERRED;")
-                .map_err(unavailable)?;
-            let state = reconstruct_repository_snapshot_v5(&connection, selection)?;
-            Ok(SqliteReadTransaction::from_v5_state(
-                connection,
-                state,
-                context,
-                cancellation,
-                Some(Arc::clone(&self.blob_repository)),
-            ))
-        }
-
-        fn begin_write(
-            &self,
-            context: AccessContext,
-            expected_revision: StoreRevision,
-            cancellation: CancellationToken,
-        ) -> Result<Self::Write<'_>, StoreError> {
-            cancellation.check()?;
-            Ok(V5ConformanceWrite {
-                store: self,
-                context,
-                expected_revision,
-                cancellation,
-                staged: Vec::new(),
-            })
-        }
-    }
-
-    impl ConformanceRepository for V5ConformanceStore {
+    impl ConformanceRepository for SqliteV5Store {
         fn inject_commit_abort(&self) {
             self.fail_next_commit.store(true, Ordering::Release);
         }
@@ -3066,7 +3641,7 @@ mod tests {
         let blobs: Arc<dyn RepositoryBlobStore> =
             Arc::new(LocalRepositoryBlobStore::new(local, key.key_ref, 1));
         let store =
-            V5ConformanceStore::open(directory.path().join("conformance-v5.sqlite3"), blobs)?;
+            open_production_v5_store(directory.path().join("conformance-v5.sqlite3"), blobs)?;
         let report = run_repository_conformance(&store, &fixture)?;
         assert_eq!(report.methods_exercised, 21);
         assert_eq!(report.concurrent_writers, 2);
@@ -3075,6 +3650,95 @@ mod tests {
         assert_eq!(
             retention_statistics_v5(&connection)?.current_revision,
             StoreRevision(2)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn production_v5_service_and_worker_writes_survive_restart_without_v4_growth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("production-v5.sqlite3");
+        let provider = Arc::new(MemoryKeyProvider::default());
+        let tenant = tenant()?;
+        let key = provider.create(CreateKeyRequest {
+            tenant: tenant.as_str().to_owned(),
+            purpose: KeyPurpose::BlobEncryption,
+            algorithm: KeyAlgorithm::XChaCha20Poly1305,
+            created_at: 1,
+            activated_at: 1,
+        })?;
+        let local = LocalBlobStore::open(directory.path().join("production-v5-blobs"), provider)?;
+        let blobs: Arc<dyn RepositoryBlobStore> =
+            Arc::new(LocalRepositoryBlobStore::new(local, key.key_ref, 1));
+        let locator = ServiceRecordLocator::new(tenant.clone(), "runtime", "restart")?;
+        let worker = WorkerLocator::new(tenant.clone(), "runtime-worker")?;
+        {
+            let store = open_production_v5_store(path.clone(), Arc::clone(&blobs))?;
+            let receipt = store.service_commit(
+                ServiceBatch::new(
+                    tenant.clone(),
+                    vec![ServiceRecordWrite::new(
+                        "runtime",
+                        "restart",
+                        ServiceExpectedVersion::Absent,
+                        b"v5-service-state".to_vec(),
+                    )?],
+                    ServiceResponse::new(200, "application/json", b"ok".to_vec())?,
+                )?,
+                &CancellationToken::default(),
+            )?;
+            assert_eq!(receipt.revision, StoreRevision(1));
+            let state = store.worker_update(
+                &worker,
+                WorkerUpdate::Claim {
+                    expected: ServiceExpectedVersion::Absent,
+                    owner: "runtime-test".to_owned(),
+                    now_unix_nanos: 1,
+                    expires_at_unix_nanos: 100,
+                },
+                &CancellationToken::default(),
+            )?;
+            assert_eq!(state.store_revision(), StoreRevision(2));
+        }
+
+        let reopened = SqliteV5Store::open_with_blob_repository_and_capacity_profile(
+            &path,
+            blobs,
+            SqliteCapacityProfile::Standard,
+        )?;
+        assert_eq!(reopened.revision()?, StoreRevision(2));
+        let record = reopened
+            .service_get(
+                &locator,
+                ServiceRecordSelection::Latest,
+                &CancellationToken::default(),
+            )?
+            .ok_or("missing v5 service record after restart")?;
+        assert_eq!(record.bytes(), b"v5-service-state");
+        assert_eq!(
+            reopened
+                .worker_get(&worker, &CancellationToken::default())?
+                .ok_or("missing v5 worker state after restart")?
+                .store_revision(),
+            StoreRevision(2)
+        );
+        let connection =
+            Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        assert_eq!(
+            connection.query_row(
+                "SELECT COUNT(*) FROM cigar_repository_revisions_v4",
+                [],
+                |row| row.get::<_, i64>(0),
+            )?,
+            1
+        );
+        assert_eq!(
+            connection.query_row("SELECT COUNT(*) FROM repository_deltas_v5", [], |row| row
+                .get::<_, i64>(
+                0
+            ),)?,
+            2
         );
         Ok(())
     }
