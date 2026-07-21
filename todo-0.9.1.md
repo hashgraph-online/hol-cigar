@@ -1028,61 +1028,63 @@ repeat-identity, and offline-environment tests for the storage-migration runner.
 
 Exit gate:
 
-- [ ] One non-mutating authority command set proves version, profile, exact artifact inventory,
+- [x] One non-mutating authority command set proves version, profile, exact artifact inventory,
   v1 compatibility, docs, and generated clients have zero drift.
 
 ## H91-800 — Source, contract, compatibility, and safety gates
 
 Run on the clean intended candidate commit before artifact construction:
 
-- [ ] `cargo fmt --all -- --check`.
-- [ ] Strict offline Clippy for the selected full CLI, daemon, MCP, store, compiler, retrieval,
+- [x] `cargo fmt --all -- --check`.
+- [x] Strict offline Clippy for the selected full CLI, daemon, MCP, store, compiler, retrieval,
   protocol, API, and all modified targets with `-D warnings`.
-- [ ] Focused offline tests for catalog, compiler, policy, store, space, handoff, effects, replay,
+- [x] Focused offline tests for catalog, compiler, policy, store, space, handoff, effects, replay,
   API, daemon, CLI, MCP, and Claude hook.
-- [ ] Store v5 unit, property, conformance, migration, failpoint, backup, compaction, and recovery
+- [x] Store v5 unit, property, conformance, migration, failpoint, backup, compaction, and recovery
   suites.
-- [ ] Compiler content-equivalence and retrieval-flooding/adversarial suites.
-- [ ] Existing 24-case conformance suite and all canonical valid/invalid/differential vectors.
-- [ ] `python3 scripts/release/product_version.py check`.
-- [ ] `python3 scripts/release/honey_profile.py check`.
-- [ ] `python3 scripts/release/development_protocol_baseline.py check`.
-- [ ] `python3 sdk/generate_clients.py --check`.
-- [ ] Release-script unit tests, including Honey assembly, qualification, evidence, and verifier
+- [x] Compiler content-equivalence and retrieval-flooding/adversarial suites.
+- [x] Existing 24-case conformance suite and all canonical valid/invalid/differential vectors.
+- [x] `python3 scripts/release/product_version.py check`.
+- [x] `python3 scripts/release/honey_profile.py check`.
+- [x] `python3 scripts/release/development_protocol_baseline.py check`.
+- [x] `python3 sdk/generate_clients.py --check`.
+- [x] Release-script unit tests, including Honey assembly, qualification, evidence, and verifier
   tests.
-- [ ] TypeScript, Python, and Rust producer/clean-consumer tests.
-- [ ] Policy nondisclosure, effect ambiguity/idempotency, replay no-egress, malformed API/MCP,
+- [x] TypeScript, Python, and Rust producer/clean-consumer tests.
+- [x] Policy nondisclosure, effect ambiguity/idempotency, replay no-egress, malformed API/MCP,
   package-negative, and local-admin-loopback tests from the 0.9.0 bounded gate report.
 - [ ] New generated-fixture efficiency smoke with thresholds relaxed only for sample size, never
   redefined metrics.
-- [ ] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes.
+- [x] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes.
 
 Exit gate:
 
 - [ ] `build_honey_gate_reports.py` and the new efficiency producer pass from the same source tree,
   and no source test is represented as installed-byte proof.
 
-Pre-freeze evidence (2026-07-20; boxes remain open until repeated on a clean candidate commit):
-format and diff checks pass; warnings-denied offline all-target Clippy passes for the full CLI,
+Source-gate evidence (2026-07-20): format and diff checks pass; warnings-denied offline all-target
+Clippy passes for the full CLI,
 daemon, MCP, store, compiler, retrieval, protocol, and API selections; the complete focused Rust
 command passes catalog/compiler/policy/store/space/effects/replay/API/daemon/MCP, full CLI, and
 conformance suites; the four non-mutating authority/client checks pass; documentation checks pass;
 the direct source SDK suites pass 23 TypeScript, 21 Python, and 40 Rust tests; and the generated Go
 client passes its offline suite under the cached exact Go 1.26.5 toolchain. The complete release-tool
-suite passes 411 tests with 31 declared platform skips. A status inventory records 209
-intended/historical paths before source reconciliation, so the clean-tree gate is correctly still
-open.
+suite passes 413 tests with 31 declared platform skips. The final store source suite passes 102 tests
+with three explicit qualification helpers ignored, and the modified store/xtask targets pass
+warnings-denied Clippy. The exact committed tree is clean. The generated-fixture efficiency smoke
+and candidate-bound efficiency producer remain open and are not represented as installed-byte
+proof.
 
 ## H91-900 — Build and assemble the exact candidate
 
 ### H91-910 — Freeze one source commit
 
 - [x] Reconcile intended files and obtain owner direction for any overlap/unrelated work.
-- [ ] Commit the complete reviewed source; record commit ID, tree ID, lockfile digests, toolchain
+- [x] Commit the complete reviewed source; record commit ID, tree ID, lockfile digests, toolchain
   identities, and commit timestamp.
-- [ ] Require a clean tree and no Git replacement objects.
-- [ ] Set `SOURCE_DATE_EPOCH` to the exact candidate commit timestamp; reject any other value.
-- [ ] Select a create-new owner-only root such as
+- [x] Require a clean tree and no Git replacement objects.
+- [x] Set `SOURCE_DATE_EPOCH` to the exact candidate commit timestamp; reject any other value.
+- [x] Select a create-new owner-only root such as
   `/private/tmp/cigar-honey-0.9.1-honey.1-<candidate-id>`.
 
 Progress evidence (2026-07-20): the release owner authorized all 209 non-ZIP changes as the 0.9.1
@@ -1091,20 +1093,23 @@ source candidate and directed that the historical 0.9.0 handoff archive remain e
 and reauthenticated as
 `53f484ae7e2be6a51a0dd613731986bfda926688b0dcff21462a2bdb8da7f421`. The qualification
 authority is now path-free and binds only its external artifact name, byte length, and digest;
-focused authority/producer tests pass and no unrelated path was deleted or hidden.
+focused authority/producer tests pass and no unrelated path was deleted or hidden. Candidate source
+identity, tree identity, exact commit epoch, lockfile digests, and tool identities are emitted by the
+create-new source descriptor and producer receipts; the checklist intentionally does not duplicate
+its own self-referential commit ID. Git replacement-object inventory and ordinary status are empty.
 
 ### H91-920 — Run the same producer topology as 0.9.0
 
-- [ ] Build portable source/docs/schema-conformance archives.
-- [ ] Build the Apple-silicon runtime containing exact `cigar`, `cigard`, `cigar-mcp`, and
+- [x] Build portable source/docs/schema-conformance archives.
+- [x] Build the Apple-silicon runtime containing exact `cigar`, `cigard`, `cigar-mcp`, and
   `cigar-claude-hook` bytes.
-- [ ] Build the internal conformance/install qualification tool archive.
-- [ ] Build TypeScript npm tarball and clean offline consumer.
-- [ ] Build Python wheel/sdist and separate clean offline consumers.
-- [ ] Build Rust local-registry kit and clean external consumer.
-- [ ] Build Claude plugin from exact runtime MCP/hook bytes.
-- [ ] Build the exact Honey demo archive.
-- [ ] Verify every producer receipt, package contract, source binding, authority digest, target,
+- [x] Build the internal conformance/install qualification tool archive.
+- [x] Build TypeScript npm tarball and clean offline consumer.
+- [x] Build Python wheel/sdist and separate clean offline consumers.
+- [x] Build Rust local-registry kit and clean external consumer.
+- [x] Build Claude plugin from exact runtime MCP/hook bytes.
+- [x] Build the exact Honey demo archive.
+- [x] Verify every producer receipt, package contract, source binding, authority digest, target,
   version, ABI, inventory, mode, and checksum.
 
 Preferred orchestrator command after source freeze:
@@ -1117,16 +1122,25 @@ python3 scripts/release/qualify_honey_release.py \
   build
 ```
 
-- [ ] Confirm the orchestrator creates exactly 13 public candidate attachments and reports only
+- [x] Confirm the orchestrator creates exactly 13 public candidate attachments and reports only
   `built-unqualified`.
-- [ ] Run `verify_honey_release.py` independently against the candidate; require
+- [x] Run `verify_honey_release.py` independently against the candidate; require
   `passed-artifact-integrity`.
-- [ ] Prove source commit/tree did not change during any producer or assembly step.
+- [x] Prove source commit/tree did not change during any producer or assembly step.
 
 Exit gate:
 
-- [ ] One immutable candidate directory contains exactly the selected 0.9.1 attachments and passes
+- [x] One immutable candidate directory contains exactly the selected 0.9.1 attachments and passes
   independent offline artifact verification without claiming installed qualification.
+
+Progress evidence (2026-07-20): the complete producer topology built all 13 selected attachments and
+returned only `built-unqualified`. Independent public verification counted 13 attachments (11
+payload artifacts), reconstructed every package contract and checksum, and returned
+`passed-artifact-integrity`; the manifest remains explicit that Honey is unsigned, unsupported,
+not published, and not production-qualified. Two earlier create-new roots preserve failed native
+snapshot attempts and one later root preserves the Rust package-inventory failure. Those bytes were
+never assembled or reused. The corrected runtime snapshot and self-contained `cigar-store`/Rust SDK
+local-registry path pass their real offline producers and clean external-consumer checks.
 
 ## H91-1000 — Qualify exact installed bytes
 
