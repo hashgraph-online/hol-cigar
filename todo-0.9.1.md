@@ -1053,8 +1053,13 @@ Run on the clean intended candidate commit before artifact construction:
 - [x] TypeScript, Python, and Rust producer/clean-consumer tests.
 - [x] Policy nondisclosure, effect ambiguity/idempotency, replay no-egress, malformed API/MCP,
   package-negative, and local-admin-loopback tests from the 0.9.0 bounded gate report.
-- [ ] New generated-fixture efficiency smoke with thresholds relaxed only for sample size, never
+- [x] New generated-fixture efficiency smoke with thresholds relaxed only for sample size, never
   redefined metrics.
+- [ ] Route the local production daemon/embedded composition through an authenticated v5 store
+  after migration instead of unconditionally reopening the v4 `SqliteStore` path.
+- [ ] Add an end-to-end test that activates a migrated v5 descriptor, starts the production
+  composition, performs granular repository/service mutations, restarts twice, and proves no new
+  v4 residual revision was written.
 - [ ] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes for the
   replacement source commit.
 
@@ -1083,8 +1088,16 @@ ignored helpers. Supported-feature warnings-denied workspace Clippy passes. The 
 Tokio backends are mutually exclusive. The sweep also found and repaired two stale authorities:
 the retained v1-to-v4 projection qualifier now binds the catalog root, and every string in the
 v4-to-v5 migration-receipt schema is explicitly bounded with its schema digest, valid vector, and
-reviewed development baseline updated together. Replacement commit freeze and the source
-efficiency producer remain pending.
+reviewed development baseline updated together. The frozen small-fixture smoke now executes its
+8-record seed and 12-by-4 granular v5 workload with the unchanged 1-MiB growth, 10-ms/request
+slope, 10-second p95, 30-second readiness, and authenticated suffix bounds; 104 store tests pass.
+
+Release blocker (2026-07-21): production tracing found that local daemon bootstrap still constructs
+`ProductionStore::local(SqliteStore::open...)`, while `SqliteStore` accepts only active format v4.
+The v5 active-store descriptor is currently consumed by migration/compaction administration but
+not by daemon repository composition. Internal v5 conformance and migration tests therefore do not
+prove that a restarted developer runtime writes v5. Candidate freeze remains blocked until this
+composition seam and its end-to-end regression test pass; release notes must not imply otherwise.
 
 ## H91-900 — Build and assemble the exact candidate
 
@@ -1189,7 +1202,7 @@ handoff rebuild.
   candidate as historical after the seven Hiero compatibility fixes were upstreamed.
 - [x] Retain its UTM Python wheel/sdist qualification only as historical diagnostic evidence; it
   cannot qualify replacement bytes.
-- [ ] Freeze the replacement source commit after the remaining H91-800 source-efficiency gate.
+- [ ] Freeze the replacement source commit after the H91-800 production v5 composition gate.
 - [ ] Rebuild all 13 attachments into a new create-new root and independently verify them.
 - [ ] Replace the developer-handoff ZIP only after exact replacement bytes pass their applicable
   installed gates.

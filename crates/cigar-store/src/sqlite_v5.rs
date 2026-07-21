@@ -3080,6 +3080,214 @@ mod tests {
     }
 
     #[test]
+    fn frozen_small_efficiency_fixture_is_incremental_bounded_and_ready()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let authority: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../benches/honey-efficiency/qualification-fixtures.v1.json"
+        ))?;
+        let small = authority
+            .get("fixtures")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|fixtures| {
+                fixtures.iter().find(|fixture| {
+                    fixture.get("id").and_then(serde_json::Value::as_str)
+                        == Some("H91-FIXTURE-SMALL-GENERATED")
+                })
+            })
+            .and_then(|fixture| fixture.get("generator_inputs"))
+            .ok_or("frozen small efficiency fixture is unavailable")?;
+        let initial_records = small
+            .get("initial_records")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or("small initial-record count is unavailable")?;
+        let requests = small
+            .get("request_count")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or("small request count is unavailable")?;
+        let mutations_per_request = small
+            .get("mutations_per_request")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or("small mutation count is unavailable")?;
+        assert_eq!(
+            (initial_records, requests, mutations_per_request),
+            (8, 12, 4)
+        );
+
+        let fixture = crate::conformance::tests::repository_fixture()?;
+        let atom_template = fixture.atoms.first().ok_or("missing fixture atom")?;
+        let (directory, mut connection) = target(RepositoryPolicyV5::qualification("standard")?)?;
+        let path = directory.path().join("target.sqlite3");
+        let mut state = reconstruct_repository_revision_v5(&connection, StoreRevision(0))?;
+
+        for record in 1..=initial_records {
+            let staged = vec![StagedMutation::Atoms(
+                vec![generated_atom(atom_template, record)?],
+                Vec::new(),
+            )];
+            let logical_bytes = staged_logical_bytes(&staged)?;
+            let prepared = repository_delta_from_staged_v5(
+                state.revision,
+                &fixture.context,
+                &staged,
+                None,
+                logical_bytes,
+            )?
+            .prepare()?;
+            let revision = prepared.delta().result_revision();
+            let tenant_id = fixture.context.tenant_id().clone();
+            let (_, next) = commit_prepared_repository_delta_v5(
+                &mut connection,
+                &prepared,
+                &state,
+                move |transaction| {
+                    let mut touched = BTreeSet::new();
+                    for mutation in staged {
+                        if let StagedMutation::Atoms(atoms, edges) = mutation {
+                            touched.extend(apply_catalog_batch(
+                                transaction,
+                                &tenant_id,
+                                atoms,
+                                edges,
+                                revision,
+                                &CancellationToken::default(),
+                            )?);
+                        }
+                    }
+                    for bucket in touched {
+                        persist_catalog_bucket(transaction, bucket, revision)?;
+                    }
+                    Ok(())
+                },
+            )?;
+            state = next;
+        }
+
+        connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let physical_before = std::fs::metadata(&path)?.len();
+        let mut request_latencies = Vec::with_capacity(usize::try_from(requests)?);
+        for request in 0..requests {
+            let started = std::time::Instant::now();
+            for operation in 0..mutations_per_request {
+                let sequence = request
+                    .checked_mul(mutations_per_request)
+                    .and_then(|value| value.checked_add(operation))
+                    .and_then(|value| value.checked_add(1))
+                    .ok_or("small fixture operation overflow")?;
+                let staged = representative_staged_mutations(&fixture, atom_template, sequence)?;
+                let identity = representative_identity(sequence)?;
+                let logical_bytes = staged_logical_bytes(&staged)?;
+                let prepared = repository_delta_from_staged_v5(
+                    state.revision,
+                    &fixture.context,
+                    &staged,
+                    Some(&identity),
+                    logical_bytes,
+                )?
+                .prepare()?;
+                let revision = prepared.delta().result_revision();
+                let tenant_id = fixture.context.tenant_id().clone();
+                let (_, next) = commit_prepared_repository_delta_v5(
+                    &mut connection,
+                    &prepared,
+                    &state,
+                    move |transaction| {
+                        let mut touched = BTreeSet::new();
+                        for mutation in staged {
+                            if let StagedMutation::Atoms(atoms, edges) = mutation {
+                                touched.extend(apply_catalog_batch(
+                                    transaction,
+                                    &tenant_id,
+                                    atoms,
+                                    edges,
+                                    revision,
+                                    &CancellationToken::default(),
+                                )?);
+                            }
+                        }
+                        for bucket in touched {
+                            persist_catalog_bucket(transaction, bucket, revision)?;
+                        }
+                        Ok(())
+                    },
+                )?;
+                state = next;
+            }
+            request_latencies.push(i128::try_from(started.elapsed().as_nanos())?);
+        }
+
+        connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let physical_after = std::fs::metadata(&path)?.len();
+        let growth_per_request = physical_after
+            .saturating_sub(physical_before)
+            .div_ceil(requests);
+        assert!(growth_per_request < 1_048_576);
+
+        let mut ordered = request_latencies.clone();
+        ordered.sort_unstable();
+        let p95_index = usize::try_from(
+            requests
+                .checked_mul(95)
+                .ok_or("p95 overflow")?
+                .div_ceil(100)
+                .checked_sub(1)
+                .ok_or("p95 rank is empty")?,
+        )?;
+        assert!(
+            *ordered
+                .get(p95_index)
+                .ok_or("p95 observation is unavailable")?
+                < 10_000_000_000
+        );
+        let count = i128::try_from(request_latencies.len())?;
+        let sum_x = count * (count - 1) / 2;
+        let sum_x_squared = count * (count - 1) * (2 * count - 1) / 6;
+        let slope_numerator = count
+            * request_latencies
+                .iter()
+                .enumerate()
+                .map(|(index, latency)| i128::try_from(index).unwrap_or(i128::MAX) * latency)
+                .sum::<i128>()
+            - sum_x * request_latencies.iter().sum::<i128>();
+        let slope_denominator = count * sum_x_squared - sum_x * sum_x;
+        assert!(slope_denominator > 0);
+        assert!(slope_numerator <= 10_000_000 * slope_denominator);
+
+        let statistics = retention_statistics_v5(&connection)?;
+        let expected_revision = initial_records
+            .checked_add(
+                requests
+                    .checked_mul(mutations_per_request)
+                    .ok_or("revision overflow")?,
+            )
+            .ok_or("revision overflow")?;
+        assert_eq!(
+            statistics.current_revision,
+            StoreRevision(expected_revision)
+        );
+        assert_eq!(
+            statistics.retained_checkpoints + statistics.retained_deltas,
+            statistics.retained_revisions
+        );
+        assert!(!statistics.capacity_blocked);
+        for revision in 0..=expected_revision {
+            assert_eq!(
+                reconstruct_repository_revision_v5(&connection, StoreRevision(revision))?.revision,
+                StoreRevision(revision)
+            );
+        }
+        drop(connection);
+
+        let startup_started = std::time::Instant::now();
+        let startup = SqliteStore::v5_recover_bounded_startup_at(&path)?;
+        assert!(startup_started.elapsed() < std::time::Duration::from_secs(30));
+        assert_eq!(startup.current_revision, StoreRevision(expected_revision));
+        assert!(startup.replayed_deltas <= statistics.maximum_deltas_since_checkpoint);
+        assert!(startup.replayed_delta_bytes <= statistics.maximum_accumulated_delta_bytes);
+        assert_eq!(SqliteStore::v5_bounded_startup_at(&path)?, startup);
+        Ok(())
+    }
+
+    #[test]
     fn generated_valid_mutation_sequences_reconstruct_every_original_state_and_root()
     -> Result<(), Box<dyn std::error::Error>> {
         let fixture = crate::conformance::tests::repository_fixture()?;
