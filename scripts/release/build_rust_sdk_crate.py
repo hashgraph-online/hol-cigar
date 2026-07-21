@@ -116,6 +116,7 @@ SDK_SOURCE_PATHS = frozenset(
         "src/lib.rs",
         "src/options.rs",
         "src/remote.rs",
+        "src/semantic_reuse.rs",
         "src/transport.rs",
         "src/verify.rs",
     }

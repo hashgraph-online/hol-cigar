@@ -313,6 +313,7 @@ class RustSdkCrateBuilderTests(unittest.TestCase):
         )
         self.assertIn("examples/quickstart.rs", configuration.sdk_sources)
         self.assertIn("fixtures/semantic-bundle-v1.json", configuration.sdk_sources)
+        self.assertIn("src/semantic_reuse.rs", configuration.sdk_sources)
 
     def test_honey_output_workspace_accepts_the_contracted_kit_bound(self) -> None:
         captured: dict[str, object] = {}
