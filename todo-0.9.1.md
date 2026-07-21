@@ -1297,6 +1297,18 @@ Exit gate:
 
 ### H91-1130 — Publish only with explicit owner approval
 
+- [x] Select the PEP 440 identity `cigar-sdk==0.9.1.dev1` and confirm that the PyPI project name is
+  unregistered before first-publication setup.
+- [x] Move public PyPI from the deferred profile into the bounded Python developer-preview
+  integration; keep support and production claims false.
+- [x] Prepare an exact-byte Trusted Publishing workflow with separate verify/publish jobs, a
+  protected `pypi` environment, automatic attestations, and `skip-existing=false`.
+- [x] Update package metadata and developer docs with the actual repository, Python 3.14
+  requirement, daemon separation, platform boundary, and preview status.
+- [ ] Configure the pending PyPI Trusted Publisher and required-reviewer GitHub environment named
+  in `docs/release/honey-0.9.1/pypi-release.md`.
+- [ ] Run strict Twine metadata validation and clean wheel/sdist installs against the final rebuilt
+  artifacts in the offline standard-user qualification VM.
 - [ ] Obtain explicit approval in the publication turn; prior plan approval is not publication
   approval.
 - [ ] Tag the exact candidate commit `v0.9.1-honey.1`.
@@ -1311,6 +1323,17 @@ Exit gate:
 - [ ] Keep `supported=false` and `production_qualified=false` after publication.
 - [ ] Never replace bytes under the same version. Withdraw and cut a new prerelease on material
   failure.
+- [ ] Publish only the manifest-bound wheel and sdist to PyPI through the protected workflow, then
+  verify PyPI hashes, provenance, and a clean index install.
+
+Progress evidence (2026-07-21): PyPI returned 404 for both the project page and JSON API for
+`cigar-sdk`; the name is available but not reserved. The release authority now permits only the
+Python developer preview on PyPI, and `.github/workflows/pypi-honey.yml` consumes the already
+approved GitHub prerelease bytes rather than rebuilding. It verifies all 13 attachments, the
+caller-supplied manifest digest, tag/source binding, strict Twine metadata, and exact two-file PyPI
+inventory before a separate data-only OIDC job can request protected-environment approval. Unit
+tests cover manual/tag binding, byte verification, OIDC isolation, attestations, and immutable
+version behavior. No tag, GitHub release, PyPI project, or upload has been created.
 
 Final exit gate:
 

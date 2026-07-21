@@ -1,5 +1,9 @@
 # `cigar-sdk`
 
+> **Developer preview:** `0.9.1.dev1` is an unsupported proof of concept for Python 3.14. The SDK
+> does not include the CIGAR daemon. The Honey daemon is qualified separately only on Apple-silicon
+> macOS; do not treat this package as production-ready or cross-platform runtime support.
+
 The Python 3.14 SDK exposes all 45 frozen CIGAR v1 operations through both
 `AsyncCigarClient` and `CigarClient`. Both facades provide bounded deadlines,
 typed problems, resumable streams, pagination, fixed idempotency keys, safe retry,

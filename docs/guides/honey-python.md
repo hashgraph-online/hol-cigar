@@ -1,8 +1,24 @@
 # Honey Python SDK
 
 Honey ships `cigar_sdk-0.9.1.dev1-py3-none-any.whl` and
-`cigar_sdk-0.9.1.dev1.tar.gz`. Install an exact GitHub attachment into a new virtual environment;
-Honey does not publish to PyPI.
+`cigar_sdk-0.9.1.dev1.tar.gz`. After the release owner approves publication, the same exact bytes
+are published to PyPI as the unsupported `cigar-sdk` developer preview. Until then, install the
+checksum-verified GitHub prerelease attachment.
+
+## PyPI installation
+
+Python 3.14 is required. Pin the prerelease explicitly:
+
+<!-- docs-check: illustrative -->
+```sh
+python3.14 -m venv .venv
+. .venv/bin/activate
+python -m pip install --pre 'cigar-sdk==0.9.1.dev1'
+python -c 'import cigar_sdk; print(cigar_sdk.__version__)'
+```
+
+The SDK does not include the daemon. Honey's local daemon remains an Apple-silicon macOS POC and is
+unsupported, unsigned, and not production-qualified.
 
 ## Offline installation
 

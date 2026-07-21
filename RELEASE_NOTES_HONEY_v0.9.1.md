@@ -7,8 +7,8 @@ Context ABI: `cigar.context.v1`
 
 Honey 0.9.1 is a bounded proof-of-concept repair release for the persistence, restart, retrieval,
 duplicate-content, and correlation-related efficiency issues observed during the 100-with/100-without
-CIGAR security-platform evaluation. It remains unpublished, unsupported, and not production
-qualified.
+CIGAR security-platform evaluation. The candidate remains unpublished until explicit release-owner
+approval. Publication keeps it an unsupported developer preview that is not production-qualified.
 
 ## Attachments
 

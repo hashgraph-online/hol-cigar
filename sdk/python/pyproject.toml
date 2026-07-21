@@ -1,7 +1,7 @@
 [project]
 name = "cigar-sdk"
 version = "0.9.1.dev1"
-description = "CIGAR v1 Python SDK"
+description = "CIGAR v1 Python SDK developer preview"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -9,8 +9,9 @@ requires-python = ">=3.14,<3.15"
 dependencies = ["protobuf==6.33.5"]
 
 [project.urls]
-Homepage = "https://github.com/CIGAR/cigar"
-Repository = "https://github.com/CIGAR/cigar"
+Homepage = "https://github.com/HGraphPunks/cigar"
+Repository = "https://github.com/HGraphPunks/cigar"
+Issues = "https://github.com/HGraphPunks/cigar/issues"
 
 [project.scripts]
 cigar-qualify-bundle = "cigar_sdk.qualify_bundle:main"
