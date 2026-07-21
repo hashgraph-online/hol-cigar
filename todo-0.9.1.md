@@ -1060,7 +1060,7 @@ Run on the clean intended candidate commit before artifact construction:
 - [x] Add an end-to-end test that activates a migrated v5 descriptor, starts the production
   composition, performs granular repository/service mutations, restarts twice, and proves no new
   v4 residual revision was written.
-- [ ] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes for the
+- [x] `git status --porcelain=v1 --untracked-files=all` is empty after all check modes for the
   replacement source commit.
 
 Exit gate:
@@ -1102,6 +1102,15 @@ v5 deltas and no growth of the retained v4 compatibility row. A full integration
 a signed backup, migrates and activates a distinct v5 target, performs a service mutation, starts
 and shuts down the production daemon twice, proves the retained v4 source head is unchanged, and
 proves the selected v5 chain advances. Replacement freeze may proceed after the complete gate rerun.
+
+Replacement-source gate rerun (2026-07-21): supported all-target workspace Clippy passes with
+warnings denied; the complete workspace tests pass; the release-tool suite passes all 413 tests
+with 31 declared platform skips; the production-v5 store suite now contains 108 library tests; and
+product-version, Honey-profile, development-protocol, generated-client, documentation, format,
+and diff checks all pass. Git status and replacement-object inventory are empty. `Cargo.lock` is
+`807b2522cdbb8dfa4002bb4693cfd7751f46396a2c0f9681f9e93ea2d8b3c7f8` and
+`rust-toolchain.toml` is
+`3a2252d175c5cde45ef1bc7a4a5c9d4776d9356381d752cfac916d9a93923f2d`.
 
 ## H91-900 — Build and assemble the exact candidate
 
@@ -1206,7 +1215,7 @@ handoff rebuild.
   candidate as historical after the seven Hiero compatibility fixes were upstreamed.
 - [x] Retain its UTM Python wheel/sdist qualification only as historical diagnostic evidence; it
   cannot qualify replacement bytes.
-- [ ] Freeze the replacement source commit after the H91-800 production v5 composition gate.
+- [x] Freeze the replacement source commit after the H91-800 production v5 composition gate.
 - [ ] Rebuild all 13 attachments into a new create-new root and independently verify them.
 - [ ] Replace the developer-handoff ZIP only after exact replacement bytes pass their applicable
   installed gates.
