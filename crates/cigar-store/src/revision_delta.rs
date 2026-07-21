@@ -26,7 +26,7 @@ pub const SQLITE_FRESH_TARGET_SCHEMA_V5: &str =
     include_str!("../migrations/sqlite/0005_incremental_repository_state.sql");
 /// Exact public JSON Schema authenticated by every v5 repository authority.
 pub const SQLITE_V4_V5_MIGRATION_RECEIPT_SCHEMA_V1: &str =
-    include_str!("../../../schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json");
+    include_str!("../schemas/sqlite-v4-v5-migration-receipt-v1.schema.json");
 /// Exact durable record format for the initial v5 implementation.
 pub const REPOSITORY_FORMAT_V5: u64 = 5;
 /// Maximum typed residual and catalog mutations represented by one delta.

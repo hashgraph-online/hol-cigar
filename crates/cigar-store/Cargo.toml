@@ -9,7 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 publish = ["crates-io"]
-include = ["src/**", "migrations/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+include = ["src/**", "migrations/**", "schemas/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
 
 [lints]
 workspace = true

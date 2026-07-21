@@ -5592,6 +5592,13 @@ fn generated_artifacts() -> Result<Vec<(PathBuf, String)>, TaskError> {
                 .to_owned(),
         ),
         (
+            PathBuf::from(
+                "crates/cigar-store/schemas/sqlite-v4-v5-migration-receipt-v1.schema.json",
+            ),
+            include_str!("../../../schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json")
+                .to_owned(),
+        ),
+        (
             PathBuf::from("schemas/json/verification-receipt-v1.schema.json"),
             render_schema::<cigar_protocol::VerificationReceipt>("VerificationReceipt")?,
         ),
