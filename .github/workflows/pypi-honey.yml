@@ -1,4 +1,4 @@
-name: publish-cigar-sdk-honey
+name: publish-hol-cigar-honey
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirm:
-        description: Type "publish cigar-sdk 0.9.1.dev1"
+        description: Type "publish hol-cigar 0.9.1.dev1"
         required: true
         type: string
 
@@ -20,7 +20,7 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 concurrency:
-  group: publish-cigar-sdk-0.9.1.dev1
+  group: publish-hol-cigar-0.9.1.dev1
   cancel-in-progress: false
 
 jobs:
@@ -49,7 +49,7 @@ jobs:
           CONFIRM: ${{ inputs.confirm }}
         run: |
           test "${GITHUB_REF}" = "refs/tags/v0.9.1-honey.1"
-          test "${CONFIRM}" = "publish cigar-sdk 0.9.1.dev1"
+          test "${CONFIRM}" = "publish hol-cigar 0.9.1.dev1"
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 v0.9.1-honey.1)"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
@@ -82,11 +82,11 @@ jobs:
               'import json; print(json.load(open("candidate/honey-release-manifest.json"))["source"]["revision"])'
           )" = "$(git rev-parse HEAD)"
           install -m 0400 \
-            candidate/cigar_sdk-0.9.1.dev1-py3-none-any.whl \
-            dist/cigar_sdk-0.9.1.dev1-py3-none-any.whl
+            candidate/hol_cigar-0.9.1.dev1-py3-none-any.whl \
+            dist/hol_cigar-0.9.1.dev1-py3-none-any.whl
           install -m 0400 \
-            candidate/cigar_sdk-0.9.1.dev1.tar.gz \
-            dist/cigar_sdk-0.9.1.dev1.tar.gz
+            candidate/hol_cigar-0.9.1.dev1.tar.gz \
+            dist/hol_cigar-0.9.1.dev1.tar.gz
           test "$(find dist -type f | wc -l | tr -d ' ')" = "2"
 
       - name: Run the PyPI metadata compatibility check
@@ -100,7 +100,7 @@ jobs:
       - name: Stage only the verified PyPI distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: cigar-sdk-0.9.1.dev1-pypi
+          name: hol-cigar-0.9.1.dev1-pypi
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -108,20 +108,20 @@ jobs:
           include-hidden-files: false
 
   publish-to-pypi:
-    name: publish approved developer preview to PyPI
+    name: publish approved alpha to PyPI
     needs: verify-release-bytes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: pypi
-      url: https://pypi.org/p/cigar-sdk
+      url: https://pypi.org/p/hol-cigar
     permissions:
       id-token: write
     steps:
       - name: Retrieve verified distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: cigar-sdk-0.9.1.dev1-pypi
+          name: hol-cigar-0.9.1.dev1-pypi
           path: dist/
 
       - name: Publish with Trusted Publishing and attestations

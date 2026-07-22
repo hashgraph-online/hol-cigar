@@ -35,8 +35,8 @@ EXPECTED_ARTIFACTS = [
         "cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz",
     ),
     ("typescript-sdk", "cigar-sdk-0.9.1-honey.1.tgz"),
-    ("python-sdk-wheel", "cigar_sdk-0.9.1.dev1-py3-none-any.whl"),
-    ("python-sdk-sdist", "cigar_sdk-0.9.1.dev1.tar.gz"),
+    ("python-sdk-wheel", "hol_cigar-0.9.1.dev1-py3-none-any.whl"),
+    ("python-sdk-sdist", "hol_cigar-0.9.1.dev1.tar.gz"),
     (
         "rust-sdk-local-registry",
         "cigar-rust-sdk-0.9.1-honey.1-local-registry.tar.gz",

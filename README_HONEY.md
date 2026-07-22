@@ -1,6 +1,7 @@
-# CIGAR Honey v0.9.1
+# CIGAR Honey 0.9.1 alpha
 
-CIGAR Honey `0.9.1-honey.1` is a functional developer preview of CIGAR's local context,
+CIGAR is an alpha project from [HOL.org](https://hol.org). CIGAR Honey `0.9.1-honey.1` is a
+functional developer preview of CIGAR's local context,
 coordination, effect, and replay workflow. It is intended for developers evaluating CIGAR on
 Apple-silicon macOS. Honey is not a production-supported or independently audited release.
 
@@ -64,9 +65,11 @@ PostgreSQL/S3 deployment, Kubernetes, OCI, Homebrew, public package registries, 
 remote OTLP export, arbitrary extensions, or HTTPS effects. Vector retrieval may be absent; exact,
 path, symbol, graph, and lexical retrieval remain usable.
 
-The v0.9.1 gate is deliberately bounded. It includes functional, conformance, policy, canary,
-installed-byte, and recovery checks, but omits seven-day fuzzing, four-hour mutation qualification,
-24-hour soak, million-atom scale, and efficacy claims. See
+The 0.9.1 alpha gate is deliberately bounded. The exact 13-file candidate must pass artifact
+integrity, and `hol-cigar==0.9.1.dev1` must pass its package contracts, strict Twine metadata,
+Python 3.14 clean installs, imports, shared fixture, and entry points. Full-product efficiency,
+downstream shadow, longevity, chaos, cross-platform, signing, notarization, and efficacy gates are
+not represented as passed. See
 [security and limitations](docs/guides/honey-security-limitations.md).
 
 ## Start here

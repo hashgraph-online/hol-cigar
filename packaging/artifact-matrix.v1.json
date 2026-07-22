@@ -185,7 +185,7 @@
     {
       "id": "python-sdk-sdist",
       "kind": "python-sdist",
-      "filename": "cigar_sdk-0.9.1.dev1.tar.gz",
+      "filename": "hol_cigar-0.9.1.dev1.tar.gz",
       "contract": "contracts/python-sdist.v1.json",
       "ecosystem": "python",
       "producer": "python3 scripts/release/build_python_sdk_artifacts.py",
@@ -195,7 +195,7 @@
     {
       "id": "python-sdk-wheel",
       "kind": "python-wheel",
-      "filename": "cigar_sdk-0.9.1.dev1-py3-none-any.whl",
+      "filename": "hol_cigar-0.9.1.dev1-py3-none-any.whl",
       "contract": "contracts/python-wheel.v1.json",
       "ecosystem": "python",
       "producer": "python3 scripts/release/build_python_sdk_artifacts.py",

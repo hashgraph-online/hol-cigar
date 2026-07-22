@@ -193,10 +193,10 @@ class ProductVersionTests(unittest.TestCase):
             )
         )
         filenames = {entry["id"]: entry["filename"] for entry in matrix["artifacts"]}
-        self.assertEqual(filenames["python-sdk-sdist"], "cigar_sdk-0.9.1.dev1.tar.gz")
+        self.assertEqual(filenames["python-sdk-sdist"], "hol_cigar-0.9.1.dev1.tar.gz")
         self.assertEqual(
             filenames["python-sdk-wheel"],
-            "cigar_sdk-0.9.1.dev1-py3-none-any.whl",
+            "hol_cigar-0.9.1.dev1-py3-none-any.whl",
         )
         self.assertEqual(
             filenames["macos-installer-arm64"],
@@ -221,7 +221,7 @@ class ProductVersionTests(unittest.TestCase):
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b'"filename": "cigar_sdk-0.9.1.dev2.tar.gz"',
+            b'"filename": "hol_cigar-0.9.1.dev2.tar.gz"',
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
@@ -233,11 +233,11 @@ class ProductVersionTests(unittest.TestCase):
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b"cigar_sdk-0.9.1.dev2.dist-info/",
+            b"hol_cigar-0.9.1.dev2.dist-info/",
             first["packaging/contracts/python-wheel.v1.json"],
         )
         self.assertIn(
-            b"cigar_sdk-0.9.1.dev2-py3-none-any.whl",
+            b"hol_cigar-0.9.1.dev2-py3-none-any.whl",
             first["demos/README.md"],
         )
         self.assertIn(

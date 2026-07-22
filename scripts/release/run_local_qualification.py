@@ -933,11 +933,11 @@ def _qualify(
         python_sdist_contract = root / "packaging/contracts/python-sdist.v1.json"
 
         def write_python_sdist_fixture(path: Path, gitignore_payload: bytes) -> None:
-            prefix = f"cigar_sdk-{PYTHON_DISTRIBUTION_VERSION}/"
+            prefix = f"hol_cigar-{PYTHON_DISTRIBUTION_VERSION}/"
             release_payload = canonical_json_bytes(
                 {
                     "schema_version": "cigar.sdk-release.v1",
-                    "name": "cigar-sdk",
+                    "name": "hol-cigar",
                     "version": PRODUCT_VERSION,
                     "context_abi": "cigar.context.v1",
                 }
@@ -947,11 +947,11 @@ def _qualify(
                 "LICENSE": b"synthetic Apache-2.0 license fixture\n",
                 "NOTICE": b"synthetic CIGAR notice fixture\n",
                 "PKG-INFO": (
-                    f"Metadata-Version: 2.4\nName: cigar-sdk\nVersion: {PYTHON_DISTRIBUTION_VERSION}\n".encode()
+                    f"Metadata-Version: 2.4\nName: hol-cigar\nVersion: {PYTHON_DISTRIBUTION_VERSION}\n".encode()
                 ),
                 "README.md": b"# Synthetic CIGAR SDK sdist fixture\n",
                 "pyproject.toml": (
-                    f'[project]\nname = "cigar-sdk"\nversion = "{PYTHON_DISTRIBUTION_VERSION}"\n'.encode()
+                    f'[project]\nname = "hol-cigar"\nversion = "{PYTHON_DISTRIBUTION_VERSION}"\n'.encode()
                 ),
                 "src/cigar_sdk/__init__.py": b'CONTEXT_ABI = "cigar.context.v1"\n',
                 "src/cigar_sdk/release.json": release_payload,

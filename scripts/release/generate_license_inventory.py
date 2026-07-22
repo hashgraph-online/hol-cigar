@@ -807,7 +807,7 @@ def _python(root: Path) -> list[dict[str, Any]]:
     metadata = _python_metadata(root)
     entries: list[dict[str, Any]] = []
     for component in _python_components(root):
-        if component["name"] == "cigar-sdk":
+        if component["name"] == "hol-cigar":
             continue
         expression, notices = metadata.get(
             (_normalize_name(component["name"]), component["version"]),

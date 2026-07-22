@@ -1,15 +1,22 @@
 [project]
-name = "cigar-sdk"
+name = "hol-cigar"
 version = "0.9.1.dev1"
-description = "CIGAR v1 Python SDK developer preview"
+description = "HOL.org CIGAR Python SDK alpha"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14,<3.15"
 dependencies = ["protobuf==6.33.5"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
 
 [project.urls]
-Homepage = "https://github.com/HGraphPunks/cigar"
+Homepage = "https://hol.org"
 Repository = "https://github.com/HGraphPunks/cigar"
 Issues = "https://github.com/HGraphPunks/cigar/issues"
 

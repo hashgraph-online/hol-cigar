@@ -7,7 +7,7 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "P7D"
 
 [[package]]
-name = "cigar-sdk"
+name = "hol-cigar"
 version = "0.9.1.dev1"
 source = { editable = "." }
 dependencies = [

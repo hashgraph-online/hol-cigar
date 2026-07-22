@@ -1,6 +1,7 @@
 # CIGAR documentation
 
-CIGAR compiles governed, versioned context for agent workflows. It indexes configured sources,
+CIGAR is an alpha project from [HOL.org](https://hol.org). It compiles governed, versioned context
+for agent workflows. It indexes configured sources,
 selects evidence under explicit contracts and policy, emits deterministic bundles and manifests,
 supports attenuated handoffs, journals external effects, and reconstructs decisions for replay.
 It does not make model output deterministic and does not promise universal exactly-once behavior for
@@ -12,7 +13,7 @@ and practice every [operator runbook](../operations/index.md). Interface details
 [public API reference](../reference/public-api.md), while artifact trust begins with
 [offline release verification](../release/verification.md).
 
-## Honey developer preview
+## Honey 0.9.1 alpha
 
 Developers evaluating the local Apple-silicon Honey profile should begin with the
 [Honey installation guide](../guides/honey-install.md) and

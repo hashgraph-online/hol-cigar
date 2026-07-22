@@ -265,7 +265,7 @@ def _python_distribution_version(version: str) -> str:
 
 
 def _expected_contracts(python_version: str) -> dict[str, dict[str, object]]:
-    prefix = f"cigar_sdk-{python_version}"
+    prefix = f"hol_cigar-{python_version}"
     return {
         SDIST_ARTIFACT_ID: {
             "schema_version": "cigar.package-contract.v1",
@@ -377,14 +377,22 @@ def _validate_pyproject(document: dict[str, Any], python_version: str) -> None:
     project = document.get("project")
     if (
         not isinstance(project, dict)
-        or project.get("name") != "cigar-sdk"
+        or project.get("name") != "hol-cigar"
         or project.get("version") != python_version
-        or project.get("description") != "CIGAR v1 Python SDK developer preview"
+        or project.get("description") != "HOL.org CIGAR Python SDK alpha"
         or project.get("readme") != "README.md"
         or project.get("license") != "Apache-2.0"
         or project.get("license-files") != ["LICENSE", "NOTICE"]
         or project.get("requires-python") != ">=3.14,<3.15"
         or project.get("dependencies") != ["protobuf==6.33.5"]
+        or project.get("classifiers")
+        != [
+            "Development Status :: 3 - Alpha",
+            "License :: OSI Approved :: Apache Software License",
+            "Operating System :: OS Independent",
+            "Programming Language :: Python :: 3.14",
+            "Typing :: Typed",
+        ]
         or project.get("scripts")
         != {
             "cigar-agent-b-handoff": "cigar_sdk.examples.agent_b_handoff:main",
@@ -393,7 +401,7 @@ def _validate_pyproject(document: dict[str, Any], python_version: str) -> None:
     ):
         raise ReleaseError("Python project identity or runtime metadata is stale")
     if project.get("urls") != {
-        "Homepage": "https://github.com/HGraphPunks/cigar",
+        "Homepage": "https://hol.org",
         "Repository": "https://github.com/HGraphPunks/cigar",
         "Issues": "https://github.com/HGraphPunks/cigar/issues",
     }:
@@ -435,7 +443,7 @@ def _validate_lock(document: dict[str, Any], python_version: str) -> dict[str, o
     sdk_rows = [
         row
         for row in packages
-        if isinstance(row, dict) and row.get("name") == "cigar-sdk"
+        if isinstance(row, dict) and row.get("name") == "hol-cigar"
     ]
     protobuf_rows = [
         row
@@ -443,7 +451,7 @@ def _validate_lock(document: dict[str, Any], python_version: str) -> dict[str, o
         if isinstance(row, dict) and row.get("name") == "protobuf"
     ]
     expected_sdk = {
-        "name": "cigar-sdk",
+        "name": "hol-cigar",
         "version": python_version,
         "source": {"editable": "."},
         "dependencies": [{"name": "protobuf"}],
@@ -734,7 +742,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
     context_abi = product["context_abi"]
     if release != {
         "schema_version": "cigar.sdk-release.v1",
-        "name": "cigar-sdk",
+        "name": "hol-cigar",
         "version": version,
         "context_abi": context_abi,
     }:
@@ -751,7 +759,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         expected_rows = {
             WHEEL_ARTIFACT_ID: {
                 "contract": "packaging/contracts/python-wheel.v1.json",
-                "filename": f"cigar_sdk-{python_version}-py3-none-any.whl",
+                "filename": f"hol_cigar-{python_version}-py3-none-any.whl",
                 "generated_by_assembler": False,
                 "id": WHEEL_ARTIFACT_ID,
                 "kind": "python-wheel",
@@ -769,7 +777,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
             },
             SDIST_ARTIFACT_ID: {
                 "contract": "packaging/contracts/python-sdist.v1.json",
-                "filename": f"cigar_sdk-{python_version}.tar.gz",
+                "filename": f"hol_cigar-{python_version}.tar.gz",
                 "generated_by_assembler": False,
                 "id": SDIST_ARTIFACT_ID,
                 "kind": "python-sdist",
@@ -803,7 +811,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
             SDIST_ARTIFACT_ID: {
                 "id": SDIST_ARTIFACT_ID,
                 "kind": "python-sdist",
-                "filename": f"cigar_sdk-{python_version}.tar.gz",
+                "filename": f"hol_cigar-{python_version}.tar.gz",
                 "contract": "contracts/python-sdist.v1.json",
                 "ecosystem": "python",
                 "producer": PRODUCER,
@@ -821,7 +829,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
             WHEEL_ARTIFACT_ID: {
                 "id": WHEEL_ARTIFACT_ID,
                 "kind": "python-wheel",
-                "filename": f"cigar_sdk-{python_version}-py3-none-any.whl",
+                "filename": f"hol_cigar-{python_version}-py3-none-any.whl",
                 "contract": "contracts/python-wheel.v1.json",
                 "ecosystem": "python",
                 "producer": PRODUCER,
@@ -1344,15 +1352,20 @@ def _metadata_summary(
         raise ReleaseError(f"Python core metadata cannot be parsed: {error}") from error
     expected_items = [
         ("Metadata-Version", "2.4"),
-        ("Name", "cigar-sdk"),
+        ("Name", "hol-cigar"),
         ("Version", configuration.python_version),
-        ("Summary", "CIGAR v1 Python SDK developer preview"),
-        ("Project-URL", "Homepage, https://github.com/HGraphPunks/cigar"),
+        ("Summary", "HOL.org CIGAR Python SDK alpha"),
+        ("Project-URL", "Homepage, https://hol.org"),
         ("Project-URL", "Repository, https://github.com/HGraphPunks/cigar"),
         ("Project-URL", "Issues, https://github.com/HGraphPunks/cigar/issues"),
         ("License-Expression", "Apache-2.0"),
         ("License-File", "LICENSE"),
         ("License-File", "NOTICE"),
+        ("Classifier", "Development Status :: 3 - Alpha"),
+        ("Classifier", "License :: OSI Approved :: Apache Software License"),
+        ("Classifier", "Operating System :: OS Independent"),
+        ("Classifier", "Programming Language :: Python :: 3.14"),
+        ("Classifier", "Typing :: Typed"),
         ("Requires-Python", "<3.15,>=3.14"),
         ("Requires-Dist", "protobuf==6.33.5"),
         ("Description-Content-Type", "text/markdown"),
@@ -1369,7 +1382,7 @@ def _metadata_summary(
         )
     return {
         "metadata_version": "2.4",
-        "name": "cigar-sdk",
+        "name": "hol-cigar",
         "version": configuration.python_version,
         "requires_python": ">=3.14,<3.15",
         "requires_dist": ["protobuf==6.33.5"],
@@ -1378,7 +1391,7 @@ def _metadata_summary(
 
 
 def _expected_source_member_paths(configuration: BuildConfiguration) -> set[str]:
-    prefix = f"cigar_sdk-{configuration.python_version}"
+    prefix = f"hol_cigar-{configuration.python_version}"
     return {
         *(f"{prefix}/{relative}" for relative in configuration.source_assets),
         f"{prefix}/PKG-INFO",
@@ -1437,7 +1450,7 @@ def _read_sdist(
         raise ReleaseError(
             f"Python sdist inventory differs: extra={sorted(set(payloads) - expected)}, missing={sorted(expected - set(payloads))}"
         )
-    prefix = f"cigar_sdk-{configuration.python_version}"
+    prefix = f"hol_cigar-{configuration.python_version}"
     for relative, source_payload in configuration.source_assets.items():
         if payloads[f"{prefix}/{relative}"] != source_payload:
             raise ReleaseError(f"Python sdist source payload differs: {relative}")
@@ -1462,7 +1475,7 @@ def _wheel_source_paths(configuration: BuildConfiguration) -> dict[str, bytes]:
 
 
 def _wheel_metadata_paths(configuration: BuildConfiguration) -> set[str]:
-    dist_info = f"cigar_sdk-{configuration.python_version}.dist-info"
+    dist_info = f"hol_cigar-{configuration.python_version}.dist-info"
     return {
         f"{dist_info}/METADATA",
         f"{dist_info}/WHEEL",
@@ -1550,7 +1563,7 @@ def _read_wheel(
     for relative, source_payload in sources.items():
         if payloads[relative] != source_payload:
             raise ReleaseError(f"Python wheel source payload differs: {relative}")
-    dist_info = f"cigar_sdk-{configuration.python_version}.dist-info"
+    dist_info = f"hol_cigar-{configuration.python_version}.dist-info"
     if (
         payloads[f"{dist_info}/licenses/LICENSE"]
         != configuration.source_assets["LICENSE"]

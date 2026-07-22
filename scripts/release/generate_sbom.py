@@ -356,7 +356,7 @@ def main() -> int:
                 component["ecosystem"] == "generic"
                 and component["name"] in workspace_package_names
             )
-            or (component["ecosystem"] == "pypi" and component["name"] == "cigar-sdk")
+            or (component["ecosystem"] == "pypi" and component["name"] == "hol-cigar")
         )
     }
     if set(inventory_purls) != external_purls:
@@ -375,7 +375,7 @@ def main() -> int:
         if (
             component["ecosystem"] == "generic"
             and component["name"] in workspace_package_names
-        ) or (component["ecosystem"] == "pypi" and component["name"] == "cigar-sdk"):
+        ) or (component["ecosystem"] == "pypi" and component["name"] == "hol-cigar"):
             result = ("Apache-2.0", "accepted-by-policy")
         return result
 

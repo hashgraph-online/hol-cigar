@@ -1,6 +1,8 @@
-# `cigar-sdk`
+# `hol-cigar`
 
-> **Developer preview:** `0.9.1.dev1` is an unsupported proof of concept for Python 3.14. The SDK
+`hol-cigar` is the Python SDK for CIGAR, an alpha project from [HOL.org](https://hol.org).
+
+> **Alpha developer preview:** `0.9.1.dev1` is an unsupported proof of concept for Python 3.14. The SDK
 > does not include the CIGAR daemon. The Honey daemon is qualified separately only on Apple-silicon
 > macOS; do not treat this package as production-ready or cross-platform runtime support.
 
@@ -8,7 +10,12 @@ The Python 3.14 SDK exposes all 45 frozen CIGAR v1 operations through both
 `AsyncCigarClient` and `CigarClient`. Both facades provide bounded deadlines,
 typed problems, resumable streams, pagination, fixed idempotency keys, safe retry,
 and local semantic bundle/delta verification.
+The PyPI distribution is named `hol-cigar`; its stable Python import namespace remains `cigar_sdk`.
 The exported `cigar_sdk.CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
+
+```sh
+python3.14 -m pip install --pre 'hol-cigar==0.9.1.dev1'
+```
 
 ```python
 from cigar_sdk import AsyncCigarClient, TypedOperationRequest, create_idempotency_key, models

@@ -954,8 +954,8 @@ The candidate contains exactly:
 3. `cigar-0.9.1-honey.1-schemas-conformance.tar.gz`.
 4. `cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz`.
 5. `cigar-sdk-0.9.1-honey.1.tgz`.
-6. `cigar_sdk-0.9.1.dev1-py3-none-any.whl`.
-7. `cigar_sdk-0.9.1.dev1.tar.gz`.
+6. `hol_cigar-0.9.1.dev1-py3-none-any.whl`.
+7. `hol_cigar-0.9.1.dev1.tar.gz`.
 8. `cigar-rust-sdk-0.9.1-honey.1-local-registry.tar.gz`.
 9. `cigar-claude-code-0.9.1-honey.1.tar.gz`.
 10. `cigar-honey-demos-0.9.1-honey.1.tar.gz`.
@@ -1368,7 +1368,14 @@ pass. No installed-byte, efficiency, or downstream exit gate is closed by these 
 
 ### H91-1130 — Publish only with explicit owner approval
 
-- [x] Select the PEP 440 identity `cigar-sdk==0.9.1.dev1` and confirm that the PyPI project name is
+PyPI scope decision (2026-07-22): this section governs the `hol-cigar` Python alpha only. H91-1000
+through H91-1120 continue to govern a full Honey product-qualification claim, but their unfinished
+efficiency, downstream shadow, longevity, and production gates do not block the explicitly scoped
+Python alpha. The PyPI cut still requires a clean commit, release regressions, the exact 13-file
+artifact-integrity result, strict Twine, clean wheel/sdist installs, protected Trusted Publishing,
+attestations, and post-publication hash/install verification.
+
+- [x] Select the PEP 440 identity `hol-cigar==0.9.1.dev1` and confirm that the PyPI project name is
   unregistered before first-publication setup.
 - [x] Move public PyPI from the deferred profile into the bounded Python developer-preview
   integration; keep support and production claims false.
@@ -1397,8 +1404,8 @@ pass. No installed-byte, efficiency, or downstream exit gate is closed by these 
 - [ ] Publish only the manifest-bound wheel and sdist to PyPI through the protected workflow, then
   verify PyPI hashes, provenance, and a clean index install.
 
-Progress evidence (2026-07-21): PyPI returned 404 for both the project page and JSON API for
-`cigar-sdk`; the name is available but not reserved. The release authority now permits only the
+Progress evidence (2026-07-22): PyPI returned 404 for the project, JSON API, and Simple Index for
+`hol-cigar`; the name appears available but is not reserved. The release authority now permits only the
 Python developer preview on PyPI, and `.github/workflows/pypi-honey.yml` consumes the already
 approved GitHub prerelease bytes rather than rebuilding. It verifies all 13 attachments, the
 caller-supplied manifest digest, tag/source binding, strict Twine metadata, and exact two-file PyPI

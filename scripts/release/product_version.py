@@ -178,13 +178,13 @@ CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
 }
 UV_LOCK_BINDINGS = {
     "uv.lock": "cigar-workspace",
-    "sdk/python/uv.lock": "cigar-sdk",
+    "sdk/python/uv.lock": "hol-cigar",
 }
 
 SDK_RELEASE_RECORDS = {
     "sdk/rust/release.json": "cigar-sdk",
     "sdk/typescript/release.json": "@cigar/sdk",
-    "sdk/python/src/cigar_sdk/release.json": "cigar-sdk",
+    "sdk/python/src/cigar_sdk/release.json": "hol-cigar",
     "sdk/go/release.json": "github.com/CIGAR/cigar/sdk/go",
 }
 CRATE_RELEASE_RECORDS = {
@@ -219,7 +219,7 @@ TOML_PACKAGE_VERSIONS = {
     "Cargo.toml": ("workspace.package", "cigar"),
     "pyproject.toml": ("project", "cigar-workspace"),
     "sdk/rust/Cargo.toml": ("package", "cigar-sdk"),
-    "sdk/python/pyproject.toml": ("project", "cigar-sdk"),
+    "sdk/python/pyproject.toml": ("project", "hol-cigar"),
 }
 
 PUBLISHABLE_PRODUCT_PACKAGES = (
@@ -321,7 +321,7 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
 PYTHON_TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
     "demos/README.md": (
         re.compile(
-            rf"cigar_sdk-(?P<version>{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
+            rf"hol_cigar-(?P<version>{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
             r"(?=-py3-none-any\.whl)"
         ),
         2,
@@ -436,7 +436,7 @@ CONTRACT_BINDINGS: dict[str, tuple[str, re.Pattern[str], tuple[str, ...]]] = {
     ),
     "packaging/contracts/python-sdist.v1.json": (
         "python-sdist-v1",
-        re.compile(r"cigar_sdk-([^/]+)/"),
+        re.compile(r"hol_cigar-([^/]+)/"),
         (
             *_indices("allow", 8),
             *_indices("required", 7),
@@ -447,7 +447,7 @@ CONTRACT_BINDINGS: dict[str, tuple[str, re.Pattern[str], tuple[str, ...]]] = {
     ),
     "packaging/contracts/python-wheel.v1.json": (
         "python-wheel-v1",
-        re.compile(r"cigar_sdk-([^/]+)\.dist-info/"),
+        re.compile(r"hol_cigar-([^/]+)\.dist-info/"),
         (
             "/allow/1",
             "/required/1",
@@ -1200,7 +1200,7 @@ def _update_documents(root: Path, version: str, abi: str, *, write: bool) -> Non
         tuple(f"/artifacts/{index}/filename" for index in python_artifact_indexes),
         python_distribution_version(version),
         re.compile(
-            rf"cigar_sdk-({PRODUCT_VERSION_FRAGMENT}|"
+            rf"hol_cigar-({PRODUCT_VERSION_FRAGMENT}|"
             rf"{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
             r"(?=\.tar\.gz|-py3-none-any\.whl)"
         ),

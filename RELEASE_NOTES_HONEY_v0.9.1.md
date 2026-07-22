@@ -1,8 +1,10 @@
 # CIGAR Honey v0.9.1 release notes
 
+CIGAR is an alpha project from [HOL.org](https://hol.org).
+
 Version: `0.9.1-honey.1`
 Channel: `honey`
-State: developer preview
+State: alpha developer preview
 Context ABI: `cigar.context.v1`
 
 Honey 0.9.1 is a bounded proof-of-concept repair release for the persistence, restart, retrieval,
@@ -21,8 +23,8 @@ The public candidate contains exactly these 13 files:
 | `cigar-0.9.1-honey.1-schemas-conformance.tar.gz` | Protocol schemas, vectors, and conformance inputs |
 | `cigar-0.9.1-honey.1-aarch64-apple-darwin.tar.gz` | CLI, daemon, MCP, hook, man page, and completions |
 | `cigar-sdk-0.9.1-honey.1.tgz` | TypeScript ESM SDK |
-| `cigar_sdk-0.9.1.dev1-py3-none-any.whl` | Python wheel |
-| `cigar_sdk-0.9.1.dev1.tar.gz` | Python source distribution |
+| `hol_cigar-0.9.1.dev1-py3-none-any.whl` | `hol-cigar` Python wheel |
+| `hol_cigar-0.9.1.dev1.tar.gz` | `hol-cigar` Python source distribution |
 | `cigar-rust-sdk-0.9.1-honey.1-local-registry.tar.gz` | Offline Rust registry kit |
 | `cigar-claude-code-0.9.1-honey.1.tar.gz` | Claude Code plugin using matching runtime bytes |
 | `cigar-honey-demos-0.9.1-honey.1.tar.gz` | Deterministic installed-artifact demonstrations |
@@ -88,12 +90,11 @@ post-verification. `VACUUM`, manual row deletion, and a larger capacity ceiling 
 
 ## Qualification and compatibility
 
-The internal efficiency/reliability report binds one clean source commit/tree, exact release
-manifest, installed runtime, frozen generated fixtures, owner-private raw-observation digest,
-environment, and all mandatory thresholds. A failed, skipped, waived, unknown, or absent gate fails
-the candidate. The generated workloads run before any separately authorized verified copy of the
-observed workload; the retained approximately 50 GiB evidence store is never a first migration
-target.
+The public 0.9.1 alpha gate binds one clean source commit/tree, the exact release manifest, package
+contracts, strict metadata checks, and installed Python SDK smoke tests. It establishes artifact
+integrity and SDK installability, not full-product efficiency or production qualification. The
+separate internal efficiency/reliability program remains fail-closed and may not be reported as
+passed without its authenticated raw cohort and complete evidence ledger.
 
 The public v1 API remains exactly 45 operations and 70 nominal payload types. Existing granular
 clients remain the compatibility surface. Atomic context compilation, signed semantic/execution

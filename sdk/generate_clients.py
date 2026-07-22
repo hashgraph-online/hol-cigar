@@ -1291,7 +1291,7 @@ def assert_release_contracts() -> None:
     releases = {
         "rust": (SDK / "rust/release.json", "cigar-sdk"),
         "typescript": (SDK / "typescript/release.json", "@cigar/sdk"),
-        "python": (SDK / "python/src/cigar_sdk/release.json", "cigar-sdk"),
+        "python": (SDK / "python/src/cigar_sdk/release.json", "hol-cigar"),
         "go": (SDK / "go/release.json", "github.com/CIGAR/cigar/sdk/go"),
     }
     for language, (path, name) in releases.items():

@@ -1,5 +1,7 @@
 # CIGAR documentation
 
+CIGAR is an alpha project from [HOL.org](https://hol.org).
+
 Start at the [documentation home](site/index.md). The published set is declared by
 `site-manifest.v1.json`; implementation notes under `execution/` are intentionally excluded.
 
@@ -15,7 +17,7 @@ Start at the [documentation home](site/index.md). The published set is declared 
 - [Troubleshooting](troubleshooting/index.md)
 - [Release verification](release/verification.md)
 
-The Honey developer-preview path has its own bounded installation and usage guides:
+The Honey 0.9.1 alpha path has its own bounded installation and usage guides:
 
 - [Honey install](guides/honey-install.md)
 - [Honey offline quickstart](guides/honey-quickstart.md)
