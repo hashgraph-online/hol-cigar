@@ -1,0 +1,8 @@
+{
+  "schema_version": "cigar.sdk-release.v1",
+  "name": "hol-cigar",
+  "version": "0.9.1",
+  "release_state": "developer-preview",
+  "context_abi": "cigar.context.v1",
+  "protocol_home": "https://hol.org"
+}

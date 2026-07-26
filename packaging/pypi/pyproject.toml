@@ -1,0 +1,38 @@
+[project]
+name = "hol-cigar"
+version = "0.9.1"
+description = "Python SDK for CIGAR, an open protocol developed by HOL"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.14,<3.15"
+dependencies = ["protobuf==6.33.5"]
+keywords = ["ai-agents", "context", "protocol", "sdk"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://hol.org"
+Documentation = "https://github.com/hashgraph-online/hol-cigar/tree/main/docs"
+Issues = "https://github.com/hashgraph-online/hol-cigar/issues"
+Repository = "https://github.com/hashgraph-online/hol-cigar"
+
+[project.scripts]
+cigar-qualify-bundle = "cigar_sdk.qualify_bundle:main"
+cigar-agent-b-handoff = "cigar_sdk.examples.agent_b_handoff:main"
+
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cigar_sdk"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/cigar_sdk", "tests", "README.md", "LICENSE", "NOTICE", "pyproject.toml"]

@@ -1,0 +1,50 @@
+{
+  "schema_version": "cigar.pypi-release-profile.v1",
+  "profile_id": "cigar.honey-equivalent.python-sdk-developer-preview.v1",
+  "distribution": "hol-cigar",
+  "import_package": "cigar_sdk",
+  "version": "0.9.1",
+  "context_abi": "cigar.context.v1",
+  "protocol_home": "https://hol.org",
+  "release_state": "developer-preview",
+  "prerelease_claim": true,
+  "supported": false,
+  "production_qualified": false,
+  "qualification_basis": "bounded-honey-developer-preview",
+  "mandatory_gates": [
+    "authority-drift",
+    "protocol-drift",
+    "clean-committed-tagged-source",
+    "focused-sdk-tests",
+    "wheel-sdist-contracts",
+    "wheel-sdist-clean-installs",
+    "docs-rendering-and-links",
+    "license-notice",
+    "artifact-checksums"
+  ],
+  "deferred_full_release_gates": [
+    "seven-day-fuzz",
+    "four-hour-mutation",
+    "twenty-four-hour-soak",
+    "production-chaos-matrix",
+    "large-scale-qualification",
+    "two-builder-reproducibility",
+    "production-support",
+    "ga"
+  ],
+  "publication": {
+    "registry": "https://pypi.org",
+    "trusted_publishing_required": true,
+    "github_environment": "pypi",
+    "workflow": "publish-hol-cigar.yml",
+    "tag": "hol-cigar-v0.9.1",
+    "replace_artifact_bytes": false
+  },
+  "prohibited_claims": [
+    "production-ready",
+    "production-supported",
+    "production-qualified",
+    "independently-security-certified",
+    "ga"
+  ]
+}
