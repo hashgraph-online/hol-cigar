@@ -4,6 +4,8 @@
 
 Governed context, bounded agent authority, and replayable evidence for AI agent workflows.
 
+CIGAR is an open protocol developed by [HOL](https://hol.org).
+
 [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
 [Honey v0.9](#honey-v09-developer-preview) · [Documentation](#documentation) ·
 [Security](#security)
@@ -49,6 +51,7 @@ Choose the path that matches what you are trying to do:
 
 | Goal | Start here |
 |---|---|
+| Use the Python SDK developer preview | Install `hol-cigar==0.9.1` from PyPI; the import package remains `cigar_sdk`. |
 | Evaluate the Honey developer preview | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
 | Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
 | Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
@@ -115,7 +118,8 @@ Honey is the first bounded CIGAR profile intended for hands-on local evaluation.
 
 - Linux, Windows, and Intel macOS release support;
 - remote multi-tenancy and shared PostgreSQL/S3 deployment;
-- containers, Kubernetes, Homebrew, and public package registries;
+- containers, Kubernetes, Homebrew, public npm and crates.io publication, and PyPI publication
+  outside the separately bounded `hol-cigar` SDK profile;
 - HTTPS effects, arbitrary extensions, live-provider replay, and remote OTLP;
 - vector retrieval in the selected release profile;
 - general benchmark or efficacy claims; and
@@ -150,6 +154,8 @@ Machine-readable authorities take precedence over prose:
 - [`packaging/honey/capability-profile.v1.json`](packaging/honey/capability-profile.v1.json) — selected capabilities and platform;
 - [`packaging/honey/artifact-matrix.v1.json`](packaging/honey/artifact-matrix.v1.json) — exact artifact inventory; and
 - [`packaging/honey/release-requirements.v1.json`](packaging/honey/release-requirements.v1.json) — mandatory gates and prohibited claims.
+- [`packaging/pypi/release-profile.v1.json`](packaging/pypi/release-profile.v1.json) — the separate
+  `hol-cigar` 0.9.1 PyPI developer-preview identity and bounded qualification gates.
 
 Progress toward the broader CIGAR v1 design is tracked in
 [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) against [`prd.md`](prd.md). Those planning
