@@ -14,7 +14,7 @@ python3 scripts/release/build_hol_cigar_pypi.py --out /private/tmp/hol-cigar-pyp
 The builder overlays the public distribution identity and HOL attribution, builds the wheel from the
 source distribution, verifies both archives and their core metadata, and emits checksums plus a
 developer-preview receipt. A release build additionally requires the clean
-`hol-cigar-v0.9.1` tag. `.github/workflows/publish-hol-cigar.yml` runs focused tests and clean-install
+`hol-cigar-v0.9.1-pypi.2` tag. `.github/workflows/publish-hol-cigar.yml` runs focused tests and clean-install
 qualification before an approval-gated PyPI Trusted Publishing job. This profile does not claim the
 deferred full-release fuzz, mutation, soak, chaos, scale, reproducibility, support, or GA gates.
 

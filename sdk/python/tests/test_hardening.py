@@ -44,6 +44,7 @@ class _Transport:
         self.response = response
         self.delay = delay
         self.calls = 0
+        self.timeouts: list[float] = []
         self.stream_response: StreamResponse | None = None
 
     def request(
@@ -54,8 +55,9 @@ class _Transport:
         body: bytes | None,
         timeout: float,
     ) -> HttpResponse:
-        del method, url, headers, body, timeout
+        del method, url, headers, body
         self.calls += 1
+        self.timeouts.append(timeout)
         if self.delay:
             time.sleep(self.delay)
         assert self.response is not None
@@ -146,11 +148,12 @@ class HardeningTests(unittest.TestCase):
             transport=retry,
             trust_custom_transport=True,
         )
-        started = time.monotonic()
         with self.assertRaises(CigarTimeoutError):
             client.get_version(TypedOperationRequest(models.EmptyRequest()), options=CallOptions(timeout=0.05))
-        self.assertLess(time.monotonic() - started, 0.15)
         self.assertEqual(retry.calls, 1)
+        self.assertEqual(len(retry.timeouts), 1)
+        self.assertGreater(retry.timeouts[0], 0)
+        self.assertLessEqual(retry.timeouts[0], 0.05)
 
         oversized = _Transport(
             HttpResponse(

@@ -37,7 +37,7 @@
     "trusted_publishing_required": true,
     "github_environment": "pypi",
     "workflow": "publish-hol-cigar.yml",
-    "tag": "hol-cigar-v0.9.1",
+    "tag": "hol-cigar-v0.9.1-pypi.2",
     "replace_artifact_bytes": false
   },
   "prohibited_claims": [
