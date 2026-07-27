@@ -3,7 +3,7 @@ name: publish-hol-cigar
 on:
   push:
     tags:
-      - hol-cigar-v0.9.1
+      - hol-cigar-v0.9.1-pypi.1
 
 permissions:
   contents: read
@@ -31,14 +31,14 @@ jobs:
           check-latest: false
           python-version: "3.14.6"
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf23959e1f3b78 # v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.11.8"
           enable-cache: true
 
       - name: Verify immutable release source and package authority
         run: |
-          test "${GITHUB_REF}" = "refs/tags/hol-cigar-v0.9.1"
+          test "${GITHUB_REF}" = "refs/tags/hol-cigar-v0.9.1-pypi.1"
           test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           python3 -m unittest scripts.release.tests.test_build_hol_cigar_pypi
@@ -55,7 +55,7 @@ jobs:
           python3 scripts/release/build_hol_cigar_pypi.py \
             --out "${release_root}" \
             --require-clean \
-            --require-tag hol-cigar-v0.9.1
+            --require-tag hol-cigar-v0.9.1-pypi.1
           printf 'HOL_CIGAR_RELEASE=%s\n' "${release_root}" >>"${GITHUB_ENV}"
 
       - name: Qualify clean wheel installation
