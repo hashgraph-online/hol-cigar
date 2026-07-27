@@ -1195,6 +1195,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "cigarbench-consumer"
+version = "0.9.0-honey.1"
+dependencies = [
+ "base64",
+ "cigar-api",
+ "cigar-canon",
+ "cigar-catalog",
+ "cigar-code-intel",
+ "cigar-compiler",
+ "cigar-crypto",
+ "cigar-daemon",
+ "cigar-effects",
+ "cigar-policy",
+ "cigar-protocol",
+ "cigar-replay",
+ "cigar-retrieval",
+ "cigar-space",
+ "cigar-store",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "tokio",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

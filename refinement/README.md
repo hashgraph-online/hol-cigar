@@ -33,3 +33,18 @@ that handle is an explicit runtime action and credential bytes are never seriali
 Ledger entries are canonical, content-addressed, immutable `0400` files named by a contiguous
 20-digit sequence. Each entry binds the previous entry ID. Replay verifies the complete inventory,
 schema, sequence, previous link, and content identity. There is no mutable head file.
+
+## Benchmark observation boundary
+
+Qualification uses `cigar.benchmark-observation.v2`, not the v1 self-scored metrics event. A v2
+consumer receives only a source-bound assignment and authorized fixture archive; hidden oracles,
+expected answers, prohibited-evidence labels, and evaluator keys never cross the consumer
+boundary. The production Rust consumer records selections, authorized dispositions, provenance,
+tokens, typed operation hashes, semantic pins, retained reproduction artifacts, timing, resource
+availability, and optional governed-flow facts.
+
+`tools.refinement.consumer` performs the bounded champion/candidate launch and independently
+validates assignment, executable, observation, and retained-artifact bindings. It does not derive
+outcome KPIs. `tools/refinement/evaluator.py` will become the sole v2 metric derivation boundary in
+R04. The legacy CIGARBench v1 inputs and analyzer remain unchanged and are never reinterpreted as
+v2 qualification evidence.

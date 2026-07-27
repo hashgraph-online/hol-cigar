@@ -30,6 +30,7 @@ members = [
   "crates/cigar-windows-ipc",
   "crates/xtask",
   "conformance/runner",
+  "benches/cigarbench/consumer",
   "sdk/rust",
 ]
 default-members = ["crates/cigar-cli", "crates/cigar-daemon", "crates/cigar-mcp"]

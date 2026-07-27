@@ -123,6 +123,18 @@ def default_registry() -> CommandRegistry:
                 300,
             ),
             CommandSpec(
+                "cigarbench-consumer-tests",
+                (
+                    "cargo",
+                    "test",
+                    "--locked",
+                    "-p",
+                    "cigarbench-consumer",
+                    "--all-targets",
+                ),
+                1800,
+            ),
+            CommandSpec(
                 "retrieval-tests",
                 (
                     "cargo",

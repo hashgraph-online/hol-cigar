@@ -169,7 +169,10 @@ def observation() -> dict[str, object]:
         "pair_id": "pair-1",
         "task_id": "task-1",
         "treatment": "candidate",
+        "consumer_mode": "recorded",
         "source": source(),
+        "assignment_digest": MH,
+        "archive_digest": MH2,
         "pins": {
             "catalog": MH,
             "graph": MH,
@@ -187,7 +190,7 @@ def observation() -> dict[str, object]:
             {
                 "block_id": "block-1",
                 "lane": "evidence",
-                "representation": "source",
+                "representation": "exact",
                 "provenance_ids": ["provenance-1"],
                 "tokens": 50,
                 "rank": 1,
@@ -202,19 +205,60 @@ def observation() -> dict[str, object]:
                 "request_digest": MH,
                 "response_digest": MH2,
                 "exit_code": 0,
+            },
+            {
+                "tool": "ingestCatalog",
+                "request_digest": MH,
+                "response_digest": MH2,
+                "exit_code": 0,
+            },
+            {
+                "tool": "createContextPlan",
+                "request_digest": MH,
+                "response_digest": MH2,
+                "exit_code": 0,
+            },
+            {
+                "tool": "compileContextBundle",
+                "request_digest": MH,
+                "response_digest": MH2,
+                "exit_code": 0,
+            },
+            {
+                "tool": "materializeContextBundle",
+                "request_digest": MH,
+                "response_digest": MH2,
+                "exit_code": 0,
+            },
+        ],
+        "phases": [{"phase": "materialize", "duration_ms": 0}],
+        "artifacts": [
+            {
+                "kind": kind,
+                "digest": MH,
+                "bytes": 1,
+                "retained_base64url": "eA",
             }
+            for kind in ("plan", "bundle", "manifest", "explanation", "materialization")
         ],
         "resources": {
             "physical_input_tokens": 50,
             "cache_read_tokens": 0,
             "cache_write_tokens": 0,
             "output_tokens": 20,
-            "latency_ms": 10.0,
-            "cpu_ms": 8.0,
+            "latency_ms": 10,
+            "cpu_ms": 8,
+            "cpu_measured": True,
             "peak_rss_bytes": 1000000,
+            "peak_rss_measured": True,
             "cost_usd": 0.01,
         },
-        "effect_replay": {"effects": 0, "unsafe_retries": 0, "replay_dispatches": 0},
+        "effect_replay": {
+            "handoffs": 0,
+            "effects": 0,
+            "unsafe_retries": 0,
+            "replay_dispatches": 0,
+        },
         "status": "completed",
     }
 

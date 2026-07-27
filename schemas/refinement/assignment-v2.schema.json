@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/assignment-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "pair_id", "task_id", "treatment", "consumer_mode", "source", "archive_path", "archive_digest", "query", "job_goal", "semantic_type", "token_budget", "output_reserve_tokens", "max_context_tokens", "excluded_prefixes", "flows", "model", "prompt_digest"],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-assignment.v2"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "pair_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "treatment": {"enum": ["champion", "candidate", "baseline"]},
+    "consumer_mode": {"enum": ["production", "recorded"]},
+    "source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "archive_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "archive_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "query": {"$ref": "common-v1.schema.json#/$defs/longText"},
+    "job_goal": {"$ref": "common-v1.schema.json#/$defs/longText"},
+    "semantic_type": {"enum": ["source_code", "documentation", "schema", "artifact"]},
+    "token_budget": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "output_reserve_tokens": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "max_context_tokens": {"type": "integer", "minimum": 2, "maximum": 10000000},
+    "excluded_prefixes": {
+      "type": "array",
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/path"}
+    },
+    "flows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handoff", "effect", "replay"],
+      "properties": {
+        "handoff": {"type": "boolean"},
+        "effect": {"type": "boolean"},
+        "replay": {"type": "boolean"}
+      }
+    },
+    "model": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "prompt_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+  }
+}
