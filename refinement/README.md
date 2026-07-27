@@ -45,6 +45,10 @@ availability, and optional governed-flow facts.
 
 `tools.refinement.consumer` performs the bounded champion/candidate launch and independently
 validates assignment, executable, observation, and retained-artifact bindings. It does not derive
-outcome KPIs. `tools/refinement/evaluator.py` will become the sole v2 metric derivation boundary in
-R04. The legacy CIGARBench v1 inputs and analyzer remain unchanged and are never reinterpreted as
-v2 qualification evidence.
+outcome KPIs. `tools/refinement/evaluator.py` is the sole v2 metric derivation boundary. The legacy
+CIGARBench v1 inputs and analyzer remain unchanged and are never reinterpreted as v2 qualification
+evidence.
+
+The evaluator boundary, structured claim/citation protocol, disposable no-network verifier,
+metric arithmetic, independent key custody, attestation, and exact replay contracts are documented
+in [EVALUATOR.md](EVALUATOR.md).

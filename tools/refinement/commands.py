@@ -135,6 +135,17 @@ def default_registry() -> CommandRegistry:
                 1800,
             ),
             CommandSpec(
+                "refinement-evaluator-tests",
+                (
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "tools.refinement.tests.test_r04_evaluator",
+                    "-q",
+                ),
+                300,
+            ),
+            CommandSpec(
                 "retrieval-tests",
                 (
                     "cargo",

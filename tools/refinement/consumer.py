@@ -458,6 +458,29 @@ def _validate_reproduction(
             raise ConsumerError("observation selected block binding disagrees")
 
 
+def load_observation(
+    path: Path, registry: SchemaRegistry
+) -> tuple[dict[str, Any], bytes, dict[str, Any]]:
+    """Loads one canonical raw observation and verifies self/reproduction bindings."""
+
+    _real_input(path, "raw observation")
+    try:
+        payload = secure_read(path, maximum_bytes=MAX_STDOUT_BYTES)
+        value = loads(payload, maximum_bytes=MAX_STDOUT_BYTES)
+        registry.validate("observation-v2.schema.json", value)
+    except (OSError, ValueError) as error:
+        raise ConsumerError("raw observation violates its contract") from error
+    if not isinstance(value, dict) or canonical_bytes(value) != payload:
+        raise ConsumerError("raw observation is not canonical JSON")
+    body = dict(value)
+    observation_id = body.pop("observation_id")
+    if identity(body) != observation_id:
+        raise ConsumerError("raw observation identity is invalid")
+    decoded = _decode_artifacts(value)
+    _validate_reproduction(value, decoded)
+    return value, payload, decoded
+
+
 def validate_observation(
     stdout: bytes,
     *,

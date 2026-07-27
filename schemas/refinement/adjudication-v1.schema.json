@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/adjudication-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "adjudication_id", "observation_id", "reviewer_ids", "judgments"],
+  "properties": {
+    "schema_version": {"const": "cigar.adjudication.v1"},
+    "adjudication_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "reviewer_ids": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "judgments": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "subject_id", "votes"],
+        "properties": {
+          "criterion": {"enum": ["task_success", "claim_supported", "citation_supported", "harm"]},
+          "subject_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "votes": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reviewer_id", "outcome"],
+              "properties": {
+                "reviewer_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+                "outcome": {"enum": ["pass", "fail", "abstain"]}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

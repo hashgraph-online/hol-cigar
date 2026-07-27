@@ -269,9 +269,26 @@ def evaluation() -> dict[str, object]:
         "evaluation_id": MH,
         "observation_id": MH2,
         "task_id": "task-1",
+        "task_digest": MH,
         "oracle_digest": MH,
         "evaluator_digest": MH2,
+        "claims_digest": None,
+        "verifier_digest": MH,
+        "adjudication_digest": None,
+        "evidence_class": "diagnostic",
         "status": "valid",
+        "attachments": [
+            {"attachment_id": "evaluator", "kind": "evaluator", "digest": MH},
+            {"attachment_id": "observation", "kind": "observation", "digest": MH},
+            {"attachment_id": "oracle", "kind": "oracle", "digest": MH},
+            {"attachment_id": "task", "kind": "task", "digest": MH},
+            {"attachment_id": "verifier", "kind": "verifier", "digest": MH},
+            {
+                "attachment_id": "verifier-result",
+                "kind": "verifier-result",
+                "digest": MH,
+            },
+        ],
         "metrics": [
             {
                 "name": "verified_success",
@@ -279,10 +296,32 @@ def evaluation() -> dict[str, object]:
                 "denominator": 1,
                 "value": 1,
                 "unit": "boolean",
+                "applicable": True,
+                "source_attachment_ids": ["verifier-result"],
             }
         ],
         "violations": [],
-        "attestation": {"key_id": "evaluator-1", "mac": "3" * 64},
+        "postcondition": {
+            "result_digest": MH,
+            "passed": True,
+            "checks_passed": 1,
+            "checks_total": 1,
+            "isolation": {
+                "engine": "darwin-sandbox-exec-v1",
+                "network_denied": True,
+                "disposable_root": True,
+                "environment_digest": MH,
+                "launcher_digest": MH,
+            },
+        },
+        "attestation": {
+            "algorithm": "hmac-sha256-v1",
+            "key_id": "evaluator-1",
+            "key_fingerprint": MH,
+            "custody": "external-independent",
+            "assignment_seed_reused": False,
+            "mac": "3" * 64,
+        },
     }
 
 
