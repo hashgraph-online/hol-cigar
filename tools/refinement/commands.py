@@ -146,6 +146,17 @@ def default_registry() -> CommandRegistry:
                 300,
             ),
             CommandSpec(
+                "refinement-corpus-tests",
+                (
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "tools.refinement.tests.test_r05_corpus",
+                    "-q",
+                ),
+                300,
+            ),
+            CommandSpec(
                 "retrieval-tests",
                 (
                     "cargo",

@@ -423,6 +423,7 @@ def _bounded_process(
 def _verifier_result(
     *,
     task: dict[str, Any],
+    oracle: dict[str, Any],
     observation: dict[str, Any],
     task_environment: Path,
     state: Path,
@@ -432,7 +433,7 @@ def _verifier_result(
     inventory, environment_digest = _environment_inventory(task_environment)
     if environment_digest != task["source"]["setup_digest"]:
         raise EvaluatorError("task environment digest does not match task setup")
-    verifier_relative = task["oracle"]["deterministic_verifier"]
+    verifier_relative = oracle["deterministic_verifier"]
     verifier_source = task_environment / verifier_relative
     _real_path(verifier_source, "deterministic verifier")
     verifier_digest = _digest_file(verifier_source)
@@ -459,7 +460,7 @@ def _verifier_result(
                     for provenance in block["provenance_ids"]
                 }
             ),
-            "expected_artifacts": task["oracle"]["expected_artifacts"],
+            "expected_artifacts": oracle["expected_artifacts"],
         }
         python_executable = Path(sys.executable).resolve(strict=True)
         command = [
@@ -597,11 +598,11 @@ def _derive_metrics(
     *,
     observation: dict[str, Any],
     task: dict[str, Any],
+    oracle: dict[str, Any],
     claims: dict[str, Any] | None,
     adjudication: dict[str, Any] | None,
     verifier: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    oracle = task["oracle"]
     selected_blocks = observation["selected_blocks"]
     selected = {
         provenance
@@ -789,6 +790,7 @@ def evaluate(
     *,
     observation_path: Path,
     task_path: Path,
+    oracle_path: Path,
     claims_path: Path | None,
     adjudication_path: Path | None,
     task_environment: Path,
@@ -827,8 +829,17 @@ def evaluate(
         or task["source"]["immutable_revision"] != observation["source"]["revision"]
     ):
         raise EvaluatorError("task source does not match observation")
-    oracle_digest = identity(task["oracle"])
-    if oracle_digest != expected_oracle_digest:
+    oracle, _oracle_bytes, oracle_digest = _load_record(
+        oracle_path,
+        schema="oracle-v1.schema.json",
+        registry=registry,
+        identity_field="oracle_id",
+    )
+    if (
+        oracle["task_id"] != task["task_id"]
+        or oracle_digest != task["oracle_digest"]
+        or oracle_digest != expected_oracle_digest
+    ):
         raise EvaluatorError("hidden oracle digest was substituted")
     claims: dict[str, Any] | None = None
     claims_digest: str | None = None
@@ -864,6 +875,7 @@ def evaluate(
             raise EvaluatorError("adjudication does not match observation")
     verifier_result, verifier_digest, isolation = _verifier_result(
         task=task,
+        oracle=oracle,
         observation=observation,
         task_environment=task_environment,
         state=state,
@@ -891,6 +903,7 @@ def evaluate(
     metrics, violations = _derive_metrics(
         observation=observation,
         task=task,
+        oracle=oracle,
         claims=claims,
         adjudication=adjudication,
         verifier=verifier_result,
@@ -1039,6 +1052,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--evaluation", type=Path)
     parser.add_argument("--observation", type=Path)
     parser.add_argument("--task", type=Path)
+    parser.add_argument("--oracle", type=Path)
     parser.add_argument("--claims", type=Path)
     parser.add_argument("--adjudication", type=Path)
     parser.add_argument("--task-environment", type=Path)
@@ -1082,6 +1096,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         required = (
             arguments.observation,
             arguments.task,
+            arguments.oracle,
             arguments.task_environment,
             arguments.state,
             arguments.expected_oracle_digest,
@@ -1092,6 +1107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         call = {
             "observation_path": arguments.observation,
             "task_path": arguments.task,
+            "oracle_path": arguments.oracle,
             "claims_path": arguments.claims,
             "adjudication_path": arguments.adjudication,
             "task_environment": arguments.task_environment,

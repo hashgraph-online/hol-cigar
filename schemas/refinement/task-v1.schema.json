@@ -3,7 +3,7 @@
   "$id": "https://cigar.invalid/schemas/refinement/task-v1.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "task_lineage_id", "stratum", "sub_strata", "source", "contract", "prompt_reference", "oracle", "execution", "contamination"],
+  "required": ["schema_version", "task_id", "task_lineage_id", "stratum", "sub_strata", "source", "contract", "prompt_reference", "oracle_digest", "execution", "contamination"],
   "properties": {
     "schema_version": {"const": "cigar.refinement-task.v1"},
     "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
@@ -52,77 +52,7 @@
       }
     },
     "prompt_reference": {"$ref": "common-v1.schema.json#/$defs/path"},
-    "oracle": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["critical_evidence", "relevant_evidence", "prohibited_evidence", "required_claims", "accepted_answers_or_properties", "expected_artifacts", "deterministic_verifier", "allowed_abstention", "harm_conditions"],
-      "properties": {
-        "critical_evidence": {
-          "type": "array",
-          "maxItems": 4096,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["evidence_id", "version_or_span", "weight"],
-            "properties": {
-              "evidence_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
-              "version_or_span": {"type": "string", "minLength": 1, "maxLength": 512},
-              "weight": {"type": "integer", "minimum": 1, "maximum": 1000000}
-            }
-          }
-        },
-        "relevant_evidence": {
-          "type": "array",
-          "maxItems": 10000,
-          "uniqueItems": true,
-          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
-        },
-        "prohibited_evidence": {
-          "type": "array",
-          "maxItems": 10000,
-          "uniqueItems": true,
-          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
-        },
-        "required_claims": {
-          "type": "array",
-          "maxItems": 1024,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["claim_id", "description", "evidence_ids", "weight"],
-            "properties": {
-              "claim_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
-              "description": {"$ref": "common-v1.schema.json#/$defs/shortText"},
-              "evidence_ids": {
-                "type": "array",
-                "maxItems": 1024,
-                "uniqueItems": true,
-                "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
-              },
-              "weight": {"type": "integer", "minimum": 1, "maximum": 1000000}
-            }
-          }
-        },
-        "accepted_answers_or_properties": {
-          "type": "array",
-          "maxItems": 1024,
-          "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
-        },
-        "expected_artifacts": {
-          "type": "array",
-          "maxItems": 1024,
-          "uniqueItems": true,
-          "items": {"$ref": "common-v1.schema.json#/$defs/path"}
-        },
-        "deterministic_verifier": {"$ref": "common-v1.schema.json#/$defs/path"},
-        "allowed_abstention": {"type": "boolean"},
-        "harm_conditions": {
-          "type": "array",
-          "maxItems": 256,
-          "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
-        }
-      }
-    },
+    "oracle_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
     "execution": {
       "type": "object",
       "additionalProperties": false,

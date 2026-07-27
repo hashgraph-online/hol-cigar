@@ -15,8 +15,9 @@ cross-record IDs fail before an evaluation is emitted.
 - `observation-v2.schema.json` supplies raw selection and execution facts. Its self-ID, retained
   artifacts, bundle/manifest relationships, selected block rows, and content digests are
   independently revalidated.
-- `task-v1.schema.json` is loaded through a separate evaluator-only path. The caller must provide
-  the expected oracle digest from an independently held manifest. Task ID, immutable source
+- `task-v1.schema.json` and its digest-bound `oracle-v1.schema.json` are loaded through separate
+  evaluator-only paths. The caller must provide the expected oracle digest from an independently
+  held manifest. Task ID, immutable source
   revision, fixture archive digest, and setup digest must match the observation and environment.
 - `claims-v1.schema.json` is an optional versioned atomic-claim/citation format. It stores statement
   digests and evidence IDs, not answer text. It is self-identifying and bound to both observation
@@ -85,6 +86,7 @@ requires byte-identical output. `verify` checks an existing record without rerun
 python3 -m tools.refinement.evaluator evaluate \
   --observation /absolute/evidence/observation.json \
   --task /absolute/private/task.json \
+  --oracle /absolute/private/oracle.json \
   --claims /absolute/evidence/claims.json \
   --task-environment /absolute/private/task-environment \
   --state /absolute/private/evaluator-state \

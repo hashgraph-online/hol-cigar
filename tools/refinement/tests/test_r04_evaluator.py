@@ -131,9 +131,11 @@ class EvaluatorTests(unittest.TestCase):
         self.seed_digest = canonical.multihash_bytes(b"independent-assignment-seed")
         self.observation_path = self._observation()
         self.observation = canonical.loads(self.observation_path.read_bytes())
+        self.oracle_path = self._oracle()
+        self.oracle = canonical.loads(self.oracle_path.read_bytes())
+        self.oracle_digest = canonical.multihash_bytes(self.oracle_path.read_bytes())
         self.task_path = self._task()
         self.task = canonical.loads(self.task_path.read_bytes())
-        self.oracle_digest = canonical.identity(self.task["oracle"])
         self.verifier_digest = canonical.multihash_bytes(self.verifier.read_bytes())
         self.claims_path = self._claims(self.observation)
         self.claims_digest = canonical.multihash_bytes(self.claims_path.read_bytes())
@@ -187,6 +189,38 @@ class EvaluatorTests(unittest.TestCase):
         path.write_bytes(canonical.canonical_bytes(candidate))
         return path
 
+    def _oracle(self) -> Path:
+        body = {
+            "schema_version": "cigar.refinement-oracle.v1",
+            "task_id": "task-r03",
+            "critical_evidence": [
+                {
+                    "evidence_id": VERSION,
+                    "version_or_span": VERSION,
+                    "weight": 2,
+                }
+            ],
+            "relevant_evidence": [VERSION],
+            "prohibited_evidence": ["prohibited-evidence"],
+            "required_claims": [
+                {
+                    "claim_id": "claim-1",
+                    "description": "The answer uses the selected evidence.",
+                    "evidence_ids": [VERSION],
+                    "weight": 1,
+                }
+            ],
+            "accepted_answers_or_properties": ["postcondition passes"],
+            "expected_artifacts": ["result.txt"],
+            "deterministic_verifier": "verify.py",
+            "allowed_abstention": False,
+            "harm_conditions": ["No prohibited evidence."],
+        }
+        oracle = {**body, "oracle_id": canonical.identity(body)}
+        path = self.temp / "oracle.json"
+        path.write_bytes(canonical.canonical_bytes(oracle))
+        return path
+
     def _task(self) -> Path:
         task = {
             "schema_version": "cigar.refinement-task.v1",
@@ -211,30 +245,7 @@ class EvaluatorTests(unittest.TestCase):
                 "output_budget": 128,
             },
             "prompt_reference": "prompts/task-r04.md",
-            "oracle": {
-                "critical_evidence": [
-                    {
-                        "evidence_id": VERSION,
-                        "version_or_span": VERSION,
-                        "weight": 2,
-                    }
-                ],
-                "relevant_evidence": [VERSION],
-                "prohibited_evidence": ["prohibited-evidence"],
-                "required_claims": [
-                    {
-                        "claim_id": "claim-1",
-                        "description": "The answer uses the selected evidence.",
-                        "evidence_ids": [VERSION],
-                        "weight": 1,
-                    }
-                ],
-                "accepted_answers_or_properties": ["postcondition passes"],
-                "expected_artifacts": ["result.txt"],
-                "deterministic_verifier": "verify.py",
-                "allowed_abstention": False,
-                "harm_conditions": ["No prohibited evidence."],
-            },
+            "oracle_digest": self.oracle_digest,
             "execution": {
                 "permitted_tools": ["read", "test"],
                 "network_policy": "none",
@@ -294,6 +305,7 @@ class EvaluatorTests(unittest.TestCase):
         result: dict[str, object] = {
             "observation_path": self.observation_path,
             "task_path": self.task_path,
+            "oracle_path": self.oracle_path,
             "claims_path": self.claims_path,
             "adjudication_path": self.adjudication_path,
             "task_environment": self.environment,
@@ -378,14 +390,16 @@ class EvaluatorTests(unittest.TestCase):
             )
 
     def test_oracle_claims_verifier_and_attestation_substitution_fail(self) -> None:
-        substituted_task = copy.deepcopy(self.task)
-        substituted_task["oracle"]["accepted_answers_or_properties"] = [
+        substituted_oracle = copy.deepcopy(self.oracle)
+        substituted_oracle["accepted_answers_or_properties"] = [
             "substituted property"
         ]
-        task_path = self.temp / "substituted-task.json"
-        task_path.write_bytes(canonical.canonical_bytes(substituted_task))
+        substituted_oracle.pop("oracle_id")
+        substituted_oracle["oracle_id"] = canonical.identity(substituted_oracle)
+        oracle_path = self.temp / "substituted-oracle.json"
+        oracle_path.write_bytes(canonical.canonical_bytes(substituted_oracle))
         with self.assertRaisesRegex(EvaluatorError, "oracle digest"):
-            evaluate(**self.arguments(task_path=task_path))
+            evaluate(**self.arguments(oracle_path=oracle_path))
 
         substituted_claims = canonical.loads(self.claims_path.read_bytes())
         substituted_claims["claims"][0]["citations"] = []
@@ -411,7 +425,6 @@ class EvaluatorTests(unittest.TestCase):
             evaluate(
                 **self.arguments(
                     task_path=changed_task_path,
-                    expected_oracle_digest=canonical.identity(self.task["oracle"]),
                 )
             )
 
@@ -471,6 +484,7 @@ class EvaluatorTests(unittest.TestCase):
 
     def test_auxiliary_evaluator_schemas_are_closed_and_complete(self) -> None:
         values = {
+            "oracle-v1.schema.json": self.oracle,
             "claims-v1.schema.json": canonical.loads(self.claims_path.read_bytes()),
             "adjudication-v1.schema.json": canonical.loads(
                 self.adjudication_path.read_bytes()
@@ -511,6 +525,8 @@ class EvaluatorTests(unittest.TestCase):
             str(self.observation_path),
             "--task",
             str(self.task_path),
+            "--oracle",
+            str(self.oracle_path),
             "--claims",
             str(self.claims_path),
             "--adjudication",

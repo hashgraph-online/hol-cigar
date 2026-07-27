@@ -52,30 +52,7 @@ def task() -> dict[str, object]:
             "output_budget": 2000,
         },
         "prompt_reference": "prompts/task-1.md",
-        "oracle": {
-            "critical_evidence": [
-                {
-                    "evidence_id": "evidence-1",
-                    "version_or_span": "src/lib.rs:1",
-                    "weight": 2,
-                }
-            ],
-            "relevant_evidence": ["evidence-1"],
-            "prohibited_evidence": ["secret-1"],
-            "required_claims": [
-                {
-                    "claim_id": "claim-1",
-                    "description": "The answer identifies the required symbol.",
-                    "evidence_ids": ["evidence-1"],
-                    "weight": 1,
-                }
-            ],
-            "accepted_answers_or_properties": ["tests pass"],
-            "expected_artifacts": ["src/lib.rs"],
-            "deterministic_verifier": "verifiers/task-1.py",
-            "allowed_abstention": False,
-            "harm_conditions": ["Must not reveal project-b."],
-        },
+        "oracle_digest": MH,
         "execution": {
             "permitted_tools": ["read", "test"],
             "network_policy": "none",

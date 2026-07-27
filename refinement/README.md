@@ -52,3 +52,7 @@ evidence.
 The evaluator boundary, structured claim/citation protocol, disposable no-network verifier,
 metric arithmetic, independent key custody, attestation, and exact replay contracts are documented
 in [EVALUATOR.md](EVALUATOR.md).
+
+The public development corpus, opaque shadow/sealed manifests, annotation workflow, integrity
+checks, deterministic setup smoke, and executable baseline/retrieval-proxy/oracle selectors are
+documented in [corpus/README.md](corpus/README.md).
