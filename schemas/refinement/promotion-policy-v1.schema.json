@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/promotion-policy-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "honey_anchor_digest", "statistics", "evidence_minimums", "tier0_checks", "tier1_external_checks", "tier1_metric_constraints", "primary_metrics", "performance_metrics", "protected_strata"],
+  "properties": {
+    "schema_version": {"const": "cigar.promotion-policy.v1"},
+    "policy_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "honey_anchor_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_bootstrap_repetitions", "shadow_confidence_percent", "development_confidence_percent", "minimum_assignment_seeds", "holm_correction"],
+      "properties": {
+        "minimum_bootstrap_repetitions": {"type": "integer", "minimum": 100, "maximum": 1000000},
+        "shadow_confidence_percent": {"const": 99},
+        "development_confidence_percent": {"enum": [90, 95]},
+        "minimum_assignment_seeds": {"type": "integer", "minimum": 2, "maximum": 16},
+        "holm_correction": {"const": true}
+      }
+    },
+    "evidence_minimums": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_class", "tasks_per_stratum", "assignment_seeds", "confidence_percent", "bootstrap_repetitions"],
+        "properties": {
+          "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+          "tasks_per_stratum": {"type": "integer", "minimum": 1, "maximum": 10000},
+          "assignment_seeds": {"type": "integer", "minimum": 1, "maximum": 16},
+          "confidence_percent": {"enum": [90, 95, 99]},
+          "bootstrap_repetitions": {"type": "integer", "minimum": 100, "maximum": 1000000}
+        }
+      }
+    },
+    "tier0_checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "tier1_external_checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "tier1_metric_constraints": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "aggregation", "operator", "limit"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "aggregation": {"enum": ["minimum", "maximum"]},
+          "operator": {"enum": ["at_least", "at_most"]},
+          "limit": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000}
+        }
+      }
+    },
+    "primary_metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "direction", "blocking", "noninferiority_margin", "meaningful_delta", "absolute_floor", "absolute_ceiling"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "direction": {"enum": ["higher", "lower"]},
+          "blocking": {"type": "boolean"},
+          "noninferiority_margin": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "meaningful_delta": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "absolute_floor": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000}]},
+          "absolute_ceiling": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000}]}
+        }
+      }
+    },
+    "performance_metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "direction", "relative_regression_limit", "meaningful_relative_delta", "absolute_ceiling"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "direction": {"const": "lower"},
+          "relative_regression_limit": {"type": "number", "minimum": 0, "maximum": 1},
+          "meaningful_relative_delta": {"type": "number", "minimum": 0, "maximum": 1},
+          "absolute_ceiling": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 0, "maximum": 1000000000000000}]}
+        }
+      }
+    },
+    "protected_strata": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    }
+  }
+}

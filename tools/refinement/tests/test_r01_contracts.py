@@ -306,26 +306,76 @@ def comparison() -> dict[str, object]:
     return {
         "schema_version": "cigar.refinement-comparison.v1",
         "comparison_id": MH,
+        "input_id": MH2,
+        "input_digest": MH,
+        "trial_id": "trial-1",
+        "evidence_class": "development",
         "champion_source": source(),
         "candidate_source": source(),
+        "honey_source": source(),
         "dataset_epoch": MH,
         "policy_digest": MH2,
         "bootstrap_repetitions": 10000,
         "assignment_seeds": 2,
+        "confidence_percent": 99,
         "holm_correction": True,
+        "evidence_validity": [
+            {"gate_id": "source-identity", "passed": True, "source_digest": MH}
+        ],
+        "hard_constraints": [
+            {"gate_id": "authorization", "passed": True, "source_digest": MH2}
+        ],
         "metrics": [
             {
                 "name": "verified_success",
+                "direction": "higher",
+                "blocking": True,
+                "samples": 30,
                 "champion": 0.8,
                 "candidate": 0.9,
-                "delta": 0.1,
+                "honey": 0.7,
+                "benefit": 0.1,
                 "lower": 0.02,
                 "upper": 0.18,
-                "confidence_percent": 99,
+                "honey_benefit": 0.2,
+                "honey_lower": 0.1,
+                "honey_upper": 0.3,
+                "noninferior_champion": True,
+                "noninferior_honey": True,
+                "absolute_slo_passed": True,
+                "meaningful": True,
+                "p_value_ppm": 100,
+                "holm_threshold_ppm": 10000,
+                "holm_passed": True,
+                "seed_consistent": True,
                 "decision": "improved",
             }
         ],
-        "protected_strata": [{"stratum": "PolicyBoundary", "status": "passed"}],
+        "performance": [
+            {
+                "name": "latency_ms",
+                "champion": 100,
+                "candidate": 90,
+                "relative_benefit": 0.1,
+                "lower": 0.02,
+                "upper": 0.18,
+                "relative_regression_limit": 0.1,
+                "meaningful_relative_delta": 0.05,
+                "absolute_slo_passed": True,
+                "noninferior": True,
+                "meaningful": True,
+            }
+        ],
+        "protected_strata": [
+            {
+                "stratum": "PolicyBoundary",
+                "tasks": 30,
+                "status": "passed",
+                "reasons": [],
+            }
+        ],
+        "meaningful_improvements": ["verified_success"],
+        "reasons": [],
         "verdict": "eligible",
     }
 

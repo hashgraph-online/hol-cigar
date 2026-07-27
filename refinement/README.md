@@ -56,3 +56,7 @@ in [EVALUATOR.md](EVALUATOR.md).
 The public development corpus, opaque shadow/sealed manifests, annotation workflow, integrity
 checks, deterministic setup smoke, and executable baseline/retrieval-proxy/oracle selectors are
 documented in [corpus/README.md](corpus/README.md).
+
+Paired clustered bootstrap, Holm correction, Honey/champion non-inferiority, protected-stratum
+overrides, performance limits, deterministic decisions, and the external Pareto research archive
+are documented in [PROMOTION.md](PROMOTION.md).

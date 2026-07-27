@@ -13,7 +13,11 @@ from typing import Any
 
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_DEPTH = 64
-MAX_ITEMS = 100_000
+# A full 30-task x nine-stratum x two-seed paired comparison carries three
+# independently derived metric vectors per pair. The 16 MiB byte cap remains
+# the primary bound; one million JSON nodes admits that qualified shape without
+# admitting unbounded parsing.
+MAX_ITEMS = 1_000_000
 MAX_STRING_BYTES = 1024 * 1024
 MAX_KEY_BYTES = 256
 MAX_PATH_BYTES = 4096

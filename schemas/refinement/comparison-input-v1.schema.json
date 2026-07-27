@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/comparison-input-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "input_id", "trial_id", "evidence_class", "champion_source", "candidate_source", "honey_source", "dataset_epoch", "policy_digest", "bootstrap_repetitions", "confidence_percent", "assignment_seed_digests", "tier0_checks", "tier1_checks", "pairs"],
+  "properties": {
+    "schema_version": {"const": "cigar.comparison-input.v1"},
+    "input_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+    "champion_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "honey_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "dataset_epoch": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "policy_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "bootstrap_repetitions": {"type": "integer", "minimum": 100, "maximum": 1000000},
+    "confidence_percent": {"enum": [90, 95, 99]},
+    "assignment_seed_digests": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    },
+    "tier0_checks": {"$ref": "#/$defs/checks"},
+    "tier1_checks": {"$ref": "#/$defs/checks"},
+    "pairs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "task_id", "task_lineage_id", "stratum", "seed_index", "champion", "candidate", "honey"],
+        "properties": {
+          "pair_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "task_lineage_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "stratum": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "seed_index": {"type": "integer", "minimum": 0, "maximum": 15},
+          "champion": {"$ref": "#/$defs/treatment"},
+          "candidate": {"$ref": "#/$defs/treatment"},
+          "honey": {"$ref": "#/$defs/treatment"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "passed", "attachment_digest"],
+        "properties": {
+          "check_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "passed": {"type": "boolean"},
+          "attachment_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+        }
+      }
+    },
+    "treatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluation_digest", "metrics"],
+      "properties": {
+        "evaluation_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "numerator", "denominator", "value", "unit", "applicable"],
+            "properties": {
+              "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+              "numerator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+              "denominator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+              "value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+              "unit": {"enum": ["boolean", "count", "ratio", "rank", "tokens", "milliseconds", "bytes", "usd"]},
+              "applicable": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    }
+  }
+}
