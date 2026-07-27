@@ -523,9 +523,12 @@ class ConsumerTests(unittest.TestCase):
         executable = Path(configured)
         if not executable.is_absolute():
             self.fail("CIGARBENCH_CONSUMER must be absolute")
-        champion_value = self.assignment("champion", GIT_A)
-        candidate_value = self.assignment("candidate", GIT_B)
+        revision = os.environ.get("CIGARBENCH_SOURCE_REVISION", GIT_A)
+        tree = os.environ.get("CIGARBENCH_SOURCE_TREE", revision)
+        champion_value = self.assignment("champion", revision)
+        candidate_value = self.assignment("candidate", revision)
         for value in (champion_value, candidate_value):
+            value["source"]["tree"] = tree
             value["flows"] = {"effect": True, "handoff": True, "replay": True}
         champion = self.temp / "real-champion.json"
         candidate = self.temp / "real-candidate.json"
