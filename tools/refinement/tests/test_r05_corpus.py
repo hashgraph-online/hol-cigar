@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +18,7 @@ from tools.refinement.corpus import (
     _private_token,
     _record_map,
     _smoke,
+    production_cigar_smoke,
     select_context,
     validate_manifest,
 )
@@ -170,6 +172,24 @@ class CorpusQualificationTests(unittest.TestCase):
                 task_environment_digest(destination),
                 task["source"]["setup_digest"],
             )
+
+    def test_production_rust_cigar_is_executable_without_canary_disclosure(self) -> None:
+        configured = os.environ.get("CIGARBENCH_CONSUMER")
+        if configured is None:
+            self.skipTest("set CIGARBENCH_CONSUMER for production corpus qualification")
+        result = production_cigar_smoke(
+            repository_root=ROOT,
+            private_root=ROOT.parent / "not-used-for-development",
+            manifest_path=DEVELOPMENT_MANIFEST,
+            task_id="development-agent-handoff-001",
+            consumer_path=Path(configured).resolve(strict=True),
+        )
+        self.assertEqual(result["status"], "technically-executable")
+        self.assertFalse(result["canary_disclosed"])
+        self.assertEqual(
+            result["consumer_digest"],
+            "1220343ecc927586ae9f58cd91e9610bad9dc4af18238076b538f0baaa923078a116",
+        )
 
     def test_canaries_licenses_and_pack_contracts_are_complete(self) -> None:
         fixtures = list(self.maps["fixtures"].values())

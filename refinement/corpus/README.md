@@ -44,9 +44,24 @@ Three executable context selectors are retained:
   smoke, not a claim about the production Rust retrieval stack; and
 - `human-oracle-v1` selects the resolved relevant-evidence annotation.
 
-The production Rust consumer is connected to these task contracts in later paired-run work. These
-synthetic, machine-authored annotations are development qualification evidence. They do not
-substitute for independent human review or give shadow/sealed results promotion authority.
+The lexical proxy is retained only as deterministic construction smoke; production paired
+evaluations and KPI derivation are later work. These synthetic, machine-authored annotations are
+development qualification evidence. They do not substitute for independent human review or give
+shadow/sealed results promotion authority.
+
+The actual production Rust consumer can also be exercised immediately against a corpus task. This
+path constructs and independently validates a recorded champion/candidate assignment pair, applies
+the task's prohibited paths as excluded prefixes, and fails if the retained pair contains its
+canary:
+
+```sh
+python3 -m tools.refinement.corpus production-smoke \
+  --repository-root /absolute/hol-cigar \
+  --private-root /absolute/private/cigar-corpus-v1 \
+  --manifest /absolute/hol-cigar/refinement/corpus/development-manifest-v1.json \
+  --task-id development-agent-handoff-001 \
+  --consumer /absolute/hol-cigar/target/debug/cigarbench-consumer
+```
 
 One task can be selected or its verifier environment materialized without disclosing another task:
 

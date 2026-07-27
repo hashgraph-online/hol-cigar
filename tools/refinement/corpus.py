@@ -26,6 +26,7 @@ from .canonical import (
     secure_read,
 )
 from .evaluator import task_environment_digest
+from .consumer import run_pair
 from .schema import SchemaRegistry
 
 STRATA = (
@@ -1419,6 +1420,89 @@ def build(repository_root: Path, private_root: Path) -> list[dict[str, Any]]:
     return manifests
 
 
+def production_cigar_smoke(
+    *,
+    repository_root: Path,
+    private_root: Path,
+    manifest_path: Path,
+    task_id: str,
+    consumer_path: Path,
+) -> dict[str, Any]:
+    task, prompt, _oracle, fixture = _load_task_components(
+        repository_root=repository_root,
+        private_root=private_root,
+        manifest_path=manifest_path,
+        task_id=task_id,
+    )
+    prohibited_paths = sorted(
+        item["path"]
+        for item in fixture["evidence_index"]
+        if item["class"] == "prohibited"
+    )
+    with tempfile.TemporaryDirectory(prefix="cigar-corpus-production-") as raw:
+        root = Path(raw).resolve(strict=True)
+        archive_path = root / "archive.json"
+        _write_canonical(archive_path, fixture["archive"])
+        pair_id = f"corpus-{multihash_bytes(task_id.encode('utf-8'))[4:20]}"
+        common = {
+            "schema_version": "cigar.benchmark-assignment.v2",
+            "run_id": f"run-{pair_id}",
+            "pair_id": pair_id,
+            "task_id": task_id,
+            "consumer_mode": "recorded",
+            "source": {
+                "revision": task["source"]["immutable_revision"],
+                "tree": hashlib.sha256(
+                    (task["source"]["archive_digest"] + ":tree").encode("utf-8")
+                ).hexdigest()[:40],
+            },
+            "archive_path": str(archive_path),
+            "archive_digest": task["source"]["archive_digest"],
+            "query": prompt["text"],
+            "job_goal": "Compile authorized evidence for the corpus task.",
+            "semantic_type": "documentation",
+            "token_budget": task["contract"]["token_budget"],
+            "output_reserve_tokens": task["contract"]["output_budget"],
+            "max_context_tokens": task["contract"]["token_budget"]
+            + task["contract"]["output_budget"],
+            "excluded_prefixes": prohibited_paths,
+            "flows": {"effect": False, "handoff": False, "replay": False},
+            "model": "deterministic-recorded-v1",
+            "prompt_digest": prompt["prompt_digest"],
+        }
+        assignments = {}
+        for treatment in ("champion", "candidate"):
+            path = root / f"{treatment}-assignment.json"
+            _write_canonical(path, {**common, "treatment": treatment})
+            assignments[treatment] = path
+        pair = run_pair(
+            champion_assignment_path=assignments["champion"],
+            candidate_assignment_path=assignments["candidate"],
+            champion_executable_path=consumer_path.resolve(strict=True),
+            candidate_executable_path=consumer_path.resolve(strict=True),
+            cwd=root,
+            state=root / "state",
+            schemas=repository_root / "schemas/refinement",
+            timeout_seconds=task["execution"]["timeout_seconds"],
+        )
+    encoded = canonical_bytes(pair)
+    if fixture["canary"].encode("utf-8") in encoded:
+        raise CorpusError("production CIGAR smoke disclosed a prohibited canary")
+    selected = {
+        observation["treatment"]: len(observation["selected_blocks"])
+        for observation in pair["observations"]
+    }
+    return {
+        "canary_disclosed": False,
+        "consumer_digest": pair["consumer_digests"]["candidate"],
+        "observation_ids": pair["observation_ids"],
+        "pair_result_id": pair["pair_result_id"],
+        "selected_blocks": selected,
+        "status": "technically-executable",
+        "task_id": task_id,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1448,6 +1532,12 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--manifest", required=True, type=Path)
     materialize.add_argument("--task-id", required=True)
     materialize.add_argument("--destination", required=True, type=Path)
+    production = commands.add_parser("production-smoke")
+    production.add_argument("--repository-root", required=True, type=Path)
+    production.add_argument("--private-root", required=True, type=Path)
+    production.add_argument("--manifest", required=True, type=Path)
+    production.add_argument("--task-id", required=True)
+    production.add_argument("--consumer", required=True, type=Path)
     return parser
 
 
@@ -1457,7 +1547,7 @@ def _load_task_components(
     private_root: Path,
     manifest_path: Path,
     task_id: str,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     manifest, _keys = validate_manifest(
         repository_root=repository_root,
         private_root=private_root,
@@ -1465,13 +1555,14 @@ def _load_task_components(
         run_smoke=False,
     )
     records = {}
-    for role in ("prompts", "oracles", "fixtures"):
+    for role in ("tasks", "prompts", "oracles", "fixtures"):
         reference = next(item for item in manifest["packs"] if item["role"] == role)
         path = _pack_path(repository_root, private_root, manifest, reference)
         value, _payload = _load_canonical(path)
         records[role] = _record_map(value["records"], role)
     try:
         return (
+            records["tasks"][task_id],
             records["prompts"][task_id],
             records["oracles"][task_id],
             records["fixtures"][task_id],
@@ -1512,8 +1603,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "status": "qualified",
                 "tasks": sum(item["task_count"] for item in manifests),
             }
+        elif arguments.command == "production-smoke":
+            result = production_cigar_smoke(
+                repository_root=repository_root,
+                private_root=private_root,
+                manifest_path=arguments.manifest.resolve(strict=True),
+                task_id=arguments.task_id,
+                consumer_path=arguments.consumer,
+            )
         else:
-            prompt, oracle, fixture = _load_task_components(
+            _task, prompt, oracle, fixture = _load_task_components(
                 repository_root=repository_root,
                 private_root=private_root,
                 manifest_path=arguments.manifest.resolve(strict=True),
