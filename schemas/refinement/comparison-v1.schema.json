@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/comparison-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "comparison_id", "champion_source", "candidate_source", "dataset_epoch", "policy_digest", "bootstrap_repetitions", "assignment_seeds", "holm_correction", "metrics", "protected_strata", "verdict"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-comparison.v1"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "champion_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "dataset_epoch": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "policy_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "bootstrap_repetitions": {"type": "integer", "minimum": 100, "maximum": 1000000},
+    "assignment_seeds": {"type": "integer", "minimum": 1, "maximum": 16},
+    "holm_correction": {"type": "boolean"},
+    "metrics": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "champion", "candidate", "delta", "lower", "upper", "confidence_percent", "decision"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "champion": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "candidate": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "delta": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "lower": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "upper": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "confidence_percent": {"enum": [90, 95, 99]},
+          "decision": {"enum": ["improved", "noninferior", "inferior", "insufficient"]}
+        }
+      }
+    },
+    "protected_strata": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stratum", "status"],
+        "properties": {
+          "stratum": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "status": {"enum": ["passed", "failed", "insufficient"]}
+        }
+      }
+    },
+    "verdict": {"enum": ["eligible", "ineligible", "invalid", "needs_human_review"]}
+  }
+}

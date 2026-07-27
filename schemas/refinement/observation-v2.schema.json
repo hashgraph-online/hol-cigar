@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/observation-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_id", "run_id", "pair_id", "task_id", "treatment", "source", "pins", "selected_blocks", "dispositions", "input_digest", "output_digest", "tool_observations", "resources", "effect_replay", "status"],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-observation.v2"},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "pair_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "treatment": {"enum": ["champion", "candidate", "baseline"]},
+    "source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "graph", "index", "policy", "planner", "compiler", "tokenizer", "materializer", "consumer", "model", "prompt"],
+      "properties": {
+        "catalog": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "graph": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "index": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "policy": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "planner": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "compiler": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "tokenizer": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "materializer": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "consumer": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "model": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "prompt": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    },
+    "selected_blocks": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["block_id", "lane", "representation", "provenance_ids", "tokens", "rank"],
+        "properties": {
+          "block_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "lane": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "representation": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "provenance_ids": {
+            "type": "array",
+            "maxItems": 1024,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          },
+          "tokens": {"type": "integer", "minimum": 0, "maximum": 10000000},
+          "rank": {"type": "integer", "minimum": 1, "maximum": 10000}
+        }
+      }
+    },
+    "dispositions": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate_id", "reason"],
+        "properties": {
+          "candidate_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "reason": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        }
+      }
+    },
+    "input_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "output_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "tool_observations": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool", "request_digest", "response_digest", "exit_code"],
+        "properties": {
+          "tool": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "request_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "response_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "exit_code": {"type": "integer", "minimum": -1, "maximum": 255}
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical_input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens", "latency_ms", "cpu_ms", "peak_rss_bytes", "cost_usd"],
+      "properties": {
+        "physical_input_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "cache_read_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "cache_write_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "output_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "latency_ms": {"type": "number", "minimum": 0, "maximum": 604800000},
+        "cpu_ms": {"type": "number", "minimum": 0, "maximum": 604800000},
+        "peak_rss_bytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776},
+        "cost_usd": {"type": "number", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "effect_replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effects", "unsafe_retries", "replay_dispatches"],
+      "properties": {
+        "effects": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "unsafe_retries": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "replay_dispatches": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "status": {"enum": ["completed", "failed", "abstained"]}
+  }
+}

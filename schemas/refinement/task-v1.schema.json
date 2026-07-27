@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/task-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "task_lineage_id", "stratum", "sub_strata", "source", "contract", "prompt_reference", "oracle", "execution", "contamination"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-task.v1"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_lineage_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "stratum": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "sub_strata": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_id", "immutable_revision", "archive_digest", "license", "setup_digest"],
+      "properties": {
+        "repository_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "immutable_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+        "archive_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "license": {"type": "string", "minLength": 1, "maxLength": 256},
+        "setup_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_class", "purpose", "allowed_projects", "prohibited_projects", "target_profile", "token_budget", "output_budget"],
+      "properties": {
+        "operation_class": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "purpose": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "allowed_projects": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "prohibited_projects": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "target_profile": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "token_budget": {"type": "integer", "minimum": 1, "maximum": 10000000},
+        "output_budget": {"type": "integer", "minimum": 1, "maximum": 1000000}
+      }
+    },
+    "prompt_reference": {"$ref": "common-v1.schema.json#/$defs/path"},
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical_evidence", "relevant_evidence", "prohibited_evidence", "required_claims", "accepted_answers_or_properties", "expected_artifacts", "deterministic_verifier", "allowed_abstention", "harm_conditions"],
+      "properties": {
+        "critical_evidence": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["evidence_id", "version_or_span", "weight"],
+            "properties": {
+              "evidence_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+              "version_or_span": {"type": "string", "minLength": 1, "maxLength": 512},
+              "weight": {"type": "integer", "minimum": 1, "maximum": 1000000}
+            }
+          }
+        },
+        "relevant_evidence": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "prohibited_evidence": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "required_claims": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claim_id", "description", "evidence_ids", "weight"],
+            "properties": {
+              "claim_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+              "description": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+              "evidence_ids": {
+                "type": "array",
+                "maxItems": 1024,
+                "uniqueItems": true,
+                "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+              },
+              "weight": {"type": "integer", "minimum": 1, "maximum": 1000000}
+            }
+          }
+        },
+        "accepted_answers_or_properties": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+        },
+        "expected_artifacts": {
+          "type": "array",
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/path"}
+        },
+        "deterministic_verifier": {"$ref": "common-v1.schema.json#/$defs/path"},
+        "allowed_abstention": {"type": "boolean"},
+        "harm_conditions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permitted_tools", "network_policy", "timeout_seconds", "maximum_effects"],
+      "properties": {
+        "permitted_tools": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "network_policy": {"enum": ["none", "loopback-only", "recorded", "qualified-live"]},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "maximum_effects": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "contamination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canary_ids", "public_visibility"],
+      "properties": {
+        "canary_ids": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "public_visibility": {"enum": ["development", "shadow", "sealed"]}
+      }
+    }
+  }
+}

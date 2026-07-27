@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/ledger-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entry_id", "sequence", "previous_entry_id", "event_type", "iteration_id", "source_revision", "source_tree", "artifact_ids", "evidence_class", "decision"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-ledger-entry.v1"},
+    "entry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "sequence": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+    "previous_entry_id": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "event_type": {"enum": ["baseline_captured", "trial_created", "proposal_finished", "gate_finished", "evaluation_finished", "trial_rejected", "trial_promoted", "controller_stopped"]},
+    "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "source_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "source_tree": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "artifact_ids": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    },
+    "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+    "decision": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"}
+  }
+}

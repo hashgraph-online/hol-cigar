@@ -1,0 +1,37 @@
+schema_version = "cigar.refinement-config.v1"
+profile_id = "shadow-v1"
+mode = "suggest"
+
+[evidence]
+class = "shadow"
+
+[limits]
+max_iterations = 1
+max_wall_seconds = 43200
+max_cost_usd = 250.0
+max_input_tokens = 20000000
+max_output_tokens = 2000000
+max_files_changed = 24
+max_lines_changed = 2000
+
+[proposal]
+adapter = "recorded-proposal-v1"
+model = "deterministic-recorded-v1"
+credential_handle = "CIGAR_PROPOSAL_API_KEY"
+maximum_turns = 1
+maximum_repairs = 0
+
+[consumer]
+matrix = "refinement/profiles/consumer-matrix.v1.json"
+primary_profile = "deterministic-recorded-v1"
+
+[statistics]
+bootstrap_repetitions = 10000
+confidence_percent = 99
+assignment_seeds = 2
+holm_correction = true
+
+[paths]
+development_manifest = "refinement/corpus/development-manifest-v1.json"
+proposal_profiles = "refinement/profiles/proposal-adapters.v1.json"
+intervention_families = "refinement/profiles/intervention-families.v1.json"

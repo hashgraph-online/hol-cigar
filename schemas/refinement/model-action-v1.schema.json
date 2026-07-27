@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/model-action-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "action_id", "session_id", "kind", "query", "path", "start_line", "max_lines", "patch", "gate", "resource", "summary", "reason"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-model-action.v1"},
+    "action_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "session_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "kind": {"enum": ["search", "read", "inspect_git", "apply_patch", "run_gate", "request_context", "finish", "abandon"]},
+    "query": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "path": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/path"}
+      ]
+    },
+    "start_line": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 1, "maximum": 100000000}
+      ]
+    },
+    "max_lines": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 1, "maximum": 10000}
+      ]
+    },
+    "patch": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/longText"}
+      ]
+    },
+    "gate": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "resource": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "summary": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "reason": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"}
+  }
+}

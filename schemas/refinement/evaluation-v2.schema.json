@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/evaluation-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evaluation_id", "observation_id", "task_id", "oracle_digest", "evaluator_digest", "status", "metrics", "violations", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-evaluation.v2"},
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "oracle_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "evaluator_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "status": {"enum": ["valid", "invalid", "failed"]},
+    "metrics": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "numerator", "denominator", "value", "unit"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "numerator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "denominator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "unit": {"enum": ["boolean", "count", "ratio", "tokens", "milliseconds", "bytes", "usd"]}
+        }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "evidence_id"],
+        "properties": {
+          "code": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "severity": {"enum": ["info", "warning", "hard"]},
+          "evidence_id": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_id", "mac"],
+      "properties": {
+        "key_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "mac": {"$ref": "common-v1.schema.json#/$defs/sha256"}
+      }
+    }
+  }
+}
