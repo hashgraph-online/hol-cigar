@@ -3,7 +3,7 @@ name: publish-hol-cigar
 on:
   push:
     tags:
-      - hol-cigar-v0.9.1-pypi.1
+      - hol-cigar-v0.9.1-pypi.2
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
 
       - name: Verify immutable release source and package authority
         run: |
-          test "${GITHUB_REF}" = "refs/tags/hol-cigar-v0.9.1-pypi.1"
+          test "${GITHUB_REF}" = "refs/tags/hol-cigar-v0.9.1-pypi.2"
           test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           python3 -m unittest scripts.release.tests.test_build_hol_cigar_pypi
@@ -55,7 +55,7 @@ jobs:
           python3 scripts/release/build_hol_cigar_pypi.py \
             --out "${release_root}" \
             --require-clean \
-            --require-tag hol-cigar-v0.9.1-pypi.1
+            --require-tag hol-cigar-v0.9.1-pypi.2
           printf 'HOL_CIGAR_RELEASE=%s\n' "${release_root}" >>"${GITHUB_ENV}"
 
       - name: Qualify clean wheel installation
