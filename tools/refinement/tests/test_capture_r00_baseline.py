@@ -21,15 +21,15 @@ class BaselineCaptureTests(unittest.TestCase):
         left = {"b": [2, 1], "a": "value"}
         right = {"a": "value", "b": [2, 1]}
         self.assertEqual(baseline.canonical(left), baseline.canonical(right))
-        self.assertRegex(baseline.multihash(baseline.canonical(left)), r"^1220[0-9a-f]{64}$")
+        self.assertRegex(
+            baseline.multihash(baseline.canonical(left)), r"^1220[0-9a-f]{64}$"
+        )
 
     def test_test_counts_are_exact_and_fail_closed(self) -> None:
         self.assertEqual(
             baseline.test_count("demos", b"Ran 17 tests in 1.0s\nOK\n"), 17
         )
-        self.assertEqual(
-            baseline.test_count("python-sdk", b"22 passed in 2.0s\n"), 22
-        )
+        self.assertEqual(baseline.test_count("python-sdk", b"22 passed in 2.0s\n"), 22)
         self.assertEqual(
             baseline.test_count(
                 "focused-rust",
@@ -62,9 +62,11 @@ class BaselineCaptureTests(unittest.TestCase):
             )
 
     def test_source_identity_requires_a_clean_git_root(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaises(baseline.BaselineError):
-                baseline.source_identity(Path(temporary))
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            self.assertRaises(baseline.BaselineError),
+        ):
+            baseline.source_identity(Path(temporary))
 
 
 if __name__ == "__main__":

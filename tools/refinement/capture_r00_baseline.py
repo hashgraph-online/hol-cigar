@@ -12,8 +12,9 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE_TOOLS = ROOT / "scripts" / "release"
@@ -22,8 +23,8 @@ for import_root in (RELEASE_TOOLS, QUALITY_TOOLS):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
-from bounded_process import BoundedProcessError, run_bounded  # noqa: E402
-from evidence_workspace import (  # noqa: E402
+from bounded_process import BoundedProcessError, run_bounded
+from evidence_workspace import (
     EvidenceWorkspace,
     EvidenceWorkspaceError,
 )
@@ -144,8 +145,7 @@ def git(root: Path, *arguments: str) -> bytes:
         ["git", "--no-replace-objects", *arguments],
         cwd=root,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         timeout=60,
         check=False,
     )
@@ -310,9 +310,10 @@ def capture(root: Path, evidence_dir: Path) -> dict[str, Any]:
     anchor_path = root / ANCHOR_PATH
     anchor_payload = anchor_path.read_bytes()
     anchor = json.loads(anchor_payload)
-    if (
-        anchor.get("schema_version") != "cigar.refinement-honey-anchor.v1"
-        or not MULTIHASH.fullmatch("1220" + sha256(anchor_payload))
+    if anchor.get(
+        "schema_version"
+    ) != "cigar.refinement-honey-anchor.v1" or not MULTIHASH.fullmatch(
+        "1220" + sha256(anchor_payload)
     ):
         raise BaselineError("Honey anchor is invalid")
     commands = run_checks(root)
@@ -345,7 +346,9 @@ def capture(root: Path, evidence_dir: Path) -> dict[str, Any]:
         workspace.write_json("r00-baseline.json", receipt)
         workspace.read_files({"r00-baseline.json"}, strict_read_only=True)
     if source_identity(root) != before:
-        raise BaselineError("source identity changed while publishing baseline evidence")
+        raise BaselineError(
+            "source identity changed while publishing baseline evidence"
+        )
     return receipt
 
 
@@ -374,5 +377,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (BaselineError, BoundedProcessError, EvidenceWorkspaceError, OSError) as error:
+    except (
+        BaselineError,
+        BoundedProcessError,
+        EvidenceWorkspaceError,
+        OSError,
+    ) as error:
         raise SystemExit(f"R00 baseline capture failed: {error}") from error

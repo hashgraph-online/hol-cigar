@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.refinement import canonical, config  # noqa: E402
-from tools.refinement.ledger import Ledger, LedgerError  # noqa: E402
-from tools.refinement.schema import SchemaError, SchemaRegistry  # noqa: E402
+from tools.refinement import canonical, config
+from tools.refinement.ledger import Ledger, LedgerError
+from tools.refinement.schema import SchemaError, SchemaRegistry
 
 SCHEMAS = ROOT / "schemas/refinement"
 MH = "1220" + "1" * 64
@@ -427,9 +427,8 @@ class CanonicalAndConfigTests(unittest.TestCase):
     def test_safe_paths_reject_traversal_absolute_backslash_and_controls(self) -> None:
         self.assertEqual(canonical.safe_relative_path("a/b.json"), "a/b.json")
         for value in ("../a", "/a", "a\\b", "a/./b", "a/\x01"):
-            with self.subTest(value=value):
-                with self.assertRaises(canonical.CanonicalError):
-                    canonical.safe_relative_path(value)
+            with self.subTest(value=value), self.assertRaises(canonical.CanonicalError):
+                canonical.safe_relative_path(value)
 
     def test_all_checked_in_configs_are_closed_and_bounded(self) -> None:
         for name in (

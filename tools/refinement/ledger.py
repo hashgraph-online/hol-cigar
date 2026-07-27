@@ -17,7 +17,7 @@ RELEASE_TOOLS = ROOT / "scripts" / "release"
 if str(RELEASE_TOOLS) not in sys.path:
     sys.path.insert(0, str(RELEASE_TOOLS))
 
-from evidence_workspace import (  # noqa: E402
+from evidence_workspace import (
     EvidenceWorkspace,
     EvidenceWorkspaceError,
 )
