@@ -1172,13 +1172,45 @@ def _report_finding(target: str, vulnerability: Any) -> tuple[str, ...]:
     return tuple(values[field] for field in FINDING_FIELDS)  # type: ignore[misc]
 
 
+def expected_report_artifact_type(repository: Path) -> str:
+    """Bind Trivy's report label to the checkout's exact Git-control shape."""
+
+    git_control = repository.resolve(strict=True) / ".git"
+    try:
+        metadata = git_control.lstat()
+    except OSError as error:
+        raise PolicyError("cannot inspect Git control metadata") from error
+    if stat.S_ISDIR(metadata.st_mode):
+        return "repository"
+    if not stat.S_ISREG(metadata.st_mode):
+        raise PolicyError("Git control metadata has an unsupported shape")
+    try:
+        pointer = read_bounded(git_control, 4096, "Git worktree pointer").decode(
+            "utf-8"
+        )
+    except UnicodeDecodeError as error:
+        raise PolicyError("Git worktree pointer is not UTF-8") from error
+    if (
+        not pointer.startswith("gitdir: ")
+        or not pointer.endswith("\n")
+        or pointer.count("\n") != 1
+        or not pointer.removeprefix("gitdir: ").removesuffix("\n")
+    ):
+        raise PolicyError("Git worktree pointer is malformed")
+    return "filesystem"
+
+
 def validate_report(
-    report: dict[str, Any], policy: dict[str, Any]
+    report: dict[str, Any],
+    policy: dict[str, Any],
+    *,
+    expected_artifact_type: str,
 ) -> tuple[set[tuple[str, ...]], set[tuple[str, str, str]]]:
     if (
         report.get("SchemaVersion") != 2
         or report.get("ArtifactName") != "."
-        or report.get("ArtifactType") != "filesystem"
+        or expected_artifact_type not in {"filesystem", "repository"}
+        or report.get("ArtifactType") != expected_artifact_type
     ):
         raise PolicyError("Trivy report identity is unsupported")
     results = report.get("Results")
@@ -1242,9 +1274,15 @@ def _render_findings(values: set[tuple[str, ...]]) -> list[dict[str, str]]:
 
 
 def evaluate_report(
-    report: dict[str, Any], policy: dict[str, Any], *, source_clean: bool
+    report: dict[str, Any],
+    policy: dict[str, Any],
+    *,
+    expected_artifact_type: str,
+    source_clean: bool,
 ) -> dict[str, Any]:
-    findings, targets = validate_report(report, policy)
+    findings, targets = validate_report(
+        report, policy, expected_artifact_type=expected_artifact_type
+    )
     expected = candidate_findings(policy)
     matched = findings.intersection(expected)
     unclassified = findings - expected
@@ -1359,6 +1397,7 @@ def run_scan(
     distribution_evidence = distribution_reachability_evidence(policy, repository)
     metadata_evidence = cargo_metadata_evidence(policy, repository, cargo)
     source = git_source(repository)
+    report_artifact_type = expected_report_artifact_type(repository)
     expected_version = policy["scanner"]["version"]
     scanner_metadata(trivy, expected_version)
 
@@ -1412,7 +1451,12 @@ def run_scan(
     database = validate_database_metadata(
         final_scanner_metadata, policy["scanner"]["max_database_age_hours"]
     )
-    assessment = evaluate_report(report, policy, source_clean=source["clean"])
+    assessment = evaluate_report(
+        report,
+        policy,
+        expected_artifact_type=report_artifact_type,
+        source_clean=source["clean"],
+    )
     if verify_repository_authority(policy, repository) != repository_evidence:
         raise PolicyError("dependency reachability authority changed during the scan")
     if distribution_reachability_evidence(policy, repository) != distribution_evidence:
@@ -1421,6 +1465,8 @@ def run_scan(
         )
     if git_source(repository) != source:
         raise PolicyError("git source state changed during the scan")
+    if expected_report_artifact_type(repository) != report_artifact_type:
+        raise PolicyError("Git control metadata changed during the scan")
     if read_bounded(POLICY_PATH, MAX_POLICY_BYTES, "Trivy policy") != policy_payload:
         raise PolicyError("Trivy policy changed during the scan")
     receipt = {
@@ -1432,6 +1478,8 @@ def run_scan(
             "sha256": sha256_bytes(policy_payload),
         },
         "report": {
+            "artifact_name": ".",
+            "artifact_type": report_artifact_type,
             "bytes": len(report_payload),
             "sha256": sha256_bytes(report_payload),
         },

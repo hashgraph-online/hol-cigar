@@ -205,7 +205,10 @@ class TrivyPolicyTests(unittest.TestCase):
 
     def test_zero_findings_are_eligible_only_for_a_clean_source(self) -> None:
         assessment = trivy_policy.evaluate_report(
-            self.fixture_report(), self.policy, source_clean=True
+            self.fixture_report(),
+            self.policy,
+            expected_artifact_type="filesystem",
+            source_clean=True,
         )
         self.assertEqual(assessment["finding_count"], 0)
         self.assertEqual(assessment["status"], "eligible")
@@ -214,7 +217,10 @@ class TrivyPolicyTests(unittest.TestCase):
         self.assertEqual(assessment["missing_candidate_findings"], [])
 
         dirty = trivy_policy.evaluate_report(
-            self.fixture_report(), self.policy, source_clean=False
+            self.fixture_report(),
+            self.policy,
+            expected_artifact_type="filesystem",
+            source_clean=False,
         )
         self.assertEqual(dirty["status"], "diagnostic_dirty_source")
         self.assertFalse(dirty["release_eligible"])
@@ -231,7 +237,44 @@ class TrivyPolicyTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     trivy_policy.PolicyError, "report identity is unsupported"
                 ):
-                    trivy_policy.evaluate_report(report, self.policy, source_clean=True)
+                    trivy_policy.evaluate_report(
+                        report,
+                        self.policy,
+                        expected_artifact_type="filesystem",
+                        source_clean=True,
+                    )
+
+    def test_report_type_is_bound_to_git_control_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repository = Path(raw)
+            git_control = repository / ".git"
+            git_control.mkdir()
+            self.assertEqual(
+                trivy_policy.expected_report_artifact_type(repository), "repository"
+            )
+            report = self.fixture_report()
+            report["ArtifactType"] = "repository"
+            self.assertEqual(
+                trivy_policy.evaluate_report(
+                    report,
+                    self.policy,
+                    expected_artifact_type="repository",
+                    source_clean=True,
+                )["status"],
+                "eligible",
+            )
+            git_control.rmdir()
+            git_control.write_text(
+                "gitdir: /private/worktree-control\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                trivy_policy.expected_report_artifact_type(repository), "filesystem"
+            )
+            git_control.write_text("not a worktree pointer\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                trivy_policy.PolicyError, "worktree pointer is malformed"
+            ):
+                trivy_policy.expected_report_artifact_type(repository)
 
     def test_any_finding_blocks_without_a_disposition(self) -> None:
         report = self.fixture_report()
@@ -251,7 +294,10 @@ class TrivyPolicyTests(unittest.TestCase):
             }
         )
         assessment = trivy_policy.evaluate_report(
-            report, self.policy, source_clean=True
+            report,
+            self.policy,
+            expected_artifact_type="filesystem",
+            source_clean=True,
         )
         self.assertEqual(assessment["status"], "blocked_unclassified_findings")
         self.assertFalse(assessment["release_eligible"])
@@ -267,7 +313,12 @@ class TrivyPolicyTests(unittest.TestCase):
             if not (isinstance(result, dict) and result.get("Target") == "Cargo.lock")
         ]
         with self.assertRaisesRegex(trivy_policy.PolicyError, "omitted required"):
-            trivy_policy.evaluate_report(report, self.policy, source_clean=True)
+            trivy_policy.evaluate_report(
+                report,
+                self.policy,
+                expected_artifact_type="filesystem",
+                source_clean=True,
+            )
 
     def test_scan_command_uses_isolated_config_without_suppressions(self) -> None:
         command = trivy_policy.build_scan_command(
