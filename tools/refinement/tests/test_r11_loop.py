@@ -587,6 +587,8 @@ class LoopControllerTests(unittest.TestCase):
         self.assertEqual(first["status"], "passed")
         self.assertFalse(first["qualified_24h"])
         self.assertGreaterEqual(first["cycles"], 1)
+        first_event = load_file(state_root / "events" / "00000000000000000000.json")
+        self.assertRegex(first_event["command_receipt_id"], r"^1220[0-9a-f]{64}$")
         second = run_soak(**arguments)  # type: ignore[arg-type]
         self.assertEqual(second, first)
         self.assertEqual(

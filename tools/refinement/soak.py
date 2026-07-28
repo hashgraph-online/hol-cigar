@@ -203,6 +203,8 @@ class SoakJournal:
                 or value["event_id"] != identity(_without_id(value, "event_id"))
                 or value["status"] != "passed"
                 or value["command_id"] != COMMAND_ID
+                or re.fullmatch(r"1220[0-9a-f]{64}", value["command_receipt_id"])
+                is None
             ):
                 raise SoakError("soak event chain is invalid")
             if events and (
@@ -351,7 +353,7 @@ def run_soak(
                     "schema_version": "cigar.refinement-soak-event.v1",
                     "run_id": run_id,
                     "command_id": COMMAND_ID,
-                    "command_receipt_id": result["command_id"],
+                    "command_receipt_id": identity(result),
                     "source": {
                         "revision": source["revision"],
                         "tree": source["tree"],
