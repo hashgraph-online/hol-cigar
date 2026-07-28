@@ -74,7 +74,7 @@ jobs:
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
           test "$(go version | awk '{print $3}')" = "go1.26.5"
-          test "$(uv --version)" = "uv 0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -190,10 +190,13 @@ jobs:
             "${canonical_temp}/cigar-fast-rust-target" \
             >>"${GITHUB_ENV}"
 
+      - name: Install the pinned protocol compiler
+        uses: ./.github/actions/setup-protoc
+
       - name: Install the pinned test runner
         run: |
           cargo install cargo-nextest --version 0.9.140 --locked
-          test "$(cargo nextest --version | awk '{print $2}')" = "0.9.140"
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
 
       - name: Hydrate the locked Cargo cache
         run: cargo fetch --locked --target aarch64-apple-darwin
@@ -268,7 +271,7 @@ jobs:
           test "$(go env GOOS)" = "darwin"
           test "$(go env GOARCH)" = "arm64"
           test "$(go version | awk '{print $3}')" = "go1.26.5"
-          test "$(uv --version)" = "uv 0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
