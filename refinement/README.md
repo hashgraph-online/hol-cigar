@@ -60,3 +60,7 @@ documented in [corpus/README.md](corpus/README.md).
 Paired clustered bootstrap, Holm correction, Honey/champion non-inferiority, protected-stratum
 overrides, performance limits, deterministic decisions, and the external Pareto research archive
 are documented in [PROMOTION.md](PROMOTION.md).
+
+Workflow trust boundaries, external quotas, immutable transport bundles, read-only dashboard
+projections, environment separation, and incident/rollback procedures are documented in
+[OPERATIONS.md](OPERATIONS.md).

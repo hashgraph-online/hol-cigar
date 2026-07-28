@@ -1,0 +1,42 @@
+{
+  "schema_version": "cigar.refinement-workflow-policy.v1",
+  "policy_id": "12206abd27df740b39df73c2a537efaa213381c1f7662956a4e4a6348f5e1d17579e",
+  "workflows": [
+    {
+      "filename": "refinement-fast.yml",
+      "triggers": ["pull_request"],
+      "authority": "diagnostic",
+      "environment": null,
+      "allowed_secret_handles": [],
+      "retention_days": 14,
+      "max_timeout_minutes": 30
+    },
+    {
+      "filename": "refinement-nightly.yml",
+      "triggers": ["schedule", "workflow_dispatch"],
+      "authority": "development",
+      "environment": "refinement-development",
+      "allowed_secret_handles": ["CIGAR_DEVELOPMENT_API_KEY"],
+      "retention_days": 30,
+      "max_timeout_minutes": 360
+    },
+    {
+      "filename": "refinement-promotion.yml",
+      "triggers": ["workflow_dispatch"],
+      "authority": "promotion",
+      "environment": "refinement-promotion",
+      "allowed_secret_handles": ["CIGAR_PROMOTION_ATTESTATION_KEY"],
+      "retention_days": 365,
+      "max_timeout_minutes": 720
+    },
+    {
+      "filename": "refinement-shadow.yml",
+      "triggers": ["workflow_dispatch"],
+      "authority": "shadow",
+      "environment": "refinement-shadow",
+      "allowed_secret_handles": ["CIGAR_SHADOW_ATTESTATION_KEY"],
+      "retention_days": 90,
+      "max_timeout_minutes": 360
+    }
+  ]
+}

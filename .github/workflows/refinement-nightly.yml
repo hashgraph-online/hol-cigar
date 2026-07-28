@@ -1,0 +1,126 @@
+name: refinement-nightly-development
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-nightly-development
+  cancel-in-progress: false
+
+jobs:
+  bounded-development:
+    name: bounded development experiment
+    runs-on: [self-hosted, refinement-development]
+    timeout-minutes: 360
+    environment: refinement-development
+    env:
+      CIGAR_RUN_AUTHORITY: "development"
+      CIGAR_NO_PROMOTION: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: x64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Reserve the full nightly provider and compute budget
+        id: reserve
+        env:
+          CIGAR_DEVELOPMENT_API_KEY: ${{ secrets.CIGAR_DEVELOPMENT_API_KEY }}
+          CIGAR_QUOTA_ROOT: ${{ vars.CIGAR_REFINEMENT_QUOTA_ROOT }}
+        run: |
+          test -n "${CIGAR_DEVELOPMENT_API_KEY}"
+          test -n "${CIGAR_QUOTA_ROOT}"
+          reservation="nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          utc_day="$(date -u +%F)"
+          python3 tools/refinement/operations.py quota reserve \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --utc-day "${utc_day}" \
+            --provider openai-responses-tools-v1 \
+            --reservation-id "${reservation}" \
+            --input-tokens 2000000 \
+            --output-tokens 250000 \
+            --cost-microusd 25000000 \
+            --compute-milliseconds 21600000
+          printf 'CIGAR_RESERVATION=%s\n' "${reservation}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}" >>"${GITHUB_ENV}"
+
+      - name: Run the bounded public scheduler and proposal experiment lane
+        env:
+          OPENAI_API_KEY: ${{ secrets.CIGAR_DEVELOPMENT_API_KEY }}
+        run: |
+          python3 -B -m unittest \
+            tools.refinement.tests.test_r07_proposal \
+            tools.refinement.tests.test_r08_experiment \
+            -v
+
+      - name: Charge the complete reserved budget conservatively
+        if: ${{ always() && steps.reserve.outcome == 'success' }}
+        run: |
+          python3 tools/refinement/operations.py quota settle \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --reservation-id "${CIGAR_RESERVATION}" \
+            --input-tokens 2000000 \
+            --output-tokens 250000 \
+            --cost-microusd 25000000 \
+            --compute-milliseconds 21600000
+
+      - name: Create the development evidence bundle
+        run: |
+          umask 077
+          source_revision="$(git rev-parse --verify HEAD)"
+          source_tree="$(git rev-parse --verify HEAD^{tree})"
+          receipt="${RUNNER_TEMP}/refinement-nightly-receipt.json"
+          bundle="${RUNNER_TEMP}/refinement-nightly-evidence"
+          policy_id="$(python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"
+          python3 tools/refinement/operations.py receipt \
+            --run-id "nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --authority development \
+            --status passed \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            >"${receipt}"
+          chmod 0400 "${receipt}"
+          python3 tools/refinement/operations.py bundle create \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output-root "${bundle}" \
+            --run-id "nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --evidence-class development \
+            --retention-days 30 \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            --policy-id "${policy_id}" \
+            --authority development-only \
+            --attachment "receipt.json=${receipt}"
+          printf 'CIGAR_REFINEMENT_BUNDLE=%s\n' "${bundle}" >>"${GITHUB_ENV}"
+
+      - name: Upload immutable development evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_REFINEMENT_BUNDLE }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 30
+          compression-level: 0

@@ -35,3 +35,4 @@ holm_correction = true
 development_manifest = "refinement/corpus/development-manifest-v1.json"
 proposal_profiles = "refinement/profiles/proposal-adapters.v1.json"
 intervention_families = "refinement/profiles/intervention-families.v1.json"
+operations_policy = "refinement/operations/limits-v1.json"

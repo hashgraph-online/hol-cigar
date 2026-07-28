@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/promotion-payload-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "payload_id", "trial_id", "candidate_source", "comparison_id", "decision_id", "target_branch", "operation", "merge_authority", "publication_authority", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-promotion-payload.v1"},
+    "payload_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "decision_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "target_branch": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^refinement/[A-Za-z0-9._/-]+$"},
+    "operation": {"const": "prepare-review-only"},
+    "merge_authority": {"const": false},
+    "publication_authority": {"const": false},
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "key_fingerprint", "mac"],
+      "properties": {
+        "algorithm": {"const": "hmac-sha256"},
+        "key_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "key_fingerprint": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "mac": {"type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

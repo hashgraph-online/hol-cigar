@@ -50,6 +50,7 @@ SCHEMA: dict[str, Any] = {
         "development_manifest": str,
         "proposal_profiles": str,
         "intervention_families": str,
+        "operations_policy": str,
     },
 }
 
