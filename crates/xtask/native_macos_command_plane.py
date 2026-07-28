@@ -82,7 +82,7 @@ PERFORMANCE_REPORT_KEYS = {
     "comparisons",
 }
 SECRET_MARKERS = (
-    b"-----BEGIN PRIVATE KEY-----",
+    b"-----BEGIN PRIVATE KEY-----",  # gitleaks:allow - detector fixture
     b"-----BEGIN OPENSSH PRIVATE KEY-----",
     b"-----BEGIN EC PRIVATE KEY-----",
     b"-----BEGIN RSA PRIVATE KEY-----",
@@ -1233,7 +1233,9 @@ def _load_authority(route: str, expected_source: Mapping[str, Any]) -> Authority
             max_bytes=1024 * 1024,
         )
         files["public_key_file"] = _open_file_snapshot(
-            inputs["public_key_file"], "public signing key", max_bytes=1024 * 1024
+            inputs["public_key_file"],
+            "public signing key",  # gitleaks:allow - non-secret field label
+            max_bytes=1024 * 1024,
         )
         files["trust_policy"] = _open_file_snapshot(
             inputs["trust_policy"], "signing trust policy", max_bytes=16 * 1024 * 1024

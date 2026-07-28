@@ -287,7 +287,7 @@ class ProposalAdapterTests(unittest.TestCase):
             hosted = OpenAIResponsesAdapter(
                 model="gpt-5.6-sol",
                 instructions="fixture",
-                credential_handle="CIGAR_R07_TEST_KEY",
+                credential_handle="CIGAR_R07_TEST_KEY",  # gitleaks:allow
                 transport=double,
             )
             outcome = self.fixture.controller(hosted).run()

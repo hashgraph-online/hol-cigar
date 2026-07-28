@@ -65,7 +65,11 @@ def _asset(repository: Path, relative: str) -> dict[str, Any]:
 
 def prepare(repository: Path, *, require_clean: bool = True) -> dict[str, Any]:
     repository = repository.resolve(strict=True)
-    source = repository_identity(repository, require_clean=require_clean)
+    source = repository_identity(
+        repository,
+        require_clean=require_clean,
+        allow_detached=True,
+    )
     registry = SchemaRegistry(repository / "schemas" / "refinement")
     manifests = [
         load_file(repository / "refinement/corpus/shadow-manifest-v1.json"),

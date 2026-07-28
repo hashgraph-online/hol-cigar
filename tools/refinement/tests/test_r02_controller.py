@@ -132,6 +132,22 @@ class RepositoryCase(unittest.TestCase):
             self.before["revision"],
         )
 
+    def test_detached_identity_is_explicitly_read_only(self) -> None:
+        git(self.repository, "checkout", "--detach", self.before["revision"])
+        try:
+            with self.assertRaisesRegex(WorkspaceError, "malformed or detached"):
+                repository_identity(self.repository, require_clean=True)
+            detached = repository_identity(
+                self.repository,
+                require_clean=True,
+                allow_detached=True,
+            )
+            self.assertEqual(detached["revision"], self.before["revision"])
+            self.assertEqual(detached["tree"], self.before["tree"])
+            self.assertIsNone(detached["branch"])
+        finally:
+            git(self.repository, "checkout", "main")
+
     def test_intent_only_restart_materializes_one_exact_trial(self) -> None:
         store = self.store()
         intent = self.intent()

@@ -51,7 +51,12 @@ def _git(
     return result.stdout if result.returncode == 0 else b""
 
 
-def repository_identity(repository: Path, *, require_clean: bool) -> dict[str, Any]:
+def repository_identity(
+    repository: Path,
+    *,
+    require_clean: bool,
+    allow_detached: bool = False,
+) -> dict[str, Any]:
     if not repository.is_absolute() or repository.is_symlink():
         raise WorkspaceError("repository must be an absolute real path")
     resolved = repository.resolve(strict=True)
@@ -78,7 +83,7 @@ def repository_identity(repository: Path, *, require_clean: bool) -> dict[str, A
     if (
         GIT_OBJECT.fullmatch(revision) is None
         or GIT_OBJECT.fullmatch(tree) is None
-        or not branch
+        or (not branch and not allow_detached)
     ):
         raise WorkspaceError("repository source identity is malformed or detached")
     if require_clean and status:
@@ -89,7 +94,7 @@ def repository_identity(repository: Path, *, require_clean: bool) -> dict[str, A
     return {
         "revision": revision,
         "tree": tree,
-        "branch": branch,
+        "branch": branch or None,
         "clean": not status,
         "status_sha256": hashlib.sha256(status).hexdigest(),
         "common_dir": str(common.resolve(strict=True)),
