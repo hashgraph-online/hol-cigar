@@ -625,7 +625,7 @@ def _formula(
 '''
     formula = f'''class Cigar < Formula
   desc "Deterministic context infrastructure for AI agents"
-  homepage "https://cigar.invalid"
+  homepage "https://hol.org/cigar"
   url "{DEVELOPMENT_DOWNLOAD_ROOT}/{configuration.native_filename}"
   version "{configuration.version}"
   sha256 "{native_sha256}"

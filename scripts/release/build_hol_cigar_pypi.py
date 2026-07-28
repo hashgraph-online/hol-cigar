@@ -157,7 +157,7 @@ def validate_authority(root: Path = ROOT) -> dict[str, Any]:
     }:
         raise PackageError("PyPI console-script metadata drifted")
     if project.get("urls") != {
-        "Homepage": "https://hol.org",
+        "Homepage": "https://hol.org/cigar",
         "Documentation": "https://github.com/hashgraph-online/hol-cigar/tree/main/docs",
         "Issues": "https://github.com/hashgraph-online/hol-cigar/issues",
         "Repository": "https://github.com/hashgraph-online/hol-cigar",
@@ -338,7 +338,7 @@ def _metadata(payload: bytes, label: str) -> dict[str, Any]:
         raise PackageError(f"{label} developer-preview classifier is missing")
     project_urls = set(message.get_all("Project-URL", []))
     expected_urls = {
-        "Homepage, https://hol.org",
+        "Homepage, https://hol.org/cigar",
         "Documentation, https://github.com/hashgraph-online/hol-cigar/tree/main/docs",
         "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
         "Repository, https://github.com/hashgraph-online/hol-cigar",

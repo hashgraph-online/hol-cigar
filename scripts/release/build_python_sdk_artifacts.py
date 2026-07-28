@@ -393,7 +393,7 @@ def _validate_pyproject(document: dict[str, Any], python_version: str) -> None:
     ):
         raise ReleaseError("Python project identity or runtime metadata is stale")
     if project.get("urls") != {
-        "Homepage": "https://github.com/CIGAR/cigar",
+        "Homepage": "https://hol.org/cigar",
         "Repository": "https://github.com/CIGAR/cigar",
     }:
         raise ReleaseError("Python project URL metadata is stale")
@@ -1346,7 +1346,7 @@ def _metadata_summary(
         ("Name", "cigar-sdk"),
         ("Version", configuration.python_version),
         ("Summary", "CIGAR v1 Python SDK"),
-        ("Project-URL", "Homepage, https://github.com/CIGAR/cigar"),
+        ("Project-URL", "Homepage, https://hol.org/cigar"),
         ("Project-URL", "Repository, https://github.com/CIGAR/cigar"),
         ("License-Expression", "Apache-2.0"),
         ("License-File", "LICENSE"),

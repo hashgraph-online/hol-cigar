@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/hashgraph-online/hol-cigar?style=social)](https://github.com/hashgraph-online/hol-cigar/stargazers)
 
-| ![HOL whole dark logo](https://hol.org/brand/Logo_Whole_Dark.png) | **Give AI agents the right context—and only the authority they need.** CIGAR is an open protocol for deterministic context compilation, bounded agent handoffs, governed effects, and replayable evidence.<br><br>[Install the Python SDK](#install-the-python-sdk)<br>[Read the documentation](docs/README.md)<br>[PyPI Package (`hol-cigar`)](https://pypi.org/project/hol-cigar/)<br>[Report an Issue](https://github.com/hashgraph-online/hol-cigar/issues) |
+| ![HOL whole dark logo](https://hol.org/brand/Logo_Whole_Dark.png) | **Give AI agents the right context—and only the authority they need.** CIGAR is an open protocol for deterministic context compilation, bounded agent handoffs, governed effects, and replayable evidence.<br><br>[Visit the CIGAR website](https://hol.org/cigar)<br>[Install the Python SDK](#install-the-python-sdk)<br>[Read the documentation](docs/README.md)<br>[PyPI Package (`hol-cigar`)](https://pypi.org/project/hol-cigar/)<br>[Report an Issue](https://github.com/hashgraph-online/hol-cigar/issues) |
 | :--- | :--- |
 
 CIGAR makes the decision environment around an AI agent explicit. It sits between source systems

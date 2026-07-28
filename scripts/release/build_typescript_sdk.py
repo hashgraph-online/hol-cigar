@@ -687,6 +687,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         or package.get("name") != "@cigar/sdk"
         or package.get("version") != version
         or package.get("license") != "Apache-2.0"
+        or package.get("homepage") != "https://hol.org/cigar"
         or package.get("type") != "module"
         or package.get("packageManager") != "pnpm@10.34.5"
         or package.get("engines") != {"node": ">=24.10.0 <25"}
