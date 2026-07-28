@@ -1,19 +1,63 @@
-# CIGAR
+# CIGAR: Context Intelligence Graph Agentic Runtime
 
-**Context Intelligence Graph Agentic Runtime**
+[![hol-cigar Version](https://img.shields.io/pypi/v/hol-cigar.svg?logo=pypi&logoColor=white&cacheSeconds=300)](https://pypi.org/project/hol-cigar/)
+[![hol-cigar Downloads](https://img.shields.io/pypi/dm/hol-cigar?logo=pypi&logoColor=white)](https://pypi.org/project/hol-cigar/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)](#install-the-python-sdk)
+[![CI](https://img.shields.io/github/actions/workflow/status/hashgraph-online/hol-cigar/fast-ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/hashgraph-online/hol-cigar/actions/workflows/fast-ci.yml)
+[![Publish](https://img.shields.io/github/actions/workflow/status/hashgraph-online/hol-cigar/publish-hol-cigar.yml?label=Publish&logo=githubactions&logoColor=white)](https://github.com/hashgraph-online/hol-cigar/actions/workflows/publish-hol-cigar.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/hashgraph-online/hol-cigar?style=social)](https://github.com/hashgraph-online/hol-cigar/stargazers)
 
-Governed context, bounded agent authority, and replayable evidence for AI agent workflows.
+| ![HOL whole dark logo](https://hol.org/brand/Logo_Whole_Dark.png) | **Give AI agents the right context—and only the authority they need.** CIGAR is an open protocol for deterministic context compilation, bounded agent handoffs, governed effects, and replayable evidence.<br><br>[Install the Python SDK](#install-the-python-sdk)<br>[Read the documentation](docs/README.md)<br>[PyPI Package (`hol-cigar`)](https://pypi.org/project/hol-cigar/)<br>[Report an Issue](https://github.com/hashgraph-online/hol-cigar/issues) |
+| :--- | :--- |
 
-CIGAR is an open protocol developed by [HOL](https://hol.org).
+CIGAR makes the decision environment around an AI agent explicit. It sits between source systems
+and an agent or model runtime so applications can govern what context is disclosed, constrain
+delegated authority, recover external actions, and reproduce the evidence behind a decision.
 
-[Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
-[Honey v0.9](#honey-v09-developer-preview) · [Documentation](#documentation) ·
-[Security](#security)
+CIGAR is model-agnostic and developed by [HOL](https://hol.org). It is not a model, hosted agent
+service, autonomous scheduler, or replacement for an application-specific orchestrator.
 
 > [!IMPORTANT]
-> The current product identity is **CIGAR Honey v0.9** (`0.9.0-honey.1`), a local Apple-silicon
-> developer preview. It is not yet published or supported, and it is not production-qualified,
-> signed, or notarized. See [current status](#current-status) before evaluating it.
+> This repository contains two bounded developer previews. The Python 3.14 SDK is published as
+> [`hol-cigar` 0.9.1 on PyPI](https://pypi.org/project/hol-cigar/); its import package is
+> `cigar_sdk`. The broader **CIGAR Honey v0.9** runtime (`0.9.0-honey.1`) remains an unpublished,
+> unsupported Apple-silicon preview and is not production-qualified, signed, or notarized. See
+> [current status](#current-status) before evaluating either surface.
+
+## Install the Python SDK
+
+```bash
+python -m pip install "hol-cigar==0.9.1"
+```
+
+The SDK exposes all 45 frozen CIGAR v1 operations through synchronous and asynchronous clients.
+It provides typed problems, bounded deadlines, safe retry, resumable streams, pagination, fixed
+idempotency keys, and local semantic bundle and delta verification.
+
+[Python SDK guide](sdk/python/README.md) ·
+[PyPI package](https://pypi.org/project/hol-cigar/) ·
+[Package qualification and limitations](packaging/pypi/README.md) ·
+[Security policy](SECURITY.md)
+
+## Start here
+
+| If you want to... | Start with |
+| :--- | :--- |
+| Use the published Python SDK developer preview | Install [`hol-cigar==0.9.1`](https://pypi.org/project/hol-cigar/); import it as `cigar_sdk`. |
+| Evaluate the Honey runtime developer preview | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
+| Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
+| Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
+| Try MCP or Claude Code | Follow the [MCP and Claude Code guide](docs/guides/honey-mcp-claude.md). |
+| Build or contribute from source | Install the versions in [`support.toml`](support.toml), then run `cargo xtask bootstrap`. |
+
+For source development, `bootstrap` validates required tools and generated artifacts. It does not
+install software or fetch missing dependencies. Tests are expected to remain hermetic and offline.
+
+```bash
+cargo xtask bootstrap
+cargo xtask test unit
+```
 
 ## Why CIGAR?
 
@@ -32,39 +76,15 @@ model runtime and provides:
 - evidence reproduction and no-egress observational replay; and
 - content-safe operational signals without storing hidden model reasoning.
 
-CIGAR is model-agnostic. It is not a model, hosted agent service, autonomous scheduler, or replacement
-for an application-specific orchestrator.
-
 ## What can you evaluate?
 
 | Workflow | What CIGAR demonstrates |
-|---|---|
-| Governed context compilation | Observe filesystem or Git sources, apply policy and budgets, and produce a stable bundle with a manifest and provenance. |
-| Two-agent collaboration | Fork private work, issue a signed and attenuated handoff, accept it once, and merge a typed result against an exact base. |
-| Recoverable external actions | Record intent before dispatch, preserve `UNKNOWN` after ambiguous execution, then reconcile or compensate explicitly. |
-| Replay and audit | Reconstruct declared inputs, verify retained evidence, or replay recorded observations without contacting a live provider. |
-| Local agent integration | Use the CLI, embedded runtime, local daemon, MCP server, Claude Code adapter, or language SDKs. |
-
-## Get started
-
-Choose the path that matches what you are trying to do:
-
-| Goal | Start here |
-|---|---|
-| Use the Python SDK developer preview | Install `hol-cigar==0.9.1` from PyPI; the import package remains `cigar_sdk`. |
-| Evaluate the Honey developer preview | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
-| Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
-| Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
-| Try MCP or Claude Code | Follow the [MCP and Claude Code guide](docs/guides/honey-mcp-claude.md). |
-| Build or contribute from source | Install the versions in [`support.toml`](support.toml), then use the commands below. |
-
-```sh
-cargo xtask bootstrap
-cargo xtask test unit
-```
-
-`bootstrap` validates required tools and generated artifacts. It does not install software or fetch
-missing dependencies. Tests are expected to remain hermetic and offline.
+| :--- | :--- |
+| **Governed context compilation** | Observe filesystem or Git sources, apply policy and budgets, and produce a stable bundle with a manifest and provenance. |
+| **Two-agent collaboration** | Fork private work, issue a signed and attenuated handoff, accept it once, and merge a typed result against an exact base. |
+| **Recoverable external actions** | Record intent before dispatch, preserve `UNKNOWN` after ambiguous execution, then reconcile or compensate explicitly. |
+| **Replay and audit** | Reconstruct declared inputs, verify retained evidence, or replay recorded observations without contacting a live provider. |
+| **Local agent integration** | Use the CLI, embedded runtime, local daemon, MCP server, Claude Code adapter, or language SDKs. |
 
 ## How it works
 
@@ -133,13 +153,14 @@ that a surface is selected, packaged, qualified, published, or supported by this
 The checked-in product authority currently declares:
 
 | Property | Value |
-|---|---|
+| :--- | :--- |
 | Marketing name | CIGAR Honey v0.9 |
 | Version | `0.9.0-honey.1` |
 | Context ABI | `cigar.context.v1` |
 | Release state | `developer-preview` |
 | Target | `aarch64-apple-darwin` |
-| Publication | Not published |
+| Honey runtime publication | Not published |
+| Python SDK publication | [`hol-cigar` 0.9.1 on PyPI](https://pypi.org/project/hol-cigar/) |
 | Support | Unsupported evaluation software |
 | Production qualification | False |
 | Signing and notarization | Not included |
@@ -164,7 +185,7 @@ documents do not expand Honey's release claims.
 ## Repository map
 
 | Path | Contents |
-|---|---|
+| :--- | :--- |
 | `crates/` | Rust protocol, catalog, compiler, policy, space, effects, replay, storage, API, daemon, CLI, MCP, and support crates. |
 | `sdk/` | Python, TypeScript, Rust, and Go SDK source and contract tests. Go is not selected for Honey packaging. |
 | `adapters/`, `connectors/` | Claude Code and source-system integrations. |
@@ -178,6 +199,8 @@ documents do not expand Honey's release claims.
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Python SDK package on PyPI](https://pypi.org/project/hol-cigar/)
+- [Python SDK guide](sdk/python/README.md)
 - [Core concepts](docs/guides/concepts.md)
 - [Honey installation](docs/guides/honey-install.md)
 - [Honey offline quickstart](docs/guides/honey-quickstart.md)
@@ -197,6 +220,14 @@ with sensitive material.
 
 Report vulnerabilities through the private process in [`SECURITY.md`](SECURITY.md). Do not publish
 private source, prompts, credentials, handoff capsules, transcripts, or diagnostic archives.
+
+## Resources
+
+- [HOL](https://hol.org)
+- [HOL GitHub organization](https://github.com/hashgraph-online)
+- [`hol-cigar` on PyPI](https://pypi.org/project/hol-cigar/)
+- [CIGAR documentation](docs/README.md)
+- [GitHub Issues](https://github.com/hashgraph-online/hol-cigar/issues)
 
 ## License
 
