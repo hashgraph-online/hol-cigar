@@ -93,7 +93,24 @@ fn normalize_space(value: &str) -> String {
 }
 
 fn validate_profile(profile: &CompilerProfile) -> Result<(), CompilerError> {
-    if profile.profile_id != "cigar.compiler-profile.balanced.v1"
+    let v1 = profile.profile_id == "cigar.compiler-profile.balanced.v1";
+    let v2 = profile.profile_id == "cigar.compiler-profile.balanced.v2-candidate.1";
+    let experimental = [
+        profile.marginal_requirement_weight,
+        profile.marginal_entity_weight,
+        profile.dependency_cost_penalty,
+        profile.diversity_weight,
+        profile.redundancy_penalty,
+    ];
+    if (!v1 && !v2)
+        || (v1 && profile.retrieval_profile != cigar_retrieval::RetrievalProfile::BalancedV1)
+        || (v2
+            && profile.retrieval_profile != cigar_retrieval::RetrievalProfile::BalancedV2Candidate)
+        || (v1 && !profile.utility_density_ranking)
+        || (v1 && profile.minimum_lexical_match != 0)
+        || profile.minimum_lexical_match > cigar_retrieval::MAX_FEATURE_VALUE
+        || (v1 && experimental.iter().any(|value| *value != 0))
+        || experimental.iter().any(|value| *value < 0)
         || profile.local_swap_passes > crate::MAX_LOCAL_SWAP_PASSES
         || profile.local_swap_alternatives == 0
         || profile.local_swap_alternatives > 256
@@ -455,7 +472,7 @@ fn candidate_utility(
 ) -> Result<i64, CompilerError> {
     let base = candidate
         .features
-        .balanced_score()
+        .score(profile.retrieval_profile)
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
     let requirement_count = i64::try_from(candidate.requirement_indices.len())
         .map_err(|_error| CompilerError::new(CompilerErrorCode::LimitExceeded))?;
@@ -551,19 +568,92 @@ fn ranked_unselected(
 ) -> Result<Vec<VersionId>, CompilerError> {
     let mut values = Vec::new();
     for (version, candidate) in eligible {
-        if selected.contains_key(version) || lane.is_some_and(|expected| candidate.lane != expected)
+        if selected.contains_key(version)
+            || lane.is_some_and(|expected| candidate.lane != expected)
+            || candidate.features.lexical_match < profile.minimum_lexical_match
         {
             continue;
         }
         let representation = choose_representation(candidate, profile, false)?;
-        let utility = candidate_utility(candidate, &representation, profile)?;
+        let utility = marginal_utility(candidate, &representation, profile, selected)?;
         values.push((version.clone(), utility, representation.token_count));
     }
     values.sort_by(|left, right| {
-        ratio_order(right.1, right.2, left.1, left.2)
-            .then_with(|| candidate_order(&eligible[&left.0], &eligible[&right.0]))
+        (if profile.utility_density_ranking {
+            ratio_order(right.1, right.2, left.1, left.2)
+        } else {
+            right.1.cmp(&left.1).then_with(|| left.2.cmp(&right.2))
+        })
+        .then_with(|| candidate_order(&eligible[&left.0], &eligible[&right.0]))
     });
     Ok(values.into_iter().map(|value| value.0).collect())
+}
+
+fn marginal_utility(
+    candidate: &CompilerCandidate,
+    representation: &RepresentationVariant,
+    profile: &CompilerProfile,
+    selected: &BTreeMap<VersionId, Selection>,
+) -> Result<i64, CompilerError> {
+    let base = candidate_utility(candidate, representation, profile)?;
+    let covered_requirements: BTreeSet<_> = selected
+        .values()
+        .flat_map(|selection| selection.candidate.requirement_indices.iter().copied())
+        .collect();
+    let covered_entities = selected.values().fold(0_u64, |bits, selection| {
+        bits | selection.candidate.entity_coverage_bits
+    });
+    let new_requirements = candidate
+        .requirement_indices
+        .difference(&covered_requirements)
+        .count();
+    let redundant_requirements = candidate.requirement_indices.len() - new_requirements;
+    let new_entities = (candidate.entity_coverage_bits & !covered_entities).count_ones();
+    let redundant_entities = (candidate.entity_coverage_bits & covered_entities).count_ones();
+    let diverse_lane = !selected
+        .values()
+        .any(|selection| selection.candidate.lane == candidate.lane);
+    let signed = [
+        (
+            profile.marginal_requirement_weight,
+            i64::try_from(new_requirements)
+                .map_err(|_error| CompilerError::new(CompilerErrorCode::LimitExceeded))?,
+            true,
+        ),
+        (
+            profile.marginal_entity_weight,
+            i64::from(new_entities),
+            true,
+        ),
+        (profile.diversity_weight, i64::from(diverse_lane), true),
+        (
+            profile.dependency_cost_penalty,
+            i64::try_from(candidate.dependencies.len())
+                .map_err(|_error| CompilerError::new(CompilerErrorCode::LimitExceeded))?,
+            false,
+        ),
+        (
+            profile.redundancy_penalty,
+            i64::try_from(redundant_requirements)
+                .map_err(|_error| CompilerError::new(CompilerErrorCode::LimitExceeded))?
+                .checked_add(i64::from(redundant_entities))
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::LimitExceeded))?,
+            false,
+        ),
+    ];
+    signed
+        .into_iter()
+        .try_fold(base, |utility, (weight, count, add)| {
+            let amount = weight
+                .checked_mul(count)
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::LimitExceeded))?;
+            if add {
+                utility.checked_add(amount)
+            } else {
+                utility.checked_sub(amount)
+            }
+            .ok_or_else(|| CompilerError::new(CompilerErrorCode::LimitExceeded))
+        })
 }
 
 fn ratio_order(
@@ -1127,6 +1217,16 @@ fn profile_digest(profile: &CompilerProfile) -> Result<ContentDigest, CompilerEr
     hasher.update(profile.requirement_coverage_weight.to_be_bytes());
     hasher.update(profile.entity_coverage_weight.to_be_bytes());
     hasher.update(profile.loss_penalty.to_be_bytes());
+    if profile.profile_id != "cigar.compiler-profile.balanced.v1" {
+        hasher.update(profile.retrieval_profile.identifier().as_bytes());
+        hasher.update([u8::from(profile.utility_density_ranking)]);
+        hasher.update(profile.minimum_lexical_match.to_be_bytes());
+        hasher.update(profile.marginal_requirement_weight.to_be_bytes());
+        hasher.update(profile.marginal_entity_weight.to_be_bytes());
+        hasher.update(profile.dependency_cost_penalty.to_be_bytes());
+        hasher.update(profile.diversity_weight.to_be_bytes());
+        hasher.update(profile.redundancy_penalty.to_be_bytes());
+    }
     ContentDigest::new(multihash(hasher))
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))
 }

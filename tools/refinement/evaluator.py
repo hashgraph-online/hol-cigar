@@ -650,7 +650,7 @@ def _derive_metrics(
                 for item in critical
             )
         ),
-        0,
+        len(selected_blocks) + 1 if critical else 0,
     )
     required_claims = {claim["claim_id"]: claim for claim in oracle["required_claims"]}
     sufficient_claims = sum(
@@ -696,7 +696,7 @@ def _derive_metrics(
         _metric("temporal_correctness", int(all_critical), 1, "boolean", ["observation", "oracle"], applicable=temporal),
         _metric("conflict_correctness", int(all_critical), 1, "boolean", ["observation", "oracle"], applicable=conflict),
         _metric("abstention_correctness", int(claims is not None and claims["answer_status"] in {"abstained", "insufficient_evidence"}), 1, "boolean", claims_sources, applicable=oracle["allowed_abstention"] and claims is not None),
-        _metric("first_useful_evidence_rank", first_rank, 1, "rank", ["observation", "oracle"], applicable=bool(critical) and first_rank > 0),
+        _metric("first_useful_evidence_rank", first_rank, 1, "rank", ["observation", "oracle"], applicable=bool(critical)),
         _metric("evidence_sufficiency", sufficient_claims, len(required_claims), "ratio", ["observation", "oracle"], applicable=bool(required_claims)),
         _metric("selected_provenance_coverage", sum(bool(block["provenance_ids"]) for block in selected_blocks), len(selected_blocks), "ratio", ["observation"], applicable=bool(selected_blocks)),
         _metric("authorization_violations", len(prohibited_blocks), 1, "count", ["observation", "oracle"]),

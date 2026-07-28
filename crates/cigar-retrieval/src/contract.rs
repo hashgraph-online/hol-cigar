@@ -551,50 +551,7 @@ pub struct CandidateFeatures {
 impl CandidateFeatures {
     /// Validates all normalized features and computes the checked balanced-v1 score.
     pub fn balanced_score(self) -> Result<i64, RetrievalError> {
-        let normalized = [
-            self.requirement_match,
-            self.exact_match,
-            self.lexical_match,
-            self.semantic_match,
-            self.graph_proximity,
-            self.project_proximity,
-            self.task_proximity,
-            self.authority,
-            self.verification,
-            self.freshness,
-            self.novelty,
-            self.conflict_risk,
-            self.staleness,
-        ];
-        if normalized.iter().any(|value| *value > MAX_FEATURE_VALUE) {
-            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
-        }
-        let positive = [
-            (280_i64, self.requirement_match),
-            (150, self.exact_match),
-            (110, self.lexical_match),
-            (80, self.semantic_match),
-            (90, self.graph_proximity),
-            (70, self.project_proximity),
-            (60, self.task_proximity),
-            (90, self.authority),
-            (45, self.verification),
-            (35, self.freshness),
-            (30, self.novelty),
-        ];
-        let negative = [(130_i64, self.conflict_risk), (100, self.staleness)];
-        let mut score = 0_i64;
-        for (weight, value) in positive {
-            score = score
-                .checked_add(weight * i64::from(value))
-                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?;
-        }
-        for (weight, value) in negative {
-            score = score
-                .checked_sub(weight * i64::from(value))
-                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?;
-        }
-        Ok(score)
+        self.score(crate::RetrievalProfile::BalancedV1)
     }
 }
 

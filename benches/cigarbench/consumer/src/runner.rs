@@ -1,7 +1,7 @@
 //! Production catalog-to-materialization benchmark execution.
 
 use crate::ConsumerError;
-use crate::assignment::{Assignment, ExtractedFixture, multihash};
+use crate::assignment::{Assignment, ExtractedFixture, IntelligenceProfile, multihash};
 use crate::observation::{
     Artifact, EffectReplay, Observation, Pins, Resources, ToolObservation, body_prefix,
     canonical_json, core_artifacts, dispositions, normalized_duration, phase, selected_blocks,
@@ -41,8 +41,9 @@ use cigar_protocol::{
 };
 use cigar_replay::{ReplayDimensionDigests, compare_replay_dimensions};
 use cigar_retrieval::{
-    AuthorizedPartition, InMemoryIndexManager, IndexBuild, RetrievalConsistency, RetrievalContext,
-    RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever,
+    AuthorizedPartition, InMemoryIndexManager, IndexBuild, QueryPlannerProfile,
+    RetrievalConsistency, RetrievalContext, RetrievalErrorCode, RetrievalProfile, RetrievalRequest,
+    RetrievalStage, Retriever,
 };
 use cigar_space::{CreateHandoffRequest, HandoffService};
 use cigar_store::{
@@ -133,6 +134,18 @@ struct PlannerProfilePin {
     metadata_timeout_ms: u64,
     lexical_timeout_ms: u64,
     vector_timeout_ms: u64,
+}
+
+#[derive(Serialize)]
+struct ExperimentalPlannerProfilePin {
+    schema_version: &'static str,
+    base: PlannerProfilePin,
+    exact_graph_depth: u16,
+    graph_cap: u64,
+    graph_timeout_ms: u64,
+    augment_queries: bool,
+    augment_cap: u64,
+    augment_timeout_ms: u64,
 }
 
 #[derive(Serialize)]
@@ -257,23 +270,46 @@ pub async fn run(
         tenant_id: tenant_id.clone(),
         principal_id: principal_id.clone(),
     }));
-    let retriever = Arc::new(InMemoryIndexManager::default());
+    let (retrieval_profile, compiler_profile) = match assignment
+        .intelligence_profile
+        .unwrap_or(IntelligenceProfile::BalancedV1)
+    {
+        IntelligenceProfile::BalancedV1 => {
+            (RetrievalProfile::BalancedV1, CompilerProfile::default())
+        }
+        IntelligenceProfile::BalancedV2Candidate1 => (
+            RetrievalProfile::BalancedV2Candidate,
+            CompilerProfile::balanced_v2_candidate(),
+        ),
+    };
+    let retriever = Arc::new(InMemoryIndexManager::with_experimental_profile(
+        retrieval_profile,
+    ));
     let tokenizer_registry = Arc::new(
         PinnedContextTokenizerRegistry::with_reference_profiles()
             .map_err(|_error| ConsumerError::new("tokenizer_registry"))?,
     );
     let clock = Arc::new(FixedClock(now));
     let errors: Arc<dyn FacadeErrorFactory> = Arc::new(Errors(record(106)?));
-    let application = Arc::new(CatalogContextApplication::new(
-        Arc::clone(&store),
-        identities,
-        authorizer,
-        retriever.clone(),
-        tokenizer_registry,
-        Arc::new(BlockingPool::new(2, 2).map_err(|_error| ConsumerError::new("blocking_pool"))?),
-        clock,
-        Arc::clone(&errors),
-    ));
+    let application = Arc::new(
+        CatalogContextApplication::new(
+            Arc::clone(&store),
+            identities,
+            authorizer,
+            retriever.clone(),
+            tokenizer_registry,
+            Arc::new(
+                BlockingPool::new(2, 2).map_err(|_error| ConsumerError::new("blocking_pool"))?,
+            ),
+            clock,
+            Arc::clone(&errors),
+        )
+        .with_benchmark_compiler_profile(compiler_profile.clone())
+        .with_benchmark_query_planner_profile(match retrieval_profile {
+            RetrievalProfile::BalancedV1 => QueryPlannerProfile::default(),
+            RetrievalProfile::BalancedV2Candidate => QueryPlannerProfile::balanced_v2_candidate(),
+        }),
+    );
     application
         .provision_source(
             tenant_id.clone(),
@@ -335,7 +371,12 @@ pub async fn run(
                 edges,
                 built_through_revision: catalog_revision,
                 tenant_watermarks: BTreeMap::from([(tenant_id.clone(), catalog_revision)]),
-                configuration_digest: multihash(b"cigar.benchmark-index.lexical.v1")?,
+                configuration_digest: match retrieval_profile {
+                    RetrievalProfile::BalancedV1 => multihash(b"cigar.benchmark-index.lexical.v1")?,
+                    RetrievalProfile::BalancedV2Candidate => retrieval_profile
+                        .digest()
+                        .map_err(|_error| ConsumerError::new("retrieval_profile"))?,
+                },
                 verified_at: now,
                 vector_binding: None,
             },
@@ -356,9 +397,9 @@ pub async fn run(
     let target = tokenizer_profile
         .target_profile(materializer.clone(), assignment.max_context_tokens)
         .map_err(|_error| ConsumerError::new("target_profile"))?;
-    let compiler = compiler_profile_digest(&CompilerProfile::default())
+    let compiler = compiler_profile_digest(&compiler_profile)
         .map_err(|_error| ConsumerError::new("compiler_profile"))?;
-    let planner = multihash(&canonical_json(&PlannerProfilePin {
+    let base_planner = PlannerProfilePin {
         schema_version: "cigar.query-planner-profile.v1",
         exact_cap: 16,
         metadata_cap: 256,
@@ -368,7 +409,22 @@ pub async fn run(
         metadata_timeout_ms: 500,
         lexical_timeout_ms: 750,
         vector_timeout_ms: 1_000,
-    })?)?;
+    };
+    let planner = match retrieval_profile {
+        RetrievalProfile::BalancedV1 => multihash(&canonical_json(&base_planner)?)?,
+        RetrievalProfile::BalancedV2Candidate => {
+            multihash(&canonical_json(&ExperimentalPlannerProfilePin {
+                schema_version: "cigar.query-planner-profile.v2-candidate.1",
+                base: base_planner,
+                exact_graph_depth: 2,
+                graph_cap: 128,
+                graph_timeout_ms: 750,
+                augment_queries: false,
+                augment_cap: 128,
+                augment_timeout_ms: 500,
+            })?)?
+        }
+    };
     let consumer = consumer_executable_digest()?;
     let contract = ContextContract {
         schema_version: SchemaVersion::new("cigar.context-contract", 1)

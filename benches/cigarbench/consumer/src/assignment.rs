@@ -99,6 +99,17 @@ impl SemanticType {
     }
 }
 
+/// Benchmark-only retrieval/compiler intelligence selection.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IntelligenceProfile {
+    /// Frozen Honey behavior.
+    #[serde(rename = "balanced.v1")]
+    BalancedV1,
+    /// First experimental versioned candidate.
+    #[serde(rename = "balanced.v2-candidate.1")]
+    BalancedV2Candidate1,
+}
+
 /// One strict assignment consumed by exactly one process invocation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -141,6 +152,9 @@ pub struct Assignment {
     pub model: String,
     /// Pinned prompt digest.
     pub prompt_digest: ContentDigest,
+    /// Optional benchmark-only intelligence profile; absence is frozen balanced.v1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intelligence_profile: Option<IntelligenceProfile>,
 }
 
 impl Assignment {

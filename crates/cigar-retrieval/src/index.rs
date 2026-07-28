@@ -3,8 +3,8 @@
 use crate::{
     CandidateBatch, CandidateFeatures, CandidateRef, IndexGenerationState, IndexKind,
     MatchEvidence, RetrievalConsistency, RetrievalContext, RetrievalDisclosure, RetrievalError,
-    RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever, VectorAdapter,
-    VectorIndexBinding, VectorQuery,
+    RetrievalErrorCode, RetrievalProfile, RetrievalRequest, RetrievalStage, Retriever,
+    VectorAdapter, VectorIndexBinding, VectorQuery,
 };
 use cigar_policy::RetrievalResourceAuthorizationRequest;
 use cigar_protocol::{
@@ -192,6 +192,7 @@ struct ManagerState {
 pub struct InMemoryIndexManager {
     state: RwLock<ManagerState>,
     vector_adapter: RwLock<Option<Arc<dyn VectorAdapter>>>,
+    profile: RetrievalProfile,
 }
 
 impl Default for InMemoryIndexManager {
@@ -199,6 +200,7 @@ impl Default for InMemoryIndexManager {
         Self {
             state: RwLock::new(ManagerState::default()),
             vector_adapter: RwLock::new(None),
+            profile: RetrievalProfile::BalancedV1,
         }
     }
 }
@@ -216,6 +218,18 @@ impl InMemoryIndexManager {
         Self {
             state: RwLock::new(ManagerState::default()),
             vector_adapter: RwLock::new(Some(adapter)),
+            profile: RetrievalProfile::BalancedV1,
+        }
+    }
+
+    /// Creates an index using a benchmark-only experimental intelligence profile.
+    #[cfg(any(test, feature = "experimental-profiles"))]
+    #[must_use]
+    pub fn with_experimental_profile(profile: RetrievalProfile) -> Self {
+        Self {
+            state: RwLock::new(ManagerState::default()),
+            vector_adapter: RwLock::new(None),
+            profile,
         }
     }
 
@@ -608,8 +622,10 @@ impl InMemoryIndexManager {
                 &evidence,
                 semantic_scores.get(&version).copied().unwrap_or_default(),
                 lag,
+                request,
+                self.profile,
             );
-            let total_score = features.balanced_score()?;
+            let total_score = features.score(self.profile)?;
             candidates.push(CandidateRef {
                 version_id: version,
                 canonical_uri: document.atom.source.uri.clone(),
@@ -1141,6 +1157,8 @@ fn candidate_features(
     evidence: &BTreeSet<MatchEvidence>,
     semantic_score: u16,
     lag: u64,
+    request: &RetrievalRequest,
+    profile: RetrievalProfile,
 ) -> CandidateFeatures {
     let minimum_depth = evidence
         .iter()
@@ -1152,7 +1170,7 @@ fn candidate_features(
             }
         })
         .min();
-    CandidateFeatures {
+    let mut features = CandidateFeatures {
         requirement_match: u16::from(!evidence.is_empty()) * 10_000,
         exact_match: u16::from(evidence.contains(&MatchEvidence::ExactIdentity)) * 10_000,
         lexical_match: u16::from(evidence.contains(&MatchEvidence::Lexical)) * 10_000,
@@ -1171,7 +1189,87 @@ fn candidate_features(
         estimated_tokens: document.estimated_tokens,
         requirement_coverage_bits: 0,
         entity_coverage_bits: 0,
+    };
+    if profile == RetrievalProfile::BalancedV2Candidate {
+        features.exact_match = if evidence.contains(&MatchEvidence::ExactIdentity) {
+            10_000
+        } else if evidence.contains(&MatchEvidence::ExactPath)
+            || evidence.contains(&MatchEvidence::DeclaredTerm)
+        {
+            9_000
+        } else {
+            0
+        };
+        features.lexical_match = lexical_feature(request, document, evidence);
+        features.task_proximity = if evidence.contains(&MatchEvidence::DeclaredTerm) {
+            10_000
+        } else if evidence.contains(&MatchEvidence::ExactPath) {
+            8_000
+        } else {
+            0
+        };
+        features.verification =
+            u16::try_from(document.atom.quality.confidence.millionths() / 100).unwrap_or(10_000);
+        features.novelty =
+            u16::try_from(document.atom.quality.coverage.millionths() / 100).unwrap_or(10_000);
+        features.requirement_coverage_bits = u64::from(!evidence.is_empty());
+        features.entity_coverage_bits = entity_coverage_bits(request, document);
     }
+    features
+}
+
+fn lexical_feature(
+    request: &RetrievalRequest,
+    document: &IndexedDocument,
+    evidence: &BTreeSet<MatchEvidence>,
+) -> u16 {
+    if !evidence.contains(&MatchEvidence::Lexical) || request.terms.is_empty() {
+        return 0;
+    }
+    let terms: BTreeSet<_> = request
+        .terms
+        .iter()
+        .map(|term| normalize_term(term))
+        .collect();
+    let matched = terms.intersection(&document.lexical_terms).count();
+    let declared = terms.intersection(&document.declared_terms).count();
+    let path_bonus = document
+        .atom
+        .source
+        .relative_path
+        .as_ref()
+        .is_some_and(|path| {
+            std::str::from_utf8(path.as_bytes()).is_ok_and(|path| {
+                let normalized = path.to_lowercase();
+                terms.iter().any(|term| normalized.contains(term))
+            })
+        });
+    let ratio = matched.saturating_mul(8_000) / terms.len();
+    u16::try_from(
+        ratio
+            .saturating_add(usize::from(declared > 0) * 1_500)
+            .saturating_add(usize::from(path_bonus) * 500)
+            .min(10_000),
+    )
+    .unwrap_or(10_000)
+}
+
+fn entity_coverage_bits(request: &RetrievalRequest, document: &IndexedDocument) -> u64 {
+    let mut bits = 0_u64;
+    for term in &request.terms {
+        let normalized = normalize_term(term);
+        if document.lexical_terms.contains(&normalized)
+            || document.declared_terms.contains(&normalized)
+        {
+            let mut hasher = Sha256::new();
+            hasher.update(b"CIGAR-ENTITY-COVERAGE\0v1\0");
+            hasher.update(normalized.as_bytes());
+            let digest = hasher.finalize();
+            let index = usize::from(digest.first().copied().unwrap_or_default() & 63);
+            bits |= 1_u64 << index;
+        }
+    }
+    bits
 }
 
 const fn authority_feature(authority: InstructionAuthority) -> u16 {
@@ -1379,8 +1477,8 @@ mod tests {
     use super::{InMemoryIndexManager, IndexBuild, finish_digest};
     use crate::{
         AuthorizedPartition, IndexGenerationState, ProcessorApprovedVector, RetrievalConsistency,
-        RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalRequest, RetrievalStage,
-        Retriever, VectorAdapter, VectorIndexBinding, VectorNeighbor, VectorQuery,
+        RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalProfile, RetrievalRequest,
+        RetrievalStage, Retriever, VectorAdapter, VectorIndexBinding, VectorNeighbor, VectorQuery,
     };
     use cigar_protocol::{
         Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority, Lifecycle,
@@ -2043,6 +2141,45 @@ mod tests {
             assert_eq!(candidate.features.freshness, 10_000);
             assert_eq!(candidate.total_score, 5_575_000);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn experimental_profile_uses_only_authorized_metadata_and_is_deterministic()
+    -> Result<(), Box<dyn Error>> {
+        let tenant = record(61)?;
+        let project = record(62)?;
+        let mut document = atom(
+            61,
+            &tenant,
+            &project,
+            "ExactSymbol helper unrelated distractor",
+        )?;
+        document.retrieval.exact_terms = vec!["exactsymbol".to_owned()];
+        let manager =
+            InMemoryIndexManager::with_experimental_profile(RetrievalProfile::BalancedV2Candidate);
+        let generation = manager.build_generation(
+            build(vec![document.clone()], Vec::new(), 70, false)?,
+            &context(),
+        )?;
+        manager.activate(&generation.generation_id, None)?;
+        let mut lexical = request(RetrievalStage::Lexical, partition(&tenant, [project])?, 70);
+        lexical.terms = ["exactsymbol".to_owned(), "missing".to_owned()]
+            .into_iter()
+            .collect();
+        let first = manager.retrieve(&lexical, &context())?;
+        let second = manager.retrieve(&lexical, &context())?;
+        assert_eq!(first, second);
+        let candidate = first.candidates.first().ok_or("missing candidate")?;
+        assert_eq!(candidate.features.lexical_match, 5_500);
+        assert_eq!(candidate.features.verification, 9_000);
+        assert_ne!(candidate.features.entity_coverage_bits, 0);
+        assert_eq!(
+            candidate.total_score,
+            candidate
+                .features
+                .score(RetrievalProfile::BalancedV2Candidate)?
+        );
         Ok(())
     }
 

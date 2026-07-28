@@ -41,6 +41,12 @@
       }
     },
     "model": {"$ref": "common-v1.schema.json#/$defs/identifier"},
-    "prompt_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    "prompt_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "intelligence_profile": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["balanced.v1", "balanced.v2-candidate.1"]}
+      ]
+    }
   }
 }

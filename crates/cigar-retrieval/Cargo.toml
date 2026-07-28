@@ -11,6 +11,9 @@ authors.workspace = true
 publish = ["crates-io"]
 include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
 
+[features]
+experimental-profiles = []
+
 [lints]
 workspace = true
 

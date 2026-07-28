@@ -389,6 +389,56 @@ class StatisticsTests(unittest.TestCase):
             "reject_invalid_evidence",
         )
 
+    def test_sparse_applicability_and_zero_cost_are_compared_without_fabrication(
+        self,
+    ) -> None:
+        value = self.sample()
+        sparse = {
+            "abstention_correctness",
+            "citation_precision",
+            "citation_recall",
+            "conflict_correctness",
+            "human_agreement",
+            "unsupported_claim_rate",
+        }
+        for pair in value["pairs"]:
+            for role in ("champion", "candidate", "honey"):
+                for row in pair[role]["metrics"]:
+                    unavailable = row["name"] in sparse or (
+                        row["name"] == "temporal_correctness"
+                        and pair["stratum"] != "Temporal-Truth"
+                    )
+                    if row["name"] == "peak_rss_bytes":
+                        unavailable = True
+                    if unavailable:
+                        row.update(
+                            {
+                                "numerator": 0,
+                                "denominator": 0,
+                                "value": 0,
+                                "applicable": False,
+                            }
+                        )
+                    elif row["name"] == "cost_usd":
+                        row.update({"numerator": 0, "value": 0})
+        body = dict(value)
+        body.pop("input_id")
+        value["input_id"] = canonical.identity(body)
+        comparison = self.run_comparison(value)
+        self.assertEqual(comparison["verdict"], "eligible")
+        peak = next(
+            item
+            for item in comparison["performance"]
+            if item["name"] == "peak_rss_bytes"
+        )
+        cost = next(
+            item
+            for item in comparison["performance"]
+            if item["name"] == "cost_usd"
+        )
+        self.assertTrue(peak["noninferior"])
+        self.assertEqual(cost["relative_benefit"], 0)
+
     def test_nonpromoted_candidates_form_append_only_pareto_history(self) -> None:
         def no_gain(role, name, _stratum, _task, _seed, value):
             if role == "candidate" and name == "verified_task_success":

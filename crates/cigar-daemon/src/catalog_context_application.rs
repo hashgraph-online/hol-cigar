@@ -48,9 +48,10 @@ use cigar_protocol::{
     SelectionManifest, SourceUri, UtcTimestamp, Validate, VersionId,
 };
 use cigar_retrieval::{
-    AuthorizedPartition, CandidateFeatures, CandidateRef, QueryPlanner, QueryVectorProcessor,
-    RetrievalConsistency, RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalRequest,
-    RetrievalStage, Retriever, StagedRetrieval, StagedRetrievalResult,
+    AuthorizedPartition, CandidateFeatures, CandidateRef, QueryPlanner, QueryPlannerProfile,
+    QueryVectorProcessor, RetrievalConsistency, RetrievalContext, RetrievalError,
+    RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever, StagedRetrieval,
+    StagedRetrievalResult,
 };
 use cigar_space::{RecipientBundleReceipt, ResultMergeKind};
 use cigar_store::{
@@ -504,6 +505,8 @@ where
     query_vector_processor: Option<Arc<dyn QueryVectorProcessor>>,
     tokenizers: Arc<dyn ContextTokenizerRegistry>,
     compiler_control_plane: Arc<DurableCompilerControlPlane>,
+    compiler_profile: CompilerProfile,
+    query_planner_profile: QueryPlannerProfile,
     blocking_pool: Arc<BlockingPool>,
     clock: Arc<dyn AuthorityClock>,
     errors: Arc<dyn FacadeErrorFactory>,
@@ -524,6 +527,8 @@ where
             query_vector_processor: self.query_vector_processor.clone(),
             tokenizers: Arc::clone(&self.tokenizers),
             compiler_control_plane: Arc::clone(&self.compiler_control_plane),
+            compiler_profile: self.compiler_profile.clone(),
+            query_planner_profile: self.query_planner_profile,
             blocking_pool: Arc::clone(&self.blocking_pool),
             clock: Arc::clone(&self.clock),
             errors: Arc::clone(&self.errors),
@@ -559,6 +564,8 @@ where
             query_vector_processor: None,
             tokenizers,
             compiler_control_plane: Arc::new(DurableCompilerControlPlane::new(compiler_repository)),
+            compiler_profile: CompilerProfile::default(),
+            query_planner_profile: QueryPlannerProfile::default(),
             blocking_pool,
             clock,
             errors,
@@ -578,6 +585,22 @@ where
     #[must_use]
     pub fn with_query_vector_processor(mut self, processor: Arc<dyn QueryVectorProcessor>) -> Self {
         self.query_vector_processor = Some(processor);
+        self
+    }
+
+    /// Selects a digest-bound compiler profile for benchmark-only experimental composition.
+    #[cfg(any(test, feature = "experimental-profiles"))]
+    #[must_use]
+    pub fn with_benchmark_compiler_profile(mut self, profile: CompilerProfile) -> Self {
+        self.compiler_profile = profile;
+        self
+    }
+
+    /// Selects bounded graph/augmentation planning for benchmark-only composition.
+    #[cfg(any(test, feature = "experimental-profiles"))]
+    #[must_use]
+    pub fn with_benchmark_query_planner_profile(mut self, profile: QueryPlannerProfile) -> Self {
+        self.query_planner_profile = profile;
         self
     }
 
@@ -1130,7 +1153,8 @@ where
         .map_err(map_store_error)?;
         let revision = self.current_catalog_revision(access, &state.store_cancellation)?;
         let partition = authorized_partition(&state, &authorization)?;
-        let plan = QueryPlanner::default()
+        let plan = QueryPlanner::new(self.query_planner_profile)
+            .map_err(map_retrieval_error)?
             .plan_with_vector_processor(
                 &request.requirements,
                 &partition,
@@ -1398,7 +1422,8 @@ where
         };
         self.record_compile_phase(CompilePhase::Scope, phase_started.elapsed());
         let phase_started = Instant::now();
-        let retrieval_plan = QueryPlanner::default()
+        let retrieval_plan = QueryPlanner::new(self.query_planner_profile)
+            .map_err(map_retrieval_error)?
             .plan_with_vector_processor(
                 &contract.requirements,
                 &partition,
@@ -1476,7 +1501,7 @@ where
         let catalog_watermark = authorized_catalog_watermark(&retrieval, &atoms, &dependencies)?;
         let retrieval_plan_digest = retained_retrieval_digest(&contract, &retrieval)?;
         let index_fingerprints = retained_index_fingerprints(&retrieval, &catalog_watermark)?;
-        let profile = CompilerProfile::default();
+        let profile = self.compiler_profile.clone();
         let profile_digest = compiler_profile_digest(&profile).map_err(map_compiler_error)?;
         self.record_compile_phase(CompilePhase::Reconcile, phase_started.elapsed());
         let phase_started = Instant::now();
@@ -2420,16 +2445,18 @@ where
                 }
             }
         }
-        let current_retrieval = QueryPlanner::default().plan_with_vector_processor(
-            &retained.normalized_contract.requirements,
-            &partition,
-            retained.catalog_store_revision,
-            RetrievalConsistency::Strong,
-            authorization
-                .vector_allowed
-                .then_some(self.query_vector_processor.as_deref())
-                .flatten(),
-        );
+        let current_retrieval = QueryPlanner::new(self.query_planner_profile).and_then(|planner| {
+            planner.plan_with_vector_processor(
+                &retained.normalized_contract.requirements,
+                &partition,
+                retained.catalog_store_revision,
+                RetrievalConsistency::Strong,
+                authorization
+                    .vector_allowed
+                    .then_some(self.query_vector_processor.as_deref())
+                    .flatten(),
+            )
+        });
         match current_retrieval.and_then(|plan| {
             StagedRetrieval.execute(
                 &plan,

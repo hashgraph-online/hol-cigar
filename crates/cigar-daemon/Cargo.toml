@@ -66,6 +66,9 @@ tempfile.workspace = true
 [lints]
 workspace = true
 
+[features]
+experimental-profiles = []
+
 [[bin]]
 name = "cigard"
 path = "src/main.rs"

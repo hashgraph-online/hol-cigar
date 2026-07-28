@@ -236,8 +236,10 @@ def _benefit(
         else baseline_mean - candidate_mean
     )
     if relative:
-        if baseline_mean <= 0:
+        if baseline_mean < 0:
             raise StatisticsError("relative comparison baseline must be positive")
+        if baseline_mean == 0:
+            return 0.0 if candidate_mean == 0 else -1.0
         benefit /= baseline_mean
     return benefit
 
@@ -491,22 +493,27 @@ def compare(
                 }
             )
             continue
+        metric_pairs = [
+            pair
+            for pair in pairs
+            if pair["_metric_maps"]["candidate"][name]["applicable"]
+        ]
         statistic = lambda sample, n=name, d=direction: _benefit(
             sample, n, "champion", d
         )
         honey_statistic = lambda sample, n=name, d=direction: _benefit(
             sample, n, "honey", d
         )
-        benefit = statistic(pairs)
-        honey_benefit = honey_statistic(pairs)
+        benefit = statistic(metric_pairs)
+        honey_benefit = honey_statistic(metric_pairs)
         boot = _resample_values(
-            pairs,
+            metric_pairs,
             statistic,
             input_value["bootstrap_repetitions"],
             _rng(input_value["input_id"], f"metric:{name}:champion"),
         )
         honey_boot = _resample_values(
-            pairs,
+            metric_pairs,
             honey_statistic,
             input_value["bootstrap_repetitions"],
             _rng(input_value["input_id"], f"metric:{name}:honey"),
@@ -517,7 +524,9 @@ def compare(
             honey_boot, input_value["confidence_percent"]
         )
         seed_benefits = [
-            statistic([pair for pair in pairs if pair["seed_index"] == seed])
+            statistic(
+                [pair for pair in metric_pairs if pair["seed_index"] == seed]
+            )
             for seed in seed_indexes
         ]
         floor = spec["absolute_floor"]
@@ -592,14 +601,38 @@ def compare(
     performance = []
     for spec in policy["performance_metrics"]:
         name = spec["name"]
+        metric_pairs = [
+            pair
+            for pair in pairs
+            if pair["_metric_maps"]["candidate"][name]["applicable"]
+        ]
+        if not metric_pairs:
+            performance.append(
+                {
+                    "name": name,
+                    "champion": 0,
+                    "candidate": 0,
+                    "relative_benefit": 0,
+                    "lower": 0,
+                    "upper": 0,
+                    "relative_regression_limit": spec["relative_regression_limit"],
+                    "meaningful_relative_delta": spec[
+                        "meaningful_relative_delta"
+                    ],
+                    "absolute_slo_passed": spec["absolute_ceiling"] is None,
+                    "noninferior": True,
+                    "meaningful": False,
+                }
+            )
+            continue
         statistic = lambda sample, n=name: _benefit(
             sample, n, "champion", "lower", relative=True
         )
-        champion = _mean(_values(pairs, name, "champion"))
-        candidate = _mean(_values(pairs, name, "candidate"))
-        benefit = statistic(pairs)
+        champion = _mean(_values(metric_pairs, name, "champion"))
+        candidate = _mean(_values(metric_pairs, name, "candidate"))
+        benefit = statistic(metric_pairs)
         boot = _resample_values(
-            pairs,
+            metric_pairs,
             statistic,
             input_value["bootstrap_repetitions"],
             _rng(input_value["input_id"], f"performance:{name}"),

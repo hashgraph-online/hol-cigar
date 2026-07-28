@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/intelligence-profile-qualification-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "qualification_id", "trial_id", "evidence_class", "partition", "manifest_id", "source", "consumer_digest", "profile_registry_digest", "champion_profile", "candidate_profile", "token_budget", "tasks", "assignment_seeds", "evaluation_count", "evaluation_ids_digest", "gate_attachment_digest", "comparison_input_id", "comparison_id", "comparison_verdict", "aggregate", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.intelligence-profile-qualification.v1"},
+    "qualification_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "evidence_class": {"enum": ["development", "shadow"]},
+    "partition": {"enum": ["development", "shadow"]},
+    "manifest_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "consumer_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "profile_registry_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "champion_profile": {"const": "balanced.v1"},
+    "candidate_profile": {"const": "balanced.v2-candidate.1"},
+    "token_budget": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "tasks": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "assignment_seeds": {"type": "integer", "minimum": 1, "maximum": 16},
+    "evaluation_count": {"type": "integer", "minimum": 2, "maximum": 200000},
+    "evaluation_ids_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "gate_attachment_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_input_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_verdict": {"enum": ["eligible", "ineligible", "invalid"]},
+    "aggregate": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["treatment", "critical_context_recall_ppm", "evidence_item_precision_ppm", "evidence_token_precision_ppm", "verified_task_success_ppm", "mean_selected_tokens"],
+        "properties": {
+          "treatment": {"enum": ["champion", "candidate"]},
+          "critical_context_recall_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "evidence_item_precision_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "evidence_token_precision_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "verified_task_success_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "mean_selected_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+        }
+      }
+    },
+    "attestation": {"$ref": "intelligence-profile-evaluation-v1.schema.json#/$defs/attestation"}
+  }
+}

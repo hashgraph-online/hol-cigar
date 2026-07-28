@@ -18,12 +18,12 @@ cigar-catalog.workspace = true
 cigar-code-intel.workspace = true
 cigar-compiler.workspace = true
 cigar-crypto.workspace = true
-cigar-daemon = { version = "=0.9.0-honey.1", path = "../../../crates/cigar-daemon" }
+cigar-daemon = { version = "=0.9.0-honey.1", path = "../../../crates/cigar-daemon", features = ["experimental-profiles"] }
 cigar-effects.workspace = true
 cigar-policy.workspace = true
 cigar-protocol.workspace = true
 cigar-replay.workspace = true
-cigar-retrieval.workspace = true
+cigar-retrieval = { workspace = true, features = ["experimental-profiles"] }
 cigar-space.workspace = true
 cigar-store.workspace = true
 serde.workspace = true
