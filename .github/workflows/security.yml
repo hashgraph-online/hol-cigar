@@ -236,7 +236,7 @@ jobs:
           test "$(cargo +nightly-2026-07-13 llvm-cov --version | awk '{print $2}')" = "0.8.7"
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
@@ -328,7 +328,7 @@ jobs:
 
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
@@ -451,7 +451,7 @@ jobs:
 
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \

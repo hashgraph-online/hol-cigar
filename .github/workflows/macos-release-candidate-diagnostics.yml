@@ -88,7 +88,7 @@ jobs:
           test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
 
       - name: Hydrate the locked native dependency cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Run source-bound security and reproducibility diagnostics offline
         env:
@@ -235,7 +235,7 @@ jobs:
           printf '%s\n' "${protoc_root}/bin" >>"${GITHUB_PATH}"
 
       - name: Hydrate the locked native dependency cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Build and independently verify the unsigned package chain offline
         env:

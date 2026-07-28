@@ -117,10 +117,10 @@ jobs:
 
       - name: Hydrate locked dependency caches
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           corepack pnpm install --frozen-lockfile
           uv sync --project sdk/python --frozen
-          go -C sdk/go mod download
+          env GOWORK=off go -C sdk/go mod download
 
       - name: Check formatting, generated sources, vectors, and architecture offline
         env:
@@ -199,7 +199,7 @@ jobs:
           test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
 
       - name: Hydrate the locked Cargo cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Run the strict non-soak Rust suite offline
         env:
@@ -291,14 +291,14 @@ jobs:
 
       - name: Hydrate locked Rust and SDK dependencies
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
             --target aarch64-apple-darwin
           corepack pnpm install --frozen-lockfile
           uv sync --project sdk/python --frozen
-          go -C sdk/go mod download
+          env GOWORK=off go -C sdk/go mod download
 
       - name: Run all native non-fuzz non-soak merge matrices offline
         env:

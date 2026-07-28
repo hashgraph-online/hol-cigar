@@ -50,7 +50,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Hydrate the locked native dependency cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Build and verify the non-publishing development archive offline
         env:
