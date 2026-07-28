@@ -1453,10 +1453,27 @@ def _sanitized_environment(home: Path) -> dict[str, str]:
         "TZ": "UTC",
     }
     user_home = Path(os.environ.get("HOME", str(Path.home()))).expanduser().absolute()
+    if sys.platform == "darwin":
+        pnpm_store = user_home / "Library/pnpm/store/v10"
+    elif os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA")
+        pnpm_store = (
+            Path(local) / "pnpm/store/v10"
+            if local
+            else user_home / "AppData/Local/pnpm/store/v10"
+        )
+    else:
+        data_home = os.environ.get("XDG_DATA_HOME")
+        pnpm_store = (
+            Path(data_home) / "pnpm/store/v10"
+            if data_home
+            else user_home / ".local/share/pnpm/store/v10"
+        )
     cache_defaults = {
         "CARGO_HOME": user_home / ".cargo",
         "RUSTUP_HOME": user_home / ".rustup",
         "COREPACK_HOME": user_home / ".cache/node/corepack",
+        "NPM_CONFIG_STORE_DIR": pnpm_store,
         "UV_CACHE_DIR": user_home / ".cache/uv",
         "GOMODCACHE": user_home / "go/pkg/mod",
     }

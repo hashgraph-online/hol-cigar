@@ -144,9 +144,9 @@ class ArchiveOutput:
             staging = Path(temporary.name).resolve(strict=True)
             # Archive staging contains unpublished release inputs and is owner-private.
             # 0700 is the intended least-privilege mode, not a permissive default.
-            os.chmod(
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 staging, 0o700
-            )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            )
             return cls(
                 output_root=staging,
                 workspace=workspace,

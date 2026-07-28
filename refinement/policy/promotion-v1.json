@@ -1,0 +1,82 @@
+{
+  "schema_version": "cigar.promotion-policy.v1",
+  "policy_id": "constrained-pareto-v1",
+  "honey_anchor_digest": "1220aef09321453a30aa1a33672d3836f72d4dabbbbcc0ad8a1810e07bbe50a51055",
+  "statistics": {
+    "minimum_bootstrap_repetitions": 10000,
+    "shadow_confidence_percent": 99,
+    "development_confidence_percent": 95,
+    "minimum_assignment_seeds": 2,
+    "holm_correction": true
+  },
+  "evidence_minimums": [
+    {"evidence_class": "development", "tasks_per_stratum": 2, "assignment_seeds": 1, "confidence_percent": 95, "bootstrap_repetitions": 100},
+    {"evidence_class": "diagnostic", "tasks_per_stratum": 2, "assignment_seeds": 1, "confidence_percent": 95, "bootstrap_repetitions": 100},
+    {"evidence_class": "promotion", "tasks_per_stratum": 30, "assignment_seeds": 2, "confidence_percent": 99, "bootstrap_repetitions": 10000},
+    {"evidence_class": "release", "tasks_per_stratum": 30, "assignment_seeds": 2, "confidence_percent": 99, "bootstrap_repetitions": 10000},
+    {"evidence_class": "shadow", "tasks_per_stratum": 30, "assignment_seeds": 2, "confidence_percent": 99, "bootstrap_repetitions": 10000}
+  ],
+  "tier0_checks": [
+    "artifact-digests",
+    "assignment-balance",
+    "attachment-integrity",
+    "benchmark-immutability",
+    "calibration",
+    "clean-source-after",
+    "clean-source-before",
+    "contamination",
+    "evaluator-attestation",
+    "exact-pins",
+    "observation-chain",
+    "source-identity"
+  ],
+  "tier1_external_checks": [
+    "api-sdk-compatibility",
+    "conformance",
+    "deterministic-repeat",
+    "effect-journal-durability",
+    "prompt-injection-authority",
+    "required-tests",
+    "security-findings",
+    "silent-merge-conflicts"
+  ],
+  "tier1_metric_constraints": [
+    {"name": "authorization_violations", "aggregation": "maximum", "operator": "at_most", "limit": 0},
+    {"name": "budget_overflow", "aggregation": "maximum", "operator": "at_most", "limit": 0},
+    {"name": "digest_mismatches", "aggregation": "maximum", "operator": "at_most", "limit": 0},
+    {"name": "prohibited_materialized_tokens", "aggregation": "maximum", "operator": "at_most", "limit": 0},
+    {"name": "selected_provenance_coverage", "aggregation": "minimum", "operator": "at_least", "limit": 1},
+    {"name": "unsafe_effect_retries", "aggregation": "maximum", "operator": "at_most", "limit": 0}
+  ],
+  "primary_metrics": [
+    {"name": "abstention_correctness", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "citation_precision", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "citation_recall", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "conflict_correctness", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "critical_context_recall", "direction": "higher", "blocking": true, "noninferiority_margin": 0.0025, "meaningful_delta": 0.0025, "absolute_floor": 0.99, "absolute_ceiling": null},
+    {"name": "evidence_item_precision", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "evidence_sufficiency", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "evidence_token_precision", "direction": "higher", "blocking": true, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": 0.9, "absolute_ceiling": null},
+    {"name": "first_useful_evidence_rank", "direction": "lower", "blocking": false, "noninferiority_margin": 1, "meaningful_delta": 1, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "temporal_correctness", "direction": "higher", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "unsupported_claim_rate", "direction": "lower", "blocking": false, "noninferiority_margin": 0.01, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null},
+    {"name": "verified_task_success", "direction": "higher", "blocking": true, "noninferiority_margin": 0.02, "meaningful_delta": 0.01, "absolute_floor": null, "absolute_ceiling": null}
+  ],
+  "performance_metrics": [
+    {"name": "cost_usd", "direction": "lower", "relative_regression_limit": 0.1, "meaningful_relative_delta": 0.03, "absolute_ceiling": null},
+    {"name": "latency_ms", "direction": "lower", "relative_regression_limit": 0.1, "meaningful_relative_delta": 0.05, "absolute_ceiling": null},
+    {"name": "peak_rss_bytes", "direction": "lower", "relative_regression_limit": 0.1, "meaningful_relative_delta": 0.05, "absolute_ceiling": null},
+    {"name": "physical_input_tokens", "direction": "lower", "relative_regression_limit": 0.1, "meaningful_relative_delta": 0.03, "absolute_ceiling": null}
+  ],
+  "protected_strata": [
+    "Agent-Handoff",
+    "CatalogMutation",
+    "CrossRuntime-Replay",
+    "EffectCrash",
+    "LongRepo-Change",
+    "MultiProject-Switch",
+    "Needle-and-Distractor",
+    "PolicyBoundary",
+    "Temporal-Truth"
+  ]
+}

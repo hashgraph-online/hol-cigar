@@ -77,9 +77,9 @@ def generate(*, root: Path, crate_cache: Path, rustc: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="cigar-beta-license-vendor-") as raw:
         staging = Path(raw)
         # License generation stages verified dependency sources in an owner-private directory.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         _vendor, _homes, entries, _identity, _materials = (
             beta_artifacts._prepare_verified_vendor(
                 root=root,

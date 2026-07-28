@@ -150,6 +150,8 @@ jobs:
             echo "cigar-cli unexpectedly compiled without an explicit composition" >&2
             exit 1
           fi
+          # Backticks below are exact compiler diagnostics.
+          # shellcheck disable=SC2016
           grep -F \
             'exactly one of features `full` or `beta-embedded` must be enabled' \
             "${neither_log}"
@@ -161,6 +163,8 @@ jobs:
             echo "cigar-cli unexpectedly compiled with conflicting compositions" >&2
             exit 1
           fi
+          # Backticks below are exact compiler diagnostics.
+          # shellcheck disable=SC2016
           grep -F \
             'features `full` and `beta-embedded` are mutually exclusive' \
             "${both_log}"
@@ -266,6 +270,8 @@ jobs:
           printf '%s\n' \
             'This artifact is an unsigned, non-qualifying diagnostic output. It is not a release-readiness attestation.' \
             >> "${GITHUB_STEP_SUMMARY}"
+          # Backticks below are literal Markdown delimiters.
+          # shellcheck disable=SC2016
           printf 'Unsigned diagnostic transport digest: `%s`\n' \
             "${ARTIFACT_DIGEST}" \
             >> "${GITHUB_STEP_SUMMARY}"

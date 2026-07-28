@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/intelligence-profiles-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profiles"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-intelligence-profiles.v1"},
+    "profiles": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["profile_id", "status", "selection_surface", "retrieval_id", "retrieval_digest", "compiler_id", "compiler_digest"],
+        "properties": {
+          "profile_id": {"enum": ["balanced.v1", "balanced.v2-candidate.1"]},
+          "status": {"enum": ["frozen_default", "experimental_not_default"]},
+          "selection_surface": {"enum": ["all", "cigarbench_consumer_only"]},
+          "retrieval_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "retrieval_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "compiler_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "compiler_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+        }
+      }
+    }
+  }
+}

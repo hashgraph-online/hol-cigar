@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/trial-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trial_id", "iteration_id", "status", "champion", "candidate", "hypothesis", "adapter", "model", "prompt_digest", "allowed_paths", "budgets", "patch_digest", "completed_gates", "evidence_class", "decision_id"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-trial.v1"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "status": {"enum": ["created", "proposing", "testing", "evaluating", "rejected", "promotion_candidate", "promoted", "abandoned"]},
+    "champion": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"}
+      ]
+    },
+    "hypothesis": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "adapter": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "model": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "prompt_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "allowed_paths": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/path"}
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "lines", "turns", "wall_seconds", "cost_usd"],
+      "properties": {
+        "files": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "lines": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "turns": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "wall_seconds": {"type": "integer", "minimum": 1, "maximum": 604800},
+        "cost_usd": {"type": "number", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "patch_digest": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "completed_gates": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+    "decision_id": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"}
+  }
+}

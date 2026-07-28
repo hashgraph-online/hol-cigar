@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/pareto-record-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_id", "sequence", "previous_record_id", "comparison_id", "candidate_source", "decision", "objectives", "dominated_by", "frontier_after"],
+  "properties": {
+    "schema_version": {"const": "cigar.pareto-record.v1"},
+    "record_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "sequence": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+    "previous_record_id": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "decision": {"enum": ["reject_inferior", "reject_no_meaningful_improvement", "reject_overfit_or_inconsistent", "reject_performance", "needs_human_review"]},
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "direction", "value"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "direction": {"enum": ["higher", "lower"]},
+          "value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000}
+        }
+      }
+    },
+    "dominated_by": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    },
+    "frontier_after": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    }
+  }
+}

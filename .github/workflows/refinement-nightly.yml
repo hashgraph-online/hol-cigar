@@ -1,0 +1,153 @@
+name: refinement-nightly-development
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-nightly-development
+  cancel-in-progress: false
+
+jobs:
+  bounded-development:
+    name: bounded development experiment
+    runs-on: [self-hosted, refinement-development]
+    timeout-minutes: 360
+    environment: refinement-development
+    env:
+      CIGAR_RUN_AUTHORITY: "development"
+      CIGAR_NO_PROMOTION: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: x64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Prepare private persistent controller state
+        env:
+          CIGAR_STATE_ROOT: ${{ vars.CIGAR_REFINEMENT_STATE_ROOT }}
+          CIGAR_LEDGER_ROOT: ${{ vars.CIGAR_REFINEMENT_LEDGER_ROOT }}
+          CIGAR_QUOTA_ROOT: ${{ vars.CIGAR_REFINEMENT_QUOTA_ROOT }}
+        run: |
+          test -n "${CIGAR_STATE_ROOT}"
+          test -n "${CIGAR_LEDGER_ROOT}"
+          test -n "${CIGAR_QUOTA_ROOT}"
+          case "${CIGAR_STATE_ROOT}:${CIGAR_LEDGER_ROOT}:${CIGAR_QUOTA_ROOT}" in
+            /*:/*:/*) ;;
+            *) exit 2 ;;
+          esac
+          umask 077
+          run_id="nightly-${GITHUB_RUN_ID}"
+          run_root="${CIGAR_STATE_ROOT}/runs/${run_id}"
+          for directory in \
+            "${CIGAR_STATE_ROOT}" \
+            "${CIGAR_STATE_ROOT}/runs" \
+            "${CIGAR_STATE_ROOT}/worktrees" \
+            "${CIGAR_STATE_ROOT}/commands" \
+            "${CIGAR_LEDGER_ROOT}" \
+            "${CIGAR_QUOTA_ROOT}"
+          do
+            test -d "${directory}"
+            test ! -L "${directory}"
+            test "$(stat -c '%u:%a' "${directory}")" = "$(id -u):700"
+          done
+          if test ! -e "${run_root}"; then
+            mkdir -m 0700 "${run_root}"
+          fi
+          test -d "${run_root}"
+          test ! -L "${run_root}"
+          test "$(stat -c '%u:%a' "${run_root}")" = "$(id -u):700"
+          {
+            printf 'CIGAR_LOOP_RUN_ID=%s\n' "${run_id}"
+            printf 'CIGAR_LOOP_RUN_ROOT=%s\n' "${run_root}"
+            printf 'CIGAR_STATE_ROOT=%s\n' "${CIGAR_STATE_ROOT}"
+            printf 'CIGAR_LEDGER_ROOT=%s\n' "${CIGAR_LEDGER_ROOT}"
+            printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}"
+          } >>"${GITHUB_ENV}"
+
+      - name: Run one resumable bounded development iteration
+        env:
+          OPENAI_API_KEY: ${{ secrets.CIGAR_DEVELOPMENT_API_KEY }}
+        run: |
+          test -n "${OPENAI_API_KEY}"
+          result="${RUNNER_TEMP}/refinement-loop-result.json"
+          python3 tools/refinement/loop.py \
+            --repository "${GITHUB_WORKSPACE}" \
+            --config "${GITHUB_WORKSPACE}/refinement/config/default-v1.toml" \
+            --run-id "${CIGAR_LOOP_RUN_ID}" \
+            --loop-state-root "${CIGAR_LOOP_RUN_ROOT}/loop" \
+            --trial-state-root "${CIGAR_LOOP_RUN_ROOT}/trials" \
+            --worktree-root "${CIGAR_STATE_ROOT}/worktrees" \
+            --command-state-root "${CIGAR_STATE_ROOT}/commands" \
+            --ledger-root "${CIGAR_LEDGER_ROOT}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --operations-policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --signals "${GITHUB_WORKSPACE}/refinement/opportunities/nightly-v1.json" \
+            --history "${GITHUB_WORKSPACE}/refinement/opportunities/empty-history-v1.json" \
+            --trial-class product \
+            --adapter-profile codex-gpt-5.6-sol \
+            --mode suggest \
+            --max-iterations 1 \
+            --maximum-estimated-cost 25 \
+            --pause-file "${CIGAR_STATE_ROOT}/PAUSE" \
+            --no-promotion \
+            >"${result}"
+          chmod 0400 "${result}"
+          printf 'CIGAR_LOOP_RESULT=%s\n' "${result}" >>"${GITHUB_ENV}"
+
+      - name: Create the development evidence bundle
+        run: |
+          umask 077
+          source_revision="$(git rev-parse --verify HEAD)"
+          source_tree="$(git rev-parse --verify 'HEAD^{tree}')"
+          receipt="${RUNNER_TEMP}/refinement-nightly-receipt.json"
+          bundle="${RUNNER_TEMP}/refinement-nightly-evidence"
+          policy_id="$(python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"
+          python3 tools/refinement/operations.py receipt \
+            --run-id "nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --authority development \
+            --status passed \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            >"${receipt}"
+          chmod 0400 "${receipt}"
+          python3 tools/refinement/operations.py bundle create \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output-root "${bundle}" \
+            --run-id "nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --evidence-class development \
+            --retention-days 30 \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            --policy-id "${policy_id}" \
+            --authority development-only \
+            --attachment "receipt.json=${receipt}" \
+            --attachment "loop-result.json=${CIGAR_LOOP_RESULT}"
+          printf 'CIGAR_REFINEMENT_BUNDLE=%s\n' "${bundle}" >>"${GITHUB_ENV}"
+
+      - name: Upload immutable development evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_REFINEMENT_BUNDLE }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 30
+          compression-level: 0

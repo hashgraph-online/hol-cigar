@@ -1,4 +1,14 @@
-# CIGARBench v1
+# CIGARBench
+
+## v2 raw observation consumer
+
+The refinement system adds a production-backed v2 consumer without changing the v1 analyzer or
+its event contract. The v2 consumer emits raw selection and execution facts only; a separate
+evaluator will join those facts to hidden oracles and derive KPIs. See
+[`consumer/README.md`](consumer/README.md) for the assignment, process, privacy, reproduction, and
+paired-launch contracts.
+
+The remaining sections document the preserved v1 benchmark and installed development package.
 
 ## macOS development tool package
 

@@ -32,9 +32,9 @@ from driver_support import (  # noqa: E402
 def executable(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8", newline="\n")
     # This generated demo helper must be owner-executable without becoming shared.
-    os.chmod(
+    os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         path, 0o700
-    )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    )
 
 
 def parse_object(payload: bytes, label: str) -> dict[str, Any]:

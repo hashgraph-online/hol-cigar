@@ -33,6 +33,18 @@ pub struct QueryPlannerProfile {
     pub lexical_timeout: Duration,
     /// Timeout assigned to every optional vector stage.
     pub vector_timeout: Duration,
+    /// Benchmark-profile graph depth following an exact root.
+    pub exact_graph_depth: u16,
+    /// Graph stage result cap.
+    pub graph_cap: usize,
+    /// Graph stage timeout.
+    pub graph_timeout: Duration,
+    /// Whether query requirements add a current-state augmentation stage.
+    pub augment_queries: bool,
+    /// Augmentation result cap.
+    pub augment_cap: usize,
+    /// Augmentation stage timeout.
+    pub augment_timeout: Duration,
 }
 
 impl Default for QueryPlannerProfile {
@@ -46,6 +58,32 @@ impl Default for QueryPlannerProfile {
             metadata_timeout: Duration::from_millis(500),
             lexical_timeout: Duration::from_millis(750),
             vector_timeout: Duration::from_millis(1_000),
+            exact_graph_depth: 0,
+            graph_cap: 128,
+            graph_timeout: Duration::from_millis(750),
+            augment_queries: false,
+            augment_cap: 128,
+            augment_timeout: Duration::from_millis(500),
+        }
+    }
+}
+
+impl QueryPlannerProfile {
+    /// First benchmark-only bounded graph/augmentation profile.
+    #[must_use]
+    pub fn balanced_v2_candidate() -> Self {
+        Self {
+            exact_graph_depth: 2,
+            ..Self::default()
+        }
+    }
+
+    /// Separate benchmark-only current-state augmentation ablation.
+    #[must_use]
+    pub fn bounded_augmentation_candidate() -> Self {
+        Self {
+            augment_queries: true,
+            ..Self::default()
         }
     }
 }
@@ -104,17 +142,22 @@ impl QueryPlanner {
             profile.metadata_cap,
             profile.lexical_cap,
             profile.vector_cap,
+            profile.graph_cap,
+            profile.augment_cap,
         ];
         let timeouts = [
             profile.exact_timeout,
             profile.metadata_timeout,
             profile.lexical_timeout,
             profile.vector_timeout,
+            profile.graph_timeout,
+            profile.augment_timeout,
         ];
         if caps
             .iter()
             .any(|cap| *cap == 0 || *cap > crate::MAX_CANDIDATES)
             || timeouts.iter().any(Duration::is_zero)
+            || profile.exact_graph_depth > crate::MAX_GRAPH_DEPTH
         {
             return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
         }
@@ -192,6 +235,25 @@ impl QueryPlanner {
                         request,
                         self.profile.exact_timeout,
                     )?;
+                    if self.profile.exact_graph_depth > 0 {
+                        let mut graph = base_request(
+                            RetrievalStage::Graph,
+                            partition,
+                            required_revision,
+                            consistency,
+                            self.profile.graph_cap,
+                            false,
+                        );
+                        graph.graph_roots.insert(version.clone());
+                        graph.graph_depth = self.profile.exact_graph_depth;
+                        push_stage(
+                            &mut stages,
+                            requirement_index,
+                            false,
+                            graph,
+                            self.profile.graph_timeout,
+                        )?;
+                    }
                 }
                 RequirementSelector::Query(query) => {
                     let terms = normalize_query(query)?;
@@ -244,6 +306,23 @@ impl QueryPlanner {
                             false,
                             request,
                             self.profile.vector_timeout,
+                        )?;
+                    }
+                    if self.profile.augment_queries {
+                        let augment = base_request(
+                            RetrievalStage::Augment,
+                            partition,
+                            required_revision,
+                            consistency,
+                            self.profile.augment_cap,
+                            false,
+                        );
+                        push_stage(
+                            &mut stages,
+                            requirement_index,
+                            false,
+                            augment,
+                            self.profile.augment_timeout,
                         )?;
                     }
                 }
@@ -579,6 +658,52 @@ mod tests {
                 .map_err(|error| error.code()),
             Err(RetrievalErrorCode::LimitExceeded)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn v2_planning_adds_only_bounded_graph_and_augmentation_stages() -> Result<(), Box<dyn Error>> {
+        let exact = requirement(
+            serde_json::json!({"type":"exact", "value": format!("1220{}", "b".repeat(64))}),
+            true,
+        )?;
+        let query = requirement(
+            serde_json::json!({"type":"query", "value":"ExactSymbol helper"}),
+            false,
+        )?;
+        let plan = QueryPlanner::new(QueryPlannerProfile::bounded_augmentation_candidate())?.plan(
+            &[exact, query],
+            &partition()?,
+            StoreRevision(42),
+            RetrievalConsistency::Strong,
+            false,
+        )?;
+        assert_eq!(
+            plan.stages
+                .iter()
+                .map(|stage| stage.request.stage)
+                .collect::<Vec<_>>(),
+            vec![
+                RetrievalStage::Exact,
+                RetrievalStage::Metadata,
+                RetrievalStage::Lexical,
+                RetrievalStage::Augment,
+            ]
+        );
+        assert!(plan.stages.iter().all(|stage| stage.request.limit <= 256));
+        let graph = QueryPlanner::new(QueryPlannerProfile::balanced_v2_candidate())?.plan(
+            &[requirement(
+                serde_json::json!({"type":"exact", "value": format!("1220{}", "c".repeat(64))}),
+                true,
+            )?],
+            &partition()?,
+            StoreRevision(42),
+            RetrievalConsistency::Strong,
+            false,
+        )?;
+        let graph_stage = graph.stages.get(1).ok_or("missing graph stage")?;
+        assert_eq!(graph_stage.request.stage, RetrievalStage::Graph);
+        assert_eq!(graph_stage.request.graph_depth, 2);
         Ok(())
     }
 }

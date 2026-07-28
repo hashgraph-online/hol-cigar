@@ -1,0 +1,168 @@
+name: refinement-shadow-evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Exact candidate Git revision
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    name: independently credentialed shadow evaluation
+    runs-on: [self-hosted, refinement-shadow]
+    timeout-minutes: 360
+    environment: refinement-shadow
+    env:
+      CIGAR_RUN_AUTHORITY: "shadow"
+      CIGAR_NO_PROMOTION: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.candidate_ref }}
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: x64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Reserve bounded shadow compute
+        id: reserve
+        env:
+          CIGAR_QUOTA_ROOT: ${{ vars.CIGAR_REFINEMENT_QUOTA_ROOT }}
+        run: |
+          test -n "${CIGAR_QUOTA_ROOT}"
+          reservation="shadow-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python3 tools/refinement/operations.py quota reserve \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --utc-day "$(date -u +%F)" \
+            --provider recorded-proposal-v1 \
+            --reservation-id "${reservation}" \
+            --input-tokens 0 \
+            --output-tokens 0 \
+            --cost-microusd 0 \
+            --compute-milliseconds 43200000
+          printf 'CIGAR_RESERVATION=%s\n' "${reservation}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}" >>"${GITHUB_ENV}"
+
+      - name: Materialize the environment-scoped evaluator key
+        env:
+          CIGAR_SHADOW_ATTESTATION_KEY: ${{ secrets.CIGAR_SHADOW_ATTESTATION_KEY }}
+        run: |
+          umask 077
+          key_path="${RUNNER_TEMP}/shadow-attestation.key"
+          python3 - "${key_path}" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          payload = os.environ["CIGAR_SHADOW_ATTESTATION_KEY"].encode()
+          if len(payload) < 32:
+              raise SystemExit("shadow attestation key is too short")
+          path = Path(sys.argv[1])
+          path.write_bytes(payload)
+          path.chmod(0o400)
+          PY
+          printf 'CIGAR_ATTESTATION_KEY_PATH=%s\n' "${key_path}" >>"${GITHUB_ENV}"
+
+      - name: Run focused gates and create their aggregate attachment
+        run: |
+          gate_attachment="${RUNNER_TEMP}/shadow-gates.json"
+          python3 -B -m unittest \
+            tools.refinement.tests.test_r09_profiles \
+            tools.refinement.tests.test_r10_operations \
+            -v
+          python3 tools/refinement/operations.py receipt \
+            --run-id "shadow-gates-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --authority shadow \
+            --status passed \
+            --source-revision "$(git rev-parse --verify HEAD)" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
+            >"${gate_attachment}"
+          chmod 0400 "${gate_attachment}"
+          printf 'CIGAR_GATE_ATTACHMENT=%s\n' "${gate_attachment}" >>"${GITHUB_ENV}"
+
+      - name: Evaluate the blinded shadow corpus
+        env:
+          CIGAR_PRIVATE_ROOT: ${{ vars.CIGAR_SHADOW_CORPUS_ROOT }}
+          CIGAR_CONSUMER: ${{ vars.CIGAR_SHADOW_CONSUMER }}
+        run: |
+          test -n "${CIGAR_PRIVATE_ROOT}"
+          test -n "${CIGAR_CONSUMER}"
+          evidence="${RUNNER_TEMP}/refinement-shadow-evidence"
+          python3 tools/refinement/intelligence.py \
+            --repository-root "${GITHUB_WORKSPACE}" \
+            --private-root "${CIGAR_PRIVATE_ROOT}" \
+            --manifest "${GITHUB_WORKSPACE}/refinement/corpus/shadow-manifest-v1.json" \
+            --consumer "${CIGAR_CONSUMER}" \
+            --evidence-dir "${evidence}" \
+            --attestation-key "${CIGAR_ATTESTATION_KEY_PATH}" \
+            --key-id github-shadow-v1 \
+            --gate-attachment "${CIGAR_GATE_ATTACHMENT}" \
+            --evidence-class shadow \
+            --per-stratum 30 \
+            --seeds 2 \
+            --token-budget 4096 \
+            --bootstrap-repetitions 10000 \
+            --confidence-percent 99
+          printf 'CIGAR_SHADOW_EVIDENCE=%s\n' "${evidence}" >>"${GITHUB_ENV}"
+
+      - name: Charge the complete reserved shadow budget
+        if: ${{ always() && steps.reserve.outcome == 'success' }}
+        run: |
+          python3 tools/refinement/operations.py quota settle \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --reservation-id "${CIGAR_RESERVATION}" \
+            --input-tokens 0 \
+            --output-tokens 0 \
+            --cost-microusd 0 \
+            --compute-milliseconds 43200000
+
+      - name: Bundle aggregate-only shadow evidence
+        run: |
+          bundle="${RUNNER_TEMP}/refinement-shadow-transport"
+          policy_id="$(python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"
+          python3 tools/refinement/operations.py bundle create \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output-root "${bundle}" \
+            --run-id "shadow-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --evidence-class shadow \
+            --retention-days 90 \
+            --source-revision "$(git rev-parse --verify HEAD)" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
+            --policy-id "${policy_id}" \
+            --authority shadow-nomination \
+            --attachment "qualification.json=${CIGAR_SHADOW_EVIDENCE}/qualification.json" \
+            --attachment "comparison.json=${CIGAR_SHADOW_EVIDENCE}/comparison.json"
+          printf 'CIGAR_REFINEMENT_BUNDLE=%s\n' "${bundle}" >>"${GITHUB_ENV}"
+
+      - name: Upload immutable aggregate shadow evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_REFINEMENT_BUNDLE }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 90
+          compression-level: 0

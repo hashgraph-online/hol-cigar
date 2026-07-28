@@ -561,9 +561,9 @@ def _git_object_digest(kind: str, payload: bytes, object_id_length: int) -> str:
     )
     if object_id_length == 40:
         # SHA-1 is required only to reproduce Git's legacy object identifier, never for trust.
-        return hashlib.sha1(
+        return hashlib.sha1(  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
             framed, usedforsecurity=False
-        ).hexdigest()  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+        ).hexdigest()
     if object_id_length == 64:
         return hashlib.sha256(framed).hexdigest()
     raise BetaArtifactError("Git blob uses an unsupported object format")
@@ -3463,9 +3463,9 @@ def _resolved_cargo_evidence(
     with tempfile.TemporaryDirectory(prefix="cigar-beta-metadata-") as raw:
         staging = Path(raw)
         # Hydrated dependency/tool material is unpublished and must remain owner-private.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         cargo_source = _secure_executable(None, "cargo")
         rustc_source = _secure_executable(None, "rustc")
         cargo = _actual_rust_tool(cargo_source, "cargo", root)
@@ -4709,15 +4709,15 @@ def verify_beta_archive(
             with tempfile.TemporaryDirectory(prefix="cigar-beta-verify-") as raw:
                 directory = Path(raw)
                 # Extracted candidate bytes must not become accessible to another local user.
-                os.chmod(
+                os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                     directory, 0o700
-                )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+                )
                 binary = directory / "cigar"
                 _write_private(binary, binary_payload)
                 # Qualification executes this private staged candidate as its owning user only.
-                os.chmod(
+                os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                     binary, 0o700
-                )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+                )
                 expected_help = _read_stable_file(
                     resolve_beneath(
                         root, "crates/cigar-cli/assets/cigar-help-beta.txt"
@@ -5049,9 +5049,9 @@ def _verified_source_freeze_payloads(
     with tempfile.TemporaryDirectory(prefix="cigar-beta-source-verify-") as raw:
         staging_parent = Path(raw).resolve()
         # The reconstructed committed tree is a private verifier working copy.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging_parent, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         staged_source = staging_parent / "source"
         committed_identity = _materialize_committed_tree(staged_source, committed)
         beta_profile.validate(staged_source)
@@ -6003,9 +6003,9 @@ def freeze_beta_source(
     with tempfile.TemporaryDirectory(prefix="cigar-beta-source-freeze-") as raw:
         staging_parent = Path(raw).resolve()
         # Source-freeze staging contains unpublished candidate material and must stay private.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging_parent, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         staged_source = staging_parent / "source"
         committed_identity = _materialize_committed_tree(
             staged_source, source_committed
@@ -6205,9 +6205,9 @@ def build_beta_candidate(
     with tempfile.TemporaryDirectory(prefix="cigar-beta-stage-") as raw:
         staging_parent = Path(raw).resolve()
         # Release assembly staging contains every candidate payload before publication.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging_parent, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         candidate = staging_parent / "candidate"
         candidate.mkdir(mode=0o700)
         staged_source = staging_parent / "committed-source"

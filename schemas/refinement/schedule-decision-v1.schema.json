@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/schedule-decision-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision_id", "selected_trial_id", "selected_family_id", "selected_hypothesis_fingerprint", "task_packet_id", "score", "explanation", "ranked_candidates", "excluded"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-schedule-decision.v1"},
+    "decision_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "selected_trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "selected_family_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "selected_hypothesis_fingerprint": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "task_packet_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "score": {"type": "number", "minimum": -1000000, "maximum": 1000000},
+    "explanation": {"$ref": "common-v1.schema.json#/$defs/longText"},
+    "ranked_candidates": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}},
+    "excluded": {"type": "array", "maxItems": 10000, "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}}
+  }
+}

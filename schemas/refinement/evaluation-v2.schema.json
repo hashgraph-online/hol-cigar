@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/evaluation-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evaluation_id", "observation_id", "task_id", "task_digest", "oracle_digest", "evaluator_digest", "claims_digest", "verifier_digest", "adjudication_digest", "evidence_class", "status", "attachments", "metrics", "violations", "postcondition", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-evaluation.v2"},
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "oracle_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "evaluator_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "claims_digest": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "verifier_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "adjudication_digest": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+    "status": {"enum": ["valid", "invalid", "failed"]},
+    "attachments": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attachment_id", "kind", "digest"],
+        "properties": {
+          "attachment_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "kind": {"enum": ["observation", "task", "oracle", "claims", "verifier", "verifier-result", "adjudication", "evaluator"]},
+          "digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "numerator", "denominator", "value", "unit", "applicable", "source_attachment_ids"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "numerator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "denominator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+          "value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+          "unit": {"enum": ["boolean", "count", "ratio", "rank", "tokens", "milliseconds", "bytes", "usd"]},
+          "applicable": {"type": "boolean"},
+          "source_attachment_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          }
+        }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "evidence_id"],
+        "properties": {
+          "code": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "severity": {"enum": ["info", "warning", "hard"]},
+          "evidence_id": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        }
+      }
+    },
+    "postcondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_digest", "passed", "checks_passed", "checks_total", "isolation"],
+      "properties": {
+        "result_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "passed": {"type": "boolean"},
+        "checks_passed": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "checks_total": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "isolation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "network_denied", "disposable_root", "environment_digest", "launcher_digest"],
+          "properties": {
+            "engine": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+            "network_denied": {"type": "boolean"},
+            "disposable_root": {"type": "boolean"},
+            "environment_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+            "launcher_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+          }
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "key_fingerprint", "custody", "assignment_seed_reused", "mac"],
+      "properties": {
+        "algorithm": {"const": "hmac-sha256-v1"},
+        "key_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "key_fingerprint": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "custody": {"const": "external-independent"},
+        "assignment_seed_reused": {"const": false},
+        "mac": {"$ref": "common-v1.schema.json#/$defs/sha256"}
+      }
+    }
+  }
+}

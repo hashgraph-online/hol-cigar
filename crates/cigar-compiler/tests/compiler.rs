@@ -233,6 +233,51 @@ fn golden_bundle_permutation_and_parallel_execution_are_identical() -> Result<()
 }
 
 #[test]
+fn versioned_v2_profile_is_distinct_deterministic_and_ablatable() -> Result<(), Box<dyn Error>> {
+    let v1 = DeterministicCompiler.compile(baseline_request()?)?;
+    let mut input = baseline_request()?;
+    input.profile = CompilerProfile::balanced_v2_candidate();
+    input.frozen.compiler_profile_digest = compiler_profile_digest(&input.profile)?;
+    let full = DeterministicCompiler.compile(input.clone())?;
+    let replay = DeterministicCompiler.compile(input)?;
+    assert_eq!(full, replay);
+    assert_ne!(full.bundle.bundle_id, v1.bundle.bundle_id);
+    assert_ne!(
+        compiler_profile_digest(&CompilerProfile::default())?,
+        compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::default())?.as_str(),
+        "1220e42df560c2b77e860952db51174f8fd995da09a7b37d231899ad173388943c8f"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?.as_str(),
+        "1220c363f1fc1b3afa384fbdae91cf16b8955d91362adcadf75fa8faf0e7e437cccf"
+    );
+
+    let mut ablation_ids = BTreeSet::new();
+    for dimension in 0..8 {
+        let mut profile = CompilerProfile::balanced_v2_candidate();
+        match dimension {
+            0 => profile.marginal_requirement_weight = 0,
+            1 => profile.marginal_entity_weight = 0,
+            2 => profile.dependency_cost_penalty = 0,
+            3 => profile.diversity_weight = 0,
+            4 => profile.redundancy_penalty = 0,
+            5 => profile.utility_density_ranking = true,
+            6 => profile.local_swap_passes = CompilerProfile::default().local_swap_passes,
+            _ => profile.minimum_lexical_match = 0,
+        }
+        ablation_ids.insert(compiler_profile_digest(&profile)?);
+    }
+    assert_eq!(ablation_ids.len(), 8);
+    assert!(!ablation_ids.contains(&compiler_profile_digest(
+        &CompilerProfile::balanced_v2_candidate()
+    )?));
+    Ok(())
+}
+
+#[test]
 fn mandatory_overflow_reports_exact_lower_bound_and_generated_budgets_hold()
 -> Result<(), Box<dyn Error>> {
     let mut input = baseline_request()?;

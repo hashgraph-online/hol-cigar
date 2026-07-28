@@ -1,0 +1,51 @@
+{
+  "schema_version": "cigar.refinement-operations-policy.v1",
+  "policy_id": "12208a2a78fc556005bdbc91b1b70006fff6ba6e2ec6cd2488cd4133e9f7c0833dcf",
+  "providers": [
+    {
+      "provider_id": "openai-compatible-tools-v1",
+      "max_input_tokens_per_day": 4000000,
+      "max_output_tokens_per_day": 500000,
+      "max_cost_microusd_per_day": 50000000,
+      "max_concurrent_reservations": 2
+    },
+    {
+      "provider_id": "openai-responses-tools-v1",
+      "max_input_tokens_per_day": 2000000,
+      "max_output_tokens_per_day": 250000,
+      "max_cost_microusd_per_day": 25000000,
+      "max_concurrent_reservations": 1
+    },
+    {
+      "provider_id": "patch-json-v1",
+      "max_input_tokens_per_day": 10000000,
+      "max_output_tokens_per_day": 2000000,
+      "max_cost_microusd_per_day": 1000000,
+      "max_concurrent_reservations": 2
+    },
+    {
+      "provider_id": "recorded-proposal-v1",
+      "max_input_tokens_per_day": 10000000,
+      "max_output_tokens_per_day": 2000000,
+      "max_cost_microusd_per_day": 0,
+      "max_concurrent_reservations": 4
+    },
+    {
+      "provider_id": "subprocess-jsonl-v1",
+      "max_input_tokens_per_day": 10000000,
+      "max_output_tokens_per_day": 2000000,
+      "max_cost_microusd_per_day": 5000000,
+      "max_concurrent_reservations": 2
+    }
+  ],
+  "global": {
+    "max_compute_milliseconds_per_day": 86400000,
+    "max_concurrent_reservations": 4
+  },
+  "retention_days": {
+    "diagnostic": 14,
+    "development": 30,
+    "shadow": 90,
+    "promotion": 365
+  }
+}

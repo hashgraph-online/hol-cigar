@@ -1,0 +1,38 @@
+schema_version = "cigar.refinement-config.v1"
+profile_id = "fast-v1"
+mode = "patch"
+
+[evidence]
+class = "diagnostic"
+
+[limits]
+max_iterations = 1
+max_wall_seconds = 1800
+max_cost_usd = 2.0
+max_input_tokens = 250000
+max_output_tokens = 50000
+max_files_changed = 8
+max_lines_changed = 600
+
+[proposal]
+adapter = "recorded-proposal-v1"
+model = "deterministic-recorded-v1"
+credential_handle = "CIGAR_PROPOSAL_API_KEY"
+maximum_turns = 16
+maximum_repairs = 2
+
+[consumer]
+matrix = "refinement/profiles/consumer-matrix.v1.json"
+primary_profile = "deterministic-recorded-v1"
+
+[statistics]
+bootstrap_repetitions = 1000
+confidence_percent = 95
+assignment_seeds = 1
+holm_correction = true
+
+[paths]
+development_manifest = "refinement/corpus/development-manifest-v1.json"
+proposal_profiles = "refinement/profiles/proposal-adapters.v1.json"
+intervention_families = "refinement/profiles/intervention-families.v1.json"
+operations_policy = "refinement/operations/limits-v1.json"

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/opportunity-signal-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "signal_id", "source_kind", "visibility", "summary", "source_commitment", "owner_hint", "metric", "magnitude", "estimated_cost", "strata", "reproducible"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-opportunity-signal.v1"},
+    "signal_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "source_kind": {"enum": ["kpi_cluster", "profiler", "mutation_survivor", "test_failure", "issue"]},
+    "visibility": {"enum": ["public", "aggregate_hidden"]},
+    "summary": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "source_commitment": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "owner_hint": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "metric": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "magnitude": {"type": "number", "minimum": 0, "maximum": 1},
+    "estimated_cost": {"type": "number", "minimum": 0.000001, "maximum": 1000000},
+    "strata": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}},
+    "reproducible": {"type": "boolean"}
+  }
+}

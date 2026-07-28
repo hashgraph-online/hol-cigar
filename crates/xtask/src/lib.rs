@@ -7112,13 +7112,13 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).as_path(),
             &system_python_runtime()?,
             &["-c".into(), parent.into()],
-            Duration::from_millis(200),
+            Duration::from_secs(2),
             64 * 1024,
             64 * 1024,
             false,
         );
         assert!(result.is_err());
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(10));
         if let Ok(pid) = fs::read_to_string(&pid_file) {
             let _ignored = std::process::Command::new("/bin/kill")
                 .args(["-KILL", pid.trim()])

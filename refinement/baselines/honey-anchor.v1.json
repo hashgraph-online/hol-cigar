@@ -1,0 +1,26 @@
+{
+  "schema_version": "cigar.refinement-honey-anchor.v1",
+  "anchor_id": "honey-0.9.1",
+  "product": "CIGAR",
+  "release_name": "Honey",
+  "source": {
+    "repository": "https://github.com/hashgraph-online/hol-cigar",
+    "tag": "hol-cigar-v0.9.1-pypi.2",
+    "tag_commit": "784e167f9fca2cb7cc6e18dc082c7ba715939b24",
+    "release_commit": "ee9b52b69f4245c27b46da6ef2fc4a070430caed",
+    "origin_main_commit_at_audit": "2eab405bdd4c7287f380249ce60f23fd4167db04",
+    "tree": "7c36625bfa09417150f3b0ec6dafc7161105234f"
+  },
+  "python_distribution": {
+    "distribution": "hol-cigar",
+    "version": "0.9.1",
+    "import_package": "cigar_sdk",
+    "wheel_sha256": "4b2f9299aa5fddbd848d0ec95c488eb5d0b3904c6718e6dec0537e7f37edbe75",
+    "scope": "python-sdk-only"
+  },
+  "qualification": {
+    "status": "developer-preview",
+    "release_qualified": false,
+    "benchmark_evidence_class": "harness_smoke"
+  }
+}

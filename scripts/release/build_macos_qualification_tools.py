@@ -1635,9 +1635,9 @@ def produce(
             scratch = Path(raw).resolve(strict=True)
             # Qualification-tool staging contains unpublished executable bytes.
             # 0700 is the intended least-privilege mode, not a permissive default.
-            os.chmod(
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 scratch, 0o700
-            )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            )
             tool = builder(configuration, source_before, epoch, scratch, arguments)
             if not tool.entries or not tool.tools or not tool.invocation_probes:
                 raise ReleaseError("qualification-tool build result is incomplete")

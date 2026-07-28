@@ -6,7 +6,7 @@ use cigar_protocol::{
     InstructionAuthority, LaneKind, ManifestEntry, RepresentationKind, SelectionManifest,
     SourceUri, UtcTimestamp, VersionId,
 };
-use cigar_retrieval::CandidateFeatures;
+use cigar_retrieval::{CandidateFeatures, RetrievalProfile};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -119,6 +119,8 @@ pub struct FrozenInputs {
 pub struct CompilerProfile {
     /// Must be `cigar.compiler-profile.balanced.v1`.
     pub profile_id: String,
+    /// Retrieval score profile used by the compiler's packing utility.
+    pub retrieval_profile: RetrievalProfile,
     /// Minimum selected items per declared lane when eligible candidates exist.
     pub minimum_items: BTreeMap<LaneKind, u16>,
     /// Maximum selected items per lane.
@@ -133,12 +135,27 @@ pub struct CompilerProfile {
     pub entity_coverage_weight: i64,
     /// Information-loss penalty per loss tier.
     pub loss_penalty: i64,
+    /// Rank optional candidates by utility per token instead of absolute utility.
+    pub utility_density_ranking: bool,
+    /// Minimum deterministic lexical feature admitted for optional packing.
+    pub minimum_lexical_match: u16,
+    /// Dynamic gain per newly covered requirement (experimental profiles only).
+    pub marginal_requirement_weight: i64,
+    /// Dynamic gain per newly covered entity bit (experimental profiles only).
+    pub marginal_entity_weight: i64,
+    /// Cost per direct dependency in an optional closure (experimental profiles only).
+    pub dependency_cost_penalty: i64,
+    /// Gain when a candidate adds a lane not yet represented (experimental profiles only).
+    pub diversity_weight: i64,
+    /// Penalty per already-covered requirement/entity (experimental profiles only).
+    pub redundancy_penalty: i64,
 }
 
 impl Default for CompilerProfile {
     fn default() -> Self {
         Self {
             profile_id: "cigar.compiler-profile.balanced.v1".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV1,
             minimum_items: BTreeMap::new(),
             maximum_items: BTreeMap::new(),
             local_swap_passes: 8,
@@ -146,6 +163,35 @@ impl Default for CompilerProfile {
             requirement_coverage_weight: 250_000,
             entity_coverage_weight: 100_000,
             loss_penalty: 50_000,
+            utility_density_ranking: true,
+            minimum_lexical_match: 0,
+            marginal_requirement_weight: 0,
+            marginal_entity_weight: 0,
+            dependency_cost_penalty: 0,
+            diversity_weight: 0,
+            redundancy_penalty: 0,
+        }
+    }
+}
+
+impl CompilerProfile {
+    /// Benchmark-only first experimental compiler profile.
+    #[must_use]
+    pub fn balanced_v2_candidate() -> Self {
+        Self {
+            profile_id: "cigar.compiler-profile.balanced.v2-candidate.1".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV2Candidate,
+            local_swap_passes: 0,
+            requirement_coverage_weight: 50_000,
+            entity_coverage_weight: 20_000,
+            utility_density_ranking: false,
+            minimum_lexical_match: 8_000,
+            marginal_requirement_weight: 300_000,
+            marginal_entity_weight: 120_000,
+            dependency_cost_penalty: 40_000,
+            diversity_weight: 75_000,
+            redundancy_penalty: 90_000,
+            ..Self::default()
         }
     }
 }

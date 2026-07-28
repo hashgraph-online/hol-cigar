@@ -1,0 +1,166 @@
+name: refinement-promotion-preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Exact candidate Git revision
+        required: true
+        type: string
+      trial_id:
+        description: Qualified trial identifier
+        required: true
+        type: string
+      target_branch:
+        description: Review branch, under refinement/
+        required: true
+        default: refinement/approved-candidate
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-promotion
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: protected review payload only
+    runs-on: [self-hosted, refinement-promotion]
+    timeout-minutes: 720
+    environment: refinement-promotion
+    env:
+      CIGAR_RUN_AUTHORITY: "promotion"
+      CIGAR_NO_PROMOTION: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.candidate_ref }}
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: x64
+          check-latest: false
+          python-version: "3.14.6"
+
+      - name: Reserve bounded promotion preparation compute
+        id: reserve
+        env:
+          CIGAR_QUOTA_ROOT: ${{ vars.CIGAR_REFINEMENT_QUOTA_ROOT }}
+        run: |
+          test -n "${CIGAR_QUOTA_ROOT}"
+          reservation="promotion-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python3 tools/refinement/operations.py quota reserve \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --utc-day "$(date -u +%F)" \
+            --provider recorded-proposal-v1 \
+            --reservation-id "${reservation}" \
+            --input-tokens 0 \
+            --output-tokens 0 \
+            --cost-microusd 0 \
+            --compute-milliseconds 43200000
+          printf 'CIGAR_RESERVATION=%s\n' "${reservation}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}" >>"${GITHUB_ENV}"
+
+      - name: Materialize the protected promotion attestation key
+        env:
+          CIGAR_PROMOTION_ATTESTATION_KEY: ${{ secrets.CIGAR_PROMOTION_ATTESTATION_KEY }}
+        run: |
+          umask 077
+          key_path="${RUNNER_TEMP}/promotion-attestation.key"
+          python3 - "${key_path}" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          payload = os.environ["CIGAR_PROMOTION_ATTESTATION_KEY"].encode()
+          if len(payload) < 32:
+              raise SystemExit("promotion attestation key is too short")
+          path = Path(sys.argv[1])
+          path.write_bytes(payload)
+          path.chmod(0o400)
+          PY
+          printf 'CIGAR_ATTESTATION_KEY_PATH=%s\n' "${key_path}" >>"${GITHUB_ENV}"
+
+      - name: Reconstruct and attest a review-only promotion payload
+        env:
+          CIGAR_PROMOTION_COMPARISON: ${{ vars.CIGAR_PROMOTION_COMPARISON }}
+          CIGAR_PROMOTION_DECISION: ${{ vars.CIGAR_PROMOTION_DECISION }}
+          CIGAR_PROMOTION_TARGET_BRANCH: ${{ inputs.target_branch }}
+          CIGAR_PROMOTION_TRIAL_ID: ${{ inputs.trial_id }}
+        run: |
+          test -n "${CIGAR_PROMOTION_COMPARISON}"
+          test -n "${CIGAR_PROMOTION_DECISION}"
+          payload="${RUNNER_TEMP}/promotion-payload.json"
+          candidate_revision="$(python3 -c 'import json,os; print(json.load(open(os.environ["CIGAR_PROMOTION_COMPARISON"]))["candidate_source"]["revision"])')"
+          test "$(git rev-parse --verify HEAD)" = "${candidate_revision}"
+          python3 tools/refinement/promotion.py replay \
+            --comparison "${CIGAR_PROMOTION_COMPARISON}" \
+            --expected "${CIGAR_PROMOTION_DECISION}" \
+            --schemas "${GITHUB_WORKSPACE}/schemas/refinement"
+          python3 tools/refinement/operations.py promotion-payload \
+            --repository "${GITHUB_WORKSPACE}" \
+            --comparison "${CIGAR_PROMOTION_COMPARISON}" \
+            --decision "${CIGAR_PROMOTION_DECISION}" \
+            --trial-id "${CIGAR_PROMOTION_TRIAL_ID}" \
+            --target-branch "${CIGAR_PROMOTION_TARGET_BRANCH}" \
+            --attestation-key "${CIGAR_ATTESTATION_KEY_PATH}" \
+            --key-id github-promotion-v1 \
+            >"${payload}"
+          chmod 0400 "${payload}"
+          python3 tools/refinement/operations.py promotion-verify \
+            --repository "${GITHUB_WORKSPACE}" \
+            --payload "${payload}" \
+            --attestation-key "${CIGAR_ATTESTATION_KEY_PATH}"
+          printf 'CIGAR_PROMOTION_PAYLOAD=%s\n' "${payload}" >>"${GITHUB_ENV}"
+
+      - name: Charge the complete reserved promotion preparation budget
+        if: ${{ always() && steps.reserve.outcome == 'success' }}
+        run: |
+          python3 tools/refinement/operations.py quota settle \
+            --repository "${GITHUB_WORKSPACE}" \
+            --quota-root "${CIGAR_QUOTA_ROOT}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/limits-v1.json" \
+            --reservation-id "${CIGAR_RESERVATION}" \
+            --input-tokens 0 \
+            --output-tokens 0 \
+            --cost-microusd 0 \
+            --compute-milliseconds 43200000
+
+      - name: Bundle the immutable promotion preparation
+        run: |
+          bundle="${RUNNER_TEMP}/refinement-promotion-transport"
+          policy_id="$(python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"
+          python3 tools/refinement/operations.py bundle create \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output-root "${bundle}" \
+            --run-id "promotion-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --evidence-class promotion \
+            --retention-days 365 \
+            --source-revision "$(git rev-parse --verify HEAD)" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
+            --policy-id "${policy_id}" \
+            --authority promotion-preparation \
+            --attachment "promotion-payload.json=${CIGAR_PROMOTION_PAYLOAD}"
+          printf 'CIGAR_REFINEMENT_BUNDLE=%s\n' "${bundle}" >>"${GITHUB_ENV}"
+
+      - name: Upload immutable promotion preparation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_REFINEMENT_BUNDLE }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 365
+          compression-level: 0

@@ -190,14 +190,32 @@ class GitSourceBindingTests(unittest.TestCase):
         self.assertFalse(binding["clean"])
         self.assertEqual(binding["status_entry_count"], 1)
 
-    def test_exact_protected_root_target_is_the_only_ignored_exception(self) -> None:
+    def test_exact_protected_generated_roots_are_supported(self) -> None:
         repository = self._repository()
-        (repository / ".gitignore").write_bytes(b"/target/\n")
-        self._git(repository, "add", ".gitignore")
-        self._git(repository, "commit", "--quiet", "-m", "cargo outputs")
-        target = repository / "target"
-        target.mkdir(mode=0o755)
-        (target / "built-xtask").write_bytes(b"generated executable\n")
+        for parent in (
+            repository / "apps/dashboard",
+            repository / "sdk/python",
+            repository / "sdk/typescript",
+        ):
+            parent.mkdir(parents=True)
+            (parent / "README").write_bytes(b"tracked package\n")
+        (repository / ".gitignore").write_bytes(
+            b"/target/\n/node_modules/\n"
+            b"/apps/dashboard/node_modules/\n"
+            b"/sdk/python/.venv/\n"
+            b"/sdk/typescript/node_modules/\n"
+        )
+        self._git(repository, "add", "--all")
+        self._git(repository, "commit", "--quiet", "-m", "generated outputs")
+        for generated in (
+            repository / "target",
+            repository / "node_modules",
+            repository / "apps/dashboard/node_modules",
+            repository / "sdk/python/.venv",
+            repository / "sdk/typescript/node_modules",
+        ):
+            generated.mkdir(mode=0o755)
+            (generated / "generated").write_bytes(b"generated dependency or tool\n")
 
         binding = evidence.source_binding(repository)
 
@@ -215,7 +233,7 @@ class GitSourceBindingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             evidence.CommandPlaneError,
-            "owner-owned protected real directory",
+            "generated root must be an owner-owned protected real directory",
         ):
             evidence.source_binding(repository)
 
@@ -369,7 +387,7 @@ fn main() {
 
         with self.assertRaisesRegex(
             evidence.CommandPlaneError,
-            "ignored untracked content outside the protected Cargo target root",
+            "ignored untracked content outside the closed generated-root authority",
         ):
             evidence.source_binding(repository)
 

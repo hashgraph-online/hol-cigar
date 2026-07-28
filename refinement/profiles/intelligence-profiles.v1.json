@@ -1,0 +1,23 @@
+{
+  "schema_version": "cigar.refinement-intelligence-profiles.v1",
+  "profiles": [
+    {
+      "profile_id": "balanced.v1",
+      "status": "frozen_default",
+      "selection_surface": "all",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v1",
+      "retrieval_digest": "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea",
+      "compiler_id": "cigar.compiler-profile.balanced.v1",
+      "compiler_digest": "1220e42df560c2b77e860952db51174f8fd995da09a7b37d231899ad173388943c8f"
+    },
+    {
+      "profile_id": "balanced.v2-candidate.1",
+      "status": "experimental_not_default",
+      "selection_surface": "cigarbench_consumer_only",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.1",
+      "retrieval_digest": "12208f5c83267949db9ed969f9b5f153c2be125b7d54875e2d72acad556b9a28183c",
+      "compiler_id": "cigar.compiler-profile.balanced.v2-candidate.1",
+      "compiler_digest": "1220c363f1fc1b3afa384fbdae91cf16b8955d91362adcadf75fa8faf0e7e437cccf"
+    }
+  ]
+}
