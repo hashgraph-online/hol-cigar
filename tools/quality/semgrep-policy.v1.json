@@ -1,7 +1,7 @@
 {
   "effective_ruleset": {
-    "bytes": 2423543,
-    "sha256": "5bd3ce2eb24029ab89f37850ffcc5d3a6b860006e387a56dd5d90fd7a86c954e"
+    "bytes": 2423567,
+    "sha256": "4414ba8e83cf38b74eab4484cdb44f83d12f0c3ddd0b0cd9e92082859ec283cc"
   },
   "rule_exceptions": [
     {
@@ -42,11 +42,11 @@
   "schema_version": "cigar.semgrep-policy.v1",
   "upstream_ruleset": {
     "canonical": {
-      "bytes": 2423467,
-      "sha256": "7c6e80adeb6ede2016aebfb4292513d1f7832aad778fc5d395a240bc48452e55"
+      "bytes": 2423491,
+      "sha256": "0cfcba111781ed0d7f8d4da5bf93e954ac7913066adb1ac554f6e9de38cc7de5"
     },
     "canonicalization": "cigar.semgrep-rule-block-order.v1",
-    "retrieved_utc": "2026-07-14T20:07:41Z",
+    "retrieved_utc": "2026-07-28T03:01:23Z",
     "rule_count": 1074,
     "url": "https://semgrep.dev/c/p/default"
   }

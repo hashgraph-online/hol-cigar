@@ -645,7 +645,8 @@ def _publish_payload(
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="cigar-honey-assembly-copy-") as raw:
         staging = Path(raw).resolve(strict=True)
-        os.chmod(staging, 0o700)
+        # Assembly staging contains unpublished release payloads and stays owner-private.
+        os.chmod(staging, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         source = staging / "payload"
         descriptor = os.open(
             source,

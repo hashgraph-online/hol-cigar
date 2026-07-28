@@ -97,6 +97,8 @@ jobs:
         env:
           CIGAR_PROMOTION_COMPARISON: ${{ vars.CIGAR_PROMOTION_COMPARISON }}
           CIGAR_PROMOTION_DECISION: ${{ vars.CIGAR_PROMOTION_DECISION }}
+          CIGAR_PROMOTION_TARGET_BRANCH: ${{ inputs.target_branch }}
+          CIGAR_PROMOTION_TRIAL_ID: ${{ inputs.trial_id }}
         run: |
           test -n "${CIGAR_PROMOTION_COMPARISON}"
           test -n "${CIGAR_PROMOTION_DECISION}"
@@ -111,8 +113,8 @@ jobs:
             --repository "${GITHUB_WORKSPACE}" \
             --comparison "${CIGAR_PROMOTION_COMPARISON}" \
             --decision "${CIGAR_PROMOTION_DECISION}" \
-            --trial-id "${{ inputs.trial_id }}" \
-            --target-branch "${{ inputs.target_branch }}" \
+            --trial-id "${CIGAR_PROMOTION_TRIAL_ID}" \
+            --target-branch "${CIGAR_PROMOTION_TARGET_BRANCH}" \
             --attestation-key "${CIGAR_ATTESTATION_KEY_PATH}" \
             --key-id github-promotion-v1 \
             >"${payload}"

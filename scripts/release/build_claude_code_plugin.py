@@ -1301,9 +1301,9 @@ def produce(
         ) as raw:
             scratch = Path(raw).resolve(strict=True)
             # Plugin build staging contains an unpublished executable and package payload.
-            os.chmod(
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 scratch, 0o700
-            )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            )
             validation = source_validator(configuration, scratch)
             if validation != {
                 "validator": f"{ADAPTER_RELATIVE}/tests/validate_package.py",

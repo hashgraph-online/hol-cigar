@@ -1276,10 +1276,23 @@ def _tracked_worktree_state(
     return matches_index, total_bytes, identity.digest()
 
 
-def _generated_target_identity(root: Path) -> bytes:
-    """Validate Cargo's one permitted ignored root without traversing its output."""
+_PERMITTED_GENERATED_ROOTS = frozenset(
+    {
+        b"apps/dashboard/node_modules/",
+        b"node_modules/",
+        b"sdk/python/.venv/",
+        b"sdk/typescript/node_modules/",
+        b"target/",
+    }
+)
 
-    path = root / "target"
+
+def _generated_root_identity(root: Path, relative: bytes) -> bytes:
+    """Validate one exact generated root without trusting or traversing its output."""
+
+    if relative not in _PERMITTED_GENERATED_ROOTS or not relative.endswith(b"/"):
+        raise CommandPlaneError("generated root is outside the closed path authority")
+    path = root / os.fsdecode(relative[:-1])
     try:
         root_metadata = root.lstat()
         named_before = path.lstat()
@@ -1293,7 +1306,7 @@ def _generated_target_identity(root: Path) -> bytes:
         or mode not in {0o700, 0o750, 0o755}
     ):
         raise CommandPlaneError(
-            "Cargo generated root must be an owner-owned protected real directory"
+            "generated root must be an owner-owned protected real directory"
         )
     flags = (
         os.O_RDONLY
@@ -1318,7 +1331,9 @@ def _generated_target_identity(root: Path) -> bytes:
         == _stat_identity(named_after)
     ):
         raise CommandPlaneError("Cargo generated root changed while it was inspected")
-    return hashlib.sha256(canonical_json_bytes(list(_stat_identity(opened)))).digest()
+    return hashlib.sha256(
+        relative + b"\0" + canonical_json_bytes(list(_stat_identity(opened)))
+    ).digest()
 
 
 def _status_state(root: Path) -> tuple[bytes, int, bytes]:
@@ -1343,11 +1358,16 @@ def _status_state(root: Path) -> tuple[bytes, int, bytes]:
     ignored_entries = tuple(item for item in ignored.split(b"\0") if item)
     generated_identity = hashlib.sha256(b"").digest()
     if ignored_entries:
-        if ignored_entries != (b"target/",):
+        if len(ignored_entries) != len(set(ignored_entries)) or any(
+            item not in _PERMITTED_GENERATED_ROOTS for item in ignored_entries
+        ):
             raise CommandPlaneError(
-                "ignored untracked content outside the protected Cargo target root is unsupported"
+                "ignored untracked content outside the closed generated-root authority is unsupported"
             )
-        generated_identity = _generated_target_identity(root)
+        identity = hashlib.sha256()
+        for item in sorted(ignored_entries):
+            identity.update(_generated_root_identity(root, item))
+        generated_identity = identity.digest()
         ignored_entries = ()
         ignored = b""
     count = len(ordinary_entries)
@@ -1385,8 +1405,10 @@ def source_binding(root: Path) -> dict[str, Any]:
     single-link 0644/0755 files below protected owner-owned directories and a
     v2/v3 SHA-1 index. Gitlinks, symlinks, sparse/split indexes, local filters,
     local attributes/excludes, transformed worktree content, and ignored paths
-    other than one protected root ``target/`` fail closed because those states
-    cannot be represented by the content-free receipt schema.
+    outside the closed set of protected build/dependency roots fail closed
+    because those states cannot be represented by the content-free receipt
+    schema. Generated-root metadata is captured twice for stability; executable
+    content is independently bound by the per-route tool authority.
     """
 
     top_level = _git(root, ["rev-parse", "--show-toplevel"])
