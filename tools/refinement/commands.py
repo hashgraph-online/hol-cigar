@@ -212,6 +212,18 @@ def default_registry() -> CommandRegistry:
                 300,
             ),
             CommandSpec(
+                "refinement-loop-smoke",
+                (
+                    sys.executable,
+                    "-B",
+                    "-m",
+                    "unittest",
+                    "tools.refinement.tests.test_r11_loop.LoopControllerTests.test_one_real_iteration_commits_candidate_without_changing_champion",
+                    "-q",
+                ),
+                120,
+            ),
+            CommandSpec(
                 "retrieval-tests",
                 (
                     "cargo",

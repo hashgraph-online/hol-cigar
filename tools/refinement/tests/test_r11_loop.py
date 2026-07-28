@@ -34,6 +34,7 @@ from tools.refinement.loop import (
 from tools.refinement.loop_state import LoopState, LoopStateError
 from tools.refinement.quota import QuotaLedger
 from tools.refinement.schema import SchemaRegistry
+from tools.refinement.soak import run_soak
 from tools.refinement.trials import TrialStore
 from tools.refinement.workspace import repository_identity
 
@@ -553,6 +554,52 @@ class LoopControllerTests(unittest.TestCase):
                 )
             finally:
                 fixture.close()
+
+    def test_short_soak_is_resumable_and_cannot_change_champion(self) -> None:
+        ledger_root = self.fixture.root / "soak-ledger"
+        ledger_root.mkdir(mode=0o700)
+        state_root = self.fixture.root / "soak-state"
+        registry = CommandRegistry(
+            (
+                CommandSpec(
+                    "refinement-loop-smoke",
+                    (
+                        sys.executable,
+                        "-c",
+                        "import time; time.sleep(0.2)",
+                    ),
+                    5,
+                ),
+            )
+        )
+        arguments = {
+            "repository": self.fixture.repository,
+            "state_root": state_root,
+            "ledger_root": ledger_root,
+            "run_id": "short-soak",
+            "duration_seconds": 1,
+            "interval_seconds": 0,
+            "pause_file": self.fixture.root / "soak-pause",
+            "no_promotion": True,
+            "registry": registry,
+        }
+        first = run_soak(**arguments)  # type: ignore[arg-type]
+        self.assertEqual(first["status"], "passed")
+        self.assertFalse(first["qualified_24h"])
+        self.assertGreaterEqual(first["cycles"], 1)
+        second = run_soak(**arguments)  # type: ignore[arg-type]
+        self.assertEqual(second, first)
+        self.assertEqual(
+            repository_identity(self.fixture.repository, require_clean=True),
+            self.fixture.champion,
+        )
+        self.assertEqual(
+            Ledger(
+                ledger_root,
+                repository_root=self.fixture.repository,
+            ).replay(),
+            [],
+        )
 
         class FailOnePhase(LoopState):
             def __init__(
