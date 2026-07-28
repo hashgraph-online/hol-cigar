@@ -39,7 +39,7 @@ from tools.refinement.loop import (
 from tools.refinement.loop_state import LoopState, LoopStateError
 from tools.refinement.quota import QuotaLedger
 from tools.refinement.schema import SchemaRegistry
-from tools.refinement.soak import run_soak
+from tools.refinement.soak import SoakJournal, run_soak
 from tools.refinement.trials import TrialStore
 from tools.refinement.workspace import repository_identity
 
@@ -607,6 +607,16 @@ class LoopControllerTests(unittest.TestCase):
             ).replay(),
             [],
         )
+
+    def test_soak_journal_exceeds_default_evidence_directory_limit(self) -> None:
+        state_root = self.fixture.root / "large-soak-state"
+        journal = SoakJournal(state_root, repository=self.fixture.repository)
+        for cycle in range(2_050):
+            (journal.root / "commands" / f"{cycle:020d}").mkdir(mode=0o700)
+
+        reopened = SoakJournal(state_root, repository=self.fixture.repository)
+
+        self.assertEqual(reopened.replay(), [])
 
     def test_custody_packet_is_content_free_and_awaits_independent_review(
         self,

@@ -36,11 +36,15 @@ RELEASE_TOOLS = ROOT / "scripts" / "release"
 if str(RELEASE_TOOLS) not in sys.path:
     sys.path.insert(0, str(RELEASE_TOOLS))
 
-from evidence_workspace import EvidenceWorkspace, EvidenceWorkspaceError
+from evidence_workspace import EvidenceLimits, EvidenceWorkspace, EvidenceWorkspaceError
 
 EVENT = re.compile(r"^events/([0-9]{20})\.json$")
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 COMMAND_ID = "refinement-loop-smoke"
+SOAK_EVIDENCE_LIMITS = EvidenceLimits(
+    max_files=100_000,
+    max_directories=16_384,
+)
 
 
 class SoakError(RuntimeError):
@@ -100,7 +104,11 @@ class SoakJournal:
         self.root = root
         self.repository = repository
         try:
-            with EvidenceWorkspace.create(root, repository_root=repository):
+            with EvidenceWorkspace.create(
+                root,
+                repository_root=repository,
+                limits=SOAK_EVIDENCE_LIMITS,
+            ):
                 pass
         except EvidenceWorkspaceError as error:
             raise SoakError("soak evidence root is unsafe") from error
@@ -226,7 +234,9 @@ class SoakJournal:
             return value
         try:
             with EvidenceWorkspace.create(
-                self.root, repository_root=self.repository
+                self.root,
+                repository_root=self.repository,
+                limits=SOAK_EVIDENCE_LIMITS,
             ) as workspace:
                 workspace.write_json("contract.json", expected)
         except EvidenceWorkspaceError as error:
@@ -248,7 +258,9 @@ class SoakJournal:
         body["event_id"] = identity(_without_id(body, "event_id"))
         try:
             with EvidenceWorkspace.create(
-                self.root, repository_root=self.repository
+                self.root,
+                repository_root=self.repository,
+                limits=SOAK_EVIDENCE_LIMITS,
             ) as workspace:
                 if len(self._event_names()) != len(events):
                     raise SoakError("soak journal changed before append")
