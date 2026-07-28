@@ -1175,7 +1175,11 @@ def _report_finding(target: str, vulnerability: Any) -> tuple[str, ...]:
 def validate_report(
     report: dict[str, Any], policy: dict[str, Any]
 ) -> tuple[set[tuple[str, ...]], set[tuple[str, str, str]]]:
-    if report.get("SchemaVersion") != 2 or report.get("ArtifactType") != "repository":
+    if (
+        report.get("SchemaVersion") != 2
+        or report.get("ArtifactName") != "."
+        or report.get("ArtifactType") != "filesystem"
+    ):
         raise PolicyError("Trivy report identity is unsupported")
     results = report.get("Results")
     if not isinstance(results, list):

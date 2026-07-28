@@ -34,7 +34,7 @@ class TrivyPolicyTests(unittest.TestCase):
             )
         return {
             "ArtifactName": ".",
-            "ArtifactType": "repository",
+            "ArtifactType": "filesystem",
             "Results": results,
             "SchemaVersion": 2,
         }
@@ -218,6 +218,20 @@ class TrivyPolicyTests(unittest.TestCase):
         )
         self.assertEqual(dirty["status"], "diagnostic_dirty_source")
         self.assertFalse(dirty["release_eligible"])
+
+    def test_report_identity_is_exactly_the_pinned_filesystem_scan(self) -> None:
+        for field, value in (
+            ("SchemaVersion", 3),
+            ("ArtifactName", "subdirectory"),
+            ("ArtifactType", "repository"),
+        ):
+            with self.subTest(field=field):
+                report = self.fixture_report()
+                report[field] = value
+                with self.assertRaisesRegex(
+                    trivy_policy.PolicyError, "report identity is unsupported"
+                ):
+                    trivy_policy.evaluate_report(report, self.policy, source_clean=True)
 
     def test_any_finding_blocks_without_a_disposition(self) -> None:
         report = self.fixture_report()
