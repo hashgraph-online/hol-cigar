@@ -51,6 +51,7 @@ jobs:
             tools.refinement.tests.test_r07_proposal \
             tools.refinement.tests.test_r08_experiment \
             tools.refinement.tests.test_r10_operations \
+            tools.refinement.tests.test_r11_loop \
             -v
 
       - name: Create a content-addressed diagnostic evidence bundle

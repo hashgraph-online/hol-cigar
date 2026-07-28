@@ -340,6 +340,18 @@ class R10OperationsTests(unittest.TestCase):
             by_name["refinement-promotion.yml"]["environment"],
             "refinement-promotion",
         )
+        nightly = (ROOT / ".github" / "workflows" / "refinement-nightly.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("python3 tools/refinement/loop.py", nightly)
+        self.assertIn("--mode suggest", nightly)
+        self.assertIn("--no-promotion", nightly)
+        self.assertIn("CIGAR_REFINEMENT_STATE_ROOT", nightly)
+        self.assertNotIn("operations.py quota reserve", nightly)
+        self.assertNotIn(
+            'run_id="nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+            nightly,
+        )
 
         fixture = self.external / "repository"
         (fixture / ".github").mkdir(parents=True)

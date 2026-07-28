@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import stat
 import subprocess
@@ -373,6 +374,193 @@ def retained_branch_revision(champion_repository: Path, record: dict[str, Any]) 
     if revision != record["champion_revision"]:
         raise WorkspaceError("retained trial branch identity is missing or changed")
     return revision
+
+
+def commit_candidate(
+    champion_repository: Path,
+    record: dict[str, Any],
+    diff: dict[str, Any],
+    *,
+    packet_id: str,
+) -> dict[str, Any]:
+    """Create one deterministic candidate commit on the exact trial branch."""
+
+    champion = _real_absolute_directory(champion_repository, "champion repository")
+    record = validate_worktree_record(record, champion_repository=champion)
+    worktree = _real_absolute_directory(Path(record["worktree_path"]), "worktree")
+    inspection = inspect_worktree(champion, record)
+    if (
+        not inspection["resumable"]
+        or inspection["revision"] != record["champion_revision"]
+        or inspection["tree"] != record["champion_tree"]
+    ):
+        raise WorkspaceError("candidate worktree is not based on its exact champion")
+    if (
+        not isinstance(diff, dict)
+        or diff.get("status") != "passed"
+        or not isinstance(diff.get("paths"), list)
+        or not diff["paths"]
+        or diff.get("snapshot", {}).get("snapshot_id") is None
+    ):
+        raise WorkspaceError("candidate diff is not a passed bound record")
+    paths = [safe_relative_path(path) for path in diff["paths"]]
+    if len(paths) != len(set(paths)):
+        raise WorkspaceError("candidate diff repeats a changed path")
+    if (
+        not isinstance(packet_id, str)
+        or re.fullmatch(r"1220[0-9a-f]{64}", packet_id) is None
+    ):
+        raise WorkspaceError("candidate packet identity is invalid")
+    _git(worktree, "add", "--", *paths)
+    tree = _git(worktree, "write-tree").decode().strip()
+    if GIT_OBJECT.fullmatch(tree) is None or tree == record["champion_tree"]:
+        raise WorkspaceError("candidate index did not produce a distinct Git tree")
+    epoch_text = (
+        _git(
+            champion,
+            "show",
+            "-s",
+            "--format=%ct",
+            record["champion_revision"],
+        )
+        .decode()
+        .strip()
+    )
+    if not epoch_text.isdecimal():
+        raise WorkspaceError("champion commit timestamp is invalid")
+    environment = {
+        "GIT_AUTHOR_DATE": f"@{epoch_text} +0000",
+        "GIT_AUTHOR_EMAIL": "refinement@cigar.invalid",
+        "GIT_AUTHOR_NAME": "CIGAR Refinement",
+        "GIT_COMMITTER_DATE": f"@{epoch_text} +0000",
+        "GIT_COMMITTER_EMAIL": "refinement@cigar.invalid",
+        "GIT_COMMITTER_NAME": "CIGAR Refinement",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+    }
+    message = (
+        f"refinement candidate {record['trial_id']}\n\n"
+        f"Task-Packet: {packet_id}\n"
+        f"Diff-Snapshot: {diff['snapshot']['snapshot_id']}\n"
+    ).encode()
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "--no-replace-objects",
+                "commit-tree",
+                tree,
+                "-p",
+                record["champion_revision"],
+            ],
+            cwd=worktree,
+            input=message,
+            env=environment,
+            capture_output=True,
+            timeout=120,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise WorkspaceError("candidate commit-tree operation failed") from error
+    if result.returncode != 0 or result.stderr or len(result.stdout) > 256:
+        raise WorkspaceError("candidate commit-tree operation was not clean")
+    revision = result.stdout.decode("ascii", errors="strict").strip()
+    if GIT_OBJECT.fullmatch(revision) is None:
+        raise WorkspaceError("candidate commit identity is invalid")
+    _git(
+        worktree,
+        "update-ref",
+        f"refs/heads/{record['branch']}",
+        revision,
+        record["champion_revision"],
+    )
+    candidate = repository_identity(worktree, require_clean=True)
+    if (
+        candidate["revision"] != revision
+        or candidate["tree"] != tree
+        or candidate["branch"] != record["branch"]
+        or candidate["common_dir"] != record["git_common_dir"]
+    ):
+        raise WorkspaceError("candidate branch does not reproduce the committed tree")
+    parent = _git(worktree, "rev-parse", "--verify", f"{revision}^").decode().strip()
+    if parent != record["champion_revision"]:
+        raise WorkspaceError("candidate commit parent is not the champion")
+    return {
+        "schema_version": "cigar.refinement-candidate-commit.v1",
+        "trial_id": record["trial_id"],
+        "branch": record["branch"],
+        "revision": revision,
+        "tree": tree,
+        "parent_revision": parent,
+        "packet_id": packet_id,
+        "diff_snapshot_id": diff["snapshot"]["snapshot_id"],
+    }
+
+
+def clean_candidate_worktree(
+    champion_repository: Path,
+    record: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    """Remove an exact clean candidate worktree while retaining its branch."""
+
+    champion = _real_absolute_directory(champion_repository, "champion repository")
+    record = validate_worktree_record(record, champion_repository=champion)
+    expected = {
+        "trial_id",
+        "branch",
+        "revision",
+        "tree",
+        "parent_revision",
+        "packet_id",
+        "diff_snapshot_id",
+        "schema_version",
+    }
+    if (
+        not isinstance(candidate, dict)
+        or set(candidate) != expected
+        or candidate["schema_version"] != "cigar.refinement-candidate-commit.v1"
+        or candidate["trial_id"] != record["trial_id"]
+        or candidate["branch"] != record["branch"]
+        or candidate["parent_revision"] != record["champion_revision"]
+    ):
+        raise WorkspaceError("candidate cleanup record is malformed")
+    path = _real_absolute_directory(Path(record["worktree_path"]), "worktree")
+    isolated = repository_identity(path, require_clean=True)
+    if (
+        isolated["revision"] != candidate["revision"]
+        or isolated["tree"] != candidate["tree"]
+        or isolated["branch"] != record["branch"]
+        or isolated["common_dir"] != record["git_common_dir"]
+    ):
+        raise WorkspaceError("candidate worktree identity changed before cleanup")
+    champion_before = repository_identity(champion, require_clean=True)
+    _git(champion, "worktree", "remove", str(path))
+    champion_after = repository_identity(champion, require_clean=True)
+    if champion_after != champion_before or path.exists():
+        raise WorkspaceError(
+            "candidate cleanup changed the champion or left the worktree"
+        )
+    revision = (
+        _git(
+            champion,
+            "rev-parse",
+            "--verify",
+            f"refs/heads/{record['branch']}^{{commit}}",
+        )
+        .decode()
+        .strip()
+    )
+    if revision != candidate["revision"]:
+        raise WorkspaceError("candidate branch was not retained exactly")
+    return {
+        "status": "cleaned",
+        "trial_id": record["trial_id"],
+        "branch_retained": record["branch"],
+        "branch_revision": revision,
+    }
 
 
 def _decode_paths(payload: bytes) -> set[str]:

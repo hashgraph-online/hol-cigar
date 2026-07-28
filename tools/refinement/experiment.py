@@ -15,7 +15,9 @@ from .schema import SchemaRegistry
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS = ROOT / "schemas/refinement"
 FAMILIES = ROOT / "refinement/profiles/intervention-families.v1.json"
-TERMINAL_EVENTS = frozenset({"trial_rejected", "trial_promoted", "controller_stopped"})
+TERMINAL_EVENTS = frozenset(
+    {"trial_rejected", "trial_nominated", "trial_promoted", "controller_stopped"}
+)
 TRIAL_CLASS = frozenset({"product", "infrastructure"})
 SAFE_FAILURE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 PUBLIC_STRATA = frozenset(

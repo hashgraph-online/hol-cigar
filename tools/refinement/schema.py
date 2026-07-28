@@ -78,6 +78,10 @@ class SchemaRegistry:
         elif "#/" in reference:
             target_filename, fragment = reference.split("#/", 1)
             target_document = self.load(target_filename)
+        elif reference.endswith(".schema.json"):
+            target_filename = reference
+            target_document = self.load(target_filename)
+            return target_document, target_document, target_filename
         else:
             raise SchemaError("only local schema references are supported")
         target: Any = target_document

@@ -263,6 +263,11 @@ class QuotaLedger:
             active[event["reservation_id"]] = event
         return active
 
+    def reservation(self, reservation_id: str) -> dict[str, Any] | None:
+        if RESERVATION.fullmatch(reservation_id) is None:
+            raise QuotaError("quota reservation ID is invalid")
+        return self._active(self.replay()).get(reservation_id)
+
     def usage(self, utc_day: str) -> dict[str, Any]:
         if UTC_DAY.fullmatch(utc_day) is None:
             raise QuotaError("UTC day must use YYYY-MM-DD")

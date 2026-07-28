@@ -433,6 +433,7 @@ class ProposalController:
             "patch_digests": list(self.patch_digests),
             "transcript": list(self.transcript),
             "usage_id": usage["usage_id"],
+            "usage": usage,
         }
         record["outcome_id"] = identity(record)
         return record

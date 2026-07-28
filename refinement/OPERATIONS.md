@@ -22,9 +22,13 @@ Configure these controls before enabling a schedule:
    `CIGAR_PROMOTION_ATTESTATION_KEY` and paths to independently retained comparison/decision
    evidence. Never duplicate PyPI, signing, notarization, release, shadow, or holdout credentials
    into the pull-request or development environment.
-4. Set `CIGAR_REFINEMENT_QUOTA_ROOT` to one absolute, owner-only, repository-external filesystem
-   directory shared by workers in a lane. Configure shadow corpus/consumer and promotion evidence
-   paths only as environment variables in their respective protected environments.
+4. Set `CIGAR_REFINEMENT_STATE_ROOT`, `CIGAR_REFINEMENT_LEDGER_ROOT`, and
+   `CIGAR_REFINEMENT_QUOTA_ROOT` to distinct absolute, owner-only `0700`,
+   repository-external filesystem directories shared by development workers. Pre-create
+   `runs`, `worktrees`, and `commands` as `0700` children of the state root. The run ID excludes
+   `GITHUB_RUN_ATTEMPT`, so an Actions rerun resumes the exact controller journal rather than
+   creating a second trial. Configure shadow corpus/consumer and promotion evidence paths only as
+   environment variables in their respective protected environments.
 5. Retain external authoritative evidence independently of GitHub Actions artifacts. Uploaded
    bundles are content-addressed, immutable `0400` transports with a manifest and retention
    declaration; they do not gain promotion authority merely by being uploaded.
@@ -36,6 +40,13 @@ python3 tools/refinement/operations.py audit-workflows \
   --repository "$PWD" \
   --policy "$PWD/refinement/operations/workflow-policy-v1.json"
 ```
+
+Before enabling the schedule, perform a credential-free dry run with the same roots and checked-in
+opportunity registry. A real nightly run invokes `tools/refinement/loop.py` in `suggest` mode,
+reserves the selected packet budget through the shared quota ledger, materializes one isolated Git
+worktree, executes the hosted adapter through controller-owned actions, runs named gates, writes
+phase/ledger checkpoints, and emits a content-addressed result bundle. It never commits the
+suggested diff or changes the champion.
 
 ## Normal reconstruction
 
@@ -60,8 +71,9 @@ Omitting `--output` writes only canonical JSON to stdout. Supplying `--output` u
 ## Pause
 
 1. Create the configured pause file atomically in the controller state directory. The controller
-   checks it before scheduling, before every provider call, before gate launch, and before
-   promotion preparation.
+   checks it at every resumable phase boundary: before scheduling, proposal launch, gate launch,
+   and evaluation/terminal preparation. An already-running provider call remains bounded by the
+   packet wall-time and must finish or be cancelled.
 2. Let the active bounded command finish or use the cancel procedure below.
 3. Append `controller_stopped` with reason `operator_pause`; do not modify an earlier entry.
 4. Verify all active quota reservations. A paused live provider call remains fully reserved.

@@ -31,6 +31,7 @@ EVENT_TYPES = {
     "gate_finished",
     "evaluation_finished",
     "trial_rejected",
+    "trial_nominated",
     "trial_promoted",
     "controller_stopped",
 }

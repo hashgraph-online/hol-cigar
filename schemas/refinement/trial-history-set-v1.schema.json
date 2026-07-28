@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/trial-history-set-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_id", "history"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-trial-history-set.v1"},
+    "registry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "history": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {"$ref": "trial-history-v1.schema.json"}
+    }
+  }
+}
