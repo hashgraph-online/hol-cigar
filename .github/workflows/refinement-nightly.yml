@@ -74,11 +74,13 @@ jobs:
           test -d "${run_root}"
           test ! -L "${run_root}"
           test "$(stat -c '%u:%a' "${run_root}")" = "$(id -u):700"
-          printf 'CIGAR_LOOP_RUN_ID=%s\n' "${run_id}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_LOOP_RUN_ROOT=%s\n' "${run_root}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_STATE_ROOT=%s\n' "${CIGAR_STATE_ROOT}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_LEDGER_ROOT=%s\n' "${CIGAR_LEDGER_ROOT}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}" >>"${GITHUB_ENV}"
+          {
+            printf 'CIGAR_LOOP_RUN_ID=%s\n' "${run_id}"
+            printf 'CIGAR_LOOP_RUN_ROOT=%s\n' "${run_root}"
+            printf 'CIGAR_STATE_ROOT=%s\n' "${CIGAR_STATE_ROOT}"
+            printf 'CIGAR_LEDGER_ROOT=%s\n' "${CIGAR_LEDGER_ROOT}"
+            printf 'CIGAR_QUOTA_ROOT=%s\n' "${CIGAR_QUOTA_ROOT}"
+          } >>"${GITHUB_ENV}"
 
       - name: Run one resumable bounded development iteration
         env:
@@ -114,7 +116,7 @@ jobs:
         run: |
           umask 077
           source_revision="$(git rev-parse --verify HEAD)"
-          source_tree="$(git rev-parse --verify HEAD^{tree})"
+          source_tree="$(git rev-parse --verify 'HEAD^{tree}')"
           receipt="${RUNNER_TEMP}/refinement-nightly-receipt.json"
           bundle="${RUNNER_TEMP}/refinement-nightly-evidence"
           policy_id="$(python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"

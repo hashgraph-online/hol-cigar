@@ -62,7 +62,8 @@ jobs:
           stdout_receipt="${canonical_temp}/cigar-macos-development-stdout-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
           test ! -e "${evidence_root}"
           export CIGAR_EVIDENCE_DIR="${evidence_root}"
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          export SOURCE_DATE_EPOCH
           python3 scripts/release/build_macos_aarch64_archive.py >"${stdout_receipt}"
           python3 - "${evidence_root}" "${stdout_receipt}" "${GITHUB_SHA}" <<'PY'
           import hashlib

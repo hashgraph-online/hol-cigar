@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import hashlib
 import io
@@ -534,6 +535,10 @@ class CommandControllerTests(unittest.TestCase):
                 2,
                 maximum_stdout_bytes=True,
             ).validate()
+
+    def test_bounded_launcher_parses_with_python_3_12(self) -> None:
+        source = (ROOT / "tools/refinement/exec_bounded.py").read_text(encoding="utf-8")
+        ast.parse(source, feature_version=(3, 12))
 
     def test_shell_free_launcher_supports_a_target_without_arguments(self) -> None:
         registry = CommandRegistry((CommandSpec("no-arguments", (sys.executable,), 2),))

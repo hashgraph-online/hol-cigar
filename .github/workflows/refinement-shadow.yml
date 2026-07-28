@@ -96,7 +96,7 @@ jobs:
             --authority shadow \
             --status passed \
             --source-revision "$(git rev-parse --verify HEAD)" \
-            --source-tree "$(git rev-parse --verify HEAD^{tree})" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
             >"${gate_attachment}"
           chmod 0400 "${gate_attachment}"
           printf 'CIGAR_GATE_ATTACHMENT=%s\n' "${gate_attachment}" >>"${GITHUB_ENV}"
@@ -150,7 +150,7 @@ jobs:
             --evidence-class shadow \
             --retention-days 90 \
             --source-revision "$(git rev-parse --verify HEAD)" \
-            --source-tree "$(git rev-parse --verify HEAD^{tree})" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
             --policy-id "${policy_id}" \
             --authority shadow-nomination \
             --attachment "qualification.json=${CIGAR_SHADOW_EVIDENCE}/qualification.json" \

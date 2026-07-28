@@ -147,7 +147,7 @@ jobs:
             --evidence-class promotion \
             --retention-days 365 \
             --source-revision "$(git rev-parse --verify HEAD)" \
-            --source-tree "$(git rev-parse --verify HEAD^{tree})" \
+            --source-tree "$(git rev-parse --verify 'HEAD^{tree}')" \
             --policy-id "${policy_id}" \
             --authority promotion-preparation \
             --attachment "promotion-payload.json=${CIGAR_PROMOTION_PAYLOAD}"

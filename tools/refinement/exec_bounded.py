@@ -75,5 +75,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except OSError, ValueError:
+    except (OSError, ValueError):
         raise SystemExit(_fail()) from None

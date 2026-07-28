@@ -59,7 +59,7 @@ jobs:
         run: |
           umask 077
           source_revision="$(git rev-parse --verify HEAD)"
-          source_tree="$(git rev-parse --verify HEAD^{tree})"
+          source_tree="$(git rev-parse --verify 'HEAD^{tree}')"
           receipt="${RUNNER_TEMP}/refinement-fast-receipt.json"
           bundle="${RUNNER_TEMP}/refinement-fast-evidence"
           policy_id="$(/usr/bin/python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"

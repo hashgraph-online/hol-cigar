@@ -33,6 +33,14 @@ jobs:
           lfs: false
           submodules: false
 
+      - name: Verify the native host and pinned Rust toolchain
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           architecture: arm64
@@ -61,9 +69,6 @@ jobs:
         run: |
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
-          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
-          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
-          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
           test "$(node --version)" = "v24.10.0"
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"

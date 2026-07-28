@@ -154,9 +154,11 @@ jobs:
           python3 tools/quality/pnpm_audit.py verify-tool \
             --node "${CIGAR_AUDIT_NODE}" \
             --pnpm-root "${auditor_root}"
-          printf 'COREPACK_HOME=%s\n' "${corepack_home}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_AUDIT_NODE=%s\n' "${CIGAR_AUDIT_NODE}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_PNPM_AUDITOR_ROOT=%s\n' "${auditor_root}" >>"${GITHUB_ENV}"
+          {
+            printf 'COREPACK_HOME=%s\n' "${corepack_home}"
+            printf 'CIGAR_AUDIT_NODE=%s\n' "${CIGAR_AUDIT_NODE}"
+            printf 'CIGAR_PNPM_AUDITOR_ROOT=%s\n' "${auditor_root}"
+          } >>"${GITHUB_ENV}"
       - name: Audit TypeScript production dependencies with content-free evidence
         id: typescript_production_audit
         continue-on-error: true
