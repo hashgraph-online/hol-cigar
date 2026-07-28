@@ -22,6 +22,11 @@ from tools.refinement.adapters import (
 )
 from tools.refinement.canonical import canonical_bytes, identity, load_file, loads
 from tools.refinement.commands import CommandRegistry, CommandSpec
+from tools.refinement.custody_review import prepare as prepare_custody_review
+from tools.refinement.development_promotion import (
+    DevelopmentPromotionError,
+    prepare_development_update,
+)
 from tools.refinement.experiment import make_signal
 from tools.refinement.ledger import Ledger, LedgerError
 from tools.refinement.loop import (
@@ -603,6 +608,24 @@ class LoopControllerTests(unittest.TestCase):
             [],
         )
 
+    def test_custody_packet_is_content_free_and_awaits_independent_review(
+        self,
+    ) -> None:
+        packet = prepare_custody_review(ROOT, require_clean=False)
+        unsigned = dict(packet)
+        claimed = unsigned.pop("packet_id")
+        self.assertEqual(identity(unsigned), claimed)
+        self.assertFalse(packet["contains_private_content"])
+        self.assertEqual(packet["review_status"], "awaiting-independent-review")
+        self.assertGreaterEqual(len(packet["required_reviewer_assertions"]), 5)
+        serialized = canonical_bytes(packet)
+        for forbidden in (
+            b"CIGAR_CORPUS_SHADOW_",
+            b"CIGAR_CORPUS_SEALED_",
+            b"-----BEGIN PRIVATE KEY-----",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
         class FailOnePhase(LoopState):
             def __init__(
                 self,
@@ -935,6 +958,93 @@ class LoopControllerTests(unittest.TestCase):
                 terminal["candidate"] is not None,
                 seed["expected_candidate_commit"],
             )
+        evaluations = {
+            event["trial_id"]: state.artifact(event["artifact_ids"][0])
+            for event in events
+            if event["phase"] == "evaluated"
+        }
+        prepared = []
+        for event in terminal_events:
+            seed = trial_seeds[event["trial_id"]]
+            terminal = state.artifact(event["artifact_ids"][0])
+            evaluation = evaluations.get(event["trial_id"])
+            if evaluation is None:
+                evaluation = _seal_evaluation(
+                    evaluator_id="malicious-promotion-attempt-v1",
+                    trial_id=event["trial_id"],
+                    decision="nominate",
+                    failure_category=None,
+                    reasons=["Synthetic hostile promotion attempt."],
+                    diff_snapshot_id="1220" + "d" * 64,
+                    gate_id="1220" + "e" * 64,
+                    metrics=[],
+                    hard_invariants=[{"name": "synthetic", "status": "passed"}],
+                )
+            candidate = terminal["candidate"]
+            decision_body = {
+                "schema_version": "cigar.refinement-decision.v1",
+                "trial_id": event["trial_id"],
+                "comparison_id": identity(
+                    {"seed_id": seed["seed_id"], "kind": "comparison"}
+                ),
+                "champion_source": {
+                    "revision": self.fixture.champion["revision"],
+                    "tree": self.fixture.champion["tree"],
+                },
+                "candidate_source": (
+                    {
+                        "revision": candidate["revision"],
+                        "tree": candidate["tree"],
+                    }
+                    if candidate is not None
+                    else {
+                        "revision": self.fixture.champion["revision"],
+                        "tree": self.fixture.champion["tree"],
+                    }
+                ),
+                "policy_digest": manifest["qualification_id"],
+                "decision": "promote",
+                "reasons": ["independent-seeded-qualification"],
+                "passed_gates": ["seed-oracle"],
+                "failed_gates": [],
+                "human_review": {
+                    "reviewer_id": "independent-seed-oracle",
+                    "approval_digest": identity(
+                        {"seed_id": seed["seed_id"], "approved": True}
+                    ),
+                },
+            }
+            decision = {
+                **decision_body,
+                "decision_id": identity(decision_body),
+            }
+            if seed["expected_candidate_commit"]:
+                prepared.append(
+                    prepare_development_update(
+                        terminal=terminal,
+                        evaluation=evaluation,
+                        decision=decision,
+                        schema_root=ROOT / "schemas" / "refinement",
+                    )
+                )
+            else:
+                with self.assertRaisesRegex(
+                    DevelopmentPromotionError, "cannot promote"
+                ):
+                    prepare_development_update(
+                        terminal=terminal,
+                        evaluation=evaluation,
+                        decision=decision,
+                        schema_root=ROOT / "schemas" / "refinement",
+                    )
+        self.assertEqual(len(prepared), 5)
+        self.assertTrue(
+            all(
+                intent["branch_update_authority"] is False
+                and intent["target_branch"] == "refinement/development"
+                for intent in prepared
+            )
+        )
         nominated_events = [
             event for event in terminal_events if event["status"] == "nominate"
         ]

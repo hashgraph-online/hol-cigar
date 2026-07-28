@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/development-promotion-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "intent_id", "trial_id", "target_branch", "champion_source", "candidate_source", "evaluation_id", "decision_id", "operation", "required_environment", "branch_update_authority", "merge_authority", "publication_authority"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-development-promotion.v1"},
+    "intent_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "target_branch": {"const": "refinement/development"},
+    "champion_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "decision_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "operation": {"const": "prepare-development-branch-update-only"},
+    "required_environment": {"const": "refinement-development"},
+    "branch_update_authority": {"const": false},
+    "merge_authority": {"const": false},
+    "publication_authority": {"const": false}
+  }
+}
