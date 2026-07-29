@@ -77,6 +77,7 @@ DECISIONS = frozenset(
     }
 )
 MODES = {"suggest": 0, "patch": 1, "pr": 2}
+ZERO_COST_ADAPTERS = frozenset({"patch-json-v1", "recorded-proposal-v1"})
 SENSITIVE_CONTENT = (
     re.compile(rb"-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----"),
     re.compile(rb"AKIA(?!IOSFODNN7EXAMPLE)[0-9A-Z]{16}"),
@@ -326,11 +327,13 @@ def _validate_evaluation(
         raise LoopError("loop evaluation failure category is inconsistent")
 
 
-def _usage_request(packet: dict[str, Any]) -> dict[str, int]:
+def _usage_request(packet: dict[str, Any], *, adapter_id: str | None) -> dict[str, int]:
     try:
         microusd = int(Decimal(str(packet["budgets"]["cost_usd"])) * Decimal(1_000_000))
     except (InvalidOperation, ValueError) as error:
         raise LoopError("task packet cost cannot be represented exactly") from error
+    if adapter_id in ZERO_COST_ADAPTERS:
+        microusd = 0
     return {
         "input_tokens": packet["budgets"]["input_tokens"],
         "output_tokens": packet["budgets"]["output_tokens"],
@@ -1151,6 +1154,7 @@ class LoopController:
                         not inspection["resumable"] or not inspection["clean"]
                     ):
                         reservation_id = _reservation_id(self.run_id, trial_id)
+                        reservation = self.quota.reservation(reservation_id)
                         self._early_reject(
                             error=LoopError(
                                 "proposal mutation has no published checkpoint"
@@ -1159,7 +1163,12 @@ class LoopController:
                             iteration=iteration,
                             trial_id=trial_id,
                             reservation_id=reservation_id,
-                            requested=_usage_request(packet),
+                            requested=(
+                                dict(reservation["requested"])
+                                if reservation is not None
+                                and reservation["kind"] == "reserved"
+                                else _usage_request(packet, adapter_id=None)
+                            ),
                             failure_category="evidence_publication_interruption",
                         )
                         continue
@@ -1172,7 +1181,7 @@ class LoopController:
                 if effective == "materialized":
                     adapter = self.adapter_factory(packet)
                     reservation_id = _reservation_id(self.run_id, trial_id)
-                    requested = _usage_request(packet)
+                    requested = _usage_request(packet, adapter_id=adapter.adapter_id)
                     reservation = self.quota.reservation(reservation_id)
                     if reservation is None:
                         self.quota.reserve(
