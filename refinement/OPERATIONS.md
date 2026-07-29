@@ -176,3 +176,9 @@ the independent decision, checks out the exact candidate revision, and produces 
 package, or publication permission. A human or separately authorized integration may use the
 payload to open a review; it still may not publish a package or bypass normal release
 qualification.
+
+The separate draft-PR bridge described in
+[CONTINUOUS_REFINEMENT.md](CONTINUOUS_REFINEMENT.md) can consume a nominated loop
+PR payload. It defaults to read-only preview and requires an exact payload
+confirmation before pushing one literal retained-candidate ref and opening a draft
+review. It has no merge or publication operation.

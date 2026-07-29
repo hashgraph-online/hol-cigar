@@ -90,6 +90,24 @@ class LoopError(RuntimeError):
     """A loop request is unsafe, ambiguous, exhausted, or cannot be resumed."""
 
 
+def _validate_pr_payload(repository: Path, payload: dict[str, Any]) -> None:
+    try:
+        SchemaRegistry(repository / "schemas" / "refinement").validate(
+            "pr-payload-v1.schema.json", payload
+        )
+    except ValueError as error:
+        raise LoopError("review payload fails its schema") from error
+    unsigned = dict(payload)
+    claimed = unsigned.pop("payload_id")
+    if (
+        claimed != identity(unsigned)
+        or payload["branch"] != f"refine/trial-{payload['trial_id']}"
+        or payload["merge_authority"] is not False
+        or payload["publication_authority"] is not False
+    ):
+        raise LoopError("review payload is unsafe")
+
+
 class LoopFault(RuntimeError):
     """A controlled qualification fault injected after an immutable phase."""
 
@@ -714,14 +732,7 @@ class LoopController:
                 raise LoopError("recovered candidate commit identity changed")
         review_payload = terminal["review_payload"]
         if review_payload is not None:
-            unsigned_review = dict(review_payload)
-            claimed_review = unsigned_review.pop("payload_id", None)
-            if (
-                claimed_review != identity(unsigned_review)
-                or review_payload["merge_authority"] is not False
-                or review_payload["publication_authority"] is not False
-            ):
-                raise LoopError("recovered review payload is unsafe")
+            _validate_pr_payload(self.repository, review_payload)
         self.state.append(
             run_id=self.run_id,
             iteration=iteration,
@@ -1422,6 +1433,7 @@ class LoopController:
                                 **review_body,
                                 "payload_id": identity(review_body),
                             }
+                            _validate_pr_payload(self.repository, review_payload)
                     terminal_record = {
                         "schema_version": "cigar.refinement-loop-terminal.v1",
                         "trial_id": trial_id,

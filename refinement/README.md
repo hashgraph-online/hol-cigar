@@ -64,3 +64,7 @@ are documented in [PROMOTION.md](PROMOTION.md).
 Workflow trust boundaries, external quotas, immutable transport bundles, read-only dashboard
 projections, environment separation, and incident/rollback procedures are documented in
 [OPERATIONS.md](OPERATIONS.md).
+
+The reviewed opportunity-mining cycle, hosted/local model adapter boundary, and exact retained
+candidate-to-draft-PR bridge are documented in
+[CONTINUOUS_REFINEMENT.md](CONTINUOUS_REFINEMENT.md).

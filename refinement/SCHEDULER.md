@@ -23,3 +23,9 @@ Every decision includes the ranked candidate commitments, exclusions, and a
 component-level explanation. Terminal iteration IDs replayed from the external
 ledger and supplied trial-history fingerprints are excluded, allowing a restarted
 run to select the next eligible experiment without repeating completed work.
+
+Dashboard regressions, aggregate failure classes, and Pareto goal gaps enter this
+boundary through the independently reviewed candidate-set workflow documented in
+[CONTINUOUS_REFINEMENT.md](CONTINUOUS_REFINEMENT.md). The miner never schedules a
+candidate directly: only the HMAC-verified review publication produces the
+standard opportunities registry accepted by the loop.
