@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/draft-pr-preview-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "preview_id", "payload_id", "operation", "github_repository", "title", "body_sha256", "remote", "source", "merge_authority", "publication_authority", "executable"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-draft-pr-preview.v1"},
+    "preview_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "payload_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "operation": {"const": "push-exact-candidate-and-create-draft-review"},
+    "github_repository": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 256},
+    "body_sha256": {"$ref": "common-v1.schema.json#/$defs/sha256"},
+    "remote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "base_branch", "base_revision", "candidate_ref", "candidate_state"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "url": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "base_branch": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "base_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "candidate_ref": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "candidate_state": {"enum": ["absent", "exact"]}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_revision", "candidate_revision", "candidate_tree", "branch"],
+      "properties": {
+        "base_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "candidate_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "candidate_tree": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "branch": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+      }
+    },
+    "merge_authority": {"const": false},
+    "publication_authority": {"const": false},
+    "executable": {"const": true}
+  }
+}

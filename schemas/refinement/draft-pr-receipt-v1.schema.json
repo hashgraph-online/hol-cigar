@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/draft-pr-receipt-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "receipt_id", "preview_id", "payload_id", "github_repository", "remote", "pull_request", "merge_authority", "publication_authority"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-draft-pr-receipt.v1"},
+    "receipt_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "preview_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "payload_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "github_repository": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "remote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "base_branch", "base_revision", "head_branch", "head_revision", "pushed"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "base_branch": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "base_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "head_branch": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "head_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+        "pushed": {"type": "boolean"}
+      }
+    },
+    "pull_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "url", "draft", "created"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "url": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "draft": {"const": true},
+        "created": {"type": "boolean"}
+      }
+    },
+    "merge_authority": {"const": false},
+    "publication_authority": {"const": false}
+  }
+}

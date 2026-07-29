@@ -1,0 +1,154 @@
+{
+  "schema_version": "cigar.refinement-opportunity-mining-policy.v1",
+  "policy_id": "12206b7ceb29a106110618fe87b35c29a993554ad0fcbb97122040637d88b7312454",
+  "producer_id": "cigar-opportunity-miner-v1",
+  "kpi_lookback": 20,
+  "kpi_rules": [
+    {
+      "rule_id": "critical-recall-regression",
+      "source_metric": "critical_context_recall",
+      "direction": "higher",
+      "minimum_regression_ppm": 2500,
+      "full_scale_ppm": 100000,
+      "target": {
+        "signal_metric": "critical_recall",
+        "owner_hint": "feature-extraction",
+        "strata": ["LongRepo-Change", "Needle-and-Distractor"],
+        "estimated_cost": 20
+      }
+    },
+    {
+      "rule_id": "evidence-precision-regression",
+      "source_metric": "evidence_token_precision",
+      "direction": "higher",
+      "minimum_regression_ppm": 10000,
+      "full_scale_ppm": 200000,
+      "target": {
+        "signal_metric": "evidence_token_precision",
+        "owner_hint": "packing-dependency-closure",
+        "strata": ["LongRepo-Change", "Needle-and-Distractor"],
+        "estimated_cost": 25
+      }
+    },
+    {
+      "rule_id": "first-useful-rank-regression",
+      "source_metric": "first_useful_evidence_rank",
+      "direction": "lower",
+      "minimum_regression_ppm": 1000000,
+      "full_scale_ppm": 5000000,
+      "target": {
+        "signal_metric": "first_useful_rank",
+        "owner_hint": "lexical-scoring",
+        "strata": ["Needle-and-Distractor"],
+        "estimated_cost": 20
+      }
+    },
+    {
+      "rule_id": "latency-regression",
+      "source_metric": "latency_ms",
+      "direction": "lower",
+      "minimum_regression_ppm": 5000000,
+      "full_scale_ppm": 100000000,
+      "target": {
+        "signal_metric": "latency_p95",
+        "owner_hint": "graph-expansion",
+        "strata": ["LongRepo-Change"],
+        "estimated_cost": 25
+      }
+    }
+  ],
+  "failure_rules": [
+    {
+      "rule_id": "sensitive-content-failure",
+      "failure_class": "sensitive_content_detected",
+      "minimum_count": 1,
+      "full_scale_count": 5,
+      "target": {
+        "signal_metric": "hard_invariant",
+        "owner_hint": "authorization-policy",
+        "strata": ["PolicyBoundary"],
+        "estimated_cost": 25
+      }
+    },
+    {
+      "rule_id": "focused-gate-failure",
+      "failure_class": "focused_gate_failed",
+      "minimum_count": 2,
+      "full_scale_count": 10,
+      "target": {
+        "signal_metric": "harness_validity",
+        "owner_hint": "benchmark-evaluator-infrastructure",
+        "strata": [],
+        "estimated_cost": 15
+      }
+    },
+    {
+      "rule_id": "provider-outage-failure",
+      "failure_class": "provider_outage",
+      "minimum_count": 2,
+      "full_scale_count": 10,
+      "target": {
+        "signal_metric": "replay",
+        "owner_hint": "benchmark-evaluator-infrastructure",
+        "strata": [],
+        "estimated_cost": 10
+      }
+    },
+    {
+      "rule_id": "evidence-publication-failure",
+      "failure_class": "evidence_publication_interruption",
+      "minimum_count": 1,
+      "full_scale_count": 5,
+      "target": {
+        "signal_metric": "harness_validity",
+        "owner_hint": "benchmark-evaluator-infrastructure",
+        "strata": [],
+        "estimated_cost": 15
+      }
+    }
+  ],
+  "pareto_rules": [
+    {
+      "rule_id": "critical-recall-pareto-gap",
+      "objective": "critical_context_recall",
+      "direction": "higher",
+      "goal": 0.99,
+      "minimum_gap": 0.0025,
+      "full_scale_gap": 0.1,
+      "target": {
+        "signal_metric": "critical_recall",
+        "owner_hint": "feature-extraction",
+        "strata": ["LongRepo-Change", "Needle-and-Distractor"],
+        "estimated_cost": 20
+      }
+    },
+    {
+      "rule_id": "evidence-precision-pareto-gap",
+      "objective": "evidence_token_precision",
+      "direction": "higher",
+      "goal": 0.9,
+      "minimum_gap": 0.01,
+      "full_scale_gap": 0.2,
+      "target": {
+        "signal_metric": "evidence_token_precision",
+        "owner_hint": "packing-dependency-closure",
+        "strata": ["LongRepo-Change", "Needle-and-Distractor"],
+        "estimated_cost": 25
+      }
+    },
+    {
+      "rule_id": "first-useful-rank-pareto-gap",
+      "objective": "first_useful_evidence_rank",
+      "direction": "lower",
+      "goal": 1,
+      "minimum_gap": 1,
+      "full_scale_gap": 5,
+      "target": {
+        "signal_metric": "first_useful_rank",
+        "owner_hint": "lexical-scoring",
+        "strata": ["Needle-and-Distractor"],
+        "estimated_cost": 20
+      }
+    }
+  ]
+}

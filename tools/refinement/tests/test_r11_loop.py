@@ -35,6 +35,7 @@ from tools.refinement.loop import (
     LoopError,
     LoopFault,
     _seal_evaluation,
+    _usage_request,
 )
 from tools.refinement.loop_state import LoopState, LoopStateError
 from tools.refinement.quota import QuotaLedger
@@ -278,6 +279,29 @@ class LoopControllerTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.fixture.close()
+
+    def test_offline_adapters_reserve_no_provider_cost(self) -> None:
+        packet = {
+            "budgets": {
+                "input_tokens": 240_000,
+                "output_tokens": 80_000,
+                "wall_seconds": 4_200,
+                "cost_usd": 30,
+            }
+        }
+        hosted = _usage_request(packet, adapter_id="openai-responses-tools-v1")
+        for adapter_id in ("patch-json-v1", "recorded-proposal-v1"):
+            offline = _usage_request(packet, adapter_id=adapter_id)
+            self.assertEqual(offline["cost_microusd"], 0)
+            self.assertEqual(
+                {
+                    key: value
+                    for key, value in offline.items()
+                    if key != "cost_microusd"
+                },
+                {key: value for key, value in hosted.items() if key != "cost_microusd"},
+            )
+        self.assertEqual(hosted["cost_microusd"], 30_000_000)
 
     def test_one_real_iteration_commits_candidate_without_changing_champion(
         self,

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/opportunity-candidates-v1.schema.json",
+  "$defs": {
+    "kpiEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "metric", "direction", "reference_ppm", "latest_ppm", "regression_ppm", "reference_iteration_id", "latest_iteration_id"],
+      "properties": {
+        "kind": {"const": "kpi_regression"},
+        "metric": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "direction": {"enum": ["higher", "lower"]},
+        "reference_ppm": {"type": "integer", "minimum": -1000000000000, "maximum": 1000000000000},
+        "latest_ppm": {"type": "integer", "minimum": -1000000000000, "maximum": 1000000000000},
+        "regression_ppm": {"type": "integer", "minimum": 1, "maximum": 2000000000000},
+        "reference_iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "latest_iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+      }
+    },
+    "failureEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "failure_class", "count"],
+      "properties": {
+        "kind": {"const": "failure_cluster"},
+        "failure_class": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+        "count": {"type": "integer", "minimum": 1, "maximum": 1000000000}
+      }
+    },
+    "paretoEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "objective", "direction", "goal", "frontier_value", "gap", "comparison_id", "record_id"],
+      "properties": {
+        "kind": {"const": "pareto_gap"},
+        "objective": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "direction": {"enum": ["higher", "lower"]},
+        "goal": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "frontier_value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "gap": {"type": "number", "minimum": 0.000000001, "maximum": 2000000000000000},
+        "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "record_id": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "rule_id", "derivation_kind", "signal", "evidence"],
+      "properties": {
+        "candidate_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "rule_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "derivation_kind": {"enum": ["kpi_regression", "failure_cluster", "pareto_gap"]},
+        "signal": {"$ref": "opportunity-signal-v1.schema.json"},
+        "evidence": {
+          "oneOf": [
+            {"$ref": "#/$defs/kpiEvidence"},
+            {"$ref": "#/$defs/failureEvidence"},
+            {"$ref": "#/$defs/paretoEvidence"}
+          ]
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_set_id", "policy_id", "producer_id", "projection_id", "pareto_head", "candidates"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-opportunity-candidates.v1"},
+    "candidate_set_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "policy_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "producer_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "projection_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "pareto_head": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "candidates": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/candidate"}}
+  }
+}
