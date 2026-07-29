@@ -18,6 +18,7 @@ from development_protocol_baseline import (
 from post_beta_profile import validate as validate_post_beta_profile
 from product_version import VersionError as ProductVersionError
 from product_version import check as validate_product_version
+from product_version import python_distribution_version
 from release_lib import (
     ReleaseError,
     load_json,
@@ -250,7 +251,19 @@ def main() -> int:
         "Python SDK": python_sdk["project"]["version"],
         "Claude Code plugin": plugin["version"],
     }
-    inconsistent = {name: found for name, found in versions.items() if found != version}
+    expected_versions = {
+        name: (
+            python_distribution_version(version)
+            if name == "Python SDK"
+            else version
+        )
+        for name in versions
+    }
+    inconsistent = {
+        name: {"actual": found, "expected": expected_versions[name]}
+        for name, found in versions.items()
+        if found != expected_versions[name]
+    }
     if inconsistent:
         raise ReleaseError(f"semantic version mismatch: {inconsistent}")
     root_package_manager = workspace_package.get("packageManager")
@@ -430,7 +443,11 @@ def main() -> int:
             raise ReleaseError(f"release schema is missing draft/id metadata: {path}")
     validate_beta_profile(root)
     validate_post_beta_profile(root)
-    validate_development_macos_profile(root)
+    product_version = load_json(root / "packaging/product-version.v1.json")
+    if product_version.get("channel") == "development":
+        validate_development_macos_profile(root)
+    elif product_version.get("channel") != "honey":
+        raise ReleaseError("unsupported product-version channel")
     validate_development_protocol_baseline(root)
     wp20_schema = load_json(
         root / "packaging/schemas/wp20-local-readiness.v1.schema.json"

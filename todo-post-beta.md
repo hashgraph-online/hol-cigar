@@ -170,7 +170,7 @@ These items require new production behavior, not only requalification:
       `cigard` remains recorded-only; the full replay and focused daemon gates pass.
 - [ ] Finish native Windows IPC execution and ACL enforcement; cross-compilation is not proof.
 - [x] Finish complete PRD metric instrumentation for the local macOS runtime. One shared
-      `cigar-observe` authority defines 43 families and exactly 137 maximum closed series; local
+      `cigar-observe` authority defines 65 families and exactly 256 maximum closed series; local
       OpenMetrics, the strict dashboard parser, and OTLP use identical names, help, kinds, label
       keys, and label domains. Catalog/compiler, mandatory-index, handoff, effect, repository-check,
       worker/lease, blocking-pool, transport-buffer, and process owners record direct observations;

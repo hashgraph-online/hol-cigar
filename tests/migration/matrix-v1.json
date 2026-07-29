@@ -119,6 +119,15 @@
       "profiles": ["local", "release"],
       "platforms": ["macos"],
       "requirements": ["STORE-MIGRATION-001", "STORE-INTEGRITY-001", "COMPAT-UPGRADE-001"]
+    },
+    {
+      "id": "MIG-SQLITE-007",
+      "title": "Distinct-target SQLite v4-to-v5 migration, activation, compaction, and logical 50-GiB process-abort boundaries preserve the verified v4 rollback source.",
+      "command": ["cargo", "nextest", "run", "--locked", "--config-file", ".config/nextest.toml", "--user-config-file", "none", "-P", "macos-qualification", "--no-tests", "fail", "-p", "cigar-store", "--features", "migration-fault-injection", "--test", "migration_v5_process"],
+      "timeout_seconds": 1800,
+      "profiles": ["local", "release"],
+      "platforms": ["macos"],
+      "requirements": ["STORE-MIGRATION-001", "STORE-INTEGRITY-001", "COMPAT-UPGRADE-001", "STORE-BACKUP-001", "STORE-RESTORE-001"]
     }
   ]
 }

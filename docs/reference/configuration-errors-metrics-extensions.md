@@ -76,7 +76,7 @@ verification and bounded exporter timeouts.
 The native macOS development gate runs real bounded loopback-HTTP and private-CA-HTTPS gRPC
 collectors, rejects an unrelated valid CA, and requires both trace and metric exports to contain
 only the closed daemon signal and attribute vocabulary. The loopback collector requires exact
-equality with all 43 families and all 137 closed series, not a representative subset.
+equality with all 65 families and all 256 closed series, not a representative subset.
 
 ## Extensions and connectors
 

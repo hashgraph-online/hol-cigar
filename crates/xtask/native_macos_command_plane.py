@@ -1874,6 +1874,11 @@ def _development_product_version() -> str:
     except (OSError, Exception) as error:
         raise NativeCommandError("product version authority is unavailable") from error
     stable = ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")
+    release_identity = (
+        (document.get("release_state"), document.get("channel"))
+        if isinstance(document, dict)
+        else None
+    )
     if (
         any(getattr(before, field) != getattr(after, field) for field in stable)
         or not stat.S_ISREG(before.st_mode)
@@ -1881,16 +1886,36 @@ def _development_product_version() -> str:
         or document.get("schema_version") != "cigar.product-version.v1"
         or document.get("product") != "cigar"
         or document.get("context_abi") != "cigar.context.v1"
-        or document.get("release_state") != "development"
+        or release_identity
+        not in {
+            ("development", "development"),
+            ("developer-preview", "honey"),
+        }
+        or document.get("prerelease") is not True
         or document.get("published") is not False
+        or document.get("supported") is not False
     ):
         raise NativeCommandError("product version authority is stale or changed")
     version = document.get("version")
     if (
         not isinstance(version, str)
         or len(version) > 128
-        or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version)
-        is None
+        or (
+            release_identity == ("development", "development")
+            and (
+                re.fullmatch(r"1\.0\.0-dev\.[1-9][0-9]*", version) is None
+                or document.get("target_release_version") != "1.0.0"
+                or document.get("tag") is not None
+            )
+        )
+        or (
+            release_identity == ("developer-preview", "honey")
+            and (
+                re.fullmatch(r"0\.9\.1-honey\.[1-9][0-9]*", version) is None
+                or document.get("target_release_version") != "0.9.1"
+                or document.get("tag") != f"v{version}"
+            )
+        )
     ):
         raise NativeCommandError("product version authority has an invalid version")
     return version

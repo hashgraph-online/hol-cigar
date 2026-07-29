@@ -46,6 +46,16 @@
           "minimum_application_major": 1,
           "maximum_application_major": 1,
           "online": false
+        },
+        {
+          "sequence": 5,
+          "name": "incremental_repository_state",
+          "source": "migrations/sqlite/0005_incremental_repository_state.sql",
+          "crate_mirror": "crates/cigar-store/migrations/sqlite/0005_incremental_repository_state.sql",
+          "sha256": "4600a510c1fb75dc47e26eb8f3faeb2197150455c216e612cef40b67fd16aff2",
+          "minimum_application_major": 1,
+          "maximum_application_major": 1,
+          "online": false
         }
       ]
     },
