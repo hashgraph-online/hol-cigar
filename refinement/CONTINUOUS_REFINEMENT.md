@@ -196,6 +196,34 @@ preview, payload, base/head identities, whether a push was necessary, draft PR
 number/URL, and false merge/publication authority. Merge, promotion, qualification,
 and PyPI publication remain separate reviewed systems.
 
+## HUMIDOR downstream qualification
+
+One terminal `trial_nominated` event and its matching immutable ledger entry can
+be exported as a signed, content-free downstream request:
+
+```sh
+python3 tools/refinement/downstream.py \
+  --repository "$PWD" \
+  --event /absolute/private/loop/events/00000000000000000006.json \
+  --ledger-entry /absolute/private/ledger/entries/00000000000000000004.json \
+  --attestation-key /absolute/independent/key \
+  --key-id refinement-downstream-r1 \
+  > /absolute/private/downstream-nomination.json
+```
+
+The exporter re-resolves the champion and candidate Git commits and trees,
+binds the exact loop and ledger identities, inventories only changed source
+paths, and marks changes to public profiles, ABI, SDKs, storage, effects,
+replay, or release artifacts as requiring the HUMIDOR downstream gate. It
+exports no task, prompt, corpus, oracle, annotation, or tenant content.
+
+Experimental profiles may be labeled `--experimental-profile`; a downstream
+`humidor_incompatible` result then blocks integration but does not block
+unrelated research. Every request remains suggest-only: merge and publication
+authority are fixed false. CEDAR owns downstream execution and returns only a
+signed aggregate result with decision, failure classes, metric deltas, and
+evidence identities.
+
 ## Iteration acceptance
 
 Treat an iteration as useful only when its complete evidence is replayable. At a
