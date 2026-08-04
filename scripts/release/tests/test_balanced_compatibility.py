@@ -72,7 +72,7 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
         python_project = tomllib.loads(
             (ROOT / "sdk/python/pyproject.toml").read_text(encoding="utf-8")
         )
-        workflow = (ROOT / ".github/workflows/pypi-honey.yml").read_text(
+        workflow = (ROOT / ".github/workflows/publish-hol-cigar.yml").read_text(
             encoding="utf-8"
         )
 
