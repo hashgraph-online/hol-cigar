@@ -468,7 +468,6 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     timeouts = {"small": 300, "threshold": 1800, "hiero-shaped": 14_400}
     with tempfile.TemporaryDirectory(prefix="cigar-honey-efficiency-") as temporary:
         scratch = Path(temporary)
-        os.chmod(scratch, 0o700)
         database = scratch / "workload.sqlite3"
         if args.verified_copy:
             input_binding = copy_verified_database(

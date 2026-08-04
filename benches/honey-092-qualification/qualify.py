@@ -448,7 +448,6 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
     published_identity = git_identity(published, expected_commit=PUBLISHED_COMMIT)
     with tempfile.TemporaryDirectory(prefix="cigar-honey-092-focused-") as temporary:
         scratch = Path(temporary).resolve(strict=True)
-        os.chmod(scratch, 0o700)
         published_driver = build_driver(published, scratch, enable_v5=False)
         candidate_driver = build_driver(candidate, scratch, enable_v5=True)
         raw: dict[str, dict[str, Any]] = {"published": {}, "candidate": {}}
