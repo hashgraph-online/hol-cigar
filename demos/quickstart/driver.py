@@ -188,6 +188,16 @@ def run() -> None:
         {"contract": target_contract_digest, "repository": changed_identity}
     )
     provenance = [digest_value({"source": initial_identity, "kind": "accepted"})]
+    equivalent_versions = [
+        digest_value(
+            {
+                "source": initial_identity,
+                "equivalent_version": alias,
+                "content": "shared-retry-resolution",
+            }
+        )
+        for alias in ("primary", "mirror")
+    ]
     initial_blocks = [
         {
             "block_id": digest_value({"bundle": initial_bundle_id, "lane": lane}),
@@ -206,6 +216,10 @@ def run() -> None:
             ("history", 700),
         )
     ]
+    initial_blocks[2] = {
+        **initial_blocks[2],
+        "provenance": equivalent_versions,
+    }
     target_blocks = [dict(block) for block in initial_blocks]
     target_blocks[1] = {
         **target_blocks[1],
@@ -232,7 +246,6 @@ def run() -> None:
     }
     lanes = [block["lane"] for block in initial_blocks]
     materialized_tokens = initial_bundle["total_tokens"]
-    selected_version = initial_blocks[2]["content_digest"]
     superseded_version = digest_value(
         {"repository": initial_identity, "superseded": True}
     )
@@ -250,7 +263,7 @@ def run() -> None:
     }
     explain_request = {
         "bundle_id": target_bundle_id,
-        "version_ids": sorted([selected_version, superseded_version]),
+        "version_ids": sorted([*equivalent_versions, superseded_version]),
     }
     operations = [
         RecordedOperation(
@@ -365,7 +378,10 @@ def run() -> None:
             explain_request,
             {
                 "entries": [
-                    {"version_id": selected_version, "state": "selected"},
+                    {"version_id": version_id, "state": "selected"}
+                    for version_id in equivalent_versions
+                ]
+                + [
                     {
                         "version_id": superseded_version,
                         "state": "excluded",
@@ -451,7 +467,23 @@ def run() -> None:
         isinstance(block.get("provenance"), list) and block["provenance"]
         for block in selected_blocks
     )
+    equivalent_blocks = [
+        block
+        for block in selected_blocks
+        if block.get("content_digest") == initial_blocks[2]["content_digest"]
+    ]
+    equivalent_provenance = (
+        equivalent_blocks[0].get("provenance", [])
+        if len(equivalent_blocks) == 1
+        else []
+    )
     explanation_entries = explained.get("entries", [])
+    resolved_equivalent_versions = {
+        entry.get("version_id")
+        for entry in explanation_entries
+        if entry.get("state") == "selected"
+        and entry.get("version_id") in equivalent_versions
+    }
     superseded_absent = all(
         entry.get("version_id") != superseded_version
         or entry.get("state") != "selected"
@@ -546,7 +578,7 @@ def run() -> None:
         ),
         step(
             "explain-delta",
-            "product_observed" if len(explanation_entries) == 2 else "not_observed",
+            "product_observed" if len(explanation_entries) == 3 else "not_observed",
             {"entry_count": len(explanation_entries)},
         ),
     ]
@@ -570,6 +602,32 @@ def run() -> None:
             "selected-provenance-complete",
             "product_observed" if provenance_complete else "not_observed",
             {"complete": provenance_complete, "block_count": len(selected_blocks)},
+        ),
+        assertion(
+            "equivalent-content-single-block",
+            "product_observed"
+            if len(equivalent_blocks)
+            == fixture["expected"]["equivalent_selected_blocks"]
+            else "not_observed",
+            {"selected_equivalent_blocks": len(equivalent_blocks)},
+        ),
+        assertion(
+            "equivalent-provenance-aliases-retained",
+            "product_observed"
+            if sorted(equivalent_provenance) == sorted(equivalent_versions)
+            and len(equivalent_provenance)
+            == fixture["expected"]["equivalent_provenance_aliases"]
+            else "not_observed",
+            {"provenance_aliases": len(equivalent_provenance)},
+        ),
+        assertion(
+            "equivalent-citation-aliases-resolve",
+            "product_observed"
+            if resolved_equivalent_versions == set(equivalent_versions)
+            and len(resolved_equivalent_versions)
+            == fixture["expected"]["equivalent_citation_aliases_resolved"]
+            else "not_observed",
+            {"resolved_aliases": len(resolved_equivalent_versions)},
         ),
         assertion(
             "delta-roundtrip-exact",

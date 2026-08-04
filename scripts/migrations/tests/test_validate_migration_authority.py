@@ -37,7 +37,7 @@ class MigrationAuthorityTests(unittest.TestCase):
     def test_repository_authority_is_closed_and_complete(self) -> None:
         self.assertEqual(
             validate(REPOSITORY),
-            {"backends": 2, "migrations": 8, "retained_fixtures": 5},
+            {"backends": 2, "migrations": 9, "retained_fixtures": 5},
         )
 
     def test_source_edit_is_rejected_by_digest(self) -> None:

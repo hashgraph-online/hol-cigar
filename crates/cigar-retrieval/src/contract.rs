@@ -5,11 +5,11 @@ use cigar_policy::{
     RetrievalAuthorization, RetrievalAuthorizationClaims, RetrievalResourceAuthorizationRequest,
 };
 use cigar_protocol::{
-    Classification, ContentDigest, InstructionAuthority, LineageId, RecordId, RelativePath,
-    SourceUri, UtcTimestamp, VersionId,
+    AtomKind, Classification, ContentDigest, InstructionAuthority, LaneKind, LineageId, RecordId,
+    RelativePath, SourceUri, UtcTimestamp, VersionId,
 };
 use cigar_store::{CancellationToken, StoreRevision};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::time::Instant;
 
@@ -23,6 +23,163 @@ pub const MAX_QUERY_TERMS: usize = 1_024;
 pub const MAX_GRAPH_DEPTH: u16 = 32;
 /// Maximum normalized integer feature value.
 pub const MAX_FEATURE_VALUE: u16 = 10_000;
+
+/// Frozen post-governance candidate bounding and deterministic-diversity policy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CandidateSelectionProfile {
+    /// Minimum optional allowance assigned to one query requirement.
+    pub minimum_per_requirement: usize,
+    /// Maximum optional allowance assigned to one query requirement.
+    pub maximum_per_requirement: usize,
+    /// Optional candidates retained per conservatively possible selected item.
+    pub oversubscription_factor: usize,
+    /// Nonzero token floor used only to derive possible selected-item counts.
+    pub token_to_item_floor: u32,
+    /// Maximum optional candidates retained for one lane.
+    pub maximum_per_lane: usize,
+    /// Maximum candidates requested from one ordinary channel stage.
+    pub maximum_per_stage: usize,
+    /// Maximum protected candidates associated with one requirement.
+    pub maximum_protected_per_requirement: usize,
+    /// Maximum protected candidates in one request.
+    pub maximum_protected_per_request: usize,
+    /// Optional candidates retained for one canonical source URI.
+    pub maximum_per_source: usize,
+    /// Optional candidates retained for one governed lineage.
+    pub maximum_per_lineage: usize,
+    /// Optional candidates retained for one authenticated content family.
+    pub maximum_per_content_family: usize,
+    /// Maximum merged candidates admitted to cap/diversity comparisons.
+    pub maximum_raw_candidates: usize,
+    /// Absolute protected plus optional compiler-intake bound.
+    pub absolute_compiler_candidates: usize,
+    /// Quantized MMR penalty for a source URI already represented.
+    pub same_source_penalty: i64,
+    /// Quantized MMR penalty for a lineage already represented.
+    pub same_lineage_penalty: i64,
+    /// Quantized MMR penalty for an authenticated content family already represented.
+    pub same_content_penalty: i64,
+    /// Quantized MMR penalty for an atom kind already represented.
+    pub same_kind_penalty: i64,
+}
+
+impl Default for CandidateSelectionProfile {
+    fn default() -> Self {
+        Self {
+            minimum_per_requirement: 4,
+            maximum_per_requirement: 8,
+            oversubscription_factor: 4,
+            token_to_item_floor: 128,
+            maximum_per_lane: 64,
+            maximum_per_stage: 16,
+            maximum_protected_per_requirement: 32,
+            maximum_protected_per_request: 256,
+            maximum_per_source: 2,
+            maximum_per_lineage: 1,
+            maximum_per_content_family: 1,
+            maximum_raw_candidates: 2_048,
+            absolute_compiler_candidates: 512,
+            same_source_penalty: 1_000_000,
+            same_lineage_penalty: 2_000_000,
+            same_content_penalty: 3_000_000,
+            same_kind_penalty: 100_000,
+        }
+    }
+}
+
+impl CandidateSelectionProfile {
+    /// Rejects zero, inconsistent, overflowing, or effectively unbounded selection policy.
+    pub fn validate(self) -> Result<(), RetrievalError> {
+        let positive = [
+            self.minimum_per_requirement,
+            self.maximum_per_requirement,
+            self.oversubscription_factor,
+            self.maximum_per_lane,
+            self.maximum_per_stage,
+            self.maximum_protected_per_requirement,
+            self.maximum_protected_per_request,
+            self.maximum_per_source,
+            self.maximum_per_lineage,
+            self.maximum_per_content_family,
+            self.maximum_raw_candidates,
+            self.absolute_compiler_candidates,
+        ];
+        if self.token_to_item_floor == 0
+            || positive.contains(&0)
+            || self.minimum_per_requirement > self.maximum_per_requirement
+            || self.maximum_per_requirement > self.maximum_per_lane
+            || self.maximum_per_stage > MAX_CANDIDATES
+            || self.maximum_protected_per_requirement > self.maximum_protected_per_request
+            || self.maximum_protected_per_request > self.absolute_compiler_candidates
+            || self.absolute_compiler_candidates > self.maximum_raw_candidates
+            || self.maximum_raw_candidates > MAX_CANDIDATES
+            || [
+                self.same_source_penalty,
+                self.same_lineage_penalty,
+                self.same_content_penalty,
+                self.same_kind_penalty,
+            ]
+            .iter()
+            .any(|penalty| *penalty < 0)
+        {
+            Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Exact lane capacity inputs used to derive bounded optional retrieval allowances.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RetrievalCapacity {
+    /// Exact normalized input-token budget for every declared lane.
+    pub lane_input_tokens: BTreeMap<LaneKind, u32>,
+    /// Optional compiler maximum item count for each lane.
+    pub maximum_items: BTreeMap<LaneKind, u16>,
+    /// Configured minimum evidence count for each lane.
+    pub minimum_items: BTreeMap<LaneKind, u16>,
+}
+
+impl RetrievalCapacity {
+    /// Constructs checked capacity metadata without importing compiler implementation types.
+    pub fn new(
+        lane_input_tokens: BTreeMap<LaneKind, u32>,
+        maximum_items: BTreeMap<LaneKind, u16>,
+        minimum_items: BTreeMap<LaneKind, u16>,
+    ) -> Result<Self, RetrievalError> {
+        let value = Self {
+            lane_input_tokens,
+            maximum_items,
+            minimum_items,
+        };
+        if value.lane_input_tokens.is_empty()
+            || value.lane_input_tokens.values().any(|tokens| *tokens == 0)
+            || value.maximum_items.values().any(|items| *items == 0)
+            || value.minimum_items.values().any(|items| *items == 0)
+            || value.minimum_items.iter().any(|(lane, minimum)| {
+                value
+                    .maximum_items
+                    .get(lane)
+                    .is_some_and(|maximum| minimum > maximum)
+            })
+        {
+            Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata))
+        } else {
+            Ok(value)
+        }
+    }
+}
+
+/// Fully derived and fingerprinted post-governance bounds for one query plan.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CandidateBounds {
+    /// Optional candidate allowance for each normalized requirement index.
+    pub requirement_limits: BTreeMap<usize, usize>,
+    /// Optional candidate allowance for each destination lane.
+    pub lane_limits: BTreeMap<LaneKind, usize>,
+    /// Frozen cap and diversity policy.
+    pub profile: CandidateSelectionProfile,
+}
 
 /// Stable content-free retrieval failure categories.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -369,6 +526,8 @@ pub struct RetrievalRequest {
     pub required_revision: StoreRevision,
     /// Strong or explicitly bounded-stale behavior.
     pub consistency: RetrievalConsistency,
+    /// Optional semantic atom-kind scope applied before channel ranking and caps.
+    pub atom_kinds: BTreeSet<AtomKind>,
     /// Sorted exact semantic versions.
     pub exact_versions: BTreeSet<VersionId>,
     /// Sorted exact immutable atom record identities.
@@ -494,6 +653,7 @@ impl fmt::Debug for RetrievalRequest {
             .field("partition", &self.partition)
             .field("required_revision", &self.required_revision)
             .field("consistency", &self.consistency)
+            .field("atom_kind_count", &self.atom_kinds.len())
             .field("exact_count", &self.exact_versions.len())
             .field("atom_id_count", &self.atom_ids.len())
             .field("lineage_id_count", &self.lineage_ids.len())
@@ -551,50 +711,7 @@ pub struct CandidateFeatures {
 impl CandidateFeatures {
     /// Validates all normalized features and computes the checked balanced-v1 score.
     pub fn balanced_score(self) -> Result<i64, RetrievalError> {
-        let normalized = [
-            self.requirement_match,
-            self.exact_match,
-            self.lexical_match,
-            self.semantic_match,
-            self.graph_proximity,
-            self.project_proximity,
-            self.task_proximity,
-            self.authority,
-            self.verification,
-            self.freshness,
-            self.novelty,
-            self.conflict_risk,
-            self.staleness,
-        ];
-        if normalized.iter().any(|value| *value > MAX_FEATURE_VALUE) {
-            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
-        }
-        let positive = [
-            (280_i64, self.requirement_match),
-            (150, self.exact_match),
-            (110, self.lexical_match),
-            (80, self.semantic_match),
-            (90, self.graph_proximity),
-            (70, self.project_proximity),
-            (60, self.task_proximity),
-            (90, self.authority),
-            (45, self.verification),
-            (35, self.freshness),
-            (30, self.novelty),
-        ];
-        let negative = [(130_i64, self.conflict_risk), (100, self.staleness)];
-        let mut score = 0_i64;
-        for (weight, value) in positive {
-            score = score
-                .checked_add(weight * i64::from(value))
-                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?;
-        }
-        for (weight, value) in negative {
-            score = score
-                .checked_sub(weight * i64::from(value))
-                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::LimitExceeded))?;
-        }
-        Ok(score)
+        self.score(crate::RetrievalProfile::BalancedV1)
     }
 }
 
@@ -625,15 +742,23 @@ pub enum MatchEvidence {
 pub struct CandidateRef {
     /// Exact immutable semantic version.
     pub version_id: VersionId,
+    /// Governed semantic lineage used for bounded diversity.
+    pub lineage_id: LineageId,
+    /// Authenticated exact content family available only after authorization.
+    pub content_digest: ContentDigest,
+    /// Semantic kind used to derive the destination lane without loading content.
+    pub atom_kind: AtomKind,
     /// Canonical source URI, available only after partition authorization.
     pub canonical_uri: SourceUri,
     /// Optional exact platform-neutral path.
     pub relative_path: Option<RelativePath>,
     /// Instruction authority used by deterministic feature generation.
     pub instruction_authority: InstructionAuthority,
+    /// Governed information classification used to prevent unsafe family coalescing.
+    pub classification: Classification,
     /// Quantized features.
     pub features: CandidateFeatures,
-    /// Checked balanced-v1 score.
+    /// Checked score under the exact profile disclosed by the retrieval batch.
     pub total_score: i64,
     /// Sorted evidence classes.
     pub evidence: BTreeSet<MatchEvidence>,
@@ -681,6 +806,11 @@ pub struct CandidateBatch {
 
 /// Backend-neutral authorized retrieval stage.
 pub trait Retriever: Send + Sync {
+    /// Exact score profile emitted by this retriever; legacy implementations are balanced-v1.
+    fn retrieval_profile(&self) -> crate::RetrievalProfile {
+        crate::RetrievalProfile::BalancedV1
+    }
+
     /// Executes one immutable bounded stage without returning protected content.
     fn retrieve(
         &self,

@@ -370,7 +370,7 @@ def architecture_evidence() -> dict[str, Any]:
         "INSERT OR IGNORE INTO cigar_catalog_edges",
         "FROM cigar_catalog_atoms WHERE published_revision <= ?1",
         "FROM cigar_catalog_edges",
-        "activate_normalized_catalog(&mut connection, capacity_profile)?;",
+        "activate_normalized_catalog(&mut connection, capacity_profile)",
         "enforce_catalog_capacity(&metadata, capacity_profile)?;",
         "catalog_root_from_bucket_states",
     )

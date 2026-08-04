@@ -480,6 +480,7 @@ mod tests {
         )?;
         let config = cigar_daemon::DaemonConfig {
             mode: cigar_daemon::DeploymentMode::Local,
+            intelligence_profile: cigar_daemon::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime.clone(),
@@ -493,6 +494,7 @@ mod tests {
             production: cigar_daemon::ProductionPaths {
                 project_directory: project,
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file,
@@ -575,7 +577,7 @@ mod tests {
     async fn version_and_help_are_stable_without_a_target() {
         let version = run(args(&["version"]), TerminalContext::default()).await;
         assert_eq!(version.status, 0);
-        assert!(version.stdout.contains("\"version\":\"0.9.0-honey.1\""));
+        assert!(version.stdout.contains("\"version\":\"0.9.2\""));
         assert!(version.stderr.is_empty());
 
         let help = run(Vec::new(), TerminalContext::default()).await;

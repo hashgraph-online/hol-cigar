@@ -1,0 +1,7 @@
+self-hosted-runner:
+  labels:
+    - refinement-development
+    - refinement-promotion
+    - refinement-shadow
+
+config-variables: null

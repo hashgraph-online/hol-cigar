@@ -29,7 +29,16 @@ these identities. Errors and debug surfaces expose stable categories and bounded
 identifiers, paths, content, query text, policy selectors, or vector commitments.
 
 `QueryPlanner` expands each requirement into independently capped exact, metadata, lexical, and
-optional vector stages. `StagedRetrieval` applies the per-stage deadline and blocking semantics.
+optional vector stages. For context compilation, its bounded path derives per-requirement and
+per-lane allowances from exact lane token budgets, compiler item limits/minima, and the frozen
+oversubscription policy; every derived cap and diversity constant is part of the plan fingerprint.
+`StagedRetrieval` applies the per-stage deadline and blocking semantics.
+`RequirementAwareCandidateReducer` then runs only on authorized metadata: it coalesces channel and
+authenticated content aliases, preserves exact/blocking/policy/higher-authority candidates under a
+separate hard protected bound, applies deterministic source/lineage/content-family caps, and uses
+integer MMR-style penalties before the absolute compiler-intake check. Dependency expansion in the
+daemon bypasses ordinary competition but shares that absolute ceiling. Cancellation, partition,
+revision, generation, and query fingerprints are rechecked before submission.
 `InMemoryIndexManager` is the hermetic reference projection manager. Optional `VectorAdapter`
 implementations are generation/fingerprint-bound and receive only a processor-approved bounded
 quantized query plus the semantic versions admitted by the hard metadata gate. They never receive
@@ -62,7 +71,7 @@ fully verified if later activated. Quarantine retention is fail-closed at 16 top
 rather than growing without bound. There is no format upgrade promise yet.
 
 The macOS source-tree qualification command is
-`cargo test --locked -p cigar-retrieval --all-targets`: 48 unit tests and three public integration
+`cargo test --locked -p cigar-retrieval --all-targets`: 56 unit tests and three public integration
 tests cover deterministic sealing/scoring, denied-vector non-interference, dynamic partitions,
 closed stage shapes, stale/missing/corrupt generations, descriptor attacks, every injected
 publication and activation boundary, and restart recovery. Strict lint qualification is

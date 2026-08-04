@@ -594,7 +594,8 @@ def _write_private_file(path: Path, payload: bytes, mode: int = 0o600) -> None:
     if mode not in {0o400, 0o500, 0o600}:
         raise PolicyError("private file mode is not in the closed write policy")
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
+    # Audit projections may contain unpublished dependency metadata and stay owner-private.
+    os.chmod(path.parent, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW | _CLOEXEC
     try:
         descriptor = os.open(path, flags, mode)
@@ -964,7 +965,8 @@ def _thaw_staged_runtime(runtime_root: Path) -> None:
     if not runtime_root.exists():
         return
     for directory, _, _ in os.walk(runtime_root, topdown=True, followlinks=False):
-        os.chmod(directory, 0o700)
+        # Thaw only for owner cleanup; no group or other access is introduced.
+        os.chmod(directory, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
 
 
 def verify_host(policy: dict[str, Any]) -> dict[str, str]:
@@ -1278,7 +1280,8 @@ def run_scan(
 
     with tempfile.TemporaryDirectory(prefix="cigar-pnpm-production-audit-") as raw:
         scratch = Path(raw).resolve(strict=True)
-        os.chmod(scratch, 0o700)
+        # The projected production graph is audit-only and must stay owner-private.
+        os.chmod(scratch, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         if scratch == root or scratch.is_relative_to(root):
             raise PolicyError(
                 "pnpm audit scratch directory is inside the source checkout"

@@ -23,7 +23,7 @@ Configure the client to start the installed binary directly:
 {
   "mcpServers": {
     "cigar": {
-      "command": "/absolute/path/to/cigar-honey-0.9.0-honey.1/bin/cigar-mcp",
+      "command": "/absolute/path/to/cigar-honey-0.9.2/bin/cigar-mcp",
       "args": ["serve"]
     }
   }

@@ -428,6 +428,31 @@ impl ServiceBatch {
     pub(crate) const fn tenant_id(&self) -> &RecordId {
         &self.tenant_id
     }
+
+    pub(crate) fn logical_bytes(&self) -> u64 {
+        let mut total = logical_len(self.tenant_id.as_str()).saturating_add(1);
+        if self.expected_store_revision.is_some() {
+            total = total.saturating_add(8);
+        }
+        for write in &self.writes {
+            total = total
+                .saturating_add(logical_len(&write.namespace))
+                .saturating_add(logical_len(&write.key))
+                .saturating_add(logical_len(&write.bytes))
+                .saturating_add(9);
+        }
+        if let Some(identity) = &self.idempotency {
+            total = total
+                .saturating_add(logical_len(&identity.operation))
+                .saturating_add(logical_len(identity.key.as_str()))
+                .saturating_add(logical_len(identity.request_digest.as_str()))
+                .saturating_add(logical_len(&self.response.content_type))
+                .saturating_add(logical_len(self.response.digest.as_str()))
+                .saturating_add(logical_len(&self.response.bytes))
+                .saturating_add(2);
+        }
+        total
+    }
 }
 
 impl fmt::Debug for ServiceBatch {
@@ -1040,6 +1065,28 @@ impl fmt::Debug for WorkerUpdate {
                 .finish(),
         }
     }
+}
+
+impl WorkerUpdate {
+    pub(crate) fn logical_bytes(&self, locator: &WorkerLocator) -> u64 {
+        let base = logical_len(locator.tenant_id.as_str())
+            .saturating_add(logical_len(&locator.worker))
+            .saturating_add(1);
+        match self {
+            Self::Claim { owner, .. } => base.saturating_add(logical_len(owner)).saturating_add(25),
+            Self::Checkpoint { owner, cursor, .. } => base
+                .saturating_add(logical_len(owner))
+                .saturating_add(logical_len(cursor))
+                .saturating_add(33),
+            Self::Release { owner, .. } => {
+                base.saturating_add(logical_len(owner)).saturating_add(25)
+            }
+        }
+    }
+}
+
+fn logical_len(value: impl AsRef<[u8]>) -> u64 {
+    u64::try_from(value.as_ref().len()).unwrap_or(u64::MAX)
 }
 
 /// Object-safe durable repository used by embedded and transported service facades.
@@ -1918,12 +1965,28 @@ mod tests {
     use crate::memory::CommittedState;
     use crate::{
         AccessContext, CancellationToken, EffectRecordEnvelope, InMemoryStore,
-        MAX_RETAINED_SQLITE_SNAPSHOTS, OutboxMessage, Repository, ServiceRecord, SnapshotSelection,
-        SqliteFailpoint, SqliteStore, StoreRevision, WriteTransaction,
+        MAX_RETAINED_SQLITE_SNAPSHOTS, OutboxMessage, Repository, RepositoryCommitKind,
+        RepositoryCommitMetrics, RepositoryCommitMetricsObserver, RepositoryCommitOutcome,
+        ServiceRecord, SnapshotSelection, SqliteFailpoint, SqliteStore, StoreRevision,
+        WriteTransaction,
     };
     use ciborium::value::Value;
     use cigar_protocol::{IdempotencyKey, RecordId};
     use std::error::Error;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct CapturingCommitObserver {
+        observations: Mutex<Vec<RepositoryCommitMetrics>>,
+    }
+
+    impl RepositoryCommitMetricsObserver for CapturingCommitObserver {
+        fn observe_repository_commit(&self, metrics: RepositoryCommitMetrics) {
+            if let Ok(mut observations) = self.observations.lock() {
+                observations.push(metrics);
+            }
+        }
+    }
 
     fn required<T>(value: Option<T>, message: &'static str) -> Result<T, Box<dyn Error>> {
         value
@@ -2261,6 +2324,55 @@ mod tests {
                 .worker_get(&locator, &CancellationToken::default())?
                 .is_some()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn sqlite_emits_one_content_free_measurement_after_a_durable_worker_commit()
+    -> Result<(), Box<dyn Error>> {
+        let directory = tempfile::tempdir()?;
+        let observer = Arc::new(CapturingCommitObserver::default());
+        let observer_handle: Arc<dyn RepositoryCommitMetricsObserver> = observer.clone();
+        let store = SqliteStore::open(directory.path().join("observed-commit.sqlite3"))?
+            .with_commit_metrics_observer(observer_handle);
+        let locator = WorkerLocator::new(record(23)?, "metrics-fixture")?;
+
+        let state = store.worker_update(
+            &locator,
+            WorkerUpdate::Claim {
+                expected: ServiceExpectedVersion::Absent,
+                owner: "daemon-a".to_owned(),
+                now_unix_nanos: 1,
+                expires_at_unix_nanos: 1_000,
+            },
+            &CancellationToken::default(),
+        )?;
+
+        assert_eq!(state.store_revision(), StoreRevision(1));
+        let observations = observer
+            .observations
+            .lock()
+            .map_err(|_| std::io::Error::other("commit observer lock poisoned"))?;
+        assert_eq!(observations.len(), 1);
+        let measurement = observations
+            .first()
+            .copied()
+            .ok_or_else(|| std::io::Error::other("commit observation missing"))?;
+        assert_eq!(measurement.kind, RepositoryCommitKind::Worker);
+        assert_eq!(measurement.outcome, RepositoryCommitOutcome::Committed);
+        assert_eq!(measurement.revision_before, StoreRevision(0));
+        assert_eq!(measurement.revision_after, StoreRevision(1));
+        assert!(!measurement.receipt_only);
+        assert!(measurement.bytes.logical_changed > 0);
+        assert!(measurement.bytes.full_state > 0);
+        assert!(measurement.bytes.database_before.is_some());
+        assert!(measurement.bytes.database_after.is_some());
+        assert!(measurement.bytes.wal_before.is_some());
+        assert!(measurement.bytes.wal_after.is_some());
+        assert_eq!(measurement.retained.full_states, Some(2));
+        assert_eq!(measurement.retained.checkpoints, Some(0));
+        assert_eq!(measurement.retained.deltas, Some(0));
+        assert_eq!(measurement.revision_delta(), 1);
         Ok(())
     }
 

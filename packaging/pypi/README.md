@@ -1,7 +1,7 @@
 # `hol-cigar`
 
-`hol-cigar` is the Python SDK for [CIGAR](https://hol.org/cigar), an open protocol
-developed by [HOL](https://hol.org).
+`hol-cigar` is the Python SDK for CIGAR, an open protocol developed by
+[HOL](https://hol.org).
 
 > **Developer preview:** version `0.9.1` is evaluation software. It is unsupported,
 > is not production-qualified, and does not carry the full CIGAR release
@@ -67,7 +67,6 @@ The machine-readable profile is
 
 ## Source and license
 
-- CIGAR website: [hol.org/cigar](https://hol.org/cigar)
 - Protocol home: [hol.org](https://hol.org)
 - Source: [hashgraph-online/hol-cigar](https://github.com/hashgraph-online/hol-cigar)
 - Issues: [GitHub Issues](https://github.com/hashgraph-online/hol-cigar/issues)

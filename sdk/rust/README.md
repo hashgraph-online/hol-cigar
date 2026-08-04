@@ -75,6 +75,22 @@ cargo run -p cigar-sdk --example quickstart
 It verifies the packaged copy of `sdk/fixtures/semantic-bundle-v1.json` and prints the shared
 semantic bundle ID. Qualification tests require the packaged and shared fixture bytes to match.
 
+## Downstream semantic reuse
+
+`SemanticReuseRequest` builds a stable downstream key from normalized need, governed watermark,
+authorization/disclosure domains, policy, target, tokenizer, materializer, and compiler pins. The
+type deliberately cannot accept run/job/trace correlation or an idempotency key. Unknown semantic
+extensions and uncertain authority bypass reuse; a candidate must match every pin exactly.
+
+Each execution can then bind its generated or reused artifact to fresh operation/trace correlation:
+
+```text
+cargo run -p cigar-sdk --example semantic_request_key --no-default-features
+```
+
+This helper preserves the frozen v1 contract digest and is not a server-side cache or signed vNext
+receipt. See `docs/reference/semantic-reuse-v1.md` for the compatibility boundary.
+
 ## Honey Agent A coordinator
 
 The packaged `agent_a_coordinator` example creates one recipient-bound handoff from a reviewed,

@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 defaults:
   run:
     shell: bash --noprofile --norc -euo pipefail {0}
@@ -30,6 +33,8 @@ jobs:
           persist-credentials: false
           lfs: false
           submodules: false
+      - name: Install the pinned protocol compiler
+        uses: ./.github/actions/setup-protoc
       - run: cargo install cargo-deny --version 0.20.2 --locked
       - run: cargo deny check
       - run: cargo install cargo-audit --version 0.22.1 --locked
@@ -154,9 +159,11 @@ jobs:
           python3 tools/quality/pnpm_audit.py verify-tool \
             --node "${CIGAR_AUDIT_NODE}" \
             --pnpm-root "${auditor_root}"
-          printf 'COREPACK_HOME=%s\n' "${corepack_home}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_AUDIT_NODE=%s\n' "${CIGAR_AUDIT_NODE}" >>"${GITHUB_ENV}"
-          printf 'CIGAR_PNPM_AUDITOR_ROOT=%s\n' "${auditor_root}" >>"${GITHUB_ENV}"
+          {
+            printf 'COREPACK_HOME=%s\n' "${corepack_home}"
+            printf 'CIGAR_AUDIT_NODE=%s\n' "${CIGAR_AUDIT_NODE}"
+            printf 'CIGAR_PNPM_AUDITOR_ROOT=%s\n' "${auditor_root}"
+          } >>"${GITHUB_ENV}"
       - name: Audit TypeScript production dependencies with content-free evidence
         id: typescript_production_audit
         continue-on-error: true
@@ -216,6 +223,8 @@ jobs:
           printf 'CARGO_TARGET_DIR=%s\n' \
             "${canonical_temp}/cigar-security-coverage-target" \
             >>"${GITHUB_ENV}"
+      - name: Install the pinned protocol compiler
+        uses: ./.github/actions/setup-protoc
       - name: Install pinned coverage tools
         run: |
           rustup toolchain install nightly-2026-07-13-aarch64-apple-darwin \
@@ -230,7 +239,7 @@ jobs:
           test "$(cargo +nightly-2026-07-13 llvm-cov --version | awk '{print $2}')" = "0.8.7"
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
@@ -322,7 +331,7 @@ jobs:
 
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
@@ -445,7 +454,7 @@ jobs:
 
       - name: Hydrate both locked Cargo workspaces
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \

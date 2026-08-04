@@ -437,6 +437,7 @@ def scan(
         "--metrics",
         "off",
         "--no-git-ignore",
+        "--no-rewrite-rule-ids",
     ]
     for excluded in policy["scan"]["exclude"]:
         command.extend(("--exclude", excluded))
@@ -487,6 +488,7 @@ def scan(
         "--metrics",
         "off",
         "--no-git-ignore",
+        "--no-rewrite-rule-ids",
     ]
     for excluded in policy["scan"]["exclude"]:
         normalized_command.extend(("--exclude", excluded))

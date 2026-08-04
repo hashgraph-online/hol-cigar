@@ -40,6 +40,7 @@
       "cargo-clippy",
       "cargo-deny",
       "clippy-driver",
+      "protoc",
       "rustc"
     ],
     "package-all": [],
@@ -105,7 +106,15 @@
     "test-offline": ["cargo", "cargo-nextest", "python3", "rustc"],
     "test-sanitizers": [],
     "test-security": ["cargo", "cargo-nextest", "python3", "rustc"],
-    "test-unit": ["cargo", "cargo-nextest", "rustc"],
+    "test-unit": [
+      "cargo",
+      "cargo-nextest",
+      "go",
+      "node",
+      "protoc",
+      "python3",
+      "rustc"
+    ],
     "test-vectors": [
       "cargo",
       "corepack",

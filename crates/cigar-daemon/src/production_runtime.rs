@@ -24,7 +24,10 @@ const HEALTH_NAMESPACE: &str = "daemon.health";
 const WORKER_OWNER: &str = "cigard-runtime";
 const WORKER_LEASE_NANOS: u64 = 60_000_000_000;
 const MAX_WORKER_HEARTBEAT_AGE_NANOS: u64 = 30_000_000_000;
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+// Persist one worker heartbeat per tick instead of bursting every worker through the single
+// SQLite writer. Nine worker kinds therefore complete a durable refresh cycle in 18 seconds,
+// inside the 30-second health bound and three times inside the 60-second lease.
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
 /// Stable failure while constructing concrete production dependencies.
@@ -113,6 +116,19 @@ struct RepositoryOperationalState {
     blocking_pool: Arc<BlockingPool>,
     clock: Arc<dyn ProductionUnixClock>,
     telemetry: Arc<DaemonTelemetry>,
+    heartbeat_cursor: Mutex<usize>,
+}
+
+fn next_heartbeat_worker(cursor: &Mutex<usize>) -> Result<WorkerKind, LifecycleError> {
+    let mut next = cursor
+        .lock()
+        .map_err(|_error| LifecycleError::action_failed())?;
+    let kind = WorkerKind::ALL
+        .get(*next)
+        .copied()
+        .ok_or_else(LifecycleError::action_failed)?;
+    *next = (*next + 1) % WorkerKind::ALL.len();
+    Ok(kind)
 }
 
 impl RepositoryOperationalState {
@@ -310,6 +326,25 @@ impl RepositoryOperationalState {
             self.telemetry
                 .observe_worker_lease(kind, expiry.saturating_sub(now) / 1_000_000_000);
         }
+        self.observe_runtime()
+    }
+
+    fn checkpoint_heartbeat_slice(&self) -> Result<(), LifecycleError> {
+        let now = self.clock.now_unix_nanos()?;
+        let expiry = Self::lease_expiry(now)?;
+        let kind = next_heartbeat_worker(&self.heartbeat_cursor)?;
+        let locator = self.locator(kind)?;
+        let state = self
+            .repository
+            .worker_get(&locator, &StoreCancellation::default())
+            .map_err(|_error| LifecycleError::action_failed())?
+            .ok_or_else(LifecycleError::action_failed)?;
+        if state.lease_owner() != Some(WORKER_OWNER) {
+            return Err(LifecycleError::action_failed());
+        }
+        self.checkpoint_state(&locator, &state, state.cursor().to_vec(), now, expiry)?;
+        self.telemetry
+            .observe_worker_lease(kind, expiry.saturating_sub(now) / 1_000_000_000);
         self.observe_runtime()
     }
 
@@ -619,7 +654,7 @@ fn spawn_worker_supervisor(
                             let result = pool.run(
                                 ApiCancellation::new(),
                                 tokio::time::Instant::now() + Duration::from_secs(30),
-                                move |_cancellation| heartbeat_state.checkpoint_all(),
+                                move |_cancellation| heartbeat_state.checkpoint_heartbeat_slice(),
                             ).await;
                             if !matches!(result, Ok(Ok(()))) {
                                 state.workers.stop_dispatch_claims();
@@ -707,6 +742,7 @@ where
         blocking_pool: Arc::clone(&blocking_pool),
         clock: unix_clock,
         telemetry: Arc::clone(&telemetry),
+        heartbeat_cursor: Mutex::new(0),
     });
     let startup_actions: Vec<Arc<dyn StartupAction>> = StartupStep::ALL
         .into_iter()
@@ -717,8 +753,14 @@ where
             }) as Arc<dyn StartupAction>
         })
         .collect();
-    let startup = StartupCoordinator::new(startup_actions, Arc::clone(&readiness_gate))
-        .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?;
+    let startup_observer: Arc<dyn cigar_store::RepositoryStartupMetricsObserver> =
+        telemetry.clone();
+    let startup = StartupCoordinator::new_with_startup_metrics(
+        startup_actions,
+        Arc::clone(&readiness_gate),
+        startup_observer,
+    )
+    .map_err(|_error| ProductionRuntimeError::InvalidConfiguration)?;
     let probes: Vec<Arc<dyn ReadinessProbe>> = [
         ReadinessComponent::MetadataStore,
         ReadinessComponent::MigrationLevel,
@@ -801,8 +843,9 @@ pub fn compose_repository_runtime(
 #[cfg(test)]
 mod tests {
     use super::{
-        ProductionDependencyChecks, ProductionUnixClock, SystemProductionUnixClock,
-        compose_repository_runtime,
+        HEARTBEAT_INTERVAL, MAX_WORKER_HEARTBEAT_AGE_NANOS, ProductionDependencyChecks,
+        ProductionUnixClock, SystemProductionUnixClock, WORKER_LEASE_NANOS,
+        compose_repository_runtime, next_heartbeat_worker,
     };
     use crate::{
         BlockingPool, DaemonConfig, DaemonServer, DaemonTelemetry, DeploymentMode,
@@ -829,6 +872,29 @@ mod tests {
 
     const SYSTEM_TENANT: &str = "01890f47-8e7d-7b42-a1d2-000000000001";
     const CORRELATION: &str = "01890f47-8e7d-7b42-a1d2-000000000002";
+
+    #[test]
+    fn durable_heartbeat_cadence_preserves_health_and_lease_headroom()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(HEARTBEAT_INTERVAL, Duration::from_secs(2));
+        let interval_nanos = u64::try_from(HEARTBEAT_INTERVAL.as_nanos())?;
+        let cycle_nanos = interval_nanos.saturating_mul(WorkerKind::ALL.len() as u64);
+        assert!(cycle_nanos <= MAX_WORKER_HEARTBEAT_AGE_NANOS);
+        assert!(cycle_nanos.saturating_mul(3) <= WORKER_LEASE_NANOS);
+        Ok(())
+    }
+
+    #[test]
+    fn durable_heartbeat_round_robin_covers_every_worker_before_wrapping()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let cursor = Mutex::new(0);
+        let observed = (0..WorkerKind::ALL.len())
+            .map(|_index| next_heartbeat_worker(&cursor))
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(observed, WorkerKind::ALL);
+        assert_eq!(next_heartbeat_worker(&cursor), Ok(WorkerKind::ALL[0]));
+        Ok(())
+    }
 
     struct Errors(RecordId);
 
@@ -1079,6 +1145,7 @@ mod tests {
         let runtime = runtime.canonicalize()?;
         Ok(DaemonConfig {
             mode: DeploymentMode::Local,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime,
@@ -1092,6 +1159,7 @@ mod tests {
             production: crate::ProductionPaths {
                 project_directory: root.to_path_buf(),
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file: state.join("keystore.cigar"),
@@ -1334,6 +1402,7 @@ mod tests {
         let fixture = fixture(directory.path())?;
         fixture.checks.cursor_valid.store(false, Ordering::Release);
         let readiness = Arc::clone(&fixture.dependencies.readiness_gate);
+        let telemetry = Arc::clone(&fixture.dependencies.telemetry);
         let server = DaemonServer::local(
             fixture.config,
             fixture.dependencies,
@@ -1346,6 +1415,11 @@ mod tests {
             .ok_or("startup unexpectedly succeeded")?;
         assert_eq!(error.code(), crate::DaemonErrorCode::StartupFailed);
         assert!(!readiness.is_open());
+        let metrics = telemetry.render_openmetrics(&[]);
+        assert!(metrics.contains("cigar_startup_stage_failures_total{stage=\"readiness_open\"} 1"));
+        assert!(metrics.contains("cigar_startup_outcomes_total{outcome=\"failed\"} 1"));
+        assert!(!metrics.contains("cursor_valid"));
+        assert!(!metrics.contains(directory.path().to_string_lossy().as_ref()));
         Ok(())
     }
 

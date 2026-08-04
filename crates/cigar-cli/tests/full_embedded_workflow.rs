@@ -210,6 +210,7 @@ impl EmbeddedFixture {
 
         let daemon = DaemonConfig {
             mode: DeploymentMode::Local,
+            intelligence_profile: cigar_daemon::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime.clone(),
@@ -223,6 +224,7 @@ impl EmbeddedFixture {
             production: ProductionPaths {
                 project_directory: project.clone(),
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file,

@@ -78,7 +78,7 @@ jobs:
           test "$(cargo mutants --version)" = "cargo-mutants 27.1.0"
 
       - name: Hydrate the locked Cargo cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Run and independently verify the full non-fuzz mutation gate offline
         env:
@@ -190,7 +190,7 @@ jobs:
           test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
 
       - name: Hydrate the locked Cargo cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+        run: cargo fetch --locked
 
       - name: Run the exact 24k process-kill and 100k logical-operation campaign offline
         env:

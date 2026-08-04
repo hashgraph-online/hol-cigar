@@ -22,8 +22,8 @@ from release_lib import (
 )
 
 
-VERSION = "0.9.0-honey.1"
-PYTHON_VERSION = "0.9.0.dev1"
+VERSION = "0.9.2"
+PYTHON_VERSION = "0.9.2"
 PROFILE_ID = "cigar.honey.local-developer-preview.macos-arm64.v1"
 CONTEXT_ABI = "cigar.context.v1"
 TARGET = "aarch64-apple-darwin"
@@ -35,7 +35,7 @@ OWNERSHIP_PATH = "packaging/honey/capability-ownership.v1.json"
 ARCHIVES_PATH = "packaging/honey/local-archives.v1.json"
 EVIDENCE_SCHEMA_PATH = "packaging/honey/schemas/honey-evidence.v1.schema.json"
 EVIDENCE_SCHEMA_SHA256 = (
-    "a59741883178fa6ea5f9dbcd2190086fc9553e7ee93a9e2284dc237392b34045"
+    "dd886735fe47b77e07e77a284efd455f66c72a2e15def4e07a6b2ebf010aced4"
 )
 
 OPERATION_SOURCE = "spec/api/operations-v1.json"
@@ -170,7 +170,6 @@ DEFERRED_IDS = (
     "macos-x86-64",
     "windows",
     "homebrew",
-    "public-pypi",
     "public-crates-io",
     "public-npm",
     "remote-multitenancy",
@@ -208,6 +207,13 @@ GATE_IDS = (
     "docs-commands-links",
     "license-notice",
     "artifact-checksums",
+    "storage-format-v5",
+    "v4-v5-migration",
+    "revision-recovery",
+    "storage-amplification",
+    "serial-latency",
+    "startup-readiness",
+    "context-quality-efficiency",
 )
 
 
@@ -309,6 +315,13 @@ def expected_artifact_matrix() -> dict[str, Any]:
                 "policy-nondisclosure",
                 "effect-unknown-recovery",
                 "offline-replay",
+                "storage-format-v5",
+                "v4-v5-migration",
+                "revision-recovery",
+                "storage-amplification",
+                "serial-latency",
+                "startup-readiness",
+                "context-quality-efficiency",
             ],
             receipt_schema="cigar.development-native-archive-build.v1",
             receipt_filename="native-build-receipt.json",
@@ -329,7 +342,7 @@ def expected_artifact_matrix() -> dict[str, Any]:
             6,
             "python-sdk-wheel",
             "python-wheel",
-            f"cigar_sdk-{PYTHON_VERSION}-py3-none-any.whl",
+            f"hol_cigar-{PYTHON_VERSION}-py3-none-any.whl",
             "packaging/contracts/python-wheel.v1.json",
             ["python3", "scripts/release/build_python_sdk_artifacts.py"],
             "python",
@@ -341,7 +354,7 @@ def expected_artifact_matrix() -> dict[str, Any]:
             7,
             "python-sdk-sdist",
             "python-sdist",
-            f"cigar_sdk-{PYTHON_VERSION}.tar.gz",
+            f"hol_cigar-{PYTHON_VERSION}.tar.gz",
             "packaging/contracts/python-sdist.v1.json",
             ["python3", "scripts/release/build_python_sdk_artifacts.py"],
             "python",
@@ -398,7 +411,7 @@ def expected_artifact_matrix() -> dict[str, Any]:
             11,
             "release-notes",
             "release-notes",
-            "RELEASE_NOTES_HONEY_v0.9.md",
+            "RELEASE_NOTES_HONEY_v0.9.2.md",
             None,
             ["python3", "scripts/release/assemble_honey_release.py"],
             "source-metadata",
@@ -444,6 +457,7 @@ def expected_artifact_matrix() -> dict[str, Any]:
         ("other-demo-reports", "demo"),
         ("documentation-report", "docs"),
         ("bounded-safety-report", "safety"),
+        ("efficiency-reliability-report", "efficiency"),
         ("honey-evidence-ledger", "evidence"),
     ]
     return {
@@ -509,7 +523,7 @@ def expected_capability_profile(root: Path) -> dict[str, Any]:
         "schema_version": "cigar.honey.capability-profile.v1",
         "profile_id": PROFILE_ID,
         "identity": {
-            "marketing_name": "CIGAR Honey v0.9",
+            "marketing_name": "CIGAR Honey v0.9.2",
             "product_version": VERSION,
             "python_distribution_version": PYTHON_VERSION,
             "tag": f"v{VERSION}",
@@ -570,6 +584,7 @@ def expected_capability_profile(root: Path) -> dict[str, Any]:
             "claude-code",
             "typescript-direct-tarball",
             "python-wheel-sdist",
+            "python-pypi-developer-preview",
             "rust-local-registry-kit",
             "filesystem-source",
             "git-source",
@@ -674,7 +689,25 @@ def expected_release_requirements(
             "ga",
         ],
         "publication": {
-            "github_prerelease_only": True,
+            "github_prerelease_required": True,
+            "pypi_project": "hol-cigar",
+            "pypi_distribution_version": PYTHON_VERSION,
+            "pypi_release_state": "alpha",
+            "pypi_scope": "python-sdk-only",
+            "pypi_requires_full_honey_qualification": False,
+            "pypi_required_gate_ids": [
+                "authority-drift",
+                "clean-committed-source",
+                "focused-tests",
+                "archive-contracts",
+                "sdk-clean-installs",
+                "docs-commands-links",
+                "license-notice",
+                "artifact-checksums",
+            ],
+            "pypi_environment": "pypi",
+            "pypi_trusted_publishing_required": True,
+            "pypi_attestations_required": True,
             "replace_attachment_bytes": False,
             "owner_authorization_required": True,
         },
@@ -899,7 +932,7 @@ def expected_archives() -> dict[str, Any]:
         "IMPLEMENTATION_STATUS.md",
         "README.md",
         "README_HONEY.md",
-        "RELEASE_NOTES_HONEY_v0.9.md",
+        "RELEASE_NOTES_HONEY_v0.9.2.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
@@ -955,7 +988,7 @@ def expected_archives() -> dict[str, Any]:
                 "include": [
                     "README.md",
                     "README_HONEY.md",
-                    "RELEASE_NOTES_HONEY_v0.9.md",
+                    "RELEASE_NOTES_HONEY_v0.9.2.md",
                     "LICENSE",
                     "NOTICE",
                     "docs/**",
@@ -1063,7 +1096,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "IMPLEMENTATION_STATUS.md",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.md",
+                "RELEASE_NOTES_HONEY_v0.9.2.md",
                 "LICENSE",
                 "NOTICE",
                 "SECURITY.md",
@@ -1107,7 +1140,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "Cargo.lock",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.md",
+                "RELEASE_NOTES_HONEY_v0.9.2.md",
                 "LICENSE",
                 "NOTICE",
                 "SECURITY.md",
@@ -1179,7 +1212,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "RELEASE-METADATA.json",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.md",
+                "RELEASE_NOTES_HONEY_v0.9.2.md",
                 "LICENSE",
                 "NOTICE",
                 "docs/**",
@@ -1399,7 +1432,7 @@ def generate(root: Path) -> None:
     product_version.check(root)
     manifest = product_version.load_manifest(root)
     if manifest.get("version") != VERSION or manifest.get("context_abi") != CONTEXT_ABI:
-        raise HoneyProfileError("product-version authority is not exact Honey v0.9")
+        raise HoneyProfileError("product-version authority is not exact Honey v0.9.2")
     _validate_protocol(root)
     _validate_static_authority(root)
     for relative, document in expected_documents(root).items():
@@ -1415,7 +1448,7 @@ def check(root: Path) -> None:
         "schema_version": "cigar.product-version.v1",
         "product": "cigar",
         "version": VERSION,
-        "target_release_version": "0.9.0",
+        "target_release_version": "0.9.2",
         "context_abi": CONTEXT_ABI,
         "release_state": "developer-preview",
         "channel": "honey",

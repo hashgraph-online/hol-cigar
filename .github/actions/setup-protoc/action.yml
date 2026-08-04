@@ -1,0 +1,31 @@
+name: Set up pinned protoc
+description: Install the reviewed Apple-silicon protoc distribution by digest.
+
+runs:
+  using: composite
+  steps:
+    - name: Install protoc 33.2
+      shell: bash --noprofile --norc -euo pipefail {0}
+      run: |
+        umask 077
+        protoc_root="${RUNNER_TEMP}/protoc-33.2"
+        protoc_archive="${RUNNER_TEMP}/protoc-33.2-osx-aarch_64.zip"
+        test ! -e "${protoc_root}"
+        test ! -e "${protoc_archive}"
+        curl \
+          --proto '=https' \
+          --tlsv1.2 \
+          --fail \
+          --show-error \
+          --silent \
+          --location \
+          --output "${protoc_archive}" \
+          https://github.com/protocolbuffers/protobuf/releases/download/v33.2/protoc-33.2-osx-aarch_64.zip
+        printf '%s  %s\n' \
+          '5be1427127788c9f7dd7d606c3e69843dd3587327dea993917ffcb77e7234b44' \
+          "${protoc_archive}" \
+          | shasum -a 256 --check
+        mkdir -m 0700 "${protoc_root}"
+        unzip -q "${protoc_archive}" -d "${protoc_root}"
+        test "$("${protoc_root}/bin/protoc" --version)" = "libprotoc 33.2"
+        printf '%s\n' "${protoc_root}/bin" >>"${GITHUB_PATH}"

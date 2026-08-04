@@ -175,6 +175,16 @@ class HoneyProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(honey_profile.HoneyProfileError, "authority drift"):
             honey_profile.check(self.fixture)
 
+    def test_rejects_stale_honey_filename(self) -> None:
+        self._mutate(
+            honey_profile.MATRIX_PATH,
+            lambda document: document["artifacts"][0].update(
+                filename="cigar-0.9.0-honey.1-source.tar.gz"
+            ),
+        )
+        with self.assertRaisesRegex(honey_profile.HoneyProfileError, "authority drift"):
+            honey_profile.check(self.fixture)
+
     def test_rejects_operation_drift(self) -> None:
         path = self.fixture / honey_profile.OPERATION_SOURCE
         path.write_bytes(path.read_bytes() + b"\n")

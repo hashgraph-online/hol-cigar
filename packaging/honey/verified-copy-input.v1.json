@@ -1,0 +1,15 @@
+{
+  "schema_version": "cigar.honey-verified-copy-input.v1",
+  "input_id": "H91-WORKLOAD-VERIFIED-COPY",
+  "status": "unbound",
+  "content_free": true,
+  "executable": false,
+  "binding": null,
+  "required_generated_gates": [
+    "H91-G001",
+    "H91-G002",
+    "H91-G003",
+    "H91-G016",
+    "H91-G018"
+  ]
+}

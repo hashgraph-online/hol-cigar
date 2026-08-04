@@ -6,7 +6,7 @@ use cigar_protocol::{
     InstructionAuthority, LaneKind, ManifestEntry, RepresentationKind, SelectionManifest,
     SourceUri, UtcTimestamp, VersionId,
 };
-use cigar_retrieval::CandidateFeatures;
+use cigar_retrieval::{CandidateFeatures, RetrievalProfile};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -119,6 +119,8 @@ pub struct FrozenInputs {
 pub struct CompilerProfile {
     /// Must be `cigar.compiler-profile.balanced.v1`.
     pub profile_id: String,
+    /// Retrieval score profile used by the compiler's packing utility.
+    pub retrieval_profile: RetrievalProfile,
     /// Minimum selected items per declared lane when eligible candidates exist.
     pub minimum_items: BTreeMap<LaneKind, u16>,
     /// Maximum selected items per lane.
@@ -133,12 +135,27 @@ pub struct CompilerProfile {
     pub entity_coverage_weight: i64,
     /// Information-loss penalty per loss tier.
     pub loss_penalty: i64,
+    /// Rank optional candidates by utility per token instead of absolute utility.
+    pub utility_density_ranking: bool,
+    /// Minimum deterministic lexical feature admitted for optional packing.
+    pub minimum_lexical_match: u16,
+    /// Dynamic gain per newly covered requirement in the H1 profile.
+    pub marginal_requirement_weight: i64,
+    /// Dynamic gain per newly covered entity bit in the H1 profile.
+    pub marginal_entity_weight: i64,
+    /// Cost per direct dependency in an optional closure in the H1 profile.
+    pub dependency_cost_penalty: i64,
+    /// Gain when a candidate adds a lane not yet represented in the H1 profile.
+    pub diversity_weight: i64,
+    /// Penalty per already-covered requirement/entity in the H1 profile.
+    pub redundancy_penalty: i64,
 }
 
 impl Default for CompilerProfile {
     fn default() -> Self {
         Self {
             profile_id: "cigar.compiler-profile.balanced.v1".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV1,
             minimum_items: BTreeMap::new(),
             maximum_items: BTreeMap::new(),
             local_swap_passes: 8,
@@ -146,6 +163,35 @@ impl Default for CompilerProfile {
             requirement_coverage_weight: 250_000,
             entity_coverage_weight: 100_000,
             loss_penalty: 50_000,
+            utility_density_ranking: true,
+            minimum_lexical_match: 0,
+            marginal_requirement_weight: 0,
+            marginal_entity_weight: 0,
+            dependency_cost_penalty: 0,
+            diversity_weight: 0,
+            redundancy_penalty: 0,
+        }
+    }
+}
+
+impl CompilerProfile {
+    /// Honey 0.9.2 H1 compiler profile.
+    #[must_use]
+    pub fn balanced_v2_candidate() -> Self {
+        Self {
+            profile_id: "cigar.compiler-profile.balanced.v2-candidate.1".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV2Candidate,
+            local_swap_passes: 0,
+            requirement_coverage_weight: 50_000,
+            entity_coverage_weight: 20_000,
+            utility_density_ranking: false,
+            minimum_lexical_match: 8_000,
+            marginal_requirement_weight: 300_000,
+            marginal_entity_weight: 120_000,
+            dependency_cost_penalty: 40_000,
+            diversity_weight: 75_000,
+            redundancy_penalty: 90_000,
+            ..Self::default()
         }
     }
 }
@@ -355,6 +401,32 @@ pub struct InvalidationRegistration {
     pub compiler_profile_digest: ContentDigest,
 }
 
+/// Protected content-equivalence accounting retained outside the frozen v1 protocol records.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContentEquivalenceDiagnostic {
+    /// Stable representative used by the plan and selected block.
+    pub representative_version: VersionId,
+    /// Sorted source versions represented by the class, including the representative.
+    pub member_versions: BTreeSet<VersionId>,
+    /// Sorted exact provenance commitments retained for every member manifest entry.
+    pub provenance_digests: BTreeSet<ContentDigest>,
+    /// Selected shared block, or `None` when the class was not packed.
+    pub selected_block_id: Option<VersionId>,
+}
+
+/// Exact protected citation resolution for one source version represented by a shared block.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CitationResolution {
+    /// Version cited by the caller.
+    pub cited_version: VersionId,
+    /// Exact source version whose lineage the citation retains.
+    pub source_version: VersionId,
+    /// Stable class representative named by the v1 plan.
+    pub representative_version: VersionId,
+    /// Shared selected block containing the source version in its provenance.
+    pub block_id: VersionId,
+}
+
 /// Caller-safe explanation entry after disclosure filtering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifestViewEntry {
@@ -384,6 +456,8 @@ pub struct CompileOutput {
     pub bundle: ContextBundle,
     /// Dependency roots for invalidation.
     pub invalidation: InvalidationRegistration,
+    /// Protected non-wire accounting for content-equivalent candidates and citations.
+    pub content_equivalence: Vec<ContentEquivalenceDiagnostic>,
 }
 
 impl CompileOutput {
@@ -402,6 +476,26 @@ impl CompileOutput {
                 })
                 .collect(),
         }
+    }
+
+    /// Resolves an authorized source-version citation to its exact lineage and shared block.
+    ///
+    /// The caller must apply the same disclosure authorization used for manifest explanations
+    /// before invoking this protected lookup.
+    #[must_use]
+    pub fn resolve_citation(&self, cited_version: &VersionId) -> Option<CitationResolution> {
+        self.content_equivalence.iter().find_map(|class| {
+            let block_id = class.selected_block_id.as_ref()?;
+            class
+                .member_versions
+                .contains(cited_version)
+                .then(|| CitationResolution {
+                    cited_version: cited_version.clone(),
+                    source_version: cited_version.clone(),
+                    representative_version: class.representative_version.clone(),
+                    block_id: block_id.clone(),
+                })
+        })
     }
 }
 

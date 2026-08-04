@@ -75,7 +75,7 @@ class DevelopmentProtocolBaselineTests(unittest.TestCase):
     def test_repository_baseline_is_exact_nonclaiming_and_complete(self) -> None:
         baseline.validate(ROOT)
         document = json.loads((ROOT / baseline.BASELINE_PATH).read_text())
-        self.assertEqual(document["binding_inventory"]["file_count"], 82)
+        self.assertEqual(document["binding_inventory"]["file_count"], 83)
         self.assertEqual(len(document["binding_inventory"]["groups"]), 9)
         projection_group = document["binding_inventory"]["groups"][4]
         self.assertEqual(projection_group["id"], "interface-projections")
@@ -84,10 +84,10 @@ class DevelopmentProtocolBaselineTests(unittest.TestCase):
             [binding["path"] for binding in projection_group["files"]],
             list(baseline.INTERFACE_PROJECTIONS),
         )
-        self.assertEqual(document["binding_inventory"]["total_bytes"], 2_569_554)
+        self.assertEqual(document["binding_inventory"]["total_bytes"], 2_573_821)
         self.assertEqual(
             document["binding_inventory"]["path_inventory_sha256"],
-            "eb0e9656dd4326a2fdff285565ae7943257ce7a88959682d91b7d8231c9e774a",
+            "fc422b6870a8613ca44e4eb96c969b6584b8d10b2004532da7d4f071a8c28f1f",
         )
         self.assertFalse(document["lifecycle"]["release_claimed"])
         self.assertFalse(document["lifecycle"]["candidate_frozen"])

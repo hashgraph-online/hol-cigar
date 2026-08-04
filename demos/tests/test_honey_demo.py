@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import hashlib
 import importlib.util
 import io
 import json
@@ -29,6 +31,21 @@ claude_driver = load(
 
 
 class HoneyDemoTests(unittest.TestCase):
+    def test_two_agent_wrapper_is_bound_to_the_current_shared_driver(self) -> None:
+        wrapper_path = ROOT / "demos" / "honey-two-agent" / "driver.py"
+        shared_path = ROOT / "demos" / "agent-handoff" / "driver.py"
+        module = ast.parse(wrapper_path.read_text(encoding="utf-8"))
+        binding = next(
+            node for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "SHARED_DRIVER_SHA256"
+                for target in node.targets
+            )
+        )
+        expected = ast.literal_eval(binding.value)
+        self.assertEqual(expected, hashlib.sha256(shared_path.read_bytes()).hexdigest())
+
     def test_honey_environment_does_not_require_deferred_go_inputs(self) -> None:
         with (
             tempfile.TemporaryDirectory() as temporary,
@@ -98,7 +115,7 @@ class HoneyDemoTests(unittest.TestCase):
             relative: (
                 (
                     b"#!/bin/sh\n"
-                    b'printf \'%s\\n\' \'{"version":"0.9.0-honey.1",'
+                    b'printf \'%s\\n\' \'{"version":"0.9.2",'
                     b'"context_abi":"cigar.context.v1",'
                     b'"source_revision":"1111111111111111111111111111111111111111",'
                     b'"build_profile":"release"}\'\n'

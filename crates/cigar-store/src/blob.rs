@@ -872,6 +872,7 @@ impl<P: KeyProvider> LocalBlobStore<P> {
     ) -> Result<ReconciliationReport, BlobError> {
         validate_tenant(tenant)?;
         let directory = self.blob_directory(tenant);
+        let directory_was_present = directory.is_dir();
         fs::create_dir_all(&directory).map_err(io_error)?;
         let mut entries = read_sorted_entries(&directory)?;
         if entries.len() > MAX_RECONCILE_ENTRIES {
@@ -897,7 +898,12 @@ impl<P: KeyProvider> LocalBlobStore<P> {
                 report.orphan_files_quarantined += 1;
             }
         }
-        sync_directory(&directory)?;
+        if !directory_was_present
+            || report.temporary_files_removed > 0
+            || report.orphan_files_quarantined > 0
+        {
+            sync_directory(&directory)?;
+        }
         Ok(report)
     }
 

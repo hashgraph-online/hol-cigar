@@ -1,5 +1,6 @@
 //! Exact, lexical, temporal, graph, and optional vector candidate generation.
 
+mod bounded;
 mod contract;
 #[cfg(target_os = "macos")]
 mod durable_vector;
@@ -7,9 +8,14 @@ mod executor;
 mod index;
 mod local_vector;
 mod planner;
+mod profile;
 mod vector;
 mod worker;
 
+pub use bounded::{
+    BoundedCandidate, BoundedCandidateCounts, BoundedRetrievalResult,
+    RequirementAwareCandidateReducer,
+};
 pub use contract::*;
 #[cfg(target_os = "macos")]
 pub use durable_vector::{
@@ -27,6 +33,7 @@ pub use local_vector::{
     SealedLocalVectorAdapter, configure_local_vector_adapter,
 };
 pub use planner::{PlannedStage, QueryPlan, QueryPlanner, QueryPlannerProfile};
+pub use profile::RetrievalProfile;
 pub use vector::{
     MAX_QUANTIZED_VECTOR_VALUE, MAX_VECTOR_DIMENSIONS, MIN_QUANTIZED_VECTOR_VALUE,
     ProcessorApprovedVector, QueryVectorProcessor, VectorAdapter, VectorIndexBinding,

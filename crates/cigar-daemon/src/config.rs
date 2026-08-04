@@ -85,6 +85,46 @@ pub enum DeploymentMode {
     Shared,
 }
 
+/// Versioned context-selection behavior used by the local CIGAR runtime.
+///
+/// `balanced_v1` is the only Honey `0.9.2` release profile and preserves the
+/// published Honey context-selection behavior.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IntelligenceProfile {
+    /// Frozen Honey `0.9.1`-compatible retrieval and compiler behavior.
+    #[default]
+    #[serde(rename = "balanced_v1")]
+    BalancedV1,
+}
+
+impl IntelligenceProfile {
+    /// Content-free identifier reported through capability discovery.
+    #[must_use]
+    pub const fn capability_identifier(self) -> &'static str {
+        match self {
+            Self::BalancedV1 => "intelligence-balanced-v1",
+        }
+    }
+
+    pub(crate) const fn retrieval_profile(self) -> cigar_retrieval::RetrievalProfile {
+        match self {
+            Self::BalancedV1 => cigar_retrieval::RetrievalProfile::BalancedV1,
+        }
+    }
+
+    pub(crate) fn compiler_profile(self) -> cigar_compiler::CompilerProfile {
+        match self {
+            Self::BalancedV1 => cigar_compiler::CompilerProfile::default(),
+        }
+    }
+
+    pub(crate) fn query_planner_profile(self) -> cigar_retrieval::QueryPlannerProfile {
+        match self {
+            Self::BalancedV1 => cigar_retrieval::QueryPlannerProfile::default(),
+        }
+    }
+}
+
 /// Exact bounded capacities for every required worker queue.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -319,6 +359,9 @@ pub struct ProductionPaths {
     pub project_directory: PathBuf,
     /// Durable SQLite metadata database.
     pub metadata_database: PathBuf,
+    /// Owner-only active-store descriptor selecting an activated SQLite v5 target.
+    #[serde(default)]
+    pub active_store_descriptor: Option<PathBuf>,
     /// Encrypted content-addressed blob root.
     pub blob_directory: PathBuf,
     /// Non-secret per-tenant blob wrapping-key reference root.
@@ -618,6 +661,19 @@ impl ProductionPaths {
         for path in paths {
             normalized_absolute(path)?;
         }
+        if let Some(descriptor) = &self.active_store_descriptor {
+            normalized_absolute(descriptor)?;
+            if descriptor == state_directory
+                || !descriptor.starts_with(state_directory)
+                || paths.contains(&descriptor)
+                || descriptor.starts_with(&self.blob_directory)
+                || descriptor.starts_with(&self.blob_key_reference_directory)
+            {
+                return Err(ConfigError::new(
+                    ConfigErrorCode::IncompleteProductionInputs,
+                ));
+            }
+        }
         for mutable in [
             &self.metadata_database,
             &self.blob_directory,
@@ -707,6 +763,9 @@ impl fmt::Debug for OidcSettings {
 pub struct DaemonConfig {
     /// Local or shared security profile.
     pub mode: DeploymentMode,
+    /// Context-selection behavior; absence selects the balanced Honey profile.
+    #[serde(default)]
+    pub intelligence_profile: IntelligenceProfile,
     /// Explicit bounded SQLite capacity profile; `large_local` is macOS arm64 local-only.
     #[serde(default)]
     pub local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile,
@@ -844,6 +903,7 @@ impl DaemonConfig {
 
     fn validate_shared(&self) -> Result<(), ConfigError> {
         if self.local_sqlite_capacity_profile != cigar_store::SqliteCapacityProfile::Standard
+            || self.production.active_store_descriptor.is_some()
             || self.unix_socket.is_some()
             || self.windows_named_pipe.is_some()
             || self.local_token_file.is_some()
@@ -912,7 +972,7 @@ fn valid_claim_name(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConfigErrorCode, DaemonConfig};
+    use super::{ConfigErrorCode, DaemonConfig, IntelligenceProfile};
 
     fn local_config(extra: &str) -> String {
         format!(
@@ -1020,14 +1080,68 @@ max_token_bytes = 4096
     }
 
     #[test]
-    fn local_unix_profile_is_valid() -> Result<(), Box<dyn std::error::Error>> {
+    fn local_unix_profile_defaults_to_balanced_v1() -> Result<(), Box<dyn std::error::Error>> {
         let config = DaemonConfig::from_toml(&local_config(""))?;
         assert_eq!(config.workers.outbox, 8);
         assert_eq!(config.request_deadline().as_secs(), 30);
         assert!(!config.local_vector.enabled);
+        assert_eq!(config.intelligence_profile, IntelligenceProfile::BalancedV1);
         assert_eq!(
             config.local_sqlite_capacity_profile,
             cigar_store::SqliteCapacityProfile::Standard
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn balanced_v1_is_the_only_accepted_release_profile() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let explicit =
+            DaemonConfig::from_toml(&local_config("intelligence_profile = \"balanced_v1\""))?;
+        assert_eq!(
+            explicit.intelligence_profile,
+            IntelligenceProfile::BalancedV1
+        );
+        let rejected = DaemonConfig::from_toml(&local_config("intelligence_profile = \"h1\""))
+            .err()
+            .ok_or("failed experiment was selectable")?;
+        assert_eq!(rejected.code(), ConfigErrorCode::InvalidSyntax);
+        Ok(())
+    }
+
+    #[test]
+    fn active_v5_descriptor_is_explicit_local_owner_state() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let local = local_config("").replace(
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"",
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"\nactive_store_descriptor = \"/tmp/cigar-state/active-store.json\"",
+        );
+        let config = DaemonConfig::from_toml(&local)?;
+        assert_eq!(
+            config.production.active_store_descriptor.as_deref(),
+            Some(std::path::Path::new("/tmp/cigar-state/active-store.json"))
+        );
+
+        let outside = local.replace(
+            "/tmp/cigar-state/active-store.json",
+            "/tmp/cigar-config/active-store.json",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&outside)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::IncompleteProductionInputs)
+        );
+
+        let shared = shared_config().replace(
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"",
+            "metadata_database = \"/tmp/cigar-state/cigar.sqlite3\"\nactive_store_descriptor = \"/tmp/cigar-state/active-store.json\"",
+        );
+        assert_eq!(
+            DaemonConfig::from_toml(&shared)
+                .err()
+                .map(|error| error.code()),
+            Some(ConfigErrorCode::IncompleteSharedAuth)
         );
         Ok(())
     }

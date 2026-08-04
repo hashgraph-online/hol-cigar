@@ -6,7 +6,7 @@
   "fixture": "fixture.json",
   "fixture_digest": "1220418620274bec4a046837543e66d31198a897e740131b69919df5dd07b1a0df96",
   "driver": "driver.py",
-  "driver_digest": "1220f6926c7bd69466ec955d5d453a5be210afd6c46bb5a5bec9a14957cc10dc8416",
+  "driver_digest": "1220ab4987cbb484143e87c3682d24f32aebb8e9ba1634cf4bbb1986359609acc2cd",
   "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
   "recorded_mode": true,
   "setup": [

@@ -48,7 +48,7 @@ REQUIREMENTS_PATH = "packaging/honey/release-requirements.v1.json"
 MANIFEST_NAME = "honey-release-manifest.json"
 CHECKSUM_NAME = "SHA256SUMS"
 MANIFEST_SCHEMA = "cigar.honey.release-manifest.v1"
-EXPECTED_VERSION = "0.9.0-honey.1"
+EXPECTED_VERSION = "0.9.2"
 EXPECTED_ABI = "cigar.context.v1"
 EXPECTED_CHANNEL = "honey"
 EXPECTED_STATE = "developer-preview"
@@ -246,7 +246,7 @@ def _load_configuration(root: Path) -> Configuration:
     if (
         not isinstance(product, dict)
         or product.get("version") != EXPECTED_VERSION
-        or product.get("target_release_version") != "0.9.0"
+        or product.get("target_release_version") != "0.9.2"
         or product.get("context_abi") != EXPECTED_ABI
         or product.get("release_state") != EXPECTED_STATE
         or product.get("channel") != EXPECTED_CHANNEL
@@ -645,7 +645,10 @@ def _publish_payload(
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="cigar-honey-assembly-copy-") as raw:
         staging = Path(raw).resolve(strict=True)
-        os.chmod(staging, 0o700)
+        # Assembly staging contains unpublished release payloads and stays owner-private.
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            staging, 0o700
+        )
         source = staging / "payload"
         descriptor = os.open(
             source,

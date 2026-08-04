@@ -1,0 +1,116 @@
+{
+  "schema_version": "cigar.honey-efficiency-qualification-fixtures.v1",
+  "generator_id": "cigar.honey.synthetic-qualification-generator.v1",
+  "digest_domain": "cigar.honey.efficiency-fixture.v1",
+  "workload_order": [
+    "H91-FIXTURE-SMALL-GENERATED",
+    "H91-FIXTURE-BOUNDARY-GENERATED",
+    "H91-FIXTURE-HIERO-SHAPED-GENERATED"
+  ],
+  "fixtures": [
+    {
+      "id": "H91-FIXTURE-SMALL-GENERATED",
+      "seed": "349b2f2eef3b5b455126531f3e6338c4ea3ed67ba023f121ee3b7c73f8287ace",
+      "generator_inputs": {
+        "initial_records": 8,
+        "request_count": 12,
+        "mutations_per_request": 4,
+        "payload_bytes_minimum": 64,
+        "payload_bytes_maximum": 1024,
+        "workflow_count": 1
+      },
+      "fixture_sha256": "dbe4a34987253892dcb0765fcc1782bab0ab596a80f02d7794571554c39a0a75"
+    },
+    {
+      "id": "H91-FIXTURE-BOUNDARY-GENERATED",
+      "seed": "8d2eafb9eb500544373914548618377c77a02c8d790a071a18d8150abf2ca370",
+      "generator_inputs": {
+        "initial_records": 256,
+        "request_count": 27,
+        "mutations_per_request": 4,
+        "payload_bytes_minimum": 1,
+        "payload_bytes_maximum": 16777216,
+        "workflow_count": 1,
+        "boundary_cases": [
+          "delta-operations-minus-one",
+          "delta-operations-exact",
+          "delta-operations-plus-one",
+          "delta-bytes-minus-one",
+          "delta-bytes-exact",
+          "delta-bytes-plus-one",
+          "checkpoint-count-minus-one",
+          "checkpoint-count-exact",
+          "checkpoint-count-plus-one",
+          "checkpoint-bytes-minus-one",
+          "checkpoint-bytes-exact",
+          "checkpoint-bytes-plus-one",
+          "retained-count-minus-one",
+          "retained-count-exact",
+          "retained-count-plus-one",
+          "retained-age-minus-one",
+          "retained-age-exact",
+          "retained-age-plus-one",
+          "retained-bytes-minus-one",
+          "retained-bytes-exact",
+          "retained-bytes-plus-one",
+          "pin-at-floor",
+          "legal-hold-at-floor",
+          "replay-first",
+          "replay-checkpoint",
+          "replay-latest",
+          "overflow-rejected"
+        ]
+      },
+      "fixture_sha256": "70094427d51b8bd127d72ac3258b9d98fa99efcce37cc24cfe9afd8af6727dc1"
+    },
+    {
+      "id": "H91-FIXTURE-HIERO-SHAPED-GENERATED",
+      "seed": "a9871b471c66a778e86a4d7c446a6c4c5b9bee30250ce810384c284e8e143131",
+      "generator_inputs": {
+        "initial_records": 4096,
+        "request_count": 100,
+        "mutations_per_request": 4,
+        "payload_bytes_minimum": 256,
+        "payload_bytes_maximum": 65536,
+        "workflow_count": 5,
+        "requests_per_workflow": 20,
+        "selected_blocks_per_request_maximum": 64,
+        "candidate_inputs_per_request_maximum": 512
+      },
+      "fixture_sha256": "7138a61f549bb6ab1e0f07f41b5ae1907d2d5f4cb2d2928fbbb20933f667a9e4"
+    }
+  ],
+  "execution": {
+    "capacity_profile": "standard",
+    "warmup_requests": 5,
+    "serial_request_count": 100,
+    "serial_repetitions": 1,
+    "serial_mutation_count": 10000,
+    "mixed_concurrency": {
+      "workers": 4,
+      "mutations_per_worker": 2500
+    },
+    "retention_policy": {
+      "maximum_delta_operations": 4096,
+      "maximum_delta_bytes": 67108864,
+      "maximum_checkpoint_bytes": 268435456,
+      "maximum_deltas_since_checkpoint": 4,
+      "maximum_accumulated_delta_bytes": 268435456,
+      "maximum_retained_revisions": 100000,
+      "maximum_retained_age_nanos": 2592000000000000,
+      "maximum_physical_retained_bytes": 3221225472,
+      "minimum_reconstructable_revisions": 256,
+      "minimum_verified_replay_revisions": 256
+    }
+  },
+  "environment": {
+    "target_triple": "aarch64-apple-darwin",
+    "host_os": "macos",
+    "cpu_model": "Apple M3 Ultra",
+    "filesystem": "apfs",
+    "power_source": "ac",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "network_required": false
+  }
+}

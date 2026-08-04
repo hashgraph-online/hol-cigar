@@ -29,8 +29,8 @@ ERROR_COUNT = 34
 CLI_MAPPING_COUNT = 34
 CLI_OPERATION_COUNT = 33
 MCP_MAPPING_COUNT = 10
-METRIC_FAMILY_COUNT = 43
-METRIC_SERIES_MAXIMUM = 137
+METRIC_FAMILY_COUNT = 65
+METRIC_SERIES_MAXIMUM = 256
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
 PROBLEM_FIELDS = {
@@ -44,11 +44,15 @@ PROBLEM_FIELDS = {
     "details",
 }
 METRIC_LABEL_KEYS = {
+    "encoding",
+    "file",
     "outcome",
     "stage",
     "lane",
     "phase",
     "kind",
+    "reason",
+    "record",
     "state",
     "worker",
     "event",

@@ -6,11 +6,11 @@ use cigar_compiler::{
 };
 use cigar_policy::PolicyOutcome;
 use cigar_protocol::{
-    AtomKind, Budget, CandidateDisposition, Classification, ConsistencyMode, ContentDigest,
-    ContextContract, ContextRequirement, DispositionReason, ExtensionMap, FixedPoint,
-    InstructionAuthority, LaneKind, OperationClass, RecordId, RepresentationKind,
-    RequirementSelector, SchemaVersion, SourceUri, TargetProfile, UtcTimestamp, Validate,
-    VersionId,
+    AtomKind, Budget, CandidateDisposition, CanonicalValue, Classification, ConsistencyMode,
+    ContentDigest, ContextContract, ContextRequirement, DispositionReason, ExtensionKey,
+    ExtensionMap, FixedPoint, InstructionAuthority, LaneKind, OperationClass, RecordId,
+    RepresentationKind, RequirementSelector, SchemaVersion, SourceUri, TargetProfile, UtcTimestamp,
+    Validate, VersionId,
 };
 use cigar_retrieval::CandidateFeatures;
 use std::collections::{BTreeMap, BTreeSet};
@@ -233,6 +233,387 @@ fn golden_bundle_permutation_and_parallel_execution_are_identical() -> Result<()
 }
 
 #[test]
+fn versioned_v2_profile_is_distinct_deterministic_and_ablatable() -> Result<(), Box<dyn Error>> {
+    let v1 = DeterministicCompiler.compile(baseline_request()?)?;
+    let mut input = baseline_request()?;
+    input.profile = CompilerProfile::balanced_v2_candidate();
+    input.frozen.compiler_profile_digest = compiler_profile_digest(&input.profile)?;
+    let full = DeterministicCompiler.compile(input.clone())?;
+    let replay = DeterministicCompiler.compile(input)?;
+    assert_eq!(full, replay);
+    assert_ne!(full.bundle.bundle_id, v1.bundle.bundle_id);
+    assert_ne!(
+        compiler_profile_digest(&CompilerProfile::default())?,
+        compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::default())?.as_str(),
+        "122045f764c2c4b1a0ee6ecf6078050cfd939ff37c1b91edd8c4a38e8525e43cacb9"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?.as_str(),
+        "1220788e6159943dd2ddf35767d8935fdd8a7de5cb15c2242560ca7f551dc73437b2"
+    );
+
+    let mut ablation_ids = BTreeSet::new();
+    for dimension in 0..8 {
+        let mut profile = CompilerProfile::balanced_v2_candidate();
+        match dimension {
+            0 => profile.marginal_requirement_weight = 0,
+            1 => profile.marginal_entity_weight = 0,
+            2 => profile.dependency_cost_penalty = 0,
+            3 => profile.diversity_weight = 0,
+            4 => profile.redundancy_penalty = 0,
+            5 => profile.utility_density_ranking = true,
+            6 => profile.local_swap_passes = CompilerProfile::default().local_swap_passes,
+            _ => profile.minimum_lexical_match = 0,
+        }
+        ablation_ids.insert(compiler_profile_digest(&profile)?);
+    }
+    assert_eq!(ablation_ids.len(), 8);
+    assert!(!ablation_ids.contains(&compiler_profile_digest(
+        &CompilerProfile::balanced_v2_candidate()
+    )?));
+    Ok(())
+}
+
+#[test]
+fn content_equivalence_unions_obligations_provenance_citations_and_invalidation()
+-> Result<(), Box<dyn Error>> {
+    let requirements = vec![
+        requirement(true, "first required source")?,
+        requirement(true, "second required source")?,
+    ];
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 30)]), requirements)?;
+    let mut first = candidate(80, LaneKind::Evidence, 10, 7_000)?;
+    let mut representative = candidate(81, LaneKind::Evidence, 10, 10_000)?;
+    let mut first_dependency = candidate(82, LaneKind::Evidence, 5, 6_000)?;
+    let mut second_dependency = candidate(83, LaneKind::Evidence, 5, 6_000)?;
+    first.mandatory = true;
+    first.requirement_indices.insert(0);
+    representative.requirement_indices.insert(1);
+    representative.representations = first.representations.clone();
+    first
+        .dependencies
+        .insert(first_dependency.version_id.clone());
+    representative
+        .dependencies
+        .insert(second_dependency.version_id.clone());
+    first_dependency.entity_coverage_bits = 0b0001;
+    second_dependency.entity_coverage_bits = 0b0010;
+    let original = [
+        first.clone(),
+        representative.clone(),
+        first_dependency.clone(),
+        second_dependency.clone(),
+    ];
+
+    let mut expected = None;
+    for first_index in 0..original.len() {
+        for second_index in 0..original.len() {
+            if second_index == first_index {
+                continue;
+            }
+            for third_index in 0..original.len() {
+                if third_index == first_index || third_index == second_index {
+                    continue;
+                }
+                let fourth_index = (0..original.len())
+                    .find(|index| {
+                        *index != first_index && *index != second_index && *index != third_index
+                    })
+                    .ok_or("missing fourth permutation member")?;
+                let candidates = [first_index, second_index, third_index, fourth_index]
+                    .into_iter()
+                    .map(|index| {
+                        original
+                            .get(index)
+                            .cloned()
+                            .ok_or("permutation index is outside the fixture")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let output = DeterministicCompiler.compile(request(
+                    governed_contract.clone(),
+                    CompilerProfile::default(),
+                    candidates,
+                )?)?;
+                if let Some(prior) = &expected {
+                    assert_eq!(&output, prior);
+                } else {
+                    expected = Some(output);
+                }
+            }
+        }
+    }
+    let output = expected.ok_or("no content-equivalence permutation compiled")?;
+    assert_eq!(output.bundle.blocks.len(), 3);
+    assert_eq!(output.bundle.total_tokens, 20);
+    assert_eq!(output.manifest.entries.len(), 4);
+    let shared_digest = first
+        .representations
+        .first()
+        .ok_or("missing shared representation")?
+        .content_digest
+        .clone();
+    let shared_block = output
+        .bundle
+        .blocks
+        .iter()
+        .find(|block| block.content_digest == shared_digest)
+        .ok_or("shared block was not selected")?;
+    assert_eq!(
+        shared_block.provenance,
+        BTreeSet::from([
+            first.version_id.clone(),
+            representative.version_id.clone(),
+            first_dependency.version_id.clone(),
+            second_dependency.version_id.clone(),
+        ])
+        .into_iter()
+        .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        output.invalidation.catalog_versions,
+        shared_block.provenance.iter().cloned().collect()
+    );
+    assert!(matches!(
+        output
+            .plan
+            .dispositions
+            .iter()
+            .find_map(
+                |(version, disposition)| (version == &representative.version_id)
+                    .then_some(disposition)
+            ),
+        Some(CandidateDisposition::Selected { .. })
+    ));
+    assert!(matches!(
+        output
+            .plan
+            .dispositions
+            .iter()
+            .find_map(
+                |(version, disposition)| (version == &first.version_id).then_some(disposition)
+            ),
+        Some(CandidateDisposition::Excluded {
+            reason: DispositionReason::BudgetDisplaced
+        })
+    ));
+    let class = output
+        .content_equivalence
+        .iter()
+        .find(|class| class.member_versions.contains(&first.version_id))
+        .ok_or("content-equivalence diagnostic is absent")?;
+    assert_eq!(class.representative_version, representative.version_id);
+    assert_eq!(
+        class.member_versions,
+        BTreeSet::from([first.version_id.clone(), representative.version_id.clone()])
+    );
+    assert_eq!(
+        class.provenance_digests,
+        BTreeSet::from([
+            first.provenance_digest.clone(),
+            representative.provenance_digest.clone(),
+        ])
+    );
+    let first_citation = output
+        .resolve_citation(&first.version_id)
+        .ok_or("first merged citation did not resolve")?;
+    let representative_citation = output
+        .resolve_citation(&representative.version_id)
+        .ok_or("representative citation did not resolve")?;
+    assert_eq!(first_citation.source_version, first.version_id);
+    assert_eq!(
+        representative_citation.source_version,
+        representative.version_id
+    );
+    assert_eq!(first_citation.block_id, shared_block.block_id);
+    assert_eq!(representative_citation.block_id, shared_block.block_id);
+    Ok(())
+}
+
+#[test]
+fn content_equivalence_representative_uses_version_as_the_final_tie() -> Result<(), Box<dyn Error>>
+{
+    let tied_contract = contract(BTreeMap::from([(LaneKind::Evidence, 10)]), Vec::new())?;
+    let first = candidate(84, LaneKind::Evidence, 10, 8_000)?;
+    let mut second = candidate(85, LaneKind::Evidence, 10, 8_000)?;
+    second.canonical_uri = first.canonical_uri.clone();
+    second.representations = first.representations.clone();
+    let output = DeterministicCompiler.compile(request(
+        tied_contract,
+        CompilerProfile::default(),
+        vec![second, first.clone()],
+    )?)?;
+    let selected: BTreeSet<_> = output
+        .plan
+        .lanes
+        .iter()
+        .flat_map(|lane| lane.candidate_versions.iter().cloned())
+        .collect();
+    assert_eq!(selected, BTreeSet::from([first.version_id]));
+    assert_eq!(output.bundle.blocks.len(), 1);
+    assert_eq!(output.bundle.total_tokens, 10);
+    Ok(())
+}
+
+#[test]
+fn content_equivalence_keeps_loss_governance_claim_and_receipt_mismatches_separate()
+-> Result<(), Box<dyn Error>> {
+    let evidence_contract = contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?;
+
+    let mut lossless_left = candidate(86, LaneKind::Evidence, 10, 8_000)?;
+    let mut lossless_right = candidate(87, LaneKind::Evidence, 10, 8_000)?;
+    lossless_left
+        .representations
+        .push(RepresentationVariant::verified_summary(
+            digest(190)?,
+            5,
+            digest(191)?,
+        )?);
+    lossless_right
+        .representations
+        .push(RepresentationVariant::verified_summary(
+            digest(190)?,
+            5,
+            digest(191)?,
+        )?);
+    let loss_collision = DeterministicCompiler.compile(request(
+        evidence_contract.clone(),
+        CompilerProfile::default(),
+        vec![lossless_left, lossless_right],
+    )?)?;
+    assert_eq!(loss_collision.bundle.blocks.len(), 2);
+
+    let mut receipt_left = candidate(88, LaneKind::Evidence, 5, 8_000)?;
+    let mut receipt_right = candidate(89, LaneKind::Evidence, 5, 8_000)?;
+    receipt_left.representations = vec![RepresentationVariant::verified_summary(
+        digest(192)?,
+        5,
+        digest(193)?,
+    )?];
+    receipt_right.representations = vec![RepresentationVariant::verified_summary(
+        digest(192)?,
+        5,
+        digest(194)?,
+    )?];
+    let receipt_mismatch = DeterministicCompiler.compile(request(
+        evidence_contract.clone(),
+        CompilerProfile::default(),
+        vec![receipt_left, receipt_right],
+    )?)?;
+    assert_eq!(receipt_mismatch.bundle.blocks.len(), 2);
+
+    let mut claim_left = candidate(90, LaneKind::Evidence, 5, 8_000)?;
+    let mut claim_right = candidate(91, LaneKind::Evidence, 5, 8_000)?;
+    claim_right.representations = claim_left.representations.clone();
+    claim_left.claim = Some(CandidateClaim {
+        key: "evidence.mode".to_owned(),
+        value_digest: digest(195)?,
+        valid_at: time("2026-07-10T00:00:01Z")?,
+        observed_at: time("2026-07-10T00:00:01Z")?,
+        authority: 5,
+        verified: true,
+    });
+    claim_right.claim = Some(CandidateClaim {
+        valid_at: time("2026-07-10T00:00:02Z")?,
+        ..claim_left
+            .claim
+            .clone()
+            .ok_or("missing compatibility claim")?
+    });
+    let claim_mismatch = DeterministicCompiler.compile(request(
+        evidence_contract.clone(),
+        CompilerProfile::default(),
+        vec![claim_left, claim_right],
+    )?)?;
+    assert_eq!(claim_mismatch.bundle.blocks.len(), 2);
+
+    for mismatch in 0..4_u8 {
+        let value = 102_u8
+            .checked_add(mismatch.saturating_mul(2))
+            .ok_or("governance fixture value overflow")?;
+        let left = candidate(value, LaneKind::Evidence, 5, 8_000)?;
+        let mut right = candidate(value.saturating_add(1), LaneKind::Evidence, 5, 8_000)?;
+        right.representations = left.representations.clone();
+        let mismatch_contract = match mismatch {
+            0 => {
+                right.lane = LaneKind::Rules;
+                contract(
+                    BTreeMap::from([(LaneKind::Evidence, 50), (LaneKind::Rules, 50)]),
+                    Vec::new(),
+                )?
+            }
+            1 => {
+                right.policy_outcome = PolicyOutcome::Redact;
+                evidence_contract.clone()
+            }
+            2 => {
+                right.classification = Classification::Confidential;
+                evidence_contract.clone()
+            }
+            3 => {
+                right.instruction_authority = InstructionAuthority::Advisory;
+                evidence_contract.clone()
+            }
+            _ => return Err("unreachable governance mismatch".into()),
+        };
+        let governance_mismatch = DeterministicCompiler.compile(request(
+            mismatch_contract,
+            CompilerProfile::default(),
+            vec![left, right],
+        )?)?;
+        assert_eq!(governance_mismatch.bundle.blocks.len(), 2);
+    }
+
+    let mut redacted_left = candidate(94, LaneKind::Evidence, 5, 8_000)?;
+    let mut redacted_right = candidate(95, LaneKind::Evidence, 5, 8_000)?;
+    redacted_left.representations = vec![RepresentationVariant::redacted(digest(196)?, 5)?];
+    redacted_right.representations = redacted_left.representations.clone();
+    redacted_left.policy_outcome = PolicyOutcome::Redact;
+    redacted_right.policy_outcome = PolicyOutcome::Redact;
+    let distinct_disclosures = DeterministicCompiler.compile(request(
+        evidence_contract,
+        CompilerProfile::default(),
+        vec![redacted_left, redacted_right],
+    )?)?;
+    assert_eq!(distinct_disclosures.bundle.blocks.len(), 2);
+    Ok(())
+}
+
+#[test]
+fn content_equivalence_falls_back_when_dependency_contraction_is_unsafe()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?;
+    let mut first = candidate(96, LaneKind::Evidence, 10, 10_000)?;
+    let mut second = candidate(97, LaneKind::Evidence, 10, 9_000)?;
+    second.representations = first.representations.clone();
+    first.dependencies.insert(second.version_id.clone());
+    let direct = DeterministicCompiler.compile(request(
+        governed_contract.clone(),
+        CompilerProfile::default(),
+        vec![first, second],
+    )?)?;
+    assert_eq!(direct.bundle.blocks.len(), 2);
+
+    let mut first_a = candidate(98, LaneKind::Evidence, 10, 10_000)?;
+    let mut first_b = candidate(99, LaneKind::Evidence, 10, 9_000)?;
+    let second_a = candidate(100, LaneKind::Evidence, 10, 8_000)?;
+    let mut second_b = candidate(101, LaneKind::Evidence, 10, 7_000)?;
+    first_b.representations = first_a.representations.clone();
+    second_b.representations = second_a.representations.clone();
+    first_a.dependencies.insert(second_a.version_id.clone());
+    second_b.dependencies.insert(first_b.version_id.clone());
+    let contraction_cycle = DeterministicCompiler.compile(request(
+        governed_contract,
+        CompilerProfile::default(),
+        vec![second_b, first_b, second_a, first_a],
+    )?)?;
+    assert_eq!(contraction_cycle.bundle.blocks.len(), 4);
+    Ok(())
+}
+
+#[test]
 fn mandatory_overflow_reports_exact_lower_bound_and_generated_budgets_hold()
 -> Result<(), Box<dyn Error>> {
     let mut input = baseline_request()?;
@@ -282,6 +663,19 @@ fn exact_component_pins_and_contract_fingerprint_are_semantic() -> Result<(), Bo
     changed.contract.job_goal = "Implement a different verified change".to_owned();
     let different = DeterministicCompiler.compile(changed)?;
     assert_ne!(different.plan.contract_digest, first.plan.contract_digest);
+
+    let mut extension_changed = input.clone();
+    let mut extensions = BTreeMap::new();
+    extensions.insert(
+        ExtensionKey::new("downstream.example/correlation")?,
+        CanonicalValue::Text("execution-2".to_owned()),
+    );
+    extension_changed.contract.extensions = ExtensionMap::new(extensions, &BTreeSet::new())?;
+    let extension_different = DeterministicCompiler.compile(extension_changed)?;
+    assert_ne!(
+        extension_different.plan.contract_digest,
+        first.plan.contract_digest
+    );
 
     let mut mismatch = input;
     mismatch.frozen.tokenizer_fingerprint = digest(229)?;

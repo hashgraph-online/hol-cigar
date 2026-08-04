@@ -107,6 +107,7 @@ SDK_SOURCE_PATHS = frozenset(
         "release.json",
         "examples/agent_a_coordinator.rs",
         "examples/quickstart.rs",
+        "examples/semantic_request_key.rs",
         "fixtures/semantic-bundle-v1.json",
         "src/client.rs",
         "src/daemon_embedded.rs",
@@ -115,6 +116,7 @@ SDK_SOURCE_PATHS = frozenset(
         "src/lib.rs",
         "src/options.rs",
         "src/remote.rs",
+        "src/semantic_reuse.rs",
         "src/transport.rs",
         "src/verify.rs",
     }
@@ -610,6 +612,7 @@ def _load_development_configuration(root: Path) -> BuildConfiguration:
         "src/**",
         "examples/agent_a_coordinator.rs",
         "examples/quickstart.rs",
+        "examples/semantic_request_key.rs",
         "fixtures/semantic-bundle-v1.json",
         "Cargo.toml",
         "README.md",
@@ -730,9 +733,12 @@ def _validate_honey_authority(
     python_match = re.fullmatch(
         r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
     )
-    if python_match is None:
+    if python_match is not None:
+        python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    elif re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None:
+        python_version = version
+    else:
         raise ReleaseError("Honey version cannot be mapped to the capability profile")
-    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
     identity = {
         "channel": "honey",
         "context_abi": product["context_abi"],
@@ -743,7 +749,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9",
+        "marketing_name": "CIGAR Honey v0.9.2",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,
@@ -958,6 +964,7 @@ def _load_honey_configuration(root: Path) -> BuildConfiguration:
         "src/**",
         "examples/agent_a_coordinator.rs",
         "examples/quickstart.rs",
+        "examples/semantic_request_key.rs",
         "fixtures/semantic-bundle-v1.json",
         "Cargo.toml",
         "README.md",

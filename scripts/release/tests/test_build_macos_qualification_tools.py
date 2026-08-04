@@ -82,9 +82,9 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         return builder.BuildConfiguration(
             root=self.root,
             spec=spec,
-            version="0.9.0-honey.1",
+            version="0.9.2",
             context_abi="cigar.context.v1",
-            filename=spec.filename_template.format(version="0.9.0-honey.1"),
+            filename=spec.filename_template.format(version="0.9.2"),
             contract_path=self.root.joinpath(*spec.contract_relative.split("/")),
             authority=authority,
             assets=assets,
@@ -199,7 +199,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
             with self.subTest(spec=spec.selector):
                 self.assertEqual(
                     rows[spec.artifact_id],
-                    builder._matrix_row(spec, "0.9.0-honey.1"),
+                    builder._matrix_row(spec, "0.9.2"),
                 )
                 contract = load_json(
                     self.root.joinpath(*spec.contract_relative.split("/"))
@@ -219,7 +219,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
             selected_internal,
             [
                 builder._honey_internal_input(
-                    builder.SPECS["conformance"], "0.9.0-honey.1"
+                    builder.SPECS["conformance"], "0.9.2"
                 )
             ],
         )
@@ -261,12 +261,12 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
             shutil.copyfile(self.root.joinpath(*relative.split("/")), destination)
         spec = builder.SPECS["conformance"]
         configuration = builder._load_configuration(staged, spec)
-        self.assertEqual(configuration.version, "0.9.0-honey.1")
+        self.assertEqual(configuration.version, "0.9.2")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertTrue(configuration.honey)
         self.assertEqual(
             configuration.filename,
-            spec.filename_template.format(version="0.9.0-honey.1"),
+            spec.filename_template.format(version="0.9.2"),
         )
         self.assertEqual(
             set(configuration.authority),
@@ -284,7 +284,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         second = self.produce(
             "conformance", second_root, tool_builder=self.fake_conformance
         )
-        name = "cigar-conformance-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
+        name = "cigar-conformance-0.9.2-aarch64-apple-darwin.tar.gz"
         self.assertEqual(
             (first_root / name).read_bytes(), (second_root / name).read_bytes()
         )
@@ -324,7 +324,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         second_root = self.base / "bench-second"
         first = self.produce("cigarbench", first_root)
         second = self.produce("cigarbench", second_root)
-        name = "cigarbench-0.9.0-honey.1-aarch64-apple-darwin.tar.gz"
+        name = "cigarbench-0.9.2-aarch64-apple-darwin.tar.gz"
         self.assertEqual(
             (first_root / name).read_bytes(), (second_root / name).read_bytes()
         )

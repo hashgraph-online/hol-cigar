@@ -66,6 +66,7 @@ REQUIRED_SOURCE_BINDINGS = frozenset(
         "crates/cigar-mcp/src/json.rs",
         "crates/cigar-mcp/src/lib.rs",
         "crates/cigar-mcp/src/server.rs",
+        "fuzz/artifacts/.gitkeep",
         "rust-toolchain.toml",
         "tools/quality/bounded_process.py",
         "tools/quality/historical_crashes.py",
@@ -472,6 +473,8 @@ def _corpus_inventory(
 
     for artifact_root in artifact_roots:
         for path in _scan_tree(root, artifact_root, "preserved crash artifacts"):
+            if path == f"{artifact_root}/.gitkeep":
+                continue
             parts = PurePosixPath(path).parts
             if len(parts) < 4 or parts[2] not in policy_targets:
                 raise HistoricalCrashError(

@@ -24,26 +24,26 @@ from release_lib import ReleaseError, load_json  # noqa: E402
 
 
 EXPECTED_ARTIFACTS = [
-    ("source", "cigar-0.9.0-honey.1-source.tar.gz"),
-    ("docs", "cigar-0.9.0-honey.1-docs.tar.gz"),
+    ("source", "cigar-0.9.2-source.tar.gz"),
+    ("docs", "cigar-0.9.2-docs.tar.gz"),
     (
         "schemas-conformance",
-        "cigar-0.9.0-honey.1-schemas-conformance.tar.gz",
+        "cigar-0.9.2-schemas-conformance.tar.gz",
     ),
     (
         "macos-runtime-aarch64",
-        "cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz",
+        "cigar-0.9.2-aarch64-apple-darwin.tar.gz",
     ),
-    ("typescript-sdk", "cigar-sdk-0.9.0-honey.1.tgz"),
-    ("python-sdk-wheel", "cigar_sdk-0.9.0.dev1-py3-none-any.whl"),
-    ("python-sdk-sdist", "cigar_sdk-0.9.0.dev1.tar.gz"),
+    ("typescript-sdk", "cigar-sdk-0.9.2.tgz"),
+    ("python-sdk-wheel", "hol_cigar-0.9.2-py3-none-any.whl"),
+    ("python-sdk-sdist", "hol_cigar-0.9.2.tar.gz"),
     (
         "rust-sdk-local-registry",
-        "cigar-rust-sdk-0.9.0-honey.1-local-registry.tar.gz",
+        "cigar-rust-sdk-0.9.2-local-registry.tar.gz",
     ),
-    ("claude-code-plugin", "cigar-claude-code-0.9.0-honey.1.tar.gz"),
-    ("honey-demos", "cigar-honey-demos-0.9.0-honey.1.tar.gz"),
-    ("release-notes", "RELEASE_NOTES_HONEY_v0.9.md"),
+    ("claude-code-plugin", "cigar-claude-code-0.9.2.tar.gz"),
+    ("honey-demos", "cigar-honey-demos-0.9.2.tar.gz"),
+    ("release-notes", "RELEASE_NOTES_HONEY_v0.9.2.md"),
     ("release-manifest", "honey-release-manifest.json"),
     ("checksums", "SHA256SUMS"),
 ]
@@ -55,6 +55,10 @@ EXPECTED_EVIDENCE_LOCATIONS = {
         "claude-code-plugin-installed-development-qualification.json",
     ),
     "documentation-report": ("docs-report", "documentation-report.json"),
+    "efficiency-reliability-report": (
+        "efficiency-qualification",
+        "honey-efficiency-reliability-report.json",
+    ),
     "installed-runtime-report": ("installed", "installed-runtime-report.json"),
     "license-inventory": (
         "static-reports",
@@ -101,6 +105,7 @@ class HoneyParserAndDispatchTests(unittest.TestCase):
                     arguments.evidence_root, Path("/private/tmp/cigar-honey-test")
                 )
                 self.assertEqual(arguments.source_date_epoch, 1234)
+                self.assertIsNone(arguments.efficiency_raw_observations)
 
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
@@ -444,7 +449,7 @@ class HoneyEvidencePolicyTests(unittest.TestCase):
         self.assertEqual(
             [row["id"] for row in rows], sorted(honey.honey_evidence.REQUIRED_EVIDENCE)
         )
-        self.assertEqual(len(rows), 13)
+        self.assertEqual(len(rows), 14)
         all_capabilities: set[str] = set()
         all_gates: set[str] = set()
         all_artifacts: set[str] = set()

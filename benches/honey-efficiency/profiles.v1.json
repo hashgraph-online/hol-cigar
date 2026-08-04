@@ -1,0 +1,23 @@
+{
+  "schema_version": "cigar.honey-efficiency-profiles.v1",
+  "profiles": {
+    "hiero-shaped": {
+      "initial_records": 4096,
+      "iterations": 100,
+      "mutations_per_iteration": 4,
+      "shape": "four durable mutations per compilation across a long-lived repository"
+    },
+    "small": {
+      "initial_records": 8,
+      "iterations": 12,
+      "mutations_per_iteration": 4,
+      "shape": "fast deterministic developer baseline"
+    },
+    "threshold": {
+      "initial_records": 128,
+      "iterations": 32,
+      "mutations_per_iteration": 4,
+      "shape": "retention-window and write-amplification boundary baseline"
+    }
+  }
+}

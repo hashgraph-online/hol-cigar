@@ -338,13 +338,17 @@ impl OperationalHandlers {
                     crate::DeploymentMode::Local => "local",
                     crate::DeploymentMode::Shared => "shared",
                 };
-                let effects_profile = effect_capability_profile(self.effects_enabled);
+                let profiles = capability_profiles(
+                    profile,
+                    self.effects_enabled,
+                    self.config.intelligence_profile,
+                );
                 self.typed_response(
                     operation,
                     CapabilitiesResponse {
                         api_version: "v1".to_owned(),
                         protocol_version: cigar_protocol::PROTOCOL_MAX.to_owned(),
-                        profiles: vec![effects_profile.to_owned(), profile.to_owned()],
+                        profiles,
                         extensions: Vec::new(),
                         max_payload_bytes,
                         max_event_bytes,
@@ -610,6 +614,7 @@ impl fmt::Debug for OperationalHandlers {
 #[derive(Clone, Debug)]
 struct SafeConfiguration {
     mode: crate::DeploymentMode,
+    intelligence_profile: crate::IntelligenceProfile,
     http_listen: Option<std::net::SocketAddr>,
     grpc_listen: Option<std::net::SocketAddr>,
     local_ipc: bool,
@@ -621,6 +626,7 @@ impl From<&DaemonConfig> for SafeConfiguration {
     fn from(config: &DaemonConfig) -> Self {
         Self {
             mode: config.mode,
+            intelligence_profile: config.intelligence_profile,
             http_listen: config.http_listen,
             grpc_listen: config.grpc_listen,
             local_ipc: config.unix_socket.is_some() || config.windows_named_pipe.is_some(),
@@ -644,6 +650,20 @@ const fn effect_capability_profile(effects_enabled: bool) -> &'static str {
     } else {
         "effects-disabled"
     }
+}
+
+fn capability_profiles(
+    deployment_profile: &str,
+    effects_enabled: bool,
+    intelligence_profile: crate::IntelligenceProfile,
+) -> Vec<String> {
+    let mut profiles = vec![
+        effect_capability_profile(effects_enabled).to_owned(),
+        deployment_profile.to_owned(),
+        intelligence_profile.capability_identifier().to_owned(),
+    ];
+    profiles.sort();
+    profiles
 }
 
 pub(crate) struct RuntimeShutdownAction {
@@ -703,11 +723,20 @@ impl ShutdownAction for RuntimeShutdownAction {
 
 #[cfg(test)]
 mod tests {
-    use super::effect_capability_profile;
+    use super::{capability_profiles, effect_capability_profile};
+    use crate::IntelligenceProfile;
 
     #[test]
     fn capability_profile_reflects_both_validated_effect_registry_states() {
         assert_eq!(effect_capability_profile(false), "effects-disabled");
         assert_eq!(effect_capability_profile(true), "effects-enabled");
+    }
+
+    #[test]
+    fn capability_profiles_report_only_balanced_v1() {
+        assert_eq!(
+            capability_profiles("local", false, IntelligenceProfile::BalancedV1),
+            ["effects-disabled", "intelligence-balanced-v1", "local"]
+        );
     }
 }

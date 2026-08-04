@@ -2,7 +2,7 @@
 
 use crate::{
     CandidateBatch, QueryPlan, RetrievalContext, RetrievalError, RetrievalErrorCode,
-    RetrievalStage, Retriever,
+    RetrievalProfile, RetrievalStage, Retriever,
 };
 use cigar_protocol::ContentDigest;
 use std::collections::BTreeSet;
@@ -14,6 +14,8 @@ use std::time::Instant;
 pub struct ExecutedStage {
     /// Requirement that introduced the stage.
     pub requirement_index: usize,
+    /// Whether absence from this stage contributes to a compile-blocking requirement failure.
+    pub blocking: bool,
     /// Channel that ran.
     pub stage: RetrievalStage,
     /// Query fingerprint recorded by the planner.
@@ -27,6 +29,7 @@ impl fmt::Debug for ExecutedStage {
         formatter
             .debug_struct("ExecutedStage")
             .field("requirement_index", &self.requirement_index)
+            .field("blocking", &self.blocking)
             .field("stage", &self.stage)
             .field("query_fingerprint", &self.query_fingerprint)
             .field("candidate_count", &self.batch.candidates.len())
@@ -56,7 +59,21 @@ impl StagedRetrieval {
         retriever: &dyn Retriever,
         context: &RetrievalContext,
     ) -> Result<StagedRetrievalResult, RetrievalError> {
+        self.execute_with_profile(plan, retriever, context, RetrievalProfile::BalancedV1)
+    }
+
+    /// Executes a plan only when the retriever declares the exact bound score profile.
+    pub fn execute_with_profile(
+        &self,
+        plan: &QueryPlan,
+        retriever: &dyn Retriever,
+        context: &RetrievalContext,
+        retrieval_profile: RetrievalProfile,
+    ) -> Result<StagedRetrievalResult, RetrievalError> {
         context.check()?;
+        if retriever.retrieval_profile() != retrieval_profile {
+            return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration));
+        }
         let mut stages = Vec::with_capacity(plan.stages.len());
         let mut blocking_requirements = BTreeSet::new();
         let mut satisfied_blocking_requirements = BTreeSet::new();
@@ -81,6 +98,7 @@ impl StagedRetrieval {
             }
             stages.push(ExecutedStage {
                 requirement_index: planned.requirement_index,
+                blocking: planned.blocking,
                 stage: planned.request.stage,
                 query_fingerprint: planned.query_fingerprint.clone(),
                 batch,
@@ -104,7 +122,7 @@ mod tests {
     use crate::{
         AuthorizedPartition, CandidateBatch, CandidateFeatures, CandidateRef, MatchEvidence,
         QueryPlanner, RetrievalConsistency, RetrievalContext, RetrievalDisclosure, RetrievalError,
-        RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever,
+        RetrievalErrorCode, RetrievalProfile, RetrievalRequest, RetrievalStage, Retriever,
     };
     use cigar_protocol::{
         Classification, ContentDigest, ContextRequirement, InstructionAuthority, RecordId,
@@ -156,11 +174,18 @@ mod tests {
                     .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
                 batch.candidates.push(CandidateRef {
                     version_id,
+                    lineage_id: cigar_protocol::LineageId::new(
+                        "01890f47-8e7d-7b42-a1d2-3c4d5e6f7805",
+                    )
+                    .map_err(|_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?,
+                    content_digest: digest('e')?,
+                    atom_kind: cigar_protocol::AtomKind::Documentation,
                     canonical_uri: SourceUri::new("file:///authorized/document.md").map_err(
                         |_error| RetrievalError::new(RetrievalErrorCode::CorruptGeneration),
                     )?,
                     relative_path: None,
                     instruction_authority: InstructionAuthority::Data,
+                    classification: Classification::Internal,
                     features: CandidateFeatures::default(),
                     total_score: 0,
                     evidence: BTreeSet::from([MatchEvidence::Lexical]),
@@ -222,6 +247,17 @@ mod tests {
         let result = StagedRetrieval.execute(&nonblocking, &EmptyRetriever, &context())?;
         assert_eq!(result.plan_fingerprint, nonblocking.plan_fingerprint);
         assert_eq!(result.stages.len(), 2);
+        assert_eq!(
+            StagedRetrieval
+                .execute_with_profile(
+                    &nonblocking,
+                    &EmptyRetriever,
+                    &context(),
+                    RetrievalProfile::BalancedV2Candidate,
+                )
+                .map_err(|error| error.code()),
+            Err(RetrievalErrorCode::CorruptGeneration)
+        );
         assert_eq!(
             result
                 .stages

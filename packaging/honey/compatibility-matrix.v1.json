@@ -1,0 +1,61 @@
+{
+  "schema_version": "cigar.honey.compatibility-matrix.v1",
+  "release": {
+    "name": "CIGAR Honey 0.9.2",
+    "version": "0.9.2",
+    "intelligence": "balanced_v1 only",
+    "release_state": "developer-preview",
+    "supported": false,
+    "production_qualified": false
+  },
+  "upgrade_from": {
+    "name": "CIGAR Honey 0.9.1",
+    "version": "0.9.1"
+  },
+  "compatibility": {
+    "context_abi": {
+      "before": "cigar.context.v1",
+      "after": "cigar.context.v1",
+      "breaking": false
+    },
+    "public_api": {
+      "before_operations": 45,
+      "after_operations": 45,
+      "before_nominal_payload_types": 70,
+      "after_nominal_payload_types": 70,
+      "breaking": false
+    },
+    "python": {
+      "distribution_before": "hol-cigar==0.9.1",
+      "distribution_after": "hol-cigar==0.9.2",
+      "import_before": "cigar_sdk",
+      "import_after": "cigar_sdk",
+      "breaking": false
+    },
+    "configuration": {
+      "existing_configuration_valid": true,
+      "new_optional_field": "intelligence_profile",
+      "omitted_field_behavior": "balanced_v1",
+      "accepted_values": ["balanced_v1"],
+      "unsupported_values_rejected": true,
+      "breaking": false
+    },
+    "local_sidecar": {
+      "transport_shape_changed": false,
+      "operation_shape_changed": false,
+      "capability_discovery_addition": "intelligence-balanced-v1",
+      "breaking": false
+    },
+    "state": {
+      "existing_v4_state_is_mutated_in_place": false,
+      "v5_target_is_constructed_separately": true,
+      "verified_backup_required_before_migration": true,
+      "older_runtime_may_open_v5": false
+    }
+  },
+  "rollback": {
+    "behavior_only": "remove intelligence_profile or set it to \"balanced_v1\", then restart the sidecar",
+    "binary_and_state": "stop the sidecar, activate a separately restored verified v4 backup, then select the prior versioned installation",
+    "in_place_state_downgrade_allowed": false
+  }
+}

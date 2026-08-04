@@ -1,5 +1,5 @@
 complete -c cigar -f
-complete -c cigar -n '__fish_use_subcommand' -a 'init source ingest catalog status context project focus space handoff effect replay policy backup gc diagnostics state doctor serve mcp plugin release completion man help version'
+complete -c cigar -n '__fish_use_subcommand' -a 'init source ingest catalog status context project focus space handoff effect replay policy backup migration compaction integrity gc diagnostics state doctor serve mcp plugin release completion man help version'
 complete -c cigar -n '__fish_seen_subcommand_from source' -a 'add list refresh inspect remove'
 complete -c cigar -n '__fish_seen_subcommand_from catalog' -a 'query'
 complete -c cigar -n '__fish_seen_subcommand_from context' -a 'plan compile explain diff revalidate materialize'
@@ -11,6 +11,9 @@ complete -c cigar -n '__fish_seen_subcommand_from effect' -a 'prepare approve di
 complete -c cigar -n '__fish_seen_subcommand_from replay' -a 'reconstruct run compare completeness'
 complete -c cigar -n '__fish_seen_subcommand_from policy' -a 'check explain'
 complete -c cigar -n '__fish_seen_subcommand_from backup' -a 'create verify restore'
+complete -c cigar -n '__fish_seen_subcommand_from migration' -a 'preflight run activate cleanup'
+complete -c cigar -n '__fish_seen_subcommand_from compaction' -a 'preview execute status'
+complete -c cigar -n '__fish_seen_subcommand_from integrity' -a 'deep'
 complete -c cigar -n '__fish_seen_subcommand_from gc' -a 'plan run'
 complete -c cigar -n '__fish_seen_subcommand_from diagnostics' -a 'bundle'
 complete -c cigar -n '__fish_seen_subcommand_from state' -a 'inspect-beta import-beta restore-beta'
@@ -43,5 +46,6 @@ complete -c cigar -l width -r
 complete -c cigar -l explain-config
 complete -c cigar -l security
 complete -c cigar -l deep
+complete -c cigar -l force-full
 complete -c cigar -l help -s h
 complete -c cigar -l version -s V

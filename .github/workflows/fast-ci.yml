@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 defaults:
   run:
     shell: bash --noprofile --norc -euo pipefail {0}
@@ -32,6 +35,14 @@ jobs:
           persist-credentials: false
           lfs: false
           submodules: false
+
+      - name: Verify the native host and pinned Rust toolchain
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -61,15 +72,12 @@ jobs:
         run: |
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
-          test "$(rustc --version | awk '{print $2}')" = "1.92.0"
-          test "$(cargo --version | awk '{print $2}')" = "1.92.0"
-          test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
           test "$(node --version)" = "v24.10.0"
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
           test "$(go version | awk '{print $3}')" = "go1.26.5"
-          test "$(uv --version)" = "uv 0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -112,10 +120,10 @@ jobs:
 
       - name: Hydrate locked dependency caches
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           corepack pnpm install --frozen-lockfile
           uv sync --project sdk/python --frozen
-          go -C sdk/go mod download
+          env GOWORK=off go -C sdk/go mod download
 
       - name: Check formatting, generated sources, vectors, and architecture offline
         env:
@@ -172,6 +180,25 @@ jobs:
           lfs: false
           submodules: false
 
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          architecture: arm64
+          cache: false
+          check-latest: false
+          go-version: "1.26.5"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          architecture: arm64
+          check-latest: false
+          node-version: "24.10.0"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          architecture: arm64
+          check-latest: false
+          python-version: "3.14.6"
+
       - name: Verify the native host and pinned Rust toolchain
         run: |
           test "$(uname -s)" = "Darwin"
@@ -179,23 +206,37 @@ jobs:
           test "$(rustc --version | awk '{print $2}')" = "1.92.0"
           test "$(cargo --version | awk '{print $2}')" = "1.92.0"
           test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
+          test "$(node --version)" = "v24.10.0"
+          test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
+          test "$(go env GOARCH)" = "arm64"
+          test "$(go env GOOS)" = "darwin"
+          test "$(go version | awk '{print $3}')" = "go1.26.5"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
             "${canonical_temp}/cigar-fast-rust-target" \
             >>"${GITHUB_ENV}"
 
+      - name: Install the pinned protocol compiler
+        uses: ./.github/actions/setup-protoc
+
       - name: Install the pinned test runner
         run: |
           cargo install cargo-nextest --version 0.9.140 --locked
-          test "$(cargo nextest --version | awk '{print $2}')" = "0.9.140"
+          test "$(cargo nextest --version | awk 'NR == 1 {print $2}')" = "0.9.140"
 
-      - name: Hydrate the locked Cargo cache
-        run: cargo fetch --locked --target aarch64-apple-darwin
+      - name: Hydrate the locked Rust and Go caches
+        run: |
+          cargo fetch --locked
+          env GOWORK=off go -C sdk/go mod download
 
       - name: Run the strict non-soak Rust suite offline
         env:
           CARGO_NET_OFFLINE: "true"
+          GONOSUMDB: "*"
+          GOPROXY: "off"
+          GOSUMDB: "off"
+          GOTOOLCHAIN: "local"
         run: |
           cargo metadata --locked --offline --format-version 1 >/dev/null
           cargo nextest run \
@@ -263,7 +304,7 @@ jobs:
           test "$(go env GOOS)" = "darwin"
           test "$(go env GOARCH)" = "arm64"
           test "$(go version | awk '{print $3}')" = "go1.26.5"
-          test "$(uv --version)" = "uv 0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -283,14 +324,14 @@ jobs:
 
       - name: Hydrate locked Rust and SDK dependencies
         run: |
-          cargo fetch --locked --target aarch64-apple-darwin
+          cargo fetch --locked
           cargo fetch \
             --manifest-path tests/properties/Cargo.toml \
             --locked \
             --target aarch64-apple-darwin
           corepack pnpm install --frozen-lockfile
           uv sync --project sdk/python --frozen
-          go -C sdk/go mod download
+          env GOWORK=off go -C sdk/go mod download
 
       - name: Run all native non-fuzz non-soak merge matrices offline
         env:

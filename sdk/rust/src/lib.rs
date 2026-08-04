@@ -10,6 +10,7 @@ mod embedded;
 mod error;
 mod options;
 mod remote;
+mod semantic_reuse;
 mod transport;
 mod verify;
 
@@ -20,6 +21,7 @@ pub use embedded::*;
 pub use error::*;
 pub use options::*;
 pub use remote::*;
+pub use semantic_reuse::*;
 pub use transport::*;
 pub use verify::*;
 

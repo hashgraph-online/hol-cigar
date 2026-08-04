@@ -52,7 +52,7 @@ impl BlobState {
     }
 }
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct TenantState {
     pub(crate) atoms: BTreeMap<VersionId, ContextAtomV1>,
     #[serde(default)]
@@ -79,7 +79,7 @@ pub(crate) struct TenantState {
     pub(crate) worker_states: BTreeMap<String, WorkerState>,
 }
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct CommittedState {
     pub(crate) revision: StoreRevision,
     pub(crate) tenants: BTreeMap<RecordId, TenantState>,

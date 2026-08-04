@@ -3,13 +3,14 @@
 use crate::{
     CandidateBatch, CandidateFeatures, CandidateRef, IndexGenerationState, IndexKind,
     MatchEvidence, RetrievalConsistency, RetrievalContext, RetrievalDisclosure, RetrievalError,
-    RetrievalErrorCode, RetrievalRequest, RetrievalStage, Retriever, VectorAdapter,
-    VectorIndexBinding, VectorQuery,
+    RetrievalErrorCode, RetrievalProfile, RetrievalRequest, RetrievalStage, Retriever,
+    VectorAdapter, VectorIndexBinding, VectorQuery,
 };
 use cigar_policy::RetrievalResourceAuthorizationRequest;
 use cigar_protocol::{
-    AtomPayload, Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority,
-    Lifecycle, LineageId, RecordId, RelativePath, UtcTimestamp, Validate, VersionId,
+    AtomKind, AtomPayload, Classification, ContentDigest, ContextAtomV1, ContextEdge,
+    InstructionAuthority, Lifecycle, LineageId, RecordId, RelativePath, UtcTimestamp, Validate,
+    VersionId,
 };
 use cigar_store::StoreRevision;
 use sha2::{Digest, Sha256};
@@ -192,6 +193,7 @@ struct ManagerState {
 pub struct InMemoryIndexManager {
     state: RwLock<ManagerState>,
     vector_adapter: RwLock<Option<Arc<dyn VectorAdapter>>>,
+    profile: RetrievalProfile,
 }
 
 impl Default for InMemoryIndexManager {
@@ -199,6 +201,7 @@ impl Default for InMemoryIndexManager {
         Self {
             state: RwLock::new(ManagerState::default()),
             vector_adapter: RwLock::new(None),
+            profile: RetrievalProfile::BalancedV1,
         }
     }
 }
@@ -216,7 +219,25 @@ impl InMemoryIndexManager {
         Self {
             state: RwLock::new(ManagerState::default()),
             vector_adapter: RwLock::new(Some(adapter)),
+            profile: RetrievalProfile::BalancedV1,
         }
+    }
+
+    /// Creates an index using one exact digest-bound intelligence profile.
+    #[must_use]
+    pub fn with_profile(profile: RetrievalProfile) -> Self {
+        Self {
+            state: RwLock::new(ManagerState::default()),
+            vector_adapter: RwLock::new(None),
+            profile,
+        }
+    }
+
+    /// Backward-compatible benchmark constructor retained for private harnesses.
+    #[cfg(any(test, feature = "experimental-profiles"))]
+    #[must_use]
+    pub fn with_experimental_profile(profile: RetrievalProfile) -> Self {
+        Self::with_profile(profile)
     }
 
     /// Atomically replaces the optional adapter used by future retrieval snapshots.
@@ -488,6 +509,10 @@ impl InMemoryIndexManager {
 }
 
 impl Retriever for InMemoryIndexManager {
+    fn retrieval_profile(&self) -> RetrievalProfile {
+        self.profile
+    }
+
     fn retrieve(
         &self,
         request: &RetrievalRequest,
@@ -529,13 +554,17 @@ impl InMemoryIndexManager {
             &request.partition,
             &mut work,
         );
-        let authorized = authorized_current_documents(
+        let mut authorized = authorized_current_documents(
             &generation.documents,
             &generation.lineage_projection,
             &lineages,
             request,
             &mut work,
         )?;
+        if !request.atom_kinds.is_empty() {
+            authorized
+                .retain(|_version, document| request.atom_kinds.contains(&document.atom.kind));
+        }
         let mut evidence_by_version: BTreeMap<VersionId, BTreeSet<MatchEvidence>> = BTreeMap::new();
         let mut semantic_scores = BTreeMap::new();
         let mut fallback_used = false;
@@ -608,20 +637,28 @@ impl InMemoryIndexManager {
                 &evidence,
                 semantic_scores.get(&version).copied().unwrap_or_default(),
                 lag,
+                request,
+                self.profile,
             );
-            let total_score = features.balanced_score()?;
+            let total_score = features.score(self.profile)?;
             candidates.push(CandidateRef {
                 version_id: version,
+                lineage_id: document.atom.lineage_id.clone(),
+                content_digest: document.atom.content_digest.clone(),
+                atom_kind: document.atom.kind,
                 canonical_uri: document.atom.source.uri.clone(),
                 relative_path: document.atom.source.relative_path.clone(),
                 instruction_authority: document.atom.governance.instruction_authority,
+                classification: document.atom.governance.classification,
                 features,
                 total_score,
                 evidence,
             });
             work.scored_candidates = work.scored_candidates.saturating_add(1);
         }
-        candidates.sort_by(candidate_order);
+        candidates.sort_by(|left, right| {
+            intrinsic_protection_order(left, right).then_with(|| candidate_order(left, right))
+        });
         candidates.truncate(request.limit);
         request.partition.validate()?;
         let partition_semantic_root = partition_semantic_root(
@@ -636,6 +673,7 @@ impl InMemoryIndexManager {
             request.partition.partition_digest(),
             request.stage,
             authorized_vector_binding.as_ref(),
+            self.profile,
         )?;
         let partition_generation_id = RecordId::new(deterministic_uuid(&[
             b"CIGAR-AUTHORIZED-INDEX-GENERATION\0v1\0",
@@ -1141,6 +1179,8 @@ fn candidate_features(
     evidence: &BTreeSet<MatchEvidence>,
     semantic_score: u16,
     lag: u64,
+    request: &RetrievalRequest,
+    profile: RetrievalProfile,
 ) -> CandidateFeatures {
     let minimum_depth = evidence
         .iter()
@@ -1152,7 +1192,7 @@ fn candidate_features(
             }
         })
         .min();
-    CandidateFeatures {
+    let mut features = CandidateFeatures {
         requirement_match: u16::from(!evidence.is_empty()) * 10_000,
         exact_match: u16::from(evidence.contains(&MatchEvidence::ExactIdentity)) * 10_000,
         lexical_match: u16::from(evidence.contains(&MatchEvidence::Lexical)) * 10_000,
@@ -1171,7 +1211,87 @@ fn candidate_features(
         estimated_tokens: document.estimated_tokens,
         requirement_coverage_bits: 0,
         entity_coverage_bits: 0,
+    };
+    if profile == RetrievalProfile::BalancedV2Candidate {
+        features.exact_match = if evidence.contains(&MatchEvidence::ExactIdentity) {
+            10_000
+        } else if evidence.contains(&MatchEvidence::ExactPath)
+            || evidence.contains(&MatchEvidence::DeclaredTerm)
+        {
+            9_000
+        } else {
+            0
+        };
+        features.lexical_match = lexical_feature(request, document, evidence);
+        features.task_proximity = if evidence.contains(&MatchEvidence::DeclaredTerm) {
+            10_000
+        } else if evidence.contains(&MatchEvidence::ExactPath) {
+            8_000
+        } else {
+            0
+        };
+        features.verification =
+            u16::try_from(document.atom.quality.confidence.millionths() / 100).unwrap_or(10_000);
+        features.novelty =
+            u16::try_from(document.atom.quality.coverage.millionths() / 100).unwrap_or(10_000);
+        features.requirement_coverage_bits = u64::from(!evidence.is_empty());
+        features.entity_coverage_bits = entity_coverage_bits(request, document);
     }
+    features
+}
+
+fn lexical_feature(
+    request: &RetrievalRequest,
+    document: &IndexedDocument,
+    evidence: &BTreeSet<MatchEvidence>,
+) -> u16 {
+    if !evidence.contains(&MatchEvidence::Lexical) || request.terms.is_empty() {
+        return 0;
+    }
+    let terms: BTreeSet<_> = request
+        .terms
+        .iter()
+        .map(|term| normalize_term(term))
+        .collect();
+    let matched = terms.intersection(&document.lexical_terms).count();
+    let declared = terms.intersection(&document.declared_terms).count();
+    let path_bonus = document
+        .atom
+        .source
+        .relative_path
+        .as_ref()
+        .is_some_and(|path| {
+            std::str::from_utf8(path.as_bytes()).is_ok_and(|path| {
+                let normalized = path.to_lowercase();
+                terms.iter().any(|term| normalized.contains(term))
+            })
+        });
+    let ratio = matched.saturating_mul(8_000) / terms.len();
+    u16::try_from(
+        ratio
+            .saturating_add(usize::from(declared > 0) * 1_500)
+            .saturating_add(usize::from(path_bonus) * 500)
+            .min(10_000),
+    )
+    .unwrap_or(10_000)
+}
+
+fn entity_coverage_bits(request: &RetrievalRequest, document: &IndexedDocument) -> u64 {
+    let mut bits = 0_u64;
+    for term in &request.terms {
+        let normalized = normalize_term(term);
+        if document.lexical_terms.contains(&normalized)
+            || document.declared_terms.contains(&normalized)
+        {
+            let mut hasher = Sha256::new();
+            hasher.update(b"CIGAR-ENTITY-COVERAGE\0v1\0");
+            hasher.update(normalized.as_bytes());
+            let digest = hasher.finalize();
+            let index = usize::from(digest.first().copied().unwrap_or_default() & 63);
+            bits |= 1_u64 << index;
+        }
+    }
+    bits
 }
 
 const fn authority_feature(authority: InstructionAuthority) -> u16 {
@@ -1204,6 +1324,16 @@ fn candidate_order(left: &CandidateRef, right: &CandidateRef) -> std::cmp::Order
                 .cmp(&right.relative_path.as_ref().map(RelativePath::as_bytes))
         })
         .then_with(|| left.version_id.cmp(&right.version_id))
+}
+
+fn intrinsic_protection_order(left: &CandidateRef, right: &CandidateRef) -> std::cmp::Ordering {
+    intrinsic_protected(right).cmp(&intrinsic_protected(left))
+}
+
+fn intrinsic_protected(candidate: &CandidateRef) -> bool {
+    candidate.evidence.contains(&MatchEvidence::ExactIdentity)
+        || candidate.atom_kind == AtomKind::Policy
+        || candidate.instruction_authority >= InstructionAuthority::Project
 }
 
 fn revision_lag(
@@ -1256,42 +1386,26 @@ fn partition_semantic_root(
         hasher.update(document.atom.content_digest.as_str().as_bytes());
         hasher.update([document.atom.lifecycle as u8]);
     }
-    let documents: Vec<_> = documents.iter().collect();
-    for (left_index, (left_version, left_document)) in documents.iter().enumerate() {
-        for (right_version, right_document) in documents.iter().skip(left_index) {
-            work.graph_lineage_pair_lookups = work.graph_lineage_pair_lookups.saturating_add(1);
-            let (first_lineage, second_lineage) =
-                if left_document.atom.lineage_id <= right_document.atom.lineage_id {
-                    (
-                        left_document.atom.lineage_id.clone(),
-                        right_document.atom.lineage_id.clone(),
-                    )
-                } else {
-                    (
-                        right_document.atom.lineage_id.clone(),
-                        left_document.atom.lineage_id.clone(),
-                    )
-                };
-            let (first_version, second_version) = if left_version <= right_version {
-                ((*left_version).clone(), (*right_version).clone())
-            } else {
-                ((*right_version).clone(), (*left_version).clone())
-            };
-            if edge_projection
-                .get(&LineageEdgeKey {
-                    tenant_id: tenant_id.clone(),
-                    first_lineage,
-                    second_lineage,
-                })
-                .is_some_and(|edges| {
-                    edges.contains(&(first_version.clone(), second_version.clone()))
-                })
-            {
-                work.authorized_graph_edges = work.authorized_graph_edges.saturating_add(1);
-                hasher.update(first_version.as_str().as_bytes());
-                hasher.update(second_version.as_str().as_bytes());
+    // The projection already contains only real edges. Walking every authorized document pair
+    // makes disclosure generation quadratic even for an empty or sparse graph. Collect the
+    // authorized projected edges instead; the tuple set preserves the exact version-pair order
+    // used by the former nested scan and therefore preserves the fingerprint contract.
+    let mut authorized_edges = BTreeSet::new();
+    for (key, edges) in edge_projection {
+        if key.tenant_id != *tenant_id {
+            continue;
+        }
+        for (first_version, second_version) in edges {
+            if documents.contains_key(first_version) && documents.contains_key(second_version) {
+                work.graph_lineage_pair_lookups = work.graph_lineage_pair_lookups.saturating_add(1);
+                authorized_edges.insert((first_version, second_version));
             }
         }
+    }
+    for (first_version, second_version) in authorized_edges {
+        work.authorized_graph_edges = work.authorized_graph_edges.saturating_add(1);
+        hasher.update(first_version.as_str().as_bytes());
+        hasher.update(second_version.as_str().as_bytes());
     }
     finish_digest(hasher)
 }
@@ -1302,12 +1416,21 @@ fn partition_fingerprint(
     partition_digest: &ContentDigest,
     stage: RetrievalStage,
     vector: Option<&VectorIndexBinding>,
+    retrieval_profile: RetrievalProfile,
 ) -> Result<ContentDigest, RetrievalError> {
     let mut hasher = Sha256::new();
-    hasher.update(b"CIGAR-AUTHORIZED-INDEX-FINGERPRINT\0v1\0");
+    if retrieval_profile == RetrievalProfile::BalancedV1 {
+        hasher.update(b"CIGAR-AUTHORIZED-INDEX-FINGERPRINT\0v1\0");
+    } else {
+        hasher.update(b"CIGAR-AUTHORIZED-INDEX-FINGERPRINT\0v2\0");
+    }
     hasher.update(configuration.as_str().as_bytes());
     hasher.update(semantic_root.as_str().as_bytes());
     hasher.update(partition_digest.as_str().as_bytes());
+    if retrieval_profile != RetrievalProfile::BalancedV1 {
+        hasher.update(retrieval_profile.identifier().as_bytes());
+        hasher.update(retrieval_profile.digest()?.as_str().as_bytes());
+    }
     if stage == RetrievalStage::Vector {
         hasher.update(b"VECTOR-STAGE\0");
         if let Some(vector) = vector {
@@ -1379,12 +1502,12 @@ mod tests {
     use super::{InMemoryIndexManager, IndexBuild, finish_digest};
     use crate::{
         AuthorizedPartition, IndexGenerationState, ProcessorApprovedVector, RetrievalConsistency,
-        RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalRequest, RetrievalStage,
-        Retriever, VectorAdapter, VectorIndexBinding, VectorNeighbor, VectorQuery,
+        RetrievalContext, RetrievalError, RetrievalErrorCode, RetrievalProfile, RetrievalRequest,
+        RetrievalStage, Retriever, VectorAdapter, VectorIndexBinding, VectorNeighbor, VectorQuery,
     };
     use cigar_protocol::{
-        Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority, Lifecycle,
-        RecordId, RelativePath, SourceUri, UtcTimestamp, VersionId,
+        AtomKind, Classification, ContentDigest, ContextAtomV1, ContextEdge, InstructionAuthority,
+        Lifecycle, RecordId, RelativePath, SourceUri, UtcTimestamp, VersionId,
     };
     use cigar_store::{CancellationToken, StoreRevision};
     use cigar_testkit::deterministic_protocol_fixture;
@@ -1525,6 +1648,7 @@ mod tests {
             partition,
             required_revision: StoreRevision(revision),
             consistency: RetrievalConsistency::Strong,
+            atom_kinds: BTreeSet::new(),
             exact_versions: BTreeSet::new(),
             atom_ids: BTreeSet::new(),
             lineage_ids: BTreeSet::new(),
@@ -1867,6 +1991,37 @@ mod tests {
     }
 
     #[test]
+    fn low_rank_policy_evidence_survives_ordinary_stage_truncation() -> Result<(), Box<dyn Error>> {
+        let tenant = record(8)?;
+        let project = record(9)?;
+        let mut ordinary = atom(90, &tenant, &project, "protected_term ordinary")?;
+        ordinary.source.uri = SourceUri::new("file:///project/00-ordinary.md")?;
+        let mut policy = atom(91, &tenant, &project, "protected_term policy")?;
+        policy.kind = AtomKind::Policy;
+        policy.source.uri = SourceUri::new("file:///project/ff-policy.md")?;
+        let manager = InMemoryIndexManager::default();
+        let descriptor = manager.build_generation(
+            build(vec![ordinary, policy.clone()], Vec::new(), 21, false)?,
+            &context(),
+        )?;
+        manager.activate(&descriptor.generation_id, None)?;
+        let mut lexical = request(RetrievalStage::Lexical, partition(&tenant, [project])?, 21);
+        lexical.terms.insert("protected_term".to_owned());
+        lexical.limit = 1;
+        let batch = manager.retrieve(&lexical, &context())?;
+        assert_eq!(batch.candidates.len(), 1);
+        assert_eq!(
+            batch
+                .candidates
+                .first()
+                .ok_or("protected policy candidate is absent")?
+                .version_id,
+            policy.version_id
+        );
+        Ok(())
+    }
+
+    #[test]
     fn graph_cycles_are_bounded_and_vector_denial_or_fallback_is_explicit()
     -> Result<(), Box<dyn Error>> {
         let tenant = record(8)?;
@@ -2043,6 +2198,45 @@ mod tests {
             assert_eq!(candidate.features.freshness, 10_000);
             assert_eq!(candidate.total_score, 5_575_000);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn experimental_profile_uses_only_authorized_metadata_and_is_deterministic()
+    -> Result<(), Box<dyn Error>> {
+        let tenant = record(61)?;
+        let project = record(62)?;
+        let mut document = atom(
+            61,
+            &tenant,
+            &project,
+            "ExactSymbol helper unrelated distractor",
+        )?;
+        document.retrieval.exact_terms = vec!["exactsymbol".to_owned()];
+        let manager =
+            InMemoryIndexManager::with_experimental_profile(RetrievalProfile::BalancedV2Candidate);
+        let generation = manager.build_generation(
+            build(vec![document.clone()], Vec::new(), 70, false)?,
+            &context(),
+        )?;
+        manager.activate(&generation.generation_id, None)?;
+        let mut lexical = request(RetrievalStage::Lexical, partition(&tenant, [project])?, 70);
+        lexical.terms = ["exactsymbol".to_owned(), "missing".to_owned()]
+            .into_iter()
+            .collect();
+        let first = manager.retrieve(&lexical, &context())?;
+        let second = manager.retrieve(&lexical, &context())?;
+        assert_eq!(first, second);
+        let candidate = first.candidates.first().ok_or("missing candidate")?;
+        assert_eq!(candidate.features.lexical_match, 5_500);
+        assert_eq!(candidate.features.verification, 9_000);
+        assert_ne!(candidate.features.entity_coverage_bits, 0);
+        assert_eq!(
+            candidate.total_score,
+            candidate
+                .features
+                .score(RetrievalProfile::BalancedV2Candidate)?
+        );
         Ok(())
     }
 

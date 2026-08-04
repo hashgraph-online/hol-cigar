@@ -420,9 +420,12 @@ def _validate_honey_authority(
     python_match = re.fullmatch(
         r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
     )
-    if python_match is None:
+    if python_match is not None:
+        python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    elif re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None:
+        python_version = version
+    else:
         raise ReleaseError("Honey version cannot be mapped to the capability profile")
-    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
     identity = {
         "channel": "honey",
         "context_abi": product["context_abi"],
@@ -433,7 +436,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9",
+        "marketing_name": "CIGAR Honey v0.9.2",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,
@@ -687,7 +690,6 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         or package.get("name") != "@cigar/sdk"
         or package.get("version") != version
         or package.get("license") != "Apache-2.0"
-        or package.get("homepage") != "https://hol.org/cigar"
         or package.get("type") != "module"
         or package.get("packageManager") != "pnpm@10.34.5"
         or package.get("engines") != {"node": ">=24.10.0 <25"}

@@ -40,7 +40,7 @@ from release_lib import (
 from verify_package import verify as verify_package
 
 
-DEFAULT_PRODUCT_VERSION = "0.9.0-honey.1"
+DEFAULT_PRODUCT_VERSION = "0.9.2"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
 MAX_CONTRACT_BYTES = 8 * 1024 * 1024

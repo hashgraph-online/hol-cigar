@@ -1439,6 +1439,7 @@ mod macos {
             let metadata_database = state.join("cigar.sqlite3");
             let daemon = DaemonConfig {
                 mode: DeploymentMode::Local,
+                intelligence_profile: cigar_daemon::IntelligenceProfile::default(),
                 local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
                 state_directory: state.clone(),
                 runtime_directory: runtime.clone(),
@@ -1452,6 +1453,7 @@ mod macos {
                 production: ProductionPaths {
                     project_directory: project.clone(),
                     metadata_database: metadata_database.clone(),
+                    active_store_descriptor: None,
                     blob_directory: state.join("blobs"),
                     blob_key_reference_directory: state.join("blob-keys"),
                     keystore_file,
@@ -4068,12 +4070,12 @@ mod macos {
             || activation_count != 1
             || activation.0 != 1
             || activation.1 != expected_revision
-            || activation.2 != retained.semantic_root
+            || activation.2 != retained.catalog_root
             || usize::try_from(activation.3).ok() != Some(retained.atoms.len())
             || activation.4 != expected_projection_root
             || activation.5 != 1
             || activation.6 != expected_revision
-            || activation.7 != retained.semantic_root
+            || activation.7 != retained.catalog_root
         {
             return Err("atom projection activation is not exactly fixture-bound".into());
         }
@@ -4155,7 +4157,7 @@ mod macos {
         root.update(b"CIGAR-SQLITE-ATOM-PROJECTION\0v1\0");
         root.update(generation.to_be_bytes());
         root.update(retained.revision.0.to_be_bytes());
-        catalog_hash_field_fixture(&mut root, retained.semantic_root.as_bytes())?;
+        catalog_hash_field_fixture(&mut root, retained.catalog_root.as_bytes())?;
         for row in &retained.atoms {
             for field in [
                 retained.tenant_id.as_str(),
@@ -4282,7 +4284,10 @@ mod macos {
         use std::collections::BTreeSet;
         use std::ffi::OsString;
         use std::fs::{self, OpenOptions};
+        use std::io::Write as _;
+        use std::net::TcpListener;
         use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+        use std::os::unix::net::UnixListener;
         use std::path::PathBuf;
         use std::process::{Command, Stdio};
         use std::sync::atomic::Ordering;
@@ -4399,13 +4404,15 @@ mod macos {
                 .position(|window| window == b"--deadline")
                 .ok_or("full help contains deadline")?;
             let mut changed_option_help = full.to_vec();
-            changed_option_help[changed_option] = b'+';
+            *changed_option_help
+                .get_mut(changed_option)
+                .ok_or("deadline mutation offset is in bounds")? = b'+';
             assert!(validate_full_surface_help(&changed_option_help).is_err());
             Ok(())
         }
 
         #[test]
-        fn complete_provenance_probe_rejects_a_later_block_without_provenance() {
+        fn complete_provenance_probe_rejects_a_later_block_without_provenance() -> Result<()> {
             let first = format!("1220{}", "1".repeat(64));
             let second = format!("1220{}", "2".repeat(64));
             let plan = json!({
@@ -4431,7 +4438,9 @@ mod macos {
             assert!(validate_plan_and_compiled_provenance(&plan, &compiled, &authorized).is_ok());
 
             let mut missing_later_provenance = compiled;
-            missing_later_provenance["result"]["blocks"][1]["provenance"] = json!([]);
+            *missing_later_provenance
+                .pointer_mut("/result/blocks/1/provenance")
+                .ok_or("second compiled block provenance is present")? = json!([]);
             assert!(
                 validate_plan_and_compiled_provenance(
                     &plan,
@@ -4457,6 +4466,7 @@ mod macos {
                 )
                 .is_err()
             );
+            Ok(())
         }
 
         #[test]
@@ -4579,63 +4589,83 @@ mod macos {
             let protected = protected.canonicalize()?;
             let outside_root = outside.path().canonicalize()?;
             let sandbox = CandidateSandbox::for_roots(&root, &[&protected])?;
-            let script = r#"
-import os
-import socket
-import sys
-
-root, protected, outside = sys.argv[1:]
-with open(os.path.join(root, "allowed"), "wb") as stream:
-    stream.write(b"allowed")
-for path in (
-    os.path.join(protected, "denied"),
-    os.path.join(outside, "denied"),
-):
-    try:
-        with open(path, "wb") as stream:
-            stream.write(b"denied")
-    except PermissionError:
-        pass
-    else:
-        raise SystemExit(10)
-ip = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-try:
-    ip.bind(("127.0.0.1", 0))
-except PermissionError:
-    pass
-else:
-    raise SystemExit(11)
-finally:
-    ip.close()
-unix = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-unix.bind(os.path.join(root, "allowed.sock"))
-unix.close()
-try:
-    child = os.fork()
-except OSError:
-    pass
-else:
-    if child == 0:
-        os._exit(0)
-    os.waitpid(child, 0)
-    raise SystemExit(12)
-"#;
-            let mut command =
-                sandboxed_candidate_command(std::path::Path::new("/usr/bin/python3"), &sandbox)?;
+            let executable = std::env::current_exe()?;
+            let mut command = sandboxed_candidate_command(&executable, &sandbox)?;
             let output = command
-                .arg("-c")
-                .arg(script)
-                .arg(&root)
-                .arg(&protected)
-                .arg(&outside_root)
+                .args([
+                    "--exact",
+                    "macos::tests::combined_candidate_sandbox_probe_helper",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("CIGAR_SANDBOX_PROBE_ROOT", &root)
+                .env("CIGAR_SANDBOX_PROBE_PROTECTED", &protected)
+                .env("CIGAR_SANDBOX_PROBE_OUTSIDE", &outside_root)
                 .stdin(Stdio::null())
                 .output()?;
             if !output.status.success() {
                 return Err(format!(
-                    "combined Seatbelt proof failed: {}",
+                    "combined Seatbelt proof failed: stdout={} stderr={}",
+                    String::from_utf8_lossy(&output.stdout),
                     String::from_utf8_lossy(&output.stderr)
                 )
                 .into());
+            }
+            Ok(())
+        }
+
+        #[test]
+        #[ignore = "invoked as the native payload of the combined Seatbelt proof"]
+        fn combined_candidate_sandbox_probe_helper() -> Result<()> {
+            let root = PathBuf::from(
+                std::env::var_os("CIGAR_SANDBOX_PROBE_ROOT")
+                    .ok_or("combined Seatbelt helper requires CIGAR_SANDBOX_PROBE_ROOT")?,
+            );
+            let protected = PathBuf::from(
+                std::env::var_os("CIGAR_SANDBOX_PROBE_PROTECTED")
+                    .ok_or("combined Seatbelt helper requires CIGAR_SANDBOX_PROBE_PROTECTED")?,
+            );
+            let outside = PathBuf::from(
+                std::env::var_os("CIGAR_SANDBOX_PROBE_OUTSIDE")
+                    .ok_or("combined Seatbelt helper requires CIGAR_SANDBOX_PROBE_OUTSIDE")?,
+            );
+
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(root.join("allowed"))?
+                .write_all(b"allowed")?;
+            for denied in [protected.join("denied"), outside.join("denied")] {
+                match OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .open(&denied)
+                {
+                    Err(_) => {}
+                    Ok(_) => {
+                        return Err(format!(
+                            "combined Seatbelt helper wrote denied path {}",
+                            denied.display()
+                        )
+                        .into());
+                    }
+                }
+            }
+            if TcpListener::bind(("127.0.0.1", 0)).is_ok() {
+                return Err("combined Seatbelt helper bound an IP socket".into());
+            }
+            let unix = UnixListener::bind(root.join("allowed.sock"))?;
+            drop(unix);
+            if Command::new("/bin/true")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok()
+            {
+                return Err("combined Seatbelt helper spawned a child process".into());
             }
             Ok(())
         }
@@ -4669,8 +4699,7 @@ else:
                 .stdout(Stdio::from(stdout_file))
                 .stderr(Stdio::from(stderr_file));
             let mut process = ProcessGuard::spawn(&mut command)?;
-            wait_for_file(&pid_file)?;
-            let descendant = read_pid(&pid_file)?;
+            let descendant = wait_for_pid(&pid_file)?;
             assert!(
                 wait_for_exit(&mut process, &stdout, &stderr, Duration::from_millis(25)).is_err()
             );
@@ -4708,28 +4737,27 @@ else:
                 .stdout(Stdio::from(stdout_file))
                 .stderr(Stdio::from(stderr_file));
             let mut process = ProcessGuard::spawn(&mut command)?;
-            wait_for_file(&pid_file)?;
-            let descendant = read_pid(&pid_file)?;
+            let descendant = wait_for_pid(&pid_file)?;
             assert!(wait_for_exit(&mut process, &stdout, &stderr, Duration::from_secs(5)).is_err());
             drop(process);
             assert_process_gone(descendant)?;
             Ok(())
         }
 
-        fn wait_for_file(path: &std::path::Path) -> Result<()> {
+        fn wait_for_pid(path: &std::path::Path) -> Result<rustix::process::Pid> {
             let deadline = Instant::now() + Duration::from_secs(2);
-            while !path.is_file() {
+            loop {
+                if let Ok(contents) = fs::read_to_string(path)
+                    && let Ok(raw) = contents.trim().parse::<i32>()
+                    && let Some(pid) = rustix::process::Pid::from_raw(raw)
+                {
+                    return Ok(pid);
+                }
                 if Instant::now() >= deadline {
                     return Err("descendant pid file timed out".into());
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
-            Ok(())
-        }
-
-        fn read_pid(path: &std::path::Path) -> Result<rustix::process::Pid> {
-            let raw = fs::read_to_string(path)?.trim().parse::<i32>()?;
-            rustix::process::Pid::from_raw(raw).ok_or_else(|| "invalid descendant pid".into())
         }
 
         fn assert_process_gone(pid: rustix::process::Pid) -> Result<()> {

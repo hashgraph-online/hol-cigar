@@ -22,7 +22,6 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 
 LABEL org.opencontainers.image.title="CIGAR daemon" \
       org.opencontainers.image.description="Capability-limited CIGAR context service" \
-      org.opencontainers.image.url="https://hol.org/cigar" \
       org.opencontainers.image.source="https://github.com/CIGAR/cigar" \
       org.opencontainers.image.licenses="Apache-2.0"
 

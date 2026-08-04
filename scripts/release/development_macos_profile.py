@@ -23,11 +23,11 @@ from release_lib import (
 PROFILE_ID = "cigar.development.local.macos-aarch64.v1"
 PROFILE_PATH = "packaging/development/local-macos-aarch64.v1.json"
 SCHEMA_PATH = "packaging/development/schemas/local-macos-aarch64.v1.schema.json"
-SCHEMA_SHA256 = "b4f78e3ec4c5f35948681cfec2804190d9f9e0f86e85be3d749bdb5be431dcd7"
-PROFILE_SHA256 = "e8fc89bc9ce272e9e91acdef2aac54cdf40f383da1b4536b95fadef6d58e794e"
+SCHEMA_SHA256 = "846ba53f97fc703e23583e34cfb12ae8a333805be78e98ace13c383cfcb84ff7"
+PROFILE_SHA256 = "d5353cc006548ebe90da600fb468be03d8028e108867f5fc11c262af5766ba20"
 PRODUCT_VERSION_PATH = "packaging/product-version.v1.json"
 PRODUCT_VERSION_SHA256 = (
-    "055375b4142926fb950280b56077f7ad1a31055537be4e14e6efbf10dbac30c4"
+    "5769db6058cc7198d8d840003244893e495446ba58218c3cb3602a382af24839"
 )
 ARTIFACT_MATRIX_PATH = "packaging/artifact-matrix.v1.json"
 ARTIFACT_ID_INVENTORY_SHA256 = (
@@ -86,8 +86,8 @@ def expected_profile() -> dict[str, Any]:
         "version_binding": {
             "path": PRODUCT_VERSION_PATH,
             "sha256": PRODUCT_VERSION_SHA256,
-            "version": "1.0.0-dev.1",
-            "target_release_version": "1.0.0",
+            "version": "0.9.2",
+            "target_release_version": "0.9.2",
         },
         "artifact_matrix": {
             "path": ARTIFACT_MATRIX_PATH,
@@ -209,9 +209,9 @@ def _validate_sources(root: Path) -> tuple[str, ...]:
         for key, value in {
             "schema_version": "cigar.product-version.v1",
             "product": "cigar",
-            "version": "1.0.0-dev.1",
-            "target_release_version": "1.0.0",
-            "release_state": "development",
+            "version": "0.9.2",
+            "target_release_version": "0.9.2",
+            "release_state": "developer-preview",
             "published": False,
             "supported": False,
         }.items()
@@ -224,7 +224,7 @@ def _validate_sources(root: Path) -> tuple[str, ...]:
     if (
         not isinstance(matrix, dict)
         or matrix.get("schema_version") != "cigar.artifact-matrix.v1"
-        or matrix.get("product_version") != "1.0.0-dev.1"
+        or matrix.get("product_version") != "0.9.2"
         or matrix.get("release_state") != "development"
         or not isinstance(matrix.get("artifacts"), list)
     ):

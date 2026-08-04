@@ -23,6 +23,8 @@ import tomllib
 from typing import Any
 import zipfile
 
+from release_lib import reject_evidence_directory
+
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOT = ROOT / "packaging" / "pypi"
@@ -118,10 +120,7 @@ def _validate_source_tree(path: Path) -> None:
             raise PackageError(f"source package contains a symlink: {relative}")
         if entry.is_file():
             metadata = entry.stat(follow_symlinks=False)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_size > MAX_FILE_BYTES
-            ):
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_FILE_BYTES:
                 raise PackageError(f"source package file is not bounded: {relative}")
 
 
@@ -157,14 +156,17 @@ def validate_authority(root: Path = ROOT) -> dict[str, Any]:
     }:
         raise PackageError("PyPI console-script metadata drifted")
     if project.get("urls") != {
-        "Homepage": "https://hol.org/cigar",
+        "Homepage": "https://hol.org",
         "Documentation": "https://github.com/hashgraph-online/hol-cigar/tree/main/docs",
         "Issues": "https://github.com/hashgraph-online/hol-cigar/issues",
         "Repository": "https://github.com/hashgraph-online/hol-cigar",
     }:
         raise PackageError("PyPI project URL metadata drifted")
     classifiers = project.get("classifiers")
-    if not isinstance(classifiers, list) or "Development Status :: 3 - Alpha" not in classifiers:
+    if (
+        not isinstance(classifiers, list)
+        or "Development Status :: 3 - Alpha" not in classifiers
+    ):
         raise PackageError("PyPI package is not classified as a developer preview")
     if pyproject.get("build-system") != {
         "requires": ["hatchling==1.28.0"],
@@ -224,7 +226,9 @@ def validate_authority(root: Path = ROOT) -> dict[str, Any]:
         "not production-qualified",
     ):
         if required not in lowered:
-            raise PackageError(f"PyPI attribution or preview warning is missing: {required}")
+            raise PackageError(
+                f"PyPI attribution or preview warning is missing: {required}"
+            )
     return profile
 
 
@@ -324,7 +328,10 @@ def _metadata(payload: bytes, label: str) -> dict[str, Any]:
         raise PackageError(f"cannot parse {label} core metadata: {error}") from error
     if message.get("Name") != NAME or message.get("Version") != VERSION:
         raise PackageError(f"{label} package identity is stale")
-    if message.get("Summary") != "Python SDK for CIGAR, an open protocol developed by HOL":
+    if (
+        message.get("Summary")
+        != "Python SDK for CIGAR, an open protocol developed by HOL"
+    ):
         raise PackageError(f"{label} package summary is stale")
     if message.get("Requires-Python") != "<3.15,>=3.14":
         raise PackageError(f"{label} Python requirement is stale")
@@ -338,7 +345,7 @@ def _metadata(payload: bytes, label: str) -> dict[str, Any]:
         raise PackageError(f"{label} developer-preview classifier is missing")
     project_urls = set(message.get_all("Project-URL", []))
     expected_urls = {
-        "Homepage, https://hol.org/cigar",
+        "Homepage, https://hol.org",
         "Documentation, https://github.com/hashgraph-online/hol-cigar/tree/main/docs",
         "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
         "Repository, https://github.com/hashgraph-online/hol-cigar",
@@ -352,7 +359,9 @@ def _metadata(payload: bytes, label: str) -> dict[str, Any]:
         or "developer preview" not in lowered
         or "not production-qualified" not in lowered
     ):
-        raise PackageError(f"{label} long description lost attribution or preview limits")
+        raise PackageError(
+            f"{label} long description lost attribution or preview limits"
+        )
     return {
         "metadata_version": message.get("Metadata-Version"),
         "name": message.get("Name"),
@@ -383,17 +392,25 @@ def _read_sdist(path: Path) -> dict[str, Any]:
         for member in members:
             _safe_archive_path(member.name)
             if member.issym() or member.islnk() or member.isdev():
-                raise PackageError(f"source distribution has a linked/device entry: {member.name}")
+                raise PackageError(
+                    f"source distribution has a linked/device entry: {member.name}"
+                )
             if member.isdir():
                 continue
             if not member.isfile() or member.size > MAX_FILE_BYTES:
-                raise PackageError(f"source distribution has an invalid file: {member.name}")
+                raise PackageError(
+                    f"source distribution has an invalid file: {member.name}"
+                )
             stream = archive.extractfile(member)
             if stream is None:
-                raise PackageError(f"cannot read source distribution member: {member.name}")
+                raise PackageError(
+                    f"cannot read source distribution member: {member.name}"
+                )
             payload = stream.read(MAX_FILE_BYTES + 1)
             if len(payload) != member.size:
-                raise PackageError(f"source distribution member changed length: {member.name}")
+                raise PackageError(
+                    f"source distribution member changed length: {member.name}"
+                )
             payloads[member.name] = payload
 
     required = {
@@ -412,9 +429,7 @@ def _read_sdist(path: Path) -> dict[str, Any]:
         raise PackageError(f"source distribution is incomplete: {sorted(missing)}")
     if any(not name.startswith(f"{prefix}/") for name in payloads):
         raise PackageError("source distribution contains a second archive root")
-    _validate_release(
-        payloads[f"{prefix}/src/{IMPORT_PACKAGE}/release.json"], "sdist"
-    )
+    _validate_release(payloads[f"{prefix}/src/{IMPORT_PACKAGE}/release.json"], "sdist")
     metadata = _metadata(payloads[f"{prefix}/PKG-INFO"], "sdist")
     return {"file_count": len(payloads), "metadata": metadata}
 
@@ -441,7 +456,9 @@ def _read_wheel(path: Path) -> dict[str, Any]:
             if member.is_dir():
                 continue
             if member.file_size > MAX_FILE_BYTES:
-                raise PackageError(f"wheel member exceeds its size bound: {member.filename}")
+                raise PackageError(
+                    f"wheel member exceeds its size bound: {member.filename}"
+                )
             payload = archive.read(member)
             if len(payload) != member.file_size:
                 raise PackageError(f"wheel member changed length: {member.filename}")
@@ -533,7 +550,11 @@ def _run(command: list[str], *, cwd: Path, environment: dict[str, str]) -> None:
 
 
 def _source_date_epoch(root: Path, explicit: str | None) -> int:
-    raw = explicit if explicit is not None else _git(root, "show", "-s", "--format=%ct", "HEAD")
+    raw = (
+        explicit
+        if explicit is not None
+        else _git(root, "show", "-s", "--format=%ct", "HEAD")
+    )
     try:
         epoch = int(raw)
     except ValueError as error:
@@ -633,12 +654,15 @@ def build(
             "sha256": hashlib.sha256(checksum_payload).hexdigest(),
         },
         "gates": {
-            gate: "passed" if gate not in {
+            gate: "passed"
+            if gate
+            not in {
                 "clean-committed-tagged-source",
                 "focused-sdk-tests",
                 "protocol-drift",
                 "wheel-sdist-clean-installs",
-            } else "required-external"
+            }
+            else "required-external"
             for gate in MANDATORY_GATES
         },
         "claims": {
@@ -669,12 +693,21 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--require-tag")
     parser.add_argument("--source-date-epoch")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="inapplicable: this command writes only to --out",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
     try:
+        reject_evidence_directory(
+            arguments.evidence_dir,
+            "hol-cigar PyPI distribution build",
+        )
         receipt = build(
             arguments.out.resolve(),
             root=arguments.root.resolve(),

@@ -14,7 +14,10 @@
       "language": "typescript",
       "mode": "http-client-recorded",
       "working_directory": ".",
-      "prepare": ["pnpm", "--dir", "sdk/typescript", "run", "build"],
+      "prepare": [
+        ["pnpm", "--dir", "sdk/typescript", "install", "--offline", "--frozen-lockfile"],
+        ["pnpm", "--dir", "sdk/typescript", "run", "build"]
+      ],
       "command": ["node", "demos/sdk-clients/typescript-workflow.mjs"]
     },
     {

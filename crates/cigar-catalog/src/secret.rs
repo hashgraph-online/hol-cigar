@@ -329,6 +329,9 @@ fn high_entropy_candidate(token: &[u8]) -> bool {
     if token.len() < 32 || token.len() > 4_096 {
         return false;
     }
+    if lowercase_path_identifier(token) {
+        return false;
+    }
     let mut seen = [false; 256];
     let mut unique = 0_usize;
     let mut lower = false;
@@ -355,6 +358,18 @@ fn high_entropy_candidate(token: &[u8]) -> bool {
         .filter(|present| *present)
         .count();
     unique >= 20 && class_count >= 3
+}
+
+fn lowercase_path_identifier(token: &[u8]) -> bool {
+    token.iter().filter(|byte| **byte == b'/').count() >= 2
+        && token.contains(&b'-')
+        && token.split(|byte| *byte == b'/').all(|segment| {
+            !segment.is_empty()
+                && segment.len() <= 128
+                && segment
+                    .iter()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
+        })
 }
 
 fn is_entropy_token_byte(byte: u8) -> bool {
@@ -413,6 +428,13 @@ mod tests {
     #[test]
     fn ordinary_source_is_not_classified_as_secret() {
         let scan = scan_secrets(b"fn main() { println!(\"hello\"); }");
+        assert!(!scan.must_quarantine());
+        assert!(scan.findings().is_empty());
+    }
+
+    #[test]
+    fn lowercase_path_identifiers_are_not_high_entropy_credentials() {
+        let scan = scan_secrets(b"Required fact: decision/beacon-ledger/rule-c09c73c6e4.");
         assert!(!scan.must_quarantine());
         assert!(scan.findings().is_empty());
     }

@@ -156,13 +156,13 @@ fn rust_and_every_sdk_reproduce_exact_replay_vector() -> Result<(), Box<dyn Erro
         )));
     }
 
-    let node = node_command(&root, &fixture_path).output()?;
+    let node = run_sdk("TypeScript", node_command(&root, &fixture_path))?;
     require_identical("TypeScript", &node, rust_output.as_bytes())?;
 
-    let python = python_command(&root, &fixture_path).output()?;
+    let python = run_sdk("Python", python_command(&root, &fixture_path))?;
     require_identical("Python", &python, rust_output.as_bytes())?;
 
-    let go = go_command(&root, &fixture_path).output()?;
+    let go = run_sdk("Go", go_command(&root, &fixture_path))?;
     require_identical("Go", &go, rust_output.as_bytes())?;
     Ok(())
 }
@@ -188,9 +188,9 @@ fn duplicate_json_keys_are_rejected_by_every_sdk() -> Result<(), Box<dyn Error>>
     std::fs::write(&probe_path, duplicate)?;
 
     let rust_accepted = load_fixture(&probe_path).is_ok();
-    let node = node_command(&root, &probe_path).output()?;
-    let python = python_command(&root, &probe_path).output()?;
-    let go = go_command(&root, &probe_path).output()?;
+    let node = run_sdk("TypeScript", node_command(&root, &probe_path))?;
+    let python = run_sdk("Python", python_command(&root, &probe_path))?;
+    let go = run_sdk("Go", go_command(&root, &probe_path))?;
     std::fs::remove_file(&probe_path)?;
 
     if rust_accepted {
@@ -232,6 +232,12 @@ fn go_command(root: &Path, fixture: &Path) -> Command {
         .arg(fixture)
         .current_dir(root);
     command
+}
+
+fn run_sdk(runtime: &str, mut command: Command) -> Result<Output, Box<dyn Error>> {
+    command
+        .output()
+        .map_err(|error| invalid(format!("{runtime} replay runtime failed to start: {error}")))
 }
 
 fn workspace_root() -> PathBuf {
@@ -548,9 +554,19 @@ fn require_identical(
 }
 
 fn require_rejected(runtime: &str, output: &Output) -> Result<(), Box<dyn Error>> {
-    if output.status.success() {
+    let expected_diagnostic = if runtime == "Python" {
+        "duplicate key in replay vector"
+    } else {
+        "duplicate JSON object key"
+    };
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.status.success() || !output.stdout.is_empty() || !stderr.contains(expected_diagnostic)
+    {
         return Err(invalid(format!(
-            "{runtime} accepted a duplicate JSON object key"
+            "{runtime} did not specifically reject the duplicate JSON key: \
+             status={}; stdout={:?}; stderr={stderr:?}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
         )));
     }
     Ok(())

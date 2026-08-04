@@ -1,7 +1,7 @@
 _cigar_complete() {
     local current="${COMP_WORDS[COMP_CWORD]}"
     local previous="${COMP_WORDS[COMP_CWORD-1]}"
-    local globals="--output --deadline --config --target --embedded --local --remote --endpoint --authorization-file --input --idempotency-key --expected-revision --page-cursor --page-size --dry-run --yes --confirm --non-interactive --quiet --color --unicode --width --explain-config --security --deep --help -h --version -V"
+    local globals="--output --deadline --config --target --embedded --local --remote --endpoint --authorization-file --input --idempotency-key --expected-revision --page-cursor --page-size --dry-run --yes --confirm --non-interactive --quiet --color --unicode --width --explain-config --security --deep --force-full --help -h --version -V"
     local words=""
     case "${COMP_WORDS[1]}" in
         source) words="add list refresh inspect remove" ;;
@@ -15,6 +15,9 @@ _cigar_complete() {
         replay) words="reconstruct run compare completeness" ;;
         policy) words="check explain" ;;
         backup) words="create verify restore" ;;
+        migration) words="preflight run activate cleanup" ;;
+        compaction) words="preview execute status" ;;
+        integrity) words="deep" ;;
         gc) words="plan run" ;;
         diagnostics) words="bundle" ;;
         state) words="inspect-beta import-beta restore-beta" ;;
@@ -22,7 +25,7 @@ _cigar_complete() {
         plugin) words="install uninstall doctor" ;;
         release) words="verify" ;;
         completion) words="bash zsh fish" ;;
-        *) words="init source ingest catalog status context project focus space handoff effect replay policy backup gc diagnostics state doctor serve mcp plugin release completion man help version" ;;
+        *) words="init source ingest catalog status context project focus space handoff effect replay policy backup migration compaction integrity gc diagnostics state doctor serve mcp plugin release completion man help version" ;;
     esac
     case "$previous" in
         --output) words="text json" ;;

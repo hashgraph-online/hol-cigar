@@ -1,0 +1,176 @@
+{
+  "schema_version": "cigar.honey-balanced-release-contract.v1",
+  "release": {
+    "name": "CIGAR Honey 0.9.2",
+    "version": "0.9.2",
+    "channel": "honey",
+    "release_state": "developer-preview",
+    "supported": false,
+    "production_qualified": false
+  },
+  "published_baseline": {
+    "distribution": "hol-cigar",
+    "version": "0.9.1",
+    "git_tag": "hol-cigar-v0.9.1-pypi.2",
+    "commit": "ee9b52b69f4245c27b46da6ef2fc4a070430caed",
+    "tree": "7c36625bfa09417150f3b0ec6dafc7161105234f",
+    "context_abi": "cigar.context.v1",
+    "python_artifacts": [
+      {
+        "filename": "hol_cigar-0.9.1-py3-none-any.whl",
+        "bytes": 87370,
+        "sha256": "4b2f9299aa5fddbd848d0ec95c488eb5d0b3904c6718e6dec0537e7f37edbe75"
+      },
+      {
+        "filename": "hol_cigar-0.9.1.tar.gz",
+        "bytes": 82970,
+        "sha256": "20bef5e8c08c68b301ed6e400b25f472541f013b10d7e34b499db18f7b1ed125"
+      }
+    ],
+    "roles": [
+      "sole-comparator",
+      "rollback-reference"
+    ]
+  },
+  "candidate": {
+    "version": "0.9.2",
+    "starting_commit": "d608c9ff461218ad761def70347a86ba76512a83",
+    "starting_tree": "b32272b30373a8df2fbbdee2d05f9c5f8187be04",
+    "final_source_binding": "required-after-freeze",
+    "release_profile": "balanced_v1",
+    "default_profile": "balanced_v1",
+    "release_profiles": [
+      "balanced_v1"
+    ],
+    "capability_identifiers": [
+      "intelligence-balanced-v1"
+    ]
+  },
+  "excluded_experiment": {
+    "id": "h1",
+    "disposition": "terminal-failure",
+    "historical_evidence_use": "audit-only",
+    "runtime_selectable": false,
+    "release_candidate": false,
+    "comparator": false,
+    "fallback": false,
+    "qualification_input": false,
+    "release_claim_source": false,
+    "may_be_relabeled_balanced": false
+  },
+  "compatibility": {
+    "context_abi": "cigar.context.v1",
+    "public_operations": 45,
+    "nominal_payload_types": 70,
+    "python_distribution": "hol-cigar",
+    "python_import": "cigar_sdk",
+    "existing_0_9_1_configuration_valid": true,
+    "new_mandatory_configuration": false,
+    "sidecar_transport_shape_changed": false,
+    "json_rpc_operation_shape_changed": false
+  },
+  "frozen_inputs": {
+    "focused_evaluator": {
+      "path": "benches/honey-092-qualification/qualify.py",
+      "sha256": "ffac21ca95bbc5b74041956c25558119ea3db73e573803ff2cbfa229ea37d79a"
+    },
+    "efficiency_fixtures": {
+      "path": "benches/honey-efficiency/qualification-fixtures.v1.json",
+      "sha256": "0a3637e53a6ba17f1662460434cb0406478656f392df50907fd002bd6d7a5c82"
+    },
+    "efficiency_profile": {
+      "path": "packaging/honey/efficiency-qualification-profile.v1.json",
+      "sha256": "670b0feb26e4c833e83da3b994f1c4ef57bae697de699a98fccca6cb251cc022"
+    },
+    "efficiency_report_schema": {
+      "path": "packaging/honey/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
+      "sha256": "0adf646d6b2dfe1201b1389a6421cb78dc9cbc1ed1ed868fc58b90ede362c012"
+    }
+  },
+  "comparison_cohort": {
+    "requests": 100,
+    "requests_per_workflow": 20,
+    "workflows": [
+      "consensus-node",
+      "blocknode-tss",
+      "solo",
+      "json-rpc",
+      "evm-tx-liveness"
+    ],
+    "identical_source_pairs": true,
+    "identical_tasks_seeds_and_limits": true,
+    "fresh_isolated_state": true,
+    "cross_arm_cache_reuse": false,
+    "authenticated_governed_lineage_counts_required": true,
+    "source_diversity_is_not_lineage_proxy": true,
+    "physical_database_growth_per_compilation_required": true
+  },
+  "storage_policy": {
+    "format": "sqlite-v5",
+    "checkpoint_cadence_matrix": [
+      4,
+      16,
+      64,
+      128,
+      256
+    ],
+    "release_default_maximum_deltas_since_checkpoint": 4,
+    "protocol_maximum_deltas_since_checkpoint": 256,
+    "checkpoint_storage": "authenticated-canonical-checkpoint-with-bounded-deterministic-zstd-envelope",
+    "focused_startup_repetitions": 40,
+    "selection_basis": "unchanged serial-latency and physical-growth gates",
+    "thresholds_modified_after_observation": false
+  },
+  "thresholds": {
+    "completion_rate_millionths": 1000000,
+    "maximum_security_policy_violations": 0,
+    "citation_resolvability_rate_millionths": 1000000,
+    "required_source_coverage_rate_millionths": 1000000,
+    "maximum_duplicate_selected_content": 0,
+    "minimum_workflow_lineage_diversity_delta": 0,
+    "minimum_storage_improvement_millionths": 100000,
+    "maximum_storage_regression_millionths": 50000,
+    "maximum_latency_regression_millionths": 200000,
+    "maximum_context_token_regression_millionths": 100000,
+    "maximum_growth_bytes_per_compilation": 1048575,
+    "maximum_serial_latency_slope_nanoseconds_per_request": 10000000,
+    "maximum_compile_p95_nanoseconds": 10000000000,
+    "maximum_compile_p95_baseline_ratio_millionths": 2000000,
+    "maximum_clean_startup_nanoseconds": 30000000000,
+    "maximum_crash_recovery_startup_nanoseconds": 30000000000,
+    "minimum_meaningful_improvements": 1
+  },
+  "mandatory_gates": [
+    "clean-committed-source",
+    "balanced-only-profile",
+    "authority-drift",
+    "protocol-drift",
+    "focused-tests",
+    "compatibility",
+    "storage-format-v5",
+    "v4-v5-migration",
+    "revision-recovery",
+    "storage-amplification",
+    "serial-latency",
+    "startup-readiness",
+    "context-quality-efficiency",
+    "artifact-contracts",
+    "installed-runtime",
+    "sdk-clean-installs",
+    "claude-lifecycle",
+    "humidor-exact-source-e2e",
+    "humidor-installed-artifact-e2e",
+    "cedar-two-lane-sidecar-e2e",
+    "dashboard-projection",
+    "artifact-checksums"
+  ],
+  "authority": {
+    "push_public": false,
+    "open_public_pr": false,
+    "merge": false,
+    "tag": false,
+    "release": false,
+    "publish": false,
+    "deploy": false
+  }
+}

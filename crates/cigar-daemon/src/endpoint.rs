@@ -590,6 +590,7 @@ mod tests {
         let runtime = root.join("run");
         DaemonConfig {
             mode: DeploymentMode::Local,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: state.clone(),
             runtime_directory: runtime.clone(),
@@ -603,6 +604,7 @@ mod tests {
             production: crate::ProductionPaths {
                 project_directory: root.join("project"),
                 metadata_database: state.join("cigar.sqlite3"),
+                active_store_descriptor: None,
                 blob_directory: state.join("blobs"),
                 blob_key_reference_directory: state.join("blob-keys"),
                 keystore_file: state.join("keystore.cigar"),
@@ -670,6 +672,7 @@ mod tests {
     fn listener_plan_rechecks_public_local_bind_refusal() {
         let config = DaemonConfig {
             mode: DeploymentMode::Local,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: "/tmp/cigar-state".into(),
             runtime_directory: "/tmp/cigar-run".into(),
@@ -683,6 +686,7 @@ mod tests {
             production: crate::ProductionPaths {
                 project_directory: "/tmp/cigar-project".into(),
                 metadata_database: "/tmp/cigar-state/cigar.sqlite3".into(),
+                active_store_descriptor: None,
                 blob_directory: "/tmp/cigar-state/blobs".into(),
                 blob_key_reference_directory: "/tmp/cigar-state/blob-keys".into(),
                 keystore_file: "/tmp/cigar-state/keystore.cigar".into(),

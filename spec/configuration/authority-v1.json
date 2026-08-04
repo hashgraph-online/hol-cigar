@@ -1692,6 +1692,28 @@
       "macos_disposition": "active"
     },
     {
+      "id": "daemon.production.active_store_descriptor",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "none",
+      "required_semantics": "optional",
+      "secret_classification": "sensitive_reference",
+      "value_form": "typed_value",
+      "provenance_label": "production_active_store_descriptor",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
       "id": "daemon.production.blob_directory",
       "owner": "cigar-daemon",
       "profiles": [
