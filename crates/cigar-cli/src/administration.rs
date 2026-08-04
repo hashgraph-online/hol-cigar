@@ -13,6 +13,14 @@ use cigar_store::{
     GarbageCollectionPlanIdentity, GarbageCollectionPlanSignatureIdentity, GarbageCollectionPolicy,
     MultiTenantLocalRepositoryBlobStore, RepositoryBlobStore, SignedGarbageCollectionPlan,
     SqliteStore, StoreError, StoreErrorCode, create_backup_with_effect_checkpoint,
+    migrate_v5::{
+        MigrationActivationPathsV5, MigrationCleanupPathsV5, MigrationPathsV5,
+        MigrationReceiptIdentity, RevisionCompactionPathsV1, activate_v5_migration,
+        cleanup_incomplete_v5_target, create_revision_compaction_preview_v1,
+        execute_revision_compaction_v1, migrate_v4_to_v5, preflight_v4_to_v5_migration,
+        read_active_store_descriptor_v1, sign_migration_receipt_v1, verify_migration_receipt_v1,
+        verify_v5_deep_integrity_with_prefix_v1,
+    },
     restore_backup_trusted, sign_garbage_collection_plan, verify_backup_trusted,
     verify_garbage_collection_plan_trusted,
 };
@@ -281,6 +289,14 @@ fn execute_blocking(
         "backup.create" => backup_create(invocation, configuration, cancellation)?,
         "backup.verify" => backup_verify(invocation, configuration)?,
         "backup.restore" => backup_restore(invocation, configuration, cancellation)?,
+        "migration.preflight" => migration_preflight(invocation, configuration)?,
+        "migration.run" => migration_run(invocation, configuration, cancellation)?,
+        "migration.activate" => migration_activate(invocation, configuration, cancellation)?,
+        "migration.cleanup" => migration_cleanup(invocation, configuration, cancellation)?,
+        "compaction.preview" => compaction_preview(invocation, configuration, cancellation)?,
+        "compaction.execute" => compaction_execute(invocation, configuration, cancellation)?,
+        "compaction.status" => compaction_status(invocation)?,
+        "integrity.deep" => integrity_deep(invocation, configuration, cancellation)?,
         "gc.plan" => gc_plan(invocation, configuration, cancellation)?,
         "gc.run" => gc_run(invocation, configuration, cancellation)?,
         "diagnostics.bundle" => diagnostics_bundle(invocation, configuration, cancellation)?,
@@ -1992,6 +2008,427 @@ fn backup_verify(
     ))
 }
 
+fn migration_preflight(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.yes
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    let [source, backup, target] = exact_three(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let paths = MigrationPathsV5::resolve(source, backup, target).map_err(map_store_error)?;
+    if paths.source() != context.configuration.production.metadata_database {
+        return Err(CliError::invalid_configuration());
+    }
+    let verified = verify_backup_trusted(
+        paths.backup(),
+        context.keys.as_ref(),
+        context.now,
+        |identity| backup_identity_trusted(&context.authority, identity),
+    )
+    .map_err(map_backup_error)?;
+    require_complete_effect_backup(paths.backup(), &verified.manifest)?;
+    let preflight =
+        preflight_v4_to_v5_migration(paths, context.keys.as_ref(), context.now, |identity| {
+            backup_identity_trusted(&context.authority, identity)
+        })
+        .map_err(map_store_error)?;
+    Ok(json!({
+        "backup_canonical_root": preflight.backup_canonical_root(),
+        "capacity_profile": preflight.capacity_profile(),
+        "first_retained_revision": preflight.first_retained_revision().0,
+        "observed_available_bytes": preflight.observed_available_bytes(),
+        "planned": true,
+        "required_available_bytes": preflight.required_available_bytes(),
+        "retained_revisions": preflight.retained_revisions(),
+        "source_database_bytes": preflight.source_database_bytes(),
+        "source_database_digest": preflight.source_database_digest().as_str(),
+        "source_revision": preflight.source_revision().0,
+        "target": preflight.paths().target(),
+        "verified_backup": true
+    }))
+}
+
+fn migration_run(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let [source, backup, target] = exact_three(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let receipt_signer = backup_creation_identity(&context)?;
+    let paths = MigrationPathsV5::resolve(source, backup, target).map_err(map_store_error)?;
+    if paths.source() != context.configuration.production.metadata_database {
+        return Err(CliError::invalid_configuration());
+    }
+    let verified = verify_backup_trusted(
+        paths.backup(),
+        context.keys.as_ref(),
+        context.now,
+        |identity| backup_identity_trusted(&context.authority, identity),
+    )
+    .map_err(map_backup_error)?;
+    require_complete_effect_backup(paths.backup(), &verified.manifest)?;
+    let preflight =
+        preflight_v4_to_v5_migration(paths, context.keys.as_ref(), context.now, |identity| {
+            backup_identity_trusted(&context.authority, identity)
+        })
+        .map_err(map_store_error)?;
+    cancellation.checkpoint()?;
+    let applied_at = u64::try_from(context.now).map_err(|_error| CliError::state_corrupt())?;
+    let report = migrate_v4_to_v5(preflight, applied_at).map_err(map_store_error)?;
+    cigar_daemon::EffectCheckpointFile::verify_backup_snapshot(
+        target,
+        Path::new(backup).join(BACKUP_EFFECT_CHECKPOINT_FILE),
+    )
+    .map_err(map_backup_checkpoint_error)?;
+    let signed_receipt = sign_migration_receipt_v1(
+        report.completed_receipt(),
+        context.keys.as_ref(),
+        MigrationReceiptIdentity {
+            signing_key: &receipt_signer.signing_key,
+            tenant: &receipt_signer.tenant,
+            signer: &receipt_signer.signer,
+        },
+    )
+    .map_err(map_store_error)?;
+    verify_migration_receipt_v1(
+        &signed_receipt,
+        context.keys.as_ref(),
+        context.now,
+        |identity| {
+            identity.tenant == receipt_signer.tenant
+                && identity.signer == receipt_signer.signer
+                && identity.signing_key == receipt_signer.signing_key
+        },
+    )
+    .map_err(map_store_error)?;
+    let mut receipt_name = OsStr::new(target).to_os_string();
+    receipt_name.push(".cigar-migration-receipt.json");
+    let receipt_path = PathBuf::from(receipt_name);
+    let receipt_bytes =
+        serde_json::to_vec(&signed_receipt).map_err(|_error| CliError::state_unavailable())?;
+    write_new_private_file(&receipt_path, &receipt_bytes)?;
+    #[cfg(feature = "migration-fault-injection")]
+    cigar_store::migrate_v5::migration_v5_process_abort_boundary(
+        cigar_store::migrate_v5::MigrationV5Failpoint::AfterReceiptPublication,
+    );
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "activated": false,
+        "catalog_root": report.catalog_root.as_str(),
+        "chain_head": report.chain_head.as_str(),
+        "checkpoint_bytes": report.checkpoint_bytes,
+        "effect_checkpoint_verified": true,
+        "external_backup_blobs_verified": true,
+        "first_retained_revision": report.first_revision.0,
+        "latest_revision": report.latest_revision.0,
+        "migration_receipt": receipt_path,
+        "migration_receipt_signed": true,
+        "retained_revisions": report.retained_revisions,
+        "semantic_root": report.semantic_root.as_str(),
+        "source_retained": true,
+        "status": "constructed_and_verified",
+        "target": target,
+        "target_database_bytes": report.target_database_bytes,
+        "target_database_digest": report.target_database_digest.as_str()
+    }))
+}
+
+fn migration_activate(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let [source, backup, target, receipt, descriptor] = exact_five(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let receipt_signer = backup_creation_identity(&context)?;
+    let paths = MigrationActivationPathsV5::resolve(source, backup, target, receipt, descriptor)
+        .map_err(map_store_error)?;
+    if paths.source() != context.configuration.production.metadata_database {
+        return Err(CliError::invalid_configuration());
+    }
+    let report = activate_v5_migration(
+        paths,
+        context.keys.as_ref(),
+        context.now,
+        |identity| backup_identity_trusted(&context.authority, identity),
+        |identity| {
+            identity.tenant == receipt_signer.tenant
+                && identity.signer == receipt_signer.signer
+                && identity.signing_key == receipt_signer.signing_key
+        },
+    )
+    .map_err(map_store_error)?;
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "activated": true,
+        "descriptor": report.descriptor_path,
+        "descriptor_checksum": report.descriptor_checksum.as_str(),
+        "format_version": 5,
+        "generation": report.generation,
+        "latest_revision": report.latest_revision.0,
+        "migration_receipt_digest": report.migration_receipt_digest.as_str(),
+        "source_retained": true,
+        "status": "active_and_verified",
+        "target": target
+    }))
+}
+
+fn migration_cleanup(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let [source, backup, target, descriptor] = exact_four(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let paths = MigrationCleanupPathsV5::resolve(source, backup, target, descriptor)
+        .map_err(map_store_error)?;
+    if paths.source() != context.configuration.production.metadata_database {
+        return Err(CliError::invalid_configuration());
+    }
+    let report =
+        cleanup_incomplete_v5_target(paths, context.keys.as_ref(), context.now, |identity| {
+            backup_identity_trusted(&context.authority, identity)
+        })
+        .map_err(map_store_error)?;
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "active_descriptor_unchanged": true,
+        "removed_files": report.removed_files,
+        "source_retained": true,
+        "source_revision": report.source_revision.0,
+        "status": "incomplete_target_removed",
+        "target": report.target_path,
+        "verified_backup_retained": true
+    }))
+}
+
+fn compaction_preview(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let [source, migration_receipt, target, descriptor, preview_path] =
+        exact_five(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let signer = backup_creation_identity(&context)?;
+    let expires_at = context
+        .now
+        .checked_add(900_000_000_000)
+        .ok_or_else(CliError::state_unavailable)?;
+    let signed = create_revision_compaction_preview_v1(
+        RevisionCompactionPathsV1::resolve(
+            source,
+            migration_receipt,
+            target,
+            descriptor,
+            preview_path,
+        )
+        .map_err(map_store_error)?,
+        context.keys.as_ref(),
+        context.now,
+        expires_at,
+        MigrationReceiptIdentity {
+            signing_key: &signer.signing_key,
+            tenant: &signer.tenant,
+            signer: &signer.signer,
+        },
+        |identity| {
+            identity.tenant == signer.tenant
+                && identity.signer == signer.signer
+                && identity.signing_key == signer.signing_key
+        },
+    )
+    .map_err(map_store_error)?;
+    let bytes = serde_json::to_vec(&signed).map_err(|_error| CliError::state_unavailable())?;
+    let preview_path = absolute_new_path(Path::new(preview_path))?;
+    write_new_private_file(&preview_path, &bytes)?;
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "candidate_revisions": signed.preview_candidate_revisions(),
+        "compacted_first_revision": signed.preview_compacted_first_revision().0,
+        "expires_at_unix_nanos": expires_at.to_string(),
+        "preview": preview_path,
+        "signed": true,
+        "status": "authorized_preview",
+        "target": signed.preview_target_path()
+    }))
+}
+
+fn compaction_execute(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let preview = exact_one(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let signer = backup_creation_identity(&context)?;
+    let report = execute_revision_compaction_v1(
+        preview,
+        context.keys.as_ref(),
+        context.now,
+        MigrationReceiptIdentity {
+            signing_key: &signer.signing_key,
+            tenant: &signer.tenant,
+            signer: &signer.signer,
+        },
+        |identity| {
+            identity.tenant == signer.tenant
+                && identity.signer == signer.signer
+                && identity.signing_key == signer.signing_key
+        },
+    )
+    .map_err(map_store_error)?;
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "activated": true,
+        "compacted_first_revision": report.compacted_first_revision.0,
+        "descriptor_generation": report.descriptor_generation,
+        "receipt": report.receipt_path,
+        "removed_revisions": report.removed_revisions,
+        "retained_revisions": report.retained_revisions,
+        "source_retained": true,
+        "status": "compacted_and_verified",
+        "target": report.target_path,
+        "target_database_bytes": report.target_database_bytes,
+        "target_database_digest": report.target_database_digest.as_str()
+    }))
+}
+
+fn compaction_status(invocation: &ParsedInvocation) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.yes
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    let descriptor_path = Path::new(exact_one(&invocation.positionals)?);
+    let descriptor = read_active_store_descriptor_v1(descriptor_path).map_err(map_store_error)?;
+    Ok(json!({
+        "active_database": descriptor.database_path(),
+        "descriptor": descriptor_path,
+        "descriptor_checksum": descriptor.checksum().as_str(),
+        "generation": descriptor.generation(),
+        "status": "active_descriptor_verified"
+    }))
+}
+
+fn integrity_deep(
+    invocation: &ParsedInvocation,
+    configuration: &EffectiveConfiguration,
+    cancellation: &BlockingCancellation,
+) -> Result<Value, CliError> {
+    if invocation.options.dry_run
+        || invocation.options.input.is_some()
+        || invocation.options.idempotency_key.is_some()
+        || invocation.options.expected_revision.is_some()
+        || invocation.options.page_cursor.is_some()
+        || invocation.options.page_size.is_some()
+    {
+        return Err(CliError::invalid_command());
+    }
+    cancellation.checkpoint()?;
+    let database = exact_one(&invocation.positionals)?;
+    let context = production_backup_context(configuration)?;
+    let signer = backup_creation_identity(&context)?;
+    let report = verify_v5_deep_integrity_with_prefix_v1(
+        database,
+        context.keys.as_ref(),
+        context.now,
+        MigrationReceiptIdentity {
+            signing_key: &signer.signing_key,
+            tenant: &signer.tenant,
+            signer: &signer.signer,
+        },
+        |identity| {
+            identity.tenant == signer.tenant
+                && identity.signer == signer.signer
+                && identity.signing_key == signer.signing_key
+        },
+        invocation.options.force_full,
+    )
+    .map_err(map_store_error)?;
+    cancellation.checkpoint()?;
+    Ok(json!({
+        "chain_head": report.integrity.chain_head.as_str(),
+        "current_revision": report.integrity.current_revision.0,
+        "first_retained_revision": report.integrity.first_retained_revision.0,
+        "force_full": report.force_full,
+        "policy_digest": report.integrity.policy_digest.as_str(),
+        "prefix": report.prefix_path,
+        "prefix_reused": report.prefix_reused,
+        "projection_atom_count": report.integrity.projection_atom_count,
+        "reused_prefix_revisions": report.integrity.reused_prefix_revisions,
+        "status": "deep_integrity_verified",
+        "verified_from_revision": report.integrity.verified_from_revision.map(|value| value.0),
+        "verified_revisions": report.integrity.verified_revisions,
+        "verified_through_revision": report.integrity.verified_through_revision.0
+    }))
+}
+
 fn backup_restore(
     invocation: &ParsedInvocation,
     configuration: &EffectiveConfiguration,
@@ -2544,6 +2981,24 @@ fn exact_one(values: &[String]) -> Result<&String, CliError> {
 
 fn exact_two(values: &[String]) -> Result<&[String; 2], CliError> {
     <&[String; 2]>::try_from(values).map_err(|_error| CliError::invalid_command())
+}
+
+fn exact_three(values: &[String]) -> Result<&[String; 3], CliError> {
+    values
+        .try_into()
+        .map_err(|_error| CliError::invalid_command())
+}
+
+fn exact_four(values: &[String]) -> Result<&[String; 4], CliError> {
+    values
+        .try_into()
+        .map_err(|_error| CliError::invalid_command())
+}
+
+fn exact_five(values: &[String]) -> Result<&[String; 5], CliError> {
+    values
+        .try_into()
+        .map_err(|_error| CliError::invalid_command())
 }
 
 fn require_no_positionals(invocation: &ParsedInvocation) -> Result<(), CliError> {

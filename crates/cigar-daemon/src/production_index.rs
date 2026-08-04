@@ -82,21 +82,49 @@ impl RepositoryCatalogIndex {
     /// Reconstructs and activates the complete mandatory generation from durable catalog outbox
     /// truth. This is called before readiness can open and after each indexing wakeup.
     pub fn rebuild(&self) -> Result<(), LifecycleError> {
-        let records = self.catalog_outbox()?;
         let context = self.context();
         let now = self
             .clock
             .now()
             .map_err(|_error| LifecycleError::action_failed())?;
-        if records.is_empty() {
-            if self
-                .manager
-                .active_generation()
-                .map_err(retrieval_lifecycle)?
-                .is_none()
-            {
+        if self
+            .manager
+            .active_generation()
+            .map_err(retrieval_lifecycle)?
+            .is_none()
+        {
+            let target = self
+                .store
+                .revision()
+                .map_err(|_error| LifecycleError::action_failed())?;
+            if target == StoreRevision(0) {
                 self.activate_empty(now, &context)?;
+            } else {
+                let receipt = self
+                    .worker
+                    .restore(
+                        target,
+                        self,
+                        &self.manager,
+                        self.configuration_digest.clone(),
+                        self.vector_binding(target, &context)?,
+                        now,
+                        &context,
+                    )
+                    .map_err(retrieval_lifecycle)?;
+                if receipt.active_generation.is_none() {
+                    return Err(LifecycleError::action_failed());
+                }
             }
+            return Ok(());
+        }
+        let watermark = self.worker.watermark().map_err(retrieval_lifecycle)?;
+        let records: Vec<_> = self
+            .catalog_outbox()?
+            .into_iter()
+            .filter(|record| record.causal_revision > watermark)
+            .collect();
+        if records.is_empty() {
             return Ok(());
         }
         let receipt = self
@@ -231,9 +259,7 @@ impl RepositoryCatalogIndex {
                         )
                 })
                 .map(|record| record.causal_revision)
-                .max()
-                .unwrap_or(StoreRevision(0));
-            tenant_watermarks.insert(tenant, tenant_watermark);
+                .max();
             let mut cursor = None;
             loop {
                 context.check()?;
@@ -260,6 +286,10 @@ impl RepositoryCatalogIndex {
                     break;
                 }
             }
+            // A pruned historical catalog revision cannot be reloaded during startup. The
+            // selected immutable snapshot is complete through its global revision, which is the
+            // safe activation watermark when no retained catalog message supplies a narrower one.
+            tenant_watermarks.insert(tenant, tenant_watermark.unwrap_or(revision));
         }
         Ok(IndexSnapshot {
             atoms: atoms.into_values().collect(),
@@ -366,10 +396,12 @@ impl IndexSnapshotProvider for RepositoryCatalogIndex {
 
 impl ProductionIndexTarget for RepositoryCatalogIndex {
     fn target_revision(&self) -> Result<StoreRevision, LifecycleError> {
-        Ok(self
+        let durable_target = self
             .catalog_outbox()?
             .last()
-            .map_or(StoreRevision(0), |record| record.causal_revision))
+            .map_or(StoreRevision(0), |record| record.causal_revision);
+        let restored_watermark = self.worker.watermark().map_err(retrieval_lifecycle)?;
+        Ok(durable_target.max(restored_watermark))
     }
 }
 
@@ -628,6 +660,7 @@ mod tests {
             partition,
             required_revision: revision,
             consistency: RetrievalConsistency::Strong,
+            atom_kinds: BTreeSet::new(),
             exact_versions: BTreeSet::new(),
             atom_ids: BTreeSet::new(),
             lineage_ids: BTreeSet::from([atom.lineage_id.clone()]),

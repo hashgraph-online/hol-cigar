@@ -76,6 +76,11 @@ after restart. Its key binds the tenant, disclosure partition, bundle, target pr
 materializer, and framing profile. Before returning a generated delta, the daemon applies it to the
 exact retained base and verifies that it reproduces the retained target.
 
+Downstream semantic request reuse is a separate compatibility concern. Honey 0.9.2 does not remove
+correlation-like values from the frozen v1 contract digest or expose a new public cache operation.
+The safe SDK key, exact mismatch gates, closed bypass reasons, and per-execution artifact binding are
+specified in [`semantic-reuse-v1.md`](semantic-reuse-v1.md).
+
 If exact framing exceeds `max_context_tokens`, the daemon constructs overflow evidence from the
 validated `MaterializedContext`; callers cannot submit a repair record. The latest evidence is stored
 in one tenant-scoped fenced worker checkpoint, which is mutable rather than an append-only service

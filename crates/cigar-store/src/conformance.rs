@@ -400,7 +400,7 @@ impl ConformanceRepository for crate::InMemoryStore {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{RepositoryFixture, run_repository_conformance};
     use crate::{
         AccessContext, BlobRecord, CancellationToken, IdempotencyIdentity, InMemoryStore,
@@ -434,7 +434,7 @@ mod tests {
         Ok(ContentDigest::new(format!("1220{suffix}"))?)
     }
 
-    fn repository_fixture() -> Result<RepositoryFixture, Box<dyn std::error::Error>> {
+    pub(crate) fn repository_fixture() -> Result<RepositoryFixture, Box<dyn std::error::Error>> {
         let first_atom: ContextAtomV1 = protocol_fixture("ContextAtomV1")?;
         let mut second_atom = first_atom.clone();
         second_atom.atom_id = RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7893")?;

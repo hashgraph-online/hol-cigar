@@ -479,9 +479,9 @@ def _snapshot_files(
         key=lambda path: len(path.parts),
     ):
         # Snapshot directories contain prepublication release material and stay owner-private.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             directory, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
     for relative, expected in captured.items():
         observed = _stable_file_bytes(
             source_root.joinpath(*relative.split("/")),
@@ -1096,9 +1096,9 @@ def _verify_candidate_offline(candidate: Path) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="cigar-beta-offline-") as raw:
         temporary = Path(raw)
         # Offline verification staging contains exact candidate bytes and trust inputs.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             temporary, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         source_root = temporary / "source"
         candidate_copy = temporary / "candidate"
         committed = _extract_source_archive(source_archive, source_root, source_epoch)
@@ -1675,9 +1675,9 @@ def _prepare_inputs(
     try:
         base = Path(temporary.name).resolve(strict=True)
         # Captured signer inputs must never be visible to another local account.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             base, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         candidate = candidate.resolve(strict=True)
         qualification_directory = qualification_directory.resolve(strict=True)
         signature_directory = signature_directory.resolve(strict=True)
@@ -2022,9 +2022,9 @@ def _verify_final_snapshot(
     try:
         staging = Path(signature_staging.name)
         # Signature verification staging is intentionally accessible only to its owner.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             staging, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         for source, final_path in signatures.paths:
             target = staging / Path(final_path).name
             with source.open("rb") as input_file, target.open("xb") as output_file:
@@ -2091,9 +2091,9 @@ def verify_final_release(
     try:
         base = Path(temporary.name).resolve(strict=True)
         # Final verification uses a private immutable snapshot before any publication decision.
-        os.chmod(
+        os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             base, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        )
         release_directory = release_directory.resolve(strict=True)
         trust_policy = trust_policy.resolve(strict=True)
         snapshot_release = _snapshot_directory(

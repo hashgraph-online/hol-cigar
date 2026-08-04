@@ -1,0 +1,57 @@
+{
+  "schema_version": "cigar.sqlite-v4-v5-migration-receipt-vector.v1",
+  "valid": {
+    "receipt": {
+      "schema_version": "cigar.sqlite-v4-v5-migration-receipt.v1",
+      "schema_digest": "12207a6aede04c1c8a98b226a2f65df79fd8ab7d71d5249e60d267b9e0cd182cea2d",
+      "created_at_unix_nanos": "4",
+      "tool_name": "cigar",
+      "tool_version": "0.9.2",
+      "product_version": "0.9.2",
+      "source_device": 1,
+      "source_inode": 2,
+      "source_database_bytes": 4096,
+      "source_database_digest": "12201111111111111111111111111111111111111111111111111111111111111111",
+      "first_retained_revision": 5,
+      "latest_revision": 1028,
+      "retained_revisions": 1024,
+      "backup_canonical_root": "12202222222222222222222222222222222222222222222222222222222222222222",
+      "backup_manifest_digest": "12203333333333333333333333333333333333333333333333333333333333333333",
+      "target_format_version": 5,
+      "target_device": 1,
+      "target_inode": 3,
+      "target_database_bytes": 8192,
+      "target_database_digest": "12204444444444444444444444444444444444444444444444444444444444444444",
+      "source_catalog_root": "12205555555555555555555555555555555555555555555555555555555555555555",
+      "source_semantic_root": "12206666666666666666666666666666666666666666666666666666666666666666",
+      "target_catalog_root": "12205555555555555555555555555555555555555555555555555555555555555555",
+      "target_semantic_root": "12206666666666666666666666666666666666666666666666666666666666666666",
+      "target_chain_head": "12207777777777777777777777777777777777777777777777777777777777777777",
+      "sqlite_integrity_verified": true,
+      "v5_chain_verified": true,
+      "exact_reconstruction_verified": true,
+      "catalog_projection_verified": true,
+      "external_blobs_verified": true,
+      "effect_chain_verified": true,
+      "failpoint_free_completion": true
+    },
+    "signature": {
+      "algorithm": "ed25519",
+      "key_ref": "fixture-signing-key",
+      "tenant": "fixture-tenant",
+      "signer": "fixture-operator",
+      "purpose": "sqlite-v4-v5-migration-receipt-v1",
+      "signed_at_unix_nanos": "4",
+      "payload_digest_hex": "8888888888888888888888888888888888888888888888888888888888888888",
+      "signature_hex": "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  },
+  "invalid": [
+    {"name": "non_consecutive_range", "pointer": "/receipt/retained_revisions", "replacement": 1023},
+    {"name": "wrong_target_format", "pointer": "/receipt/target_format_version", "replacement": 4},
+    {"name": "verification_failed", "pointer": "/receipt/catalog_projection_verified", "replacement": false},
+    {"name": "source_target_root_drift", "pointer": "/receipt/target_semantic_root", "replacement": "1220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    {"name": "unknown_field", "pointer": "/receipt/additional_property", "replacement": true},
+    {"name": "bad_signature_purpose", "pointer": "/signature/purpose", "replacement": "backup-manifest-v1"}
+  ]
+}

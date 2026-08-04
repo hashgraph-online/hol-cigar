@@ -61,6 +61,7 @@ EXPECTED_EXCLUDED_PACKAGES = (
     "cigar-soak",
     "cigar-testkit",
     "cigar-windows-ipc",
+    "cigarbench-consumer",
     "xtask",
 )
 EXPECTED_EXCLUDED_SOURCE_GLOBS = (

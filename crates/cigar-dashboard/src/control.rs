@@ -4245,7 +4245,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt as _;
 
         const SLEEPING_SCRIPT: &[u8] =
-            b"from __future__ import annotations\nimport time\ntime.sleep(5)\n";
+            b"from __future__ import annotations\nimport time\ntime.sleep(60)\n";
         let directory = tempfile::tempdir()?;
         fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700))?;
         let (config, registry) = control_fixture(directory.path(), SLEEPING_SCRIPT)?;
@@ -4282,8 +4282,20 @@ mod tests {
                 .err(),
             Some(ControlError::RecoveryRequired)
         );
+        let process_group_id = first
+            .client()
+            .recoverable_runs()?
+            .iter()
+            .find(|recovered| recovered.run().run_id() == run_id)
+            .and_then(|recovered| recovered.process())
+            .map(RunProcessIdentity::process_group_id)
+            .ok_or("crashed child process identity is unavailable")?;
         first.shutdown()?;
         drop(first);
+        let process_group_id = i32::try_from(process_group_id)?;
+        let process_group_id =
+            rustix::process::Pid::from_raw(process_group_id).ok_or("invalid process group")?;
+        rustix::process::kill_process_group(process_group_id, rustix::process::Signal::KILL)?;
 
         let deadline = Instant::now() + Duration::from_secs(15);
         loop {

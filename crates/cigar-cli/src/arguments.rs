@@ -99,6 +99,8 @@ pub(crate) struct GlobalOptions {
     pub(crate) security: bool,
     #[cfg(feature = "full")]
     pub(crate) deep: bool,
+    #[cfg(feature = "full")]
+    pub(crate) force_full: bool,
 }
 
 impl Default for GlobalOptions {
@@ -134,6 +136,8 @@ impl Default for GlobalOptions {
             security: false,
             #[cfg(feature = "full")]
             deep: false,
+            #[cfg(feature = "full")]
+            force_full: false,
         }
     }
 }
@@ -343,6 +347,8 @@ pub(crate) fn parse(
             "--security" => options.security = true,
             #[cfg(feature = "full")]
             "--deep" => options.deep = true,
+            #[cfg(feature = "full")]
+            "--force-full" => options.force_full = true,
             "--embedded" => options.target = merge_target(options.target, TargetKind::Embedded)?,
             #[cfg(feature = "full")]
             "--local" => options.target = merge_target(options.target, TargetKind::Local)?,
@@ -375,6 +381,10 @@ pub(crate) fn parse(
     }
     #[cfg(feature = "full")]
     if (options.security || options.deep) && command.path() != "doctor" {
+        return Err(CliError::invalid_command());
+    }
+    #[cfg(feature = "full")]
+    if options.force_full && command.path() != "integrity.deep" {
         return Err(CliError::invalid_command());
     }
     #[cfg(feature = "full")]
@@ -418,6 +428,9 @@ fn group_requires_subcommand(value: &str) -> bool {
             | "replay"
             | "policy"
             | "backup"
+            | "migration"
+            | "compaction"
+            | "integrity"
             | "gc"
             | "diagnostics"
             | "mcp"
@@ -646,6 +659,7 @@ mod tests {
             &["source", "list", "--expected-revision", "4"][..],
             &["doctor", "--page-size", "10"][..],
             &["catalog", "query", "--page-cursor", "ignored-cursor"][..],
+            &["status", "--force-full"][..],
         ] {
             assert!(
                 parse(args(values), TerminalContext::default()).is_err(),
@@ -661,6 +675,9 @@ mod tests {
             &["effect", "list", "--page-cursor", "cursor"][..],
             &["policy", "check", "--input", "/tmp/request.json"][..],
             &["gc", "plan", "plan.json", "--input", "/tmp/policy.json"][..],
+            &["migration", "preflight", "source", "backup", "target"][..],
+            &["compaction", "status", "descriptor.json"][..],
+            &["integrity", "deep", "database.sqlite3", "--force-full"][..],
         ] {
             assert!(
                 parse(args(values), TerminalContext::default()).is_ok(),

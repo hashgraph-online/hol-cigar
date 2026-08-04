@@ -54,6 +54,24 @@ def digest(value: bytes) -> str:
     return "1220" + hashlib.sha256(value).hexdigest()
 
 
+def default_pnpm_store(home: Path) -> Path:
+    if sys.platform == "darwin":
+        return home / "Library" / "pnpm" / "store" / "v10"
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA")
+        return (
+            Path(local) / "pnpm" / "store" / "v10"
+            if local
+            else home / "AppData" / "Local" / "pnpm" / "store" / "v10"
+        )
+    data_home = os.environ.get("XDG_DATA_HOME")
+    return (
+        Path(data_home) / "pnpm" / "store" / "v10"
+        if data_home
+        else home / ".local" / "share" / "pnpm" / "store" / "v10"
+    )
+
+
 def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -98,6 +116,10 @@ def clean_environment(state: Path) -> dict[str, str]:
             "COREPACK_HOME": os.environ.get(
                 "COREPACK_HOME", str(Path.home() / ".cache" / "node" / "corepack")
             ),
+            "NPM_CONFIG_STORE_DIR": os.environ.get(
+                "NPM_CONFIG_STORE_DIR",
+                str(default_pnpm_store(Path.home())),
+            ),
             "UV_CACHE_DIR": os.environ.get(
                 "UV_CACHE_DIR", str(Path.home() / ".cache" / "uv")
             ),
@@ -107,6 +129,7 @@ def clean_environment(state: Path) -> dict[str, str]:
             "GOCACHE": str(state / "go-build-cache"),
             "CARGO_NET_OFFLINE": "true",
             "UV_OFFLINE": "1",
+            "CI": "true",
             "GOTOOLCHAIN": pinned_go_toolchain(),
             "GOWORK": "off",
             "GOPROXY": "off",
@@ -215,12 +238,30 @@ def load_manifest() -> dict[str, Any]:
         if language not in LANGUAGES or language in seen:
             fail("quickstart languages are unknown or duplicated")
         seen.add(language)
-        for key in ("prepare", "command"):
-            parts = entry[key]
-            if not isinstance(parts, list) or not all(
+        preparations = entry["prepare"]
+        if (
+            not isinstance(preparations, list)
+            or len(preparations) > 4
+            or not all(
+                isinstance(parts, list)
+                and 0 < len(parts) <= 16
+                and all(
+                    isinstance(part, str) and 0 < len(part) <= 256
+                    for part in parts
+                )
+                for parts in preparations
+            )
+        ):
+            fail("quickstart preparation commands are invalid")
+        parts = entry["command"]
+        if (
+            not isinstance(parts, list)
+            or not 0 < len(parts) <= 16
+            or not all(
                 isinstance(part, str) and 0 < len(part) <= 256 for part in parts
-            ):
-                fail("quickstart command arguments are invalid")
+            )
+        ):
+            fail("quickstart command arguments are invalid")
         working = entry["working_directory"]
         if (
             not isinstance(working, str)
@@ -348,8 +389,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if entry["language"] not in selected:
                     continue
                 cwd = (ROOT / entry["working_directory"]).resolve()
-                if entry["prepare"]:
-                    command(entry["prepare"], cwd, state, False)
+                for preparation in entry["prepare"]:
+                    command(preparation, cwd, state, False)
                 identity = command(entry["command"], cwd, state, True)
                 if identity != manifest["expected_bundle_id"]:
                     fail("quickstart bundle identities differ")

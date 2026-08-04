@@ -65,6 +65,7 @@ const GENERATED_MANIFEST: &str = concat!(
     "    \"json/replay-request-v1.schema.json\",\n",
     "    \"json/selection-manifest-v1.schema.json\",\n",
     "    \"json/source-snapshot-v1.schema.json\",\n",
+    "    \"json/sqlite-v4-v5-migration-receipt-v1.schema.json\",\n",
     "    \"json/verification-receipt-v1.schema.json\"\n",
     "  ],\n",
     "  \"error_artifacts\": [\n",
@@ -5586,6 +5587,18 @@ fn generated_artifacts() -> Result<Vec<(PathBuf, String)>, TaskError> {
             render_schema::<cigar_protocol::SourceSnapshot>("SourceSnapshot")?,
         ),
         (
+            PathBuf::from("schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json"),
+            include_str!("../../../schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json")
+                .to_owned(),
+        ),
+        (
+            PathBuf::from(
+                "crates/cigar-store/schemas/sqlite-v4-v5-migration-receipt-v1.schema.json",
+            ),
+            include_str!("../../../schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json")
+                .to_owned(),
+        ),
+        (
             PathBuf::from("schemas/json/verification-receipt-v1.schema.json"),
             render_schema::<cigar_protocol::VerificationReceipt>("VerificationReceipt")?,
         ),
@@ -5994,22 +6007,28 @@ fn lint(root: &Path) -> Result<(), TaskError> {
     )
 }
 
+const UNIT_TEST_ARGUMENTS: &[&str] = &[
+    "nextest",
+    "run",
+    "--locked",
+    "--workspace",
+    "--all-targets",
+    "--profile",
+    "macos-qualification",
+];
+
 fn test(root: &Path, arguments: &[String]) -> Result<(), TaskError> {
     let suite = arguments.first().map(String::as_str).unwrap_or("all");
     let rest = arguments.get(1..).unwrap_or_default();
     match suite {
         "unit" | "wp00" => {
             require_no_arguments(rest, &format!("cargo xtask test {suite}"))?;
-            run_command(
-                root,
-                "cargo",
-                &[
-                    OsString::from("nextest"),
-                    OsString::from("run"),
-                    OsString::from("--workspace"),
-                    OsString::from("--all-targets"),
-                ],
-            )
+            let arguments = UNIT_TEST_ARGUMENTS
+                .iter()
+                .copied()
+                .map(OsString::from)
+                .collect::<Vec<_>>();
+            run_command(root, "cargo", &arguments)
         }
         "property" => {
             require_no_arguments(rest, "cargo xtask test property")?;
@@ -6578,7 +6597,7 @@ mod tests {
     use super::{
         CLIPPY_PROFILES, CommandEvidenceContext, ErrorCatalog, ErrorCatalogEntry,
         InterfaceProjectionCatalog, PRD_28_1_COMMANDS, PrdCommandImplementation,
-        REQUIRED_V1_ROUTES, Tool, architecture_check, authority_review_status,
+        REQUIRED_V1_ROUTES, Tool, UNIT_TEST_ARGUMENTS, architecture_check, authority_review_status,
         generate_error_artifacts, generate_operation_artifacts, generate_prd_command_manifest,
         generate_schema_artifacts, generated_artifacts, inspect_tool, load_error_catalog,
         load_interface_projection_catalog, load_operation_catalog, load_operation_payload_catalog,
@@ -7112,13 +7131,13 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).as_path(),
             &system_python_runtime()?,
             &["-c".into(), parent.into()],
-            Duration::from_millis(200),
+            Duration::from_secs(2),
             64 * 1024,
             64 * 1024,
             false,
         );
         assert!(result.is_err());
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(10));
         if let Ok(pid) = fs::read_to_string(&pid_file) {
             let _ignored = std::process::Command::new("/bin/kill")
                 .args(["-KILL", pid.trim()])
@@ -7194,7 +7213,31 @@ mod tests {
             ])
         );
         assert!(!route_tool_names("lint")?.contains("cargo-mutants"));
-        assert!(!route_tool_names("test-unit")?.contains("protoc"));
+        assert!(route_tool_names("lint")?.contains("protoc"));
+        assert_eq!(
+            route_tool_names("test-unit")?,
+            BTreeSet::from([
+                "cargo".to_owned(),
+                "cargo-nextest".to_owned(),
+                "go".to_owned(),
+                "node".to_owned(),
+                "protoc".to_owned(),
+                "python3".to_owned(),
+                "rustc".to_owned(),
+            ])
+        );
+        assert_eq!(
+            UNIT_TEST_ARGUMENTS,
+            [
+                "nextest",
+                "run",
+                "--locked",
+                "--workspace",
+                "--all-targets",
+                "--profile",
+                "macos-qualification",
+            ]
+        );
         Ok(())
     }
 

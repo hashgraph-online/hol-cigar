@@ -90,6 +90,7 @@ SOURCE_INCLUDES = (
     "crates/**",
     "conformance/runner/**",
     "sdk/rust/**",
+    "schemas/json/sqlite-v4-v5-migration-receipt-v1.schema.json",
     "spec/api/**",
     "adapters/claude-code/**",
     "scripts/release/build_macos_aarch64_archive.py",

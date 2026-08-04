@@ -17,6 +17,9 @@
   "expected": {
     "strong_index_watermark": true,
     "selected_provenance_rate": 1.0,
+    "equivalent_selected_blocks": 1,
+    "equivalent_provenance_aliases": 2,
+    "equivalent_citation_aliases_resolved": 2,
     "superseded_decision_selected": false,
     "delta_roundtrip": true,
     "minimum_reduction_percent": 40

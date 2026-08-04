@@ -32,11 +32,11 @@ class SemgrepPolicyTests(unittest.TestCase):
             self.policy["upstream_ruleset"],
             {
                 "canonical": {
-                    "bytes": 2423467,
-                    "sha256": "7c6e80adeb6ede2016aebfb4292513d1f7832aad778fc5d395a240bc48452e55",
+                    "bytes": 2423491,
+                    "sha256": "0cfcba111781ed0d7f8d4da5bf93e954ac7913066adb1ac554f6e9de38cc7de5",
                 },
                 "canonicalization": "cigar.semgrep-rule-block-order.v1",
-                "retrieved_utc": "2026-07-14T20:07:41Z",
+                "retrieved_utc": "2026-07-28T03:01:23Z",
                 "rule_count": 1074,
                 "url": "https://semgrep.dev/c/p/default",
             },
@@ -44,8 +44,8 @@ class SemgrepPolicyTests(unittest.TestCase):
         self.assertEqual(
             self.policy["effective_ruleset"],
             {
-                "bytes": 2423543,
-                "sha256": "5bd3ce2eb24029ab89f37850ffcc5d3a6b860006e387a56dd5d90fd7a86c954e",
+                "bytes": 2423567,
+                "sha256": "4414ba8e83cf38b74eab4484cdb44f83d12f0c3ddd0b0cd9e92082859ec283cc",
             },
         )
         self.assertFalse(self.policy["scan"]["use_git_ignore"])
@@ -288,6 +288,7 @@ class SemgrepPolicyTests(unittest.TestCase):
                 self.assertTrue(any(len(candidate) >= 30 for candidate in rationale))
 
                 if rule.endswith("insecure-file-permissions"):
+                    self.assertIn("os.chmod(", line)
                     # The qualifier must be on Semgrep's match-start line. Include the
                     # complete nearby multiline call while validating its exact mode.
                     permission_context = "\n".join(
@@ -316,9 +317,10 @@ class SemgrepPolicyTests(unittest.TestCase):
                     else:
                         self.assertEqual(match.group(2), "0o700")
                 elif rule.endswith("insecure-hash-algorithm-sha1"):
+                    self.assertIn("hashlib.sha1(", line)
                     context = "\n".join(source_lines[line_number - 3 : line_number + 2])
                     self.assertTrue(
-                        "usedforsecurity=False" in line
+                        "usedforsecurity=False" in context
                         or (
                             "historical libFuzzer filename" in context
                             and "sha256_bytes" in context
@@ -342,6 +344,7 @@ class SemgrepPolicyTests(unittest.TestCase):
         self.assertNotIn("semgrep scan --config auto", workflow)
         self.assertIn("tools/quality/semgrep_policy.py hydrate", workflow)
         self.assertIn("tools/quality/semgrep_policy.py scan", workflow)
+        self.assertIn("--no-rewrite-rule-ids", semgrep_policy.scan.__code__.co_consts)
         self.assertIn('mkdir -m 0700 "$evidence_directory"', workflow)
         self.assertIn("/cigar-semgrep-security", workflow)
         self.assertNotIn("$RUNNER_TEMP/cigar-semgrep-report.json", workflow)

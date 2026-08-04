@@ -202,9 +202,9 @@
     },
     "public_schemas": {
       "binding": {
-        "file_count": 42,
-        "inventory_sha256": "266231c8d08963dd4b332ee8abef1722478b4df0cb55f25c5d118700bd879716",
-        "total_bytes": 296405
+        "file_count": 43,
+        "inventory_sha256": "d7c181d6bb90feab09cf7f68aa2fcf8d83ad421caa3f34cbd60ce2b8a5ab3aa9",
+        "total_bytes": 300630
       },
       "manifest_path": "schemas/generated-manifest.json",
       "path_prefix": "schemas/",
@@ -227,8 +227,8 @@
     "stored_records": {
       "binding": {
         "file_count": 30,
-        "inventory_sha256": "eb78752c9f187dcc8edb976d493cd17cee573eafd658667a0eb9f2fd6a9e02b4",
-        "total_bytes": 1298945
+        "inventory_sha256": "2e4467ac033d9420df5838e32ce9a75689f1dc8ddc7ac0425604c4e55a7b09c7",
+        "total_bytes": 1369503
       },
       "codec_paths": [
         "crates/cigar-daemon/src/catalog_context_application.rs",

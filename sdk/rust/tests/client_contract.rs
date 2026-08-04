@@ -1,9 +1,9 @@
 //! Frozen operation inventory and retry contract tests.
 
 use cigar_sdk::api::{
-    DispatchEffectOperation, EffectIdRequest, EmptyRequest, GetLivenessOperation,
-    IngestCatalogRequest, LivenessResponse, RequestEnvelope, TYPED_OPERATION_MAPPINGS,
-    TypedOperation, encode_operation_payload,
+    AuthorizeEffectOperation, AuthorizeEffectRequest, DispatchEffectOperation, EffectIdRequest,
+    EmptyRequest, GetLivenessOperation, IngestCatalogRequest, LivenessResponse, RequestEnvelope,
+    TYPED_OPERATION_MAPPINGS, TypedOperation, encode_operation_payload,
 };
 use cigar_sdk::protocol::{ContentDigest, ExpectedRevision, IdempotencyKey, RecordId};
 use cigar_sdk::{
@@ -248,5 +248,45 @@ async fn dispatch_is_never_automatically_retried() -> Result<(), Box<dyn std::er
     };
     assert_eq!(first.operation_id, DispatchEffectOperation::OPERATION_ID);
     assert_eq!(first.envelope.idempotency_key(), Some("dispatch-key"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn initial_effect_revision_zero_reaches_authorization_transport()
+-> Result<(), Box<dyn std::error::Error>> {
+    let transport = Arc::new(RecordingTransport {
+        calls: Mutex::default(),
+        fail: true,
+    });
+    let client = Client::from_transport(transport.clone());
+    let effect_id = RecordId::new("01890f47-8e7d-7b42-a1d2-3c4d5e6f7890")?;
+    let result = client
+        .authorize_effect(
+            AuthorizeEffectRequest {
+                effect_id,
+                approval: None,
+            },
+            CallOptions::revisioned(
+                IdempotencyKey::new("authorize-initial-effect")?,
+                ExpectedRevision(0),
+            ),
+        )
+        .await;
+    let Err(error) = result else {
+        return Err("transport unexpectedly succeeded".into());
+    };
+    assert_eq!(error.kind(), ErrorKind::Transport);
+    let calls = transport.calls.lock().map_err(|_| "poisoned test mutex")?;
+    assert_eq!(calls.len(), 3);
+    let Some(first) = calls.first() else {
+        return Err("authorization was not attempted".into());
+    };
+    assert_eq!(first.operation_id, AuthorizeEffectOperation::OPERATION_ID);
+    assert_eq!(first.envelope.expected_revision(), Some("0"));
+    assert!(
+        calls
+            .iter()
+            .all(|call| call.envelope.expected_revision() == Some("0"))
+    );
     Ok(())
 }

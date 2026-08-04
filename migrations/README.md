@@ -22,7 +22,10 @@ migration ledger. Sequence 3 adds immutable atom/FTS generation tables, a single
 pointer, authoritative revision/checksum watermarks, and no authoritative-state rewrite. Sequence
 4 adds the normalized authoritative atom/edge catalog, catalog-free residual revisions, indexed
 lineage intervals, deterministic 16-bit integrity buckets, and an immutable capacity-profile
-authority singleton.
+authority singleton. Sequence 5 defines the distinct-target incremental repository format used only
+by the explicit authenticated v4-to-v5 migration and fresh-target creation tools. It is offline,
+never runs through ordinary `SqliteStore::open`, and leaves the verified v4 source untouched for
+rollback.
 `cigar-store` applies each missing sequence in its own exclusive transaction, writes the ledger row
 inside that transaction, and verifies the complete known prefix afterward. The retained-v1 fixture
 is process-aborted at ledger bootstrap and at transaction begin, SQL applied, both sides of ledger
@@ -35,6 +38,12 @@ whole-state rows are deleted, and v4 authority is activated atomically. An inter
 rolls back to legacy authority and a restart repeats cleanly. Migrated semantic roots preserve the
 legacy root; startup then builds and verifies the first disposable projection generation from the
 normalized catalog.
+
+The v5 workflow is a separate target-only operation: it verifies a signed v4 backup, proves bounded
+capacity, constructs and authenticates the v5 revision/checkpoint/delta chain, publishes a signed
+migration receipt, and atomically switches an external active-store descriptor. Process-abort tests
+cover migration, activation, compaction, and a logical 50-GiB fixture; recovery either resumes the
+exact target or removes only incomplete target-owned bytes while preserving the v4 source.
 
 Mixed-version operation is allowed only when every participating application embeds the exact same
 immutable migration catalog and every installed row spans that application's major. The historical

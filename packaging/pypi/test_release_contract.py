@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import unittest
-from importlib import metadata, resources
+# hol-cigar requires Python >=3.12, so the Python 3.6 compatibility rule is inapplicable.
+from importlib import metadata, resources  # nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2
 
 from cigar_sdk import CONTEXT_ABI
 from cigar_sdk.generated import context_abi_pb2

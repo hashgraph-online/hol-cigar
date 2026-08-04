@@ -1,5 +1,9 @@
 //! Ordered startup recovery and deadline-bounded graceful shutdown.
 
+use cigar_store::{
+    RepositoryStartupMetrics, RepositoryStartupMetricsObserver, RepositoryStartupOutcome,
+    RepositoryStartupStage,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::future::Future;
@@ -209,6 +213,7 @@ pub struct ShutdownReceipt {
 pub struct StartupCoordinator {
     actions: BTreeMap<StartupStep, Arc<dyn StartupAction>>,
     readiness: Arc<ReadinessGate>,
+    startup_observer: Option<Arc<dyn RepositoryStartupMetricsObserver>>,
 }
 
 impl StartupCoordinator {
@@ -235,27 +240,64 @@ impl StartupCoordinator {
         Ok(Self {
             actions: mapped,
             readiness,
+            startup_observer: None,
         })
+    }
+
+    /// Requires the complete startup sequence and reports the terminal readiness stage.
+    pub fn new_with_startup_metrics(
+        actions: Vec<Arc<dyn StartupAction>>,
+        readiness: Arc<ReadinessGate>,
+        observer: Arc<dyn RepositoryStartupMetricsObserver>,
+    ) -> Result<Self, LifecycleError> {
+        let mut coordinator = Self::new(actions, readiness)?;
+        coordinator.startup_observer = Some(observer);
+        Ok(coordinator)
     }
 
     /// Runs every startup action in semantic order within one overall deadline.
     pub async fn run(&self, deadline: Duration) -> Result<StartupReceipt, LifecycleError> {
         self.readiness.close();
         let started = Instant::now();
-        let mut completed = Vec::with_capacity(StartupStep::ALL.len());
-        for step in StartupStep::ALL {
-            let remaining = remaining(deadline, started)?;
-            let action = self
-                .actions
-                .get(&step)
-                .ok_or_else(|| LifecycleError::new(LifecycleErrorCode::InvalidConfiguration))?;
-            tokio::time::timeout(remaining, action.execute())
-                .await
-                .map_err(|_elapsed| LifecycleError::new(LifecycleErrorCode::DeadlineExceeded))??;
-            completed.push(step);
+        let result = async {
+            let mut completed = Vec::with_capacity(StartupStep::ALL.len());
+            for step in StartupStep::ALL {
+                let remaining = remaining(deadline, started)?;
+                let action = self
+                    .actions
+                    .get(&step)
+                    .ok_or_else(|| LifecycleError::new(LifecycleErrorCode::InvalidConfiguration))?;
+                tokio::time::timeout(remaining, action.execute())
+                    .await
+                    .map_err(|_elapsed| {
+                        LifecycleError::new(LifecycleErrorCode::DeadlineExceeded)
+                    })??;
+                completed.push(step);
+            }
+            Ok::<_, LifecycleError>(completed)
         }
-        self.readiness.open();
-        Ok(StartupReceipt { completed })
+        .await;
+        match result {
+            Ok(completed) => {
+                self.readiness.open();
+                self.observe_readiness(started.elapsed(), RepositoryStartupOutcome::Completed);
+                Ok(StartupReceipt { completed })
+            }
+            Err(error) => {
+                self.observe_readiness(started.elapsed(), RepositoryStartupOutcome::Failed);
+                Err(error)
+            }
+        }
+    }
+
+    fn observe_readiness(&self, duration: Duration, outcome: RepositoryStartupOutcome) {
+        if let Some(observer) = &self.startup_observer {
+            observer.observe_repository_startup(RepositoryStartupMetrics {
+                stage: RepositoryStartupStage::ReadinessOpen,
+                outcome,
+                duration,
+            });
+        }
     }
 }
 
@@ -372,6 +414,10 @@ mod tests {
         LifecycleError, LifecycleFuture, ReadinessGate, ShutdownAction, ShutdownCoordinator,
         ShutdownStep, StartupAction, StartupCoordinator, StartupStep,
     };
+    use cigar_store::{
+        RepositoryStartupMetrics, RepositoryStartupMetricsObserver, RepositoryStartupOutcome,
+        RepositoryStartupStage,
+    };
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -379,6 +425,19 @@ mod tests {
         step: StartupStep,
         order: Arc<Mutex<Vec<&'static str>>>,
         fail: bool,
+    }
+
+    #[derive(Default)]
+    struct StartupMetricsRecorder {
+        observations: Mutex<Vec<RepositoryStartupMetrics>>,
+    }
+
+    impl RepositoryStartupMetricsObserver for StartupMetricsRecorder {
+        fn observe_repository_startup(&self, metrics: RepositoryStartupMetrics) {
+            if let Ok(mut observations) = self.observations.lock() {
+                observations.push(metrics);
+            }
+        }
     }
 
     impl StartupAction for StartupRecorder {
@@ -473,9 +532,28 @@ mod tests {
             })
             .collect();
         let readiness = Arc::new(ReadinessGate::default());
-        let coordinator = StartupCoordinator::new(actions, Arc::clone(&readiness))?;
+        let observer = Arc::new(StartupMetricsRecorder::default());
+        let observer_handle: Arc<dyn RepositoryStartupMetricsObserver> = observer.clone();
+        let coordinator = StartupCoordinator::new_with_startup_metrics(
+            actions,
+            Arc::clone(&readiness),
+            observer_handle,
+        )?;
         assert!(coordinator.run(Duration::from_secs(1)).await.is_err());
         assert!(!readiness.is_open());
+        let observations = observer
+            .observations
+            .lock()
+            .map_err(|_| "startup metrics mutex poisoned")?;
+        assert_eq!(observations.len(), 1);
+        assert_eq!(
+            observations.first().map(|measurement| measurement.stage),
+            Some(RepositoryStartupStage::ReadinessOpen)
+        );
+        assert_eq!(
+            observations.first().map(|measurement| measurement.outcome),
+            Some(RepositoryStartupOutcome::Failed)
+        );
         Ok(())
     }
 

@@ -349,7 +349,7 @@ class MatrixRunnerTests(unittest.TestCase):
             ),
             "e2e": (ROOT / "tests/e2e/matrix-v1.json", 3, 3),
             "integration": (ROOT / "tests/integration/matrix-v1.json", 7, 7),
-            "migration": (ROOT / "tests/migration/matrix-v1.json", 13, 12),
+            "migration": (ROOT / "tests/migration/matrix-v1.json", 14, 13),
             "models": (ROOT / "tests/models/matrix-v1.json", 1, 1),
             "offline": (ROOT / "tests/offline/matrix-v1.json", 4, 4),
             "security": (ROOT / "tests/security/matrix-v1.json", 12, 12),

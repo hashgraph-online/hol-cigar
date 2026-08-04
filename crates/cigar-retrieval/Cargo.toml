@@ -11,6 +11,9 @@ authors.workspace = true
 publish = ["crates-io"]
 include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
 
+[features]
+experimental-profiles = []
+
 [lints]
 workspace = true
 
@@ -22,6 +25,7 @@ sha2.workspace = true
 
 [dev-dependencies]
 cigar-testkit.workspace = true
+proptest = "=1.11.0"
 serde_json.workspace = true
 tempfile.workspace = true
 

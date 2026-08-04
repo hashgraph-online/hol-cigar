@@ -432,9 +432,6 @@ fn request_envelope<O: TypedOperation>(
     let needs_revision = contract.revision_requirement == RevisionRequirement::Required;
     if needs_key != options.idempotency_key.is_some()
         || needs_revision != options.expected_revision.is_some()
-        || options
-            .expected_revision
-            .is_some_and(|revision| revision.0 == 0)
     {
         return Err(SdkError::local(
             ErrorKind::InvalidConfiguration,

@@ -562,7 +562,7 @@ class Wp20ReadinessTests(unittest.TestCase):
     def test_sanitized_demo_suite_integration_passes(self) -> None:
         result = MODULE._run_test_suite(ROOT, "demos", "demos/tests")
         self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["tests"], 11)
+        self.assertEqual(result["tests"], 20)
         self.assertRegex(result["command_sha256"], r"^[0-9a-f]{64}$")
 
     def test_generated_receipt_validates_against_registered_schema(self) -> None:

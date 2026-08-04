@@ -278,6 +278,13 @@ class DemoHarnessTests(unittest.TestCase):
         self.assertTrue(
             all("recorded" in item["mode"] for item in manifest["quickstarts"])
         )
+        typescript = next(
+            item for item in manifest["quickstarts"] if item["language"] == "typescript"
+        )
+        self.assertEqual(len(typescript["prepare"]), 2)
+        self.assertEqual(
+            typescript["prepare"][0][-2:], ["--offline", "--frozen-lockfile"]
+        )
         expected_operations = [
             "discoverSources",
             "ingestCatalog",
@@ -441,6 +448,8 @@ class DemoHarnessTests(unittest.TestCase):
         self.assertEqual(installed_environment["HOME"], str(state))
         self.assertEqual(demo_environment["GOTOOLCHAIN"], "go1.26.5")
         self.assertEqual(demo_environment["GOPROXY"], "off")
+        self.assertEqual(source_environment["CI"], "true")
+        self.assertTrue(Path(source_environment["NPM_CONFIG_STORE_DIR"]).is_absolute())
         self.assertEqual(demos.pinned_go_toolchain(), "go1.26.5")
         honey_environment = demos.clean_environment(state, include_go_toolchain=False)
         for key in (

@@ -26,6 +26,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 const MAX_PERSIST_RETRIES: usize = 16;
+const MAX_LATEST_READ_RETRIES: usize = 16;
 const MAX_EFFECT_ATTEMPTS: usize = 1_024;
 const MAX_EFFECT_RECONCILIATIONS: usize = 4_096;
 const AUTHENTICATED_RECORD_SCHEMA: &str = "cigar.authenticated-effect-record.v1";
@@ -1446,7 +1447,7 @@ impl<R: Repository> EffectEngine<R> {
     }
 
     fn try_get(&self, effect_id: &RecordId) -> Result<Option<DurableEffectRecord>, EffectError> {
-        self.try_get_at(effect_id, SnapshotSelection::Latest)
+        retry_latest_checkpoint_read(|| self.try_get_at(effect_id, SnapshotSelection::Latest))
     }
 
     fn try_get_at(
@@ -2185,4 +2186,79 @@ fn map_store_error(error: StoreError) -> EffectError {
         | StoreErrorCode::Unavailable => EffectErrorCode::Unavailable,
     };
     EffectError::new(code)
+}
+
+fn retry_latest_checkpoint_read<T>(
+    mut read: impl FnMut() -> Result<T, EffectError>,
+) -> Result<T, EffectError> {
+    // The repository snapshot and the external checkpoint are independently locked. A writer can
+    // advance the checkpoint after this reader opens a valid, now-stale snapshot. Only that
+    // explicit revision conflict is retryable; cryptographic or journal failures return unchanged.
+    for attempt in 0..MAX_LATEST_READ_RETRIES {
+        match read() {
+            Err(error)
+                if error.code() == EffectErrorCode::RevisionConflict
+                    && attempt + 1 < MAX_LATEST_READ_RETRIES =>
+            {
+                std::thread::yield_now();
+            }
+            Err(error) if error.code() == EffectErrorCode::RevisionConflict => {
+                return Err(EffectError::new(EffectErrorCode::CorruptJournal));
+            }
+            result => return result,
+        }
+    }
+    Err(EffectError::new(EffectErrorCode::CorruptJournal))
+}
+
+#[cfg(test)]
+mod latest_checkpoint_read_tests {
+    use super::{MAX_LATEST_READ_RETRIES, retry_latest_checkpoint_read};
+    use crate::{EffectError, EffectErrorCode};
+    use std::cell::Cell;
+
+    #[test]
+    fn stale_checkpoint_snapshot_retries_the_complete_latest_read() -> Result<(), EffectError> {
+        let calls = Cell::new(0_usize);
+        let value = retry_latest_checkpoint_read(|| {
+            let observed = calls.get();
+            calls.set(observed + 1);
+            if observed == 0 {
+                Err(EffectError::new(EffectErrorCode::RevisionConflict))
+            } else {
+                Ok(7_u8)
+            }
+        })?;
+        assert_eq!(value, 7);
+        assert_eq!(calls.get(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn persistent_checkpoint_mismatch_remains_an_integrity_failure() {
+        let calls = Cell::new(0_usize);
+        let error = retry_latest_checkpoint_read::<()>(|| {
+            calls.set(calls.get() + 1);
+            Err(EffectError::new(EffectErrorCode::RevisionConflict))
+        });
+        assert_eq!(
+            error.err().map(EffectError::code),
+            Some(EffectErrorCode::CorruptJournal)
+        );
+        assert_eq!(calls.get(), MAX_LATEST_READ_RETRIES);
+    }
+
+    #[test]
+    fn cryptographic_corruption_is_never_retried() {
+        let calls = Cell::new(0_usize);
+        let error = retry_latest_checkpoint_read::<()>(|| {
+            calls.set(calls.get() + 1);
+            Err(EffectError::new(EffectErrorCode::CorruptJournal))
+        });
+        assert_eq!(
+            error.err().map(EffectError::code),
+            Some(EffectErrorCode::CorruptJournal)
+        );
+        assert_eq!(calls.get(), 1);
+    }
 }

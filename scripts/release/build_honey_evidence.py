@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import honey_efficiency_contract
+
 from evidence_workspace import (
     EvidenceLimits,
     EvidenceWorkspace,
@@ -46,7 +48,7 @@ INPUT_SCHEMA_VERSION = "cigar.honey.evidence-input.v1"
 CHECK_SCHEMA_VERSION = "cigar.honey.evidence-check.v1"
 LEDGER_NAME = "honey-evidence.json"
 INPUT_NAME = "honey-evidence-input.json"
-EXPECTED_VERSION = "0.9.0-honey.1"
+EXPECTED_VERSION = "0.9.2"
 EXPECTED_ABI = "cigar.context.v1"
 EXPECTED_STATE = "developer-preview"
 EXPECTED_PROFILE = "cigar.honey.local-developer-preview.macos-arm64.v1"
@@ -81,6 +83,7 @@ REQUIRED_EVIDENCE: dict[str, str] = {
     "bounded-safety-report": "tests",
     "claude-lifecycle-report": "integration",
     "documentation-report": "docs",
+    "efficiency-reliability-report": "workflow",
     "installed-runtime-report": "workflow",
     "license-inventory": "security",
     "offline-dependency-check": "security",
@@ -99,6 +102,7 @@ ACCEPTED_REPORT_SCHEMAS = {
         "cigar.development-claude-plugin-installed-qualification.v2"
     ),
     "documentation-report": "cigar.docs-check.v1",
+    "efficiency-reliability-report": (honey_efficiency_contract.REPORT_SCHEMA_VERSION),
     "installed-runtime-report": "cigar.install-qualification.v1",
     "license-inventory": "cigar.third-party-license-inventory.v1",
     "offline-dependency-check": GATE_REPORT_SCHEMA,
@@ -149,6 +153,17 @@ EVIDENCE_GATE_POLICY: dict[str, frozenset[str]] = {
         {"claude-lifecycle", "archive-contracts", "policy-nondisclosure"}
     ),
     "documentation-report": frozenset({"docs-commands-links"}),
+    "efficiency-reliability-report": frozenset(
+        {
+            "storage-format-v5",
+            "v4-v5-migration",
+            "revision-recovery",
+            "storage-amplification",
+            "serial-latency",
+            "startup-readiness",
+            "context-quality-efficiency",
+        }
+    ),
     "installed-runtime-report": frozenset(
         {
             "installed-runtime",
@@ -198,6 +213,9 @@ EVIDENCE_ARTIFACT_POLICY: dict[str, frozenset[str]] = {
         {"macos-runtime-aarch64", "claude-code-plugin"}
     ),
     "documentation-report": frozenset({"docs", "release-notes"}),
+    "efficiency-reliability-report": frozenset(
+        {"macos-runtime-aarch64", "release-manifest"}
+    ),
     "installed-runtime-report": frozenset({"macos-runtime-aarch64"}),
     "license-inventory": ALL_HONEY_ARTIFACT_IDS,
     "offline-dependency-check": ALL_HONEY_ARTIFACT_IDS,
@@ -380,7 +398,7 @@ def _load_authority(root: Path) -> Authority:
         "schema_version": "cigar.product-version.v1",
         "product": "cigar",
         "version": EXPECTED_VERSION,
-        "target_release_version": "0.9.0",
+        "target_release_version": "0.9.2",
         "context_abi": EXPECTED_ABI,
         "release_state": EXPECTED_STATE,
         "channel": "honey",
@@ -1541,6 +1559,55 @@ def _validate_gate_report(
             _fail("secret scan suppression records are duplicated or not byte-sorted")
 
 
+def _validate_efficiency_report(
+    report: dict[str, Any],
+    artifacts: Mapping[str, Mapping[str, object]],
+    source_git: Mapping[str, Any],
+    authority: Authority,
+    installed_runtime_report: Mapping[str, Any] | None,
+) -> None:
+    try:
+        honey_efficiency_contract.validate_authorities(authority.root)
+        fixtures, fixture_payload = honey_efficiency_contract.load_json(
+            authority.root / honey_efficiency_contract.FIXTURE_PATH
+        )
+        profile, profile_payload = honey_efficiency_contract.load_json(
+            authority.root / honey_efficiency_contract.PROFILE_PATH
+        )
+        honey_efficiency_contract.validate_fixture_manifest(fixtures, fixture_payload)
+        honey_efficiency_contract.validate_qualification_profile(
+            profile, profile_payload
+        )
+        honey_efficiency_contract.validate_report(report, fixtures, profile)
+    except honey_efficiency_contract.EfficiencyContractError as error:
+        raise HoneyEvidenceError(
+            f"efficiency/reliability report is invalid: {error}"
+        ) from error
+    manifest = artifacts["release-manifest"]
+    installed_binaries = (
+        installed_runtime_report.get("installed_binary_sha256")
+        if isinstance(installed_runtime_report, Mapping)
+        else None
+    )
+    if (
+        report.get("overall_status") != "pass"
+        or report.get("source")
+        != {
+            "commit": source_git["revision"],
+            "tree": source_git["tree"],
+            "clean": True,
+        }
+        or report.get("candidate", {}).get("manifest_sha256") != manifest["sha256"]
+        or not isinstance(installed_binaries, Mapping)
+        or report.get("candidate", {}).get("installed_runtime_sha256")
+        != installed_binaries.get("cigar")
+    ):
+        _fail(
+            "efficiency/reliability report is not passing or bound to exact "
+            "source/candidate/installed runtime bytes"
+        )
+
+
 def _validate_evidence_report(
     identifier: str,
     report: dict[str, Any],
@@ -1548,6 +1615,7 @@ def _validate_evidence_report(
     artifacts: Mapping[str, Mapping[str, object]],
     source_git: Mapping[str, Any],
     authority: Authority,
+    evidence_reports: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     if report.get("schema_version") != ACCEPTED_REPORT_SCHEMAS[identifier]:
         _fail(f"report {identifier} does not use its closed accepted schema")
@@ -1573,6 +1641,18 @@ def _validate_evidence_report(
         _validate_demo(identifier, report, artifacts, source_git)
     elif identifier == "documentation-report":
         _validate_docs(report)
+    elif identifier == "efficiency-reliability-report":
+        _validate_efficiency_report(
+            report,
+            artifacts,
+            source_git,
+            authority,
+            (
+                evidence_reports.get("installed-runtime-report")
+                if evidence_reports is not None
+                else None
+            ),
+        )
     elif identifier == "license-inventory":
         _validate_license(report)
     elif identifier == "qualification-tools":
@@ -1703,7 +1783,8 @@ def _build_ledger(
     }:
         _fail("source descriptor does not bind the exact Honey source attachment")
 
-    evidence: list[dict[str, object]] = []
+    evidence_reports: dict[str, dict[str, Any]] = {}
+    evidence_payloads: dict[str, bytes] = {}
     for reference in control["evidence"]:
         report_payload = _payload(payloads, reference)
         report = _canonical_document(report_payload, f"report {reference['id']}")
@@ -1714,6 +1795,13 @@ def _build_ledger(
             _fail(
                 f"report {reference['id']} asserts a production claim at {claim_path}"
             )
+        evidence_reports[reference["id"]] = report
+        evidence_payloads[reference["id"]] = report_payload
+
+    evidence: list[dict[str, object]] = []
+    for reference in control["evidence"]:
+        report_payload = evidence_payloads[reference["id"]]
+        report = evidence_reports[reference["id"]]
         _validate_evidence_report(
             reference["id"],
             report,
@@ -1721,6 +1809,7 @@ def _build_ledger(
             artifact_by_id,
             source_git,
             authority,
+            evidence_reports,
         )
         report_binding = _binding(
             report_payload,

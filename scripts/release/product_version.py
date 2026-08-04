@@ -27,7 +27,7 @@ from release_lib import ReleaseError, reject_evidence_directory
 
 MANIFEST_PATH = "packaging/product-version.v1.json"
 DEVELOPMENT_TARGET_RELEASE = "1.0.0"
-HONEY_TARGET_RELEASE = "0.9.0"
+HONEY_TARGET_RELEASE = "0.9.2"
 HONEY_CHANNEL = "honey"
 EXPECTED_CONTEXT_ABI = "cigar.context.v1"
 MAX_JSON_BYTES = 16 * 1024 * 1024
@@ -175,16 +175,22 @@ CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
         "cigar-protocol",
         "cigar-sdk",
     ),
+    "benches/honey-efficiency/driver/Cargo.lock": (
+        "cigar-canon",
+        "cigar-crypto",
+        "cigar-protocol",
+        "cigar-store",
+    ),
 }
 UV_LOCK_BINDINGS = {
     "uv.lock": "cigar-workspace",
-    "sdk/python/uv.lock": "cigar-sdk",
+    "sdk/python/uv.lock": "hol-cigar",
 }
 
 SDK_RELEASE_RECORDS = {
     "sdk/rust/release.json": "cigar-sdk",
     "sdk/typescript/release.json": "@cigar/sdk",
-    "sdk/python/src/cigar_sdk/release.json": "cigar-sdk",
+    "sdk/python/src/cigar_sdk/release.json": "hol-cigar",
     "sdk/go/release.json": "github.com/CIGAR/cigar/sdk/go",
 }
 CRATE_RELEASE_RECORDS = {
@@ -219,7 +225,7 @@ TOML_PACKAGE_VERSIONS = {
     "Cargo.toml": ("workspace.package", "cigar"),
     "pyproject.toml": ("project", "cigar-workspace"),
     "sdk/rust/Cargo.toml": ("package", "cigar-sdk"),
-    "sdk/python/pyproject.toml": ("project", "cigar-sdk"),
+    "sdk/python/pyproject.toml": ("project", "hol-cigar"),
 }
 
 PUBLISHABLE_PRODUCT_PACKAGES = (
@@ -301,6 +307,10 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
         _surrounded('version.get("version") == "', '",'),
         1,
     ),
+    "demos/storage-migration/run.py": (
+        _surrounded('"product_version": "', '",'),
+        1,
+    ),
     "demos/README.md": (
         re.compile(
             rf"(?:--expected-version |cigar-sdk-|cigar-go-sdk-)"
@@ -317,7 +327,7 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
 PYTHON_TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
     "demos/README.md": (
         re.compile(
-            rf"cigar_sdk-(?P<version>{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
+            rf"hol_cigar-(?P<version>{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
             r"(?=-py3-none-any\.whl)"
         ),
         2,
@@ -432,7 +442,7 @@ CONTRACT_BINDINGS: dict[str, tuple[str, re.Pattern[str], tuple[str, ...]]] = {
     ),
     "packaging/contracts/python-sdist.v1.json": (
         "python-sdist-v1",
-        re.compile(r"cigar_sdk-([^/]+)/"),
+        re.compile(r"hol_cigar-([^/]+)/"),
         (
             *_indices("allow", 8),
             *_indices("required", 7),
@@ -443,7 +453,7 @@ CONTRACT_BINDINGS: dict[str, tuple[str, re.Pattern[str], tuple[str, ...]]] = {
     ),
     "packaging/contracts/python-wheel.v1.json": (
         "python-wheel-v1",
-        re.compile(r"cigar_sdk-([^/]+)\.dist-info/"),
+        re.compile(r"hol_cigar-([^/]+)\.dist-info/"),
         (
             "/allow/1",
             "/required/1",
@@ -702,7 +712,13 @@ def load_manifest(root: Path) -> dict[str, Any]:
     honey_valid = (
         target == HONEY_TARGET_RELEASE
         and isinstance(version, str)
-        and re.fullmatch(r"0\.9\.0-honey\.[1-9][0-9]*", version) is not None
+        and (
+            version == HONEY_TARGET_RELEASE
+            or re.fullmatch(
+                rf"{re.escape(HONEY_TARGET_RELEASE)}-honey\.[1-9][0-9]*", version
+            )
+            is not None
+        )
         and document.get("release_state") == "developer-preview"
         and document.get("channel") == HONEY_CHANNEL
         and document.get("tag") == f"v{version}"
@@ -1196,7 +1212,7 @@ def _update_documents(root: Path, version: str, abi: str, *, write: bool) -> Non
         tuple(f"/artifacts/{index}/filename" for index in python_artifact_indexes),
         python_distribution_version(version),
         re.compile(
-            rf"cigar_sdk-({PRODUCT_VERSION_FRAGMENT}|"
+            rf"hol_cigar-({PRODUCT_VERSION_FRAGMENT}|"
             rf"{PYTHON_DISTRIBUTION_VERSION_FRAGMENT})"
             r"(?=\.tar\.gz|-py3-none-any\.whl)"
         ),

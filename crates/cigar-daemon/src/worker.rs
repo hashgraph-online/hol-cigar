@@ -1067,12 +1067,12 @@ mod tests {
             deadline.err().map(|error| error.code()),
             Some(BlockingPoolErrorCode::DeadlineExceeded)
         );
-        for _attempt in 0..1_000 {
-            if pool.is_drained() {
-                break;
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !pool.is_drained() {
+                tokio::time::sleep(Duration::from_millis(1)).await;
             }
-            tokio::task::yield_now().await;
-        }
+        })
+        .await?;
         let metrics = pool.metrics();
         assert_eq!(metrics.in_use, 0);
         assert_eq!(metrics.queued, 0);

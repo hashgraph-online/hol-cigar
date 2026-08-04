@@ -13,7 +13,7 @@ cigar doctor --security --deep --output json
 cigar diagnostics bundle "$HOME/cigar-support/honey-diagnostics.tar" --yes
 ```
 
-Require version `0.9.0-honey.1`, Context ABI `cigar.context.v1`, and the intended embedded/local
+Require version `0.9.2`, Context ABI `cigar.context.v1`, and the intended embedded/local
 target. `--explain-config` identifies the winning layer without printing authorization contents.
 
 ## Daemon unavailable
@@ -29,6 +29,9 @@ Stop the daemon. Preserve the complete state and verified backup. Do not copy a 
 delete the `.cigar-revision` anchor, edit journal JSON, or run an older binary against newer state.
 Restore a verified backup into a distinct empty directory. Follow the
 [local storage recovery runbook](../runbooks/local-storage-recovery.md) for evidence-preserving steps.
+For v4/v5 preflight, activation, rollback, compaction, and deep verification, use the
+[Honey storage v5 guide](honey-storage-v5.md). The original v4 source is evidence; do not remove it
+merely because activation succeeded.
 
 ## Stale or degraded retrieval
 

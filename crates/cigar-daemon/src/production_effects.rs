@@ -2,8 +2,9 @@
 
 use cigar_canon::parse_strict_json;
 use cigar_effects::reference::{
-    DemoIssueConnector, DemoIssueRequest, DemoIssueService, FilesystemEffectConnector,
-    FilesystemWriteRequest, HttpTransport, IdempotentHttpConnector, IdempotentHttpRequest,
+    DemoDispatchMode, DemoIssueConnector, DemoIssueRequest, DemoIssueService,
+    FilesystemEffectConnector, FilesystemWriteRequest, HttpTransport, IdempotentHttpConnector,
+    IdempotentHttpRequest,
 };
 use cigar_effects::{EffectConnector, EffectError, EffectErrorCode};
 use cigar_protocol::{EffectIntent, RecordId};
@@ -90,6 +91,35 @@ pub enum ProductionEffectConnectorKind {
     IdempotentHttp,
 }
 
+/// One deterministic initial behavior for the hermetic demo connector.
+///
+/// This is deliberately unavailable to filesystem and HTTP connectors. It exists so an installed
+/// local-development composition can prove unknown-outcome reconciliation without network access
+/// or an unsafe second dispatch.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DevelopmentDemoDispatchMode {
+    /// Commit and return the normal success observation.
+    Normal,
+    /// Commit once, lose the response, and require reconciliation.
+    CommitThenLoseResponse,
+    /// Prove that no request capable of committing reached the service.
+    ProvenNotSent,
+    /// Reject before committing.
+    RejectBeforeCommit,
+}
+
+impl From<DevelopmentDemoDispatchMode> for DemoDispatchMode {
+    fn from(value: DevelopmentDemoDispatchMode) -> Self {
+        match value {
+            DevelopmentDemoDispatchMode::Normal => Self::Normal,
+            DevelopmentDemoDispatchMode::CommitThenLoseResponse => Self::CommitThenLoseResponse,
+            DevelopmentDemoDispatchMode::ProvenNotSent => Self::ProvenNotSent,
+            DevelopmentDemoDispatchMode::RejectBeforeCommit => Self::RejectBeforeCommit,
+        }
+    }
+}
+
 /// One immutable effect connector selector.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -106,6 +136,8 @@ pub struct ProductionEffectConnectorConfiguration {
     pub https_transport: Option<ProductionHttpsEffectTransportConfiguration>,
     /// Mandatory opaque argument-vault provider selector for enabled connectors.
     pub argument_vault_provider: Option<String>,
+    /// Optional one-shot initial mode, accepted only by the hermetic demo connector.
+    pub development_demo_dispatch_mode: Option<DevelopmentDemoDispatchMode>,
 }
 
 /// Explicit, secret-safe configuration for the macOS stock HTTPS effect transport.
@@ -214,6 +246,14 @@ impl ProductionEffectRegistry {
             .any(|connector| connector.kind == ProductionEffectConnectorKind::IdempotentHttp)
     }
 
+    /// Returns whether a source-only local development fault was explicitly selected.
+    #[must_use]
+    pub(crate) fn has_development_demo_dispatch_mode(&self) -> bool {
+        self.connectors
+            .iter()
+            .any(|connector| connector.development_demo_dispatch_mode.is_some())
+    }
+
     /// Constructs the exact configured built-in connectors and their shared tenant-scoped vault.
     ///
     /// HTTP connectors require an explicitly injected bounded HTTPS transport. Disabled profiles
@@ -231,6 +271,11 @@ impl ProductionEffectRegistry {
             let stager = match configuration.kind {
                 ProductionEffectConnectorKind::DemoIssue => {
                     let service = Arc::new(DemoIssueService::default());
+                    if let Some(mode) = configuration.development_demo_dispatch_mode {
+                        service
+                            .set_next_mode(mode.into())
+                            .map_err(map_connector_build_error)?;
+                    }
                     let connector = Arc::new(
                         DemoIssueConnector::new(configuration.name.clone(), Arc::clone(&service))
                             .map_err(map_connector_build_error)?,
@@ -467,6 +512,7 @@ impl ProductionEffectConnectorConfiguration {
             ProductionEffectConnectorKind::Filesystem => {
                 self.endpoint.is_none()
                     && self.https_transport.is_none()
+                    && self.development_demo_dispatch_mode.is_none()
                     && self.root_directory.as_ref().is_some_and(|root| {
                         root.is_absolute()
                             && !root.components().any(|component| {
@@ -478,6 +524,7 @@ impl ProductionEffectConnectorConfiguration {
                 #[cfg(target_os = "macos")]
                 {
                     self.root_directory.is_none()
+                        && self.development_demo_dispatch_mode.is_none()
                         && self
                             .endpoint
                             .as_deref()
@@ -737,6 +784,13 @@ mod tests {
             r#"{{"schema_version":"{EFFECT_REGISTRY_SCHEMA}","effects_enabled":true,"connectors":[{{"name":"issues","kind":"demo_issue","argument_vault_provider":"repository_blob_json.v1"}}]}}"#
         );
         assert!(ProductionEffectRegistry::from_json(enabled.as_bytes()).is_ok());
+
+        let development_fault = format!(
+            r#"{{"schema_version":"{EFFECT_REGISTRY_SCHEMA}","effects_enabled":true,"connectors":[{{"name":"issues","kind":"demo_issue","argument_vault_provider":"repository_blob_json.v1","development_demo_dispatch_mode":"commit_then_lose_response"}}]}}"#
+        );
+        let registry = ProductionEffectRegistry::from_json(development_fault.as_bytes())?;
+        let components = registry.compose(Arc::new(EmptyBlobs), None)?;
+        assert!(components.demo_service("issues").is_some());
 
         let unsupported = enabled.replace("repository_blob_json.v1", "ambient-memory.v1");
         assert_eq!(

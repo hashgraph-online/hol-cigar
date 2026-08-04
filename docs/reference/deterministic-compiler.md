@@ -22,6 +22,21 @@ compiler computes the exact per-lane lower bound before optional packing and ret
 `BudgetUnsatisfiable` with the minimum required tokens if closure cannot fit. A blocking requirement
 is always selected or compilation returns `RequiredMissing`.
 
+After lifecycle and claim reconciliation, Honey 0.9.2 groups compatible cross-logical candidates
+whose complete canonical representation sets are identical. Lane, policy outcome, classification,
+instruction authority, claim semantics, token/loss metadata, and transform receipts must also match.
+Redacted markers and dependency contractions that could erase or cycle an obligation remain separate.
+The stable representative inherits the union of mandatory status, requirement coverage, entity
+coverage, and dependencies before closure and packing.
+
+The daemon bounds compiler intake before protected content loading. It derives candidate allowances
+from lane tokens, compiler item limits/minima, and a frozen oversubscription factor; gives exact,
+blocking, policy, higher-authority, and dependency evidence a separately bounded bypass; coalesces
+authorized channel/content aliases; applies per-source, lineage, and content-family caps; and runs
+deterministic integer diversity selection. All bound/diversity constants are in the retrieval-plan
+fingerprint. The compiler remains authoritative for exact token costs, dependency closure, policy,
+and safe content equivalence.
+
 ## Represent and pack
 
 Representation constructors cover exact, evidence-backed extractive, pre-existing verified summary,
@@ -40,10 +55,18 @@ that lane has no eligible candidate. Final repair reruns all lane and total toke
 ## Seal and explain
 
 Sealing deterministically derives plan, manifest, block, and bundle identities; validates the frozen
-protocol records; and registers selected catalog versions plus policy, index, retrieval-plan, and
-compiler-profile invalidation roots. Block provenance contains the selected version and complete
-transitive dependency closure. The manifest includes every considered version with its final
-disposition, supplementary reasons, and provenance digest.
+protocol records; and registers every represented member/dependency version plus policy, index,
+retrieval-plan, and compiler-profile invalidation roots. A shared block charges its representation
+tokens and item count once while its canonical provenance contains every equivalent version and the
+complete transitive dependency closure. The manifest still includes every considered version with
+its final disposition, supplementary reasons, and provenance digest; compatible non-representatives
+use the v1 `budget_displaced` reason.
+
+`CompileOutput::content_equivalence` is protected, non-wire diagnostic state. It preserves class
+members, provenance commitments, representatives, and selected block IDs. After applying disclosure
+authorization, `CompileOutput::resolve_citation` maps any represented member version to the shared
+block without replacing the cited source identity. The daemon retains and reauthorizes every member
+for invalidation even though materialization reads the representative bytes once.
 
 The full manifest is protected. `CompileOutput::explain` accepts a freshly authorized version set and
 omits every other entry, so an explanation cannot reveal denied IDs, counts, reasons, or provenance.

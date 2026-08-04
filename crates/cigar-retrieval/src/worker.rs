@@ -70,6 +70,56 @@ impl fmt::Debug for IndexWorker {
 }
 
 impl IndexWorker {
+    /// Restores one complete generation from canonical repository state when startup can no
+    /// longer replay the historical catalog revision retained by the causal outbox. This is
+    /// restricted to a fresh worker and manager so it cannot skip live work or replace an active
+    /// generation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore(
+        &self,
+        target: StoreRevision,
+        provider: &dyn IndexSnapshotProvider,
+        manager: &InMemoryIndexManager,
+        configuration_digest: ContentDigest,
+        vector_binding: Option<VectorIndexBinding>,
+        verified_at: UtcTimestamp,
+        context: &RetrievalContext,
+    ) -> Result<IndexWorkerReceipt, RetrievalError> {
+        context.check()?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_error| RetrievalError::new(RetrievalErrorCode::IndexUnavailable))?;
+        if state.watermark != StoreRevision(0)
+            || !state.processed.is_empty()
+            || manager.active_generation()?.is_some()
+        {
+            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
+        }
+        let snapshot = provider.load(target, context)?;
+        context.check()?;
+        let descriptor = manager.build_generation(
+            IndexBuild {
+                atoms: snapshot.atoms,
+                edges: snapshot.edges,
+                built_through_revision: target,
+                tenant_watermarks: snapshot.tenant_watermarks,
+                configuration_digest,
+                verified_at,
+                vector_binding,
+            },
+            context,
+        )?;
+        context.check()?;
+        let active = manager.activate(&descriptor.generation_id, None)?;
+        state.watermark = target;
+        Ok(IndexWorkerReceipt {
+            watermark: target,
+            claimed_messages: 0,
+            active_generation: Some(active),
+        })
+    }
+
     /// Rebuilds through all new ordered catalog mutations and advances only after activation.
     #[allow(clippy::too_many_arguments)]
     pub fn process(

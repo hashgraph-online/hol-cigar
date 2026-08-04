@@ -37,7 +37,7 @@ from verify_honey_release import verify as verify_honey_release
 from verify_package import verify as verify_package
 
 
-VERSION = "0.9.0-honey.1"
+VERSION = "0.9.2"
 CONTEXT_ABI = "cigar.context.v1"
 REPORT_SCHEMA = "cigar.honey.gate-report.v1"
 PRODUCER_PATH = "scripts/release/build_honey_gate_reports.py"

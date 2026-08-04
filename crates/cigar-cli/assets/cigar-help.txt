@@ -19,6 +19,14 @@ Commands:
   cigar backup create <archive>
   cigar backup verify <archive>
   cigar backup restore <archive> <empty-target>
+  cigar migration preflight <v4-source.sqlite3> <verified-backup> <new-v5-target.sqlite3>
+  cigar migration run <v4-source.sqlite3> <verified-backup> <new-v5-target.sqlite3> --yes
+  cigar migration activate <v4-source.sqlite3> <verified-backup> <v5-target.sqlite3> <signed-receipt.json> <active-store.json> --yes
+  cigar migration cleanup <v4-source.sqlite3> <verified-backup> <incomplete-v5-target.sqlite3> <active-store.json> --yes
+  cigar compaction preview <v5-source.sqlite3> <migration-receipt.json> <new-target.sqlite3> <active-store.json> <new-preview.json> --yes
+  cigar compaction execute <signed-preview.json> --yes
+  cigar compaction status <active-store.json>
+  cigar integrity deep <v5-database.sqlite3> [--force-full] --yes
   cigar gc plan <new-signed-plan.json> [--input <gc-policy.json>] --yes
   cigar gc run <signed-plan.json> --yes
   cigar diagnostics bundle <content-free-support.tar>
@@ -61,6 +69,7 @@ Global options:
   --explain-config                    Print effective values and their sources
   --security                          Run local security diagnostics
   --deep                              Verify hashes, journals, and projections
+  --force-full                        Ignore a signed prefix and verify all retained v5 history
   --help                              Show this help (alias: -h)
   --version                           Show build metadata (alias: -V)
 

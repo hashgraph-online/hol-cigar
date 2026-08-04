@@ -4,7 +4,7 @@ use cigar_policy::{
     CapabilityContext, CompiledPolicyEngine, PolicyProfile, PolicyRequest, PolicyResource,
 };
 use cigar_protocol::{
-    AtomPayload, Capability, Classification, ContentDigest, ContextAtomV1, ContextEdge,
+    AtomKind, AtomPayload, Capability, Classification, ContentDigest, ContextAtomV1, ContextEdge,
     ContextRequirement, InstructionAuthority, Lifecycle, LineageId, RecordId, RelativePath,
     SourceUri, UtcTimestamp, VersionId,
 };
@@ -180,6 +180,7 @@ fn request(stage: RetrievalStage, partition: &AuthorizedPartition) -> RetrievalR
         partition: partition.clone(),
         required_revision: StoreRevision(17),
         consistency: RetrievalConsistency::Strong,
+        atom_kinds: BTreeSet::new(),
         exact_versions: BTreeSet::new(),
         atom_ids: BTreeSet::new(),
         lineage_ids: BTreeSet::new(),
@@ -230,7 +231,7 @@ fn exact_metadata_lexical_graph_temporal_authority_and_active_state_are_qualifie
     let tenant = record(1)?;
     let project = record(2)?;
     let authority = authorization(&tenant, &project)?;
-    let alpha = atom(
+    let mut alpha = atom(
         1,
         &tenant,
         &project,
@@ -239,7 +240,8 @@ fn exact_metadata_lexical_graph_temporal_authority_and_active_state_are_qualifie
         "LexicalNeedle alpha implementation",
         &["symbol::alpha", "entity:customer"],
     )?;
-    let beta = atom(
+    alpha.kind = AtomKind::SourceCode;
+    let mut beta = atom(
         2,
         &tenant,
         &project,
@@ -248,6 +250,7 @@ fn exact_metadata_lexical_graph_temporal_authority_and_active_state_are_qualifie
         "connected beta documentation",
         &["symbol::beta", "entity:order"],
     )?;
+    beta.kind = AtomKind::Documentation;
     let mut future = atom(
         3,
         &tenant,
@@ -349,6 +352,17 @@ fn exact_metadata_lexical_graph_temporal_authority_and_active_state_are_qualifie
     let mut lexical = request(RetrievalStage::Lexical, &authority.partition);
     lexical.terms.insert("lexicalneedle".to_owned());
     assert_eq!(candidate_versions(&manager, &lexical)?, expected_alpha);
+
+    let mut kind_scoped = request(RetrievalStage::Lexical, &authority.partition);
+    kind_scoped.atom_kinds.insert(AtomKind::Documentation);
+    kind_scoped.terms.insert("connected".to_owned());
+    kind_scoped.terms.insert("lexicalneedle".to_owned());
+    kind_scoped.limit = 1;
+    assert_eq!(
+        candidate_versions(&manager, &kind_scoped)?,
+        BTreeSet::from([beta.version_id.clone()]),
+        "semantic kind scope must be applied before channel ranking and caps"
+    );
 
     let augment = request(RetrievalStage::Augment, &authority.partition);
     assert_eq!(

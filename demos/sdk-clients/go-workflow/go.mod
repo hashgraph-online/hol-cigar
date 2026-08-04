@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/CIGAR/cigar/sdk/go v0.0.0
-	google.golang.org/grpc v1.82.0
+	google.golang.org/grpc v1.82.1
 )
 
 require (

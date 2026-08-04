@@ -35,12 +35,12 @@ members = [
 default-members = ["crates/cigar-cli", "crates/cigar-daemon", "crates/cigar-mcp"]
 
 [workspace.package]
-version = "0.9.0-honey.1"
+version = "0.9.2"
 edition = "2024"
 rust-version = "1.92"
 license = "Apache-2.0"
 repository = "https://github.com/CIGAR/cigar"
-homepage = "https://hol.org/cigar"
+homepage = "https://github.com/CIGAR/cigar"
 authors = ["CIGAR contributors"]
 
 [workspace.dependencies]
@@ -52,25 +52,26 @@ cap-std = { version = "=4.0.2" }
 argon2 = { version = "=0.5.3" }
 chacha20poly1305 = { version = "=0.11.0", features = ["zeroize"] }
 ciborium = { version = "=0.2.2" }
-cigar-api = { version = "=0.9.0-honey.1", path = "crates/cigar-api" }
-cigar-protocol = { version = "=0.9.0-honey.1", path = "crates/cigar-protocol" }
-cigar-canon = { version = "=0.9.0-honey.1", path = "crates/cigar-canon" }
-cigar-catalog = { version = "=0.9.0-honey.1", path = "crates/cigar-catalog" }
-cigar-code-intel = { version = "=0.9.0-honey.1", path = "crates/cigar-code-intel" }
-cigar-compiler = { version = "=0.9.0-honey.1", path = "crates/cigar-compiler" }
-cigar-crypto = { version = "=0.9.0-honey.1", path = "crates/cigar-crypto" }
-cigar-effects = { version = "=0.9.0-honey.1", path = "crates/cigar-effects" }
-cigar-observe = { version = "=0.9.0-honey.1", path = "crates/cigar-observe" }
-cigar-mcp = { version = "=0.9.0-honey.1", path = "crates/cigar-mcp" }
-cigar-policy = { version = "=0.9.0-honey.1", path = "crates/cigar-policy" }
-cigar-replay = { version = "=0.9.0-honey.1", path = "crates/cigar-replay" }
-cigar-retrieval = { version = "=0.9.0-honey.1", path = "crates/cigar-retrieval" }
-cigar-space = { version = "=0.9.0-honey.1", path = "crates/cigar-space" }
-cigar-testkit = { version = "=0.9.0-honey.1", path = "crates/cigar-testkit" }
-cigar-store = { version = "=0.9.0-honey.1", path = "crates/cigar-store" }
-cigar-sdk = { version = "=0.9.0-honey.1", path = "sdk/rust", default-features = false }
+cigar-api = { version = "=0.9.2", path = "crates/cigar-api" }
+cigar-protocol = { version = "=0.9.2", path = "crates/cigar-protocol" }
+cigar-canon = { version = "=0.9.2", path = "crates/cigar-canon" }
+cigar-catalog = { version = "=0.9.2", path = "crates/cigar-catalog" }
+cigar-code-intel = { version = "=0.9.2", path = "crates/cigar-code-intel" }
+cigar-compiler = { version = "=0.9.2", path = "crates/cigar-compiler" }
+cigar-crypto = { version = "=0.9.2", path = "crates/cigar-crypto" }
+cigar-effects = { version = "=0.9.2", path = "crates/cigar-effects" }
+cigar-observe = { version = "=0.9.2", path = "crates/cigar-observe" }
+cigar-mcp = { version = "=0.9.2", path = "crates/cigar-mcp" }
+cigar-policy = { version = "=0.9.2", path = "crates/cigar-policy" }
+cigar-replay = { version = "=0.9.2", path = "crates/cigar-replay" }
+cigar-retrieval = { version = "=0.9.2", path = "crates/cigar-retrieval" }
+cigar-space = { version = "=0.9.2", path = "crates/cigar-space" }
+cigar-testkit = { version = "=0.9.2", path = "crates/cigar-testkit" }
+cigar-store = { version = "=0.9.2", path = "crates/cigar-store" }
+cigar-sdk = { version = "=0.9.2", path = "sdk/rust", default-features = false }
 futures-core = { version = "=0.3.32" }
 flate2 = { version = "=1.1.9" }
+zstd = { version = "=0.13.3" }
 schemars = { version = "=1.2.1", features = ["derive"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150" }
@@ -115,8 +116,8 @@ tower = { version = "=0.5.3", features = ["limit", "util"] }
 tower-http = { version = "=0.7.0", features = ["limit"] }
 unicode-normalization = { version = "=0.1.25" }
 x509-parser = { version = "=0.18.1" }
-wasmtime = { version = "=44.0.3", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
-wasmtime-wasi = { version = "=44.0.3", default-features = false, features = ["p2"] }
+wasmtime = { version = "=36.0.13", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
+wasmtime-wasi = { version = "=36.0.13", default-features = false, features = ["p2"] }
 wat = { version = "=1.245.1", default-features = false, features = ["component-model"] }
 webpki-roots = { version = "=1.0.8" }
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }

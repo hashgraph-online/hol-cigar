@@ -63,12 +63,12 @@
         "_go_components"
       ],
       "generator_path": "scripts/release/generate_sbom.py",
-      "generator_sha256": "5bad087d44a40c689bad2dc800a5b5f18b0fceb1bd35cd496bf85fe87788d6b6"
+      "generator_sha256": "5ee1e7ea5124835c3766fb04ab634948a4c50a4485549ab275402f9b08b1fd4d"
     },
     "source_archive": {
       "artifact_id": "source",
       "builder_path": "scripts/release/build_archives.py",
-      "builder_sha256": "45e121b3babe882f1ec336a1c88da16ca21a902655f0fecd26296899025ac567",
+      "builder_sha256": "0e912b97fae173a6e40e33101c033b8dc94e1c6b5ad397dc39b7cd8fe88ba597",
       "manifest_path": "packaging/local-archives.v1.json"
     },
     "stale_lock_path": "vendor/aws-creds-0.39.1/Cargo.lock"

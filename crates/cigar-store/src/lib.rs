@@ -4,12 +4,16 @@ mod backup;
 mod blob;
 mod gc;
 mod memory;
+mod metrics;
+pub mod migrate_v5;
 mod migration;
 mod model;
 mod object;
 mod postgres;
+pub mod revision_delta;
 mod service_repository;
 mod sqlite;
+mod sqlite_v5;
 
 pub use backup::{
     BACKUP_DATABASE_FILE, BACKUP_EFFECT_CHECKPOINT_FILE, BackupError, BackupErrorCode,
@@ -31,6 +35,12 @@ pub use gc::{
     verify_garbage_collection_plan_trusted,
 };
 pub use memory::{InMemoryReadTransaction, InMemoryStore, InMemoryWriteTransaction};
+pub use metrics::{
+    RepositoryCommitBytes, RepositoryCommitDurations, RepositoryCommitKind,
+    RepositoryCommitMetrics, RepositoryCommitMetricsObserver, RepositoryCommitOutcome,
+    RepositoryRetentionCounts, RepositoryStartupMetrics, RepositoryStartupMetricsObserver,
+    RepositoryStartupOutcome, RepositoryStartupStage,
+};
 pub use migration::{
     MAX_MIGRATION_ENTRIES, MigrationCompatibility, MigrationCompatibilityError,
     MigrationDefinition, MigrationLedgerEntry, MigrationMode, MigrationPlan,
@@ -84,6 +94,10 @@ pub use sqlite::{
     SqliteCatalogStatistics, SqliteConfiguration, SqliteDeepIntegrityReport, SqliteFailpoint,
     SqliteProjectionFailpoint, SqliteProjectionStatus, SqliteReadTransaction,
     SqliteStorageStatistics, SqliteStore, SqliteWriteTransaction,
+};
+pub use sqlite_v5::{
+    SqliteDeepIntegrityReportV5, SqliteRetentionStatisticsV5, SqliteStartupVerificationV5,
+    SqliteV5Store, SqliteV5WriteTransaction,
 };
 
 /// Reusable black-box repository behavior suite.

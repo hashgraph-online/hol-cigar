@@ -17,6 +17,9 @@ _cigar() {
     'replay:reconstruct run and compare replay jobs'
     'policy:check and explain policy'
     'backup:create verify and restore backups'
+    'migration:preflight construct or activate a distinct-target SQLite v5 migration'
+    'compaction:preview execute or inspect offline revision compaction'
+    'integrity:run signed-prefix v5 retained-history verification'
     'gc:plan and run garbage collection'
     'diagnostics:create a content-free support bundle'
     'state:inspect frozen beta state without applying it'
@@ -56,6 +59,7 @@ _cigar() {
     '--explain-config[show effective configuration provenance]' \
     '--security[run local security diagnostics]' \
     '--deep[verify hashes journals and projections]' \
+    '--force-full[verify all retained v5 history without prefix reuse]' \
     '--help[show help]' \
     '-h[show help]' \
     '--version[show build metadata]' \
@@ -75,6 +79,9 @@ _cigar() {
     args:replay) _values 'replay command' reconstruct run compare completeness ;;
     args:policy) _values 'policy command' check explain ;;
     args:backup) _values 'backup command' create verify restore ;;
+    args:migration) _values 'migration command' preflight run activate cleanup ;;
+    args:compaction) _values 'compaction command' preview execute status ;;
+    args:integrity) _values 'integrity command' deep ;;
     args:gc) _values 'gc command' plan run ;;
     args:diagnostics) _values 'diagnostics command' bundle ;;
     args:state) _values 'state command' inspect-beta import-beta restore-beta ;;

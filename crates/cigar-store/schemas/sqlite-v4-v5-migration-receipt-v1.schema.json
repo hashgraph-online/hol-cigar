@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SignedSqliteV4V5MigrationReceiptV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt", "signature"],
+  "properties": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "schema_digest", "created_at_unix_nanos", "tool_name", "tool_version", "product_version",
+        "source_device", "source_inode", "source_database_bytes", "source_database_digest",
+        "first_retained_revision", "latest_revision", "retained_revisions",
+        "backup_canonical_root", "backup_manifest_digest", "target_format_version",
+        "target_device", "target_inode", "target_database_bytes", "target_database_digest",
+        "source_catalog_root", "source_semantic_root", "target_catalog_root",
+        "target_semantic_root", "target_chain_head", "sqlite_integrity_verified",
+        "v5_chain_verified", "exact_reconstruction_verified", "catalog_projection_verified",
+        "external_blobs_verified", "effect_chain_verified", "failpoint_free_completion"
+      ],
+      "properties": {
+        "schema_version": {"const": "cigar.sqlite-v4-v5-migration-receipt.v1"},
+        "schema_digest": {"$ref": "#/$defs/digest"},
+        "created_at_unix_nanos": {"type": "string", "minLength": 1, "maxLength": 39, "pattern": "^(0|[1-9][0-9]{0,38})$"},
+        "tool_name": {"const": "cigar"},
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "product_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "source_device": {"type": "integer", "minimum": 0},
+        "source_inode": {"type": "integer", "minimum": 1},
+        "source_database_bytes": {"type": "integer", "minimum": 1},
+        "source_database_digest": {"$ref": "#/$defs/digest"},
+        "first_retained_revision": {"type": "integer", "minimum": 0},
+        "latest_revision": {"type": "integer", "minimum": 0},
+        "retained_revisions": {"type": "integer", "minimum": 1},
+        "backup_canonical_root": {"$ref": "#/$defs/digest"},
+        "backup_manifest_digest": {"$ref": "#/$defs/digest"},
+        "target_format_version": {"const": 5},
+        "target_device": {"type": "integer", "minimum": 0},
+        "target_inode": {"type": "integer", "minimum": 1},
+        "target_database_bytes": {"type": "integer", "minimum": 1},
+        "target_database_digest": {"$ref": "#/$defs/digest"},
+        "source_catalog_root": {"$ref": "#/$defs/digest"},
+        "source_semantic_root": {"$ref": "#/$defs/digest"},
+        "target_catalog_root": {"$ref": "#/$defs/digest"},
+        "target_semantic_root": {"$ref": "#/$defs/digest"},
+        "target_chain_head": {"$ref": "#/$defs/digest"},
+        "sqlite_integrity_verified": {"const": true},
+        "v5_chain_verified": {"const": true},
+        "exact_reconstruction_verified": {"const": true},
+        "catalog_projection_verified": {"const": true},
+        "external_blobs_verified": {"const": true},
+        "effect_chain_verified": {"const": true},
+        "failpoint_free_completion": {"const": true}
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm", "key_ref", "tenant", "signer", "purpose",
+        "signed_at_unix_nanos", "payload_digest_hex", "signature_hex"
+      ],
+      "properties": {
+        "algorithm": {"const": "ed25519"},
+        "key_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "tenant": {"type": "string", "minLength": 1, "maxLength": 256},
+        "signer": {"type": "string", "minLength": 1, "maxLength": 256},
+        "purpose": {"const": "sqlite-v4-v5-migration-receipt-v1"},
+        "signed_at_unix_nanos": {"type": "string", "minLength": 1, "maxLength": 39, "pattern": "^(0|[1-9][0-9]{0,38})$"},
+        "payload_digest_hex": {"type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$"},
+        "signature_hex": {"type": "string", "minLength": 128, "maxLength": 128, "pattern": "^[0-9a-f]{128}$"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "minLength": 68, "maxLength": 68, "pattern": "^1220[0-9a-f]{64}$"}
+  }
+}

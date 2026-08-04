@@ -150,11 +150,13 @@ impl EffectCheckpointDocument {
             Ok(index) => {
                 let checkpoint = self.checkpoints.get_mut(index).ok_or_else(corrupt)?;
                 if intent_digest != &checkpoint.intent_digest
-                    || effect_version < checkpoint.effect_version
                     || (effect_version == checkpoint.effect_version
                         && authenticator != &checkpoint.authenticator)
                 {
                     return Err(corrupt());
+                }
+                if effect_version < checkpoint.effect_version {
+                    return Err(EffectError::new(EffectErrorCode::RevisionConflict));
                 }
                 if effect_version == checkpoint.effect_version {
                     return Ok(false);
@@ -977,7 +979,7 @@ mod tests {
     }
 
     #[test]
-    fn checkpoint_restart_two_factories_and_rollback_fail_closed() -> TestResult {
+    fn checkpoint_restart_two_factories_and_stale_observation_fail_closed() -> TestResult {
         let directory = tempfile::tempdir()?;
         let path = checkpoint_directory(directory.path())?.join("effect-checkpoints.json");
         let first = EffectCheckpointFile::open(path.clone(), true)?;
@@ -994,7 +996,7 @@ mod tests {
                 .observe(&tenant, &effect, &intent, 0, &root_one)
                 .err()
                 .map(|error| error.code()),
-            Some(EffectErrorCode::CorruptJournal)
+            Some(EffectErrorCode::RevisionConflict)
         );
         assert_eq!(
             second
@@ -1018,7 +1020,7 @@ mod tests {
                 .observe(&tenant, &effect, &intent, 0, &root_one)
                 .err()
                 .map(|error| error.code()),
-            Some(EffectErrorCode::CorruptJournal)
+            Some(EffectErrorCode::RevisionConflict)
         );
         Ok(())
     }

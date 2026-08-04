@@ -6,7 +6,7 @@
   "fixture": "fixture.json",
   "fixture_digest": "1220072e14cf546c8ef0678e33717de1fc3067a3248669cd07899ff99214450cadea",
   "driver": "driver.py",
-  "driver_digest": "1220bc366d8964c2a620ab0467235af1bfaef0c0c8ee47be003773e38ecbca5dedec",
+  "driver_digest": "12205a2d4cacc4e2fcad51a944ebd4a2e128a801b7e22c81f5b212172bf25c5834a0",
   "driver_support_digest": "1220fd8e4b7a5f39e7de973058d25a359e44216fca53d3d720b4e89bd4527bc2ec71",
   "recorded_mode": true,
   "setup": ["isolated-home", "deterministic-parent-and-children", "network-disabled", "fixed-clock-and-seed"],

@@ -358,9 +358,12 @@ def _validate_honey_authority(
     python_match = re.fullmatch(
         r"([0-9]+\.[0-9]+\.[0-9]+)-honey\.([1-9][0-9]*)", version
     )
-    if python_match is None:
+    if python_match is not None:
+        python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
+    elif re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None:
+        python_version = version
+    else:
         raise ReleaseError("Honey version cannot be mapped to the capability profile")
-    python_version = f"{python_match.group(1)}.dev{python_match.group(2)}"
     identity = {
         "channel": "honey",
         "context_abi": product["context_abi"],
@@ -371,7 +374,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9",
+        "marketing_name": "CIGAR Honey v0.9.2",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,
@@ -1301,9 +1304,9 @@ def produce(
         ) as raw:
             scratch = Path(raw).resolve(strict=True)
             # Plugin build staging contains an unpublished executable and package payload.
-            os.chmod(
+            os.chmod(  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
                 scratch, 0o700
-            )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            )
             validation = source_validator(configuration, scratch)
             if validation != {
                 "validator": f"{ADAPTER_RELATIVE}/tests/validate_package.py",

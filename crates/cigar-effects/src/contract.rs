@@ -251,6 +251,10 @@ pub trait EffectRecordAuthenticator: Send + Sync {
     /// The checkpoint identity is `(tenant_id, effect_id)`. Implementations must permanently bind
     /// its first observed `intent_digest`, reject a different intent for the same identity, reject
     /// lower versions, and reject a different authenticator at an already observed version.
+    ///
+    /// A lower version should be reported as [`EffectErrorCode::RevisionConflict`] so a caller
+    /// performing a latest read can retry the complete repository transaction. Intent or
+    /// authenticator substitution must remain an integrity failure.
     fn observe_latest(
         &self,
         tenant_id: &RecordId,

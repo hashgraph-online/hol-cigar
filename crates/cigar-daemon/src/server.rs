@@ -1346,6 +1346,7 @@ mod tests {
     fn local_tcp_config(root: &Path, address: SocketAddr) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Local,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.join("runtime"),
@@ -1372,6 +1373,7 @@ mod tests {
     fn shared_config(root: &Path, tls: TlsFiles, grpc_address: SocketAddr) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Shared,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.join("runtime"),
@@ -1407,6 +1409,7 @@ mod tests {
     fn local_unix_config(root: &Path) -> DaemonConfig {
         DaemonConfig {
             mode: crate::DeploymentMode::Local,
+            intelligence_profile: crate::IntelligenceProfile::default(),
             local_sqlite_capacity_profile: cigar_store::SqliteCapacityProfile::Standard,
             state_directory: root.join("state"),
             runtime_directory: root.to_path_buf(),
@@ -1453,6 +1456,7 @@ mod tests {
         crate::ProductionPaths {
             project_directory: root.to_path_buf(),
             metadata_database: root.join("state/cigar.sqlite3"),
+            active_store_descriptor: None,
             blob_directory: root.join("state/blobs"),
             blob_key_reference_directory: root.join("state/blob-keys"),
             keystore_file: root.join("state/keystore.cigar"),

@@ -696,6 +696,61 @@ class HoneyEvidenceTests(unittest.TestCase):
                                 fixture.authority,
                             )
 
+    def test_efficiency_report_is_cross_bound_to_installed_cigar_bytes(self) -> None:
+        source = {
+            "revision": "a" * 40,
+            "tree": "b" * 40,
+            "committed": True,
+            "clean": True,
+        }
+        manifest_sha256 = "c" * 64
+        cigar_sha256 = "d" * 64
+        report = {
+            "overall_status": "pass",
+            "source": {
+                "commit": source["revision"],
+                "tree": source["tree"],
+                "clean": True,
+            },
+            "candidate": {
+                "manifest_sha256": manifest_sha256,
+                "installed_runtime_sha256": cigar_sha256,
+            },
+        }
+        artifacts = {"release-manifest": {"sha256": manifest_sha256}}
+        installed = {"installed_binary_sha256": {"cigar": cigar_sha256}}
+        with (
+            mock.patch.object(honey.honey_efficiency_contract, "validate_authorities"),
+            mock.patch.object(
+                honey.honey_efficiency_contract,
+                "load_json",
+                side_effect=[
+                    ({}, b"fixtures"),
+                    ({}, b"profile"),
+                    ({}, b"fixtures"),
+                    ({}, b"profile"),
+                ],
+            ),
+            mock.patch.object(
+                honey.honey_efficiency_contract, "validate_fixture_manifest"
+            ),
+            mock.patch.object(
+                honey.honey_efficiency_contract, "validate_qualification_profile"
+            ),
+            mock.patch.object(honey.honey_efficiency_contract, "validate_report"),
+        ):
+            honey._validate_efficiency_report(
+                report, artifacts, source, mock.Mock(root=REPOSITORY_ROOT), installed
+            )
+            stale = json.loads(json.dumps(report))
+            stale["candidate"]["installed_runtime_sha256"] = "e" * 64
+            with self.assertRaisesRegex(
+                honey.HoneyEvidenceError, "installed runtime bytes"
+            ):
+                honey._validate_efficiency_report(
+                    stale, artifacts, source, mock.Mock(root=REPOSITORY_ROOT), installed
+                )
+
     def test_gate_assignment_and_schema_are_closed_by_evidence_id(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp") as raw:
             fixture = self._fixture(raw)

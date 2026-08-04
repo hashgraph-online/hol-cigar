@@ -64,7 +64,7 @@ class ProtocolCompatibilityTests(unittest.TestCase):
     def test_repository_policy_is_exact_bound_and_nonclaiming(self) -> None:
         compat.validate_repository(ROOT, self.policy)
         domains = self.policy["domains"]
-        self.assertEqual(domains["public_schemas"]["binding"]["file_count"], 42)
+        self.assertEqual(domains["public_schemas"]["binding"]["file_count"], 43)
         self.assertEqual(domains["operations"]["operation_count"], 45)
         self.assertEqual(domains["interface_projections"]["binding"]["file_count"], 6)
         self.assertEqual(domains["interface_projections"]["cli_mapping_count"], 34)

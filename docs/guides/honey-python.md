@@ -1,8 +1,27 @@
 # Honey Python SDK
 
-Honey ships `cigar_sdk-0.9.0.dev1-py3-none-any.whl` and
-`cigar_sdk-0.9.0.dev1.tar.gz`. Install an exact GitHub attachment into a new virtual environment;
-Honey does not publish to PyPI.
+`hol-cigar` is the Python SDK for CIGAR, an alpha project from [HOL.org](https://hol.org).
+
+Honey ships `hol_cigar-0.9.2-py3-none-any.whl` and
+`hol_cigar-0.9.2.tar.gz`. After the release owner approves publication, the same exact bytes
+are published to PyPI as the unsupported `hol-cigar` alpha. The Python import namespace
+remains `cigar_sdk`. Until then, install the
+checksum-verified GitHub prerelease attachment.
+
+## PyPI installation
+
+Python 3.14 is required. Pin the prerelease explicitly:
+
+<!-- docs-check: illustrative -->
+```sh
+python3.14 -m venv .venv
+. .venv/bin/activate
+python -m pip install --pre 'hol-cigar==0.9.2'
+python -c 'import cigar_sdk; print(cigar_sdk.__version__)'
+```
+
+The SDK does not include the daemon. Honey's local daemon remains an Apple-silicon macOS POC and is
+unsupported, unsigned, and not production-qualified.
 
 ## Offline installation
 
@@ -14,7 +33,7 @@ registry fallback.
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --no-index ./cigar_sdk-0.9.0.dev1-py3-none-any.whl
+python -m pip install --no-index ./hol_cigar-0.9.2-py3-none-any.whl
 python -c 'import cigar_sdk; print(cigar_sdk.__version__)'
 ```
 

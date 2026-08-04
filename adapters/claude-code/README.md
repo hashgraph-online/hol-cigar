@@ -4,7 +4,7 @@ CIGAR's development adapter supplies deterministic, inspectable context to Claud
 
 ## Development compatibility target
 
-This is the unpublished, unsupported development package for CIGAR Honey `0.9.0-honey.1`, targeting Claude Code `2.1.207` on Apple silicon macOS. The declared version range and platforms define a future qualification scope only; they are not evidence of installed compatibility, signing, release qualification, publication, or support. The Honey installer rejects every version or host outside that narrow target. Portable Linux and Windows runtime/test assets remain non-installable until their distributed artifacts pass separate native-platform qualification. Any Honey exercise also requires matching `cigar`, `cigar-mcp`, and `cigar-claude-hook` executables from one verified native archive. The installer captures the exact hook and MCP bytes and stages them under `${CLAUDE_PLUGIN_ROOT}/bin`; neither runtime command is resolved through ambient `PATH`.
+This is the unpublished, unsupported development package for CIGAR Honey `0.9.2`, targeting Claude Code `2.1.207` on Apple silicon macOS. The declared version range and platforms define a future qualification scope only; they are not evidence of installed compatibility, signing, release qualification, publication, or support. The Honey installer rejects every version or host outside that narrow target. Portable Linux and Windows runtime/test assets remain non-installable until their distributed artifacts pass separate native-platform qualification. Any Honey exercise also requires matching `cigar`, `cigar-mcp`, and `cigar-claude-hook` executables from one verified native archive. The installer captures the exact hook and MCP bytes and stages them under `${CLAUDE_PLUGIN_ROOT}/bin`; neither runtime command is resolved through ambient `PATH`.
 
 The release-mode `cigar` executable embeds the reviewed adapter manifest and every manifest-bound source byte at compile time. Plugin installation therefore does not read this checkout or accept a mutable package as its authority. An explicit `CIGAR_CLAUDE_PLUGIN_SOURCE` remains a development-test injection point; production and installed qualification omit it and exercise only the embedded payload.
 
@@ -76,7 +76,7 @@ The development archive producer must receive the exact previously built native 
 SOURCE_DATE_EPOCH=1700000000 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-plugin-build \
   python3 scripts/release/build_claude_code_plugin.py \
-    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz
+    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.2-aarch64-apple-darwin.tar.gz
 ```
 
 Installed development qualification uses the exact runtime and plugin archives under an isolated owner-private home. A real local Claude Code executable can exercise its documented public lifecycle commands without making a model request:
@@ -85,9 +85,9 @@ Installed development qualification uses the exact runtime and plugin archives u
 SOURCE_DATE_EPOCH=1700000000 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-installed-qualification \
   python3 scripts/release/qualify_claude_code_plugin.py \
-    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
+    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.2-aarch64-apple-darwin.tar.gz \
     --runtime-archive-sha256 <independently-recorded-runtime-sha256> \
-    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-0.9.0-honey.1.tar.gz \
+    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-0.9.2.tar.gz \
     --plugin-archive-sha256 <independently-recorded-plugin-sha256> \
     --claude /absolute/path/to/claude \
     --claude-sha256 <independently-recorded-claude-sha256>
@@ -99,9 +99,9 @@ When a real Claude executable is unavailable, the explicit fixed-host lane exerc
 SOURCE_DATE_EPOCH=1700000000 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-claude-installed-qualification \
   python3 scripts/release/qualify_claude_code_plugin.py \
-    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.0-honey.1-aarch64-apple-darwin.tar.gz \
+    --runtime-archive /private/tmp/cigar-native-build/cigar-0.9.2-aarch64-apple-darwin.tar.gz \
     --runtime-archive-sha256 <independently-recorded-runtime-sha256> \
-    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-0.9.0-honey.1.tar.gz \
+    --plugin-archive /private/tmp/cigar-claude-plugin-build/cigar-claude-code-0.9.2.tar.gz \
     --plugin-archive-sha256 <independently-recorded-plugin-sha256> \
     --fixed-host
 ```
