@@ -24,9 +24,9 @@ supported, production-qualified, or fully qualified as a product.
 - [ ] Open the public source PR only after the private qualification packet is approved.
 - [ ] After that PR is merged, create `v0.9.2` from the exact approved commit and attach the exact
   verified 13-file candidate as a GitHub prerelease.
-- [ ] Dispatch the approval-gated `publish-hol-cigar-honey` Trusted Publishing workflow with the
-  approved manifest SHA-256, then verify provenance, hashes, and a clean index install of
-  `hol-cigar==0.9.2`.
+- [ ] Dispatch the approval-gated `publish-hol-cigar-honey` Trusted Publishing workflow from the
+  PyPI-authorized `.github/workflows/publish-hol-cigar.yml` file with the approved manifest
+  SHA-256, then verify provenance, hashes, and a clean index install of `hol-cigar==0.9.2`.
 
 Full Honey efficiency-cohort generation, downstream shadow verification, longevity, production
 chaos, cross-platform qualification, signing, and notarization are not Python SDK alpha gates.

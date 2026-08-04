@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-WORKFLOW = ROOT / ".github" / "workflows" / "pypi-honey.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "publish-hol-cigar.yml"
+UNTRUSTED_DUPLICATE = ROOT / ".github" / "workflows" / "pypi-honey.yml"
 REQUIREMENTS = ROOT / "packaging" / "honey" / "release-requirements.v1.json"
 
 
@@ -14,12 +15,12 @@ class PyPIHoneyWorkflowTests(unittest.TestCase):
         cls.document = WORKFLOW.read_text(encoding="utf-8")
 
     def test_publication_is_manual_tag_bound_and_approval_gated(self) -> None:
+        self.assertFalse(UNTRUSTED_DUPLICATE.exists())
         self.assertIn("workflow_dispatch:", self.document)
         self.assertNotIn("pull_request:", self.document)
         self.assertNotIn("push:\n", self.document)
-        self.assertIn(
-            'test "${GITHUB_REF}" = "refs/tags/v0.9.2"', self.document
-        )
+        self.assertIn("ref: v0.9.2", self.document)
+        self.assertIn('test "${GITHUB_REF}" = "refs/heads/main"', self.document)
         self.assertIn(
             'test "${CONFIRM}" = "publish hol-cigar 0.9.2"', self.document
         )
@@ -28,9 +29,12 @@ class PyPIHoneyWorkflowTests(unittest.TestCase):
     def test_exact_release_bytes_are_verified_before_staging(self) -> None:
         self.assertIn("gh release download v0.9.2", self.document)
         self.assertIn(
-            "python3 scripts/release/verify_honey_release.py candidate", self.document
+            'python3 scripts/release/verify_honey_release.py "${candidate_dir}"',
+            self.document,
         )
-        self.assertIn("candidate/honey-release-manifest.json", self.document)
+        self.assertIn(
+            '"${candidate_dir}/honey-release-manifest.json"', self.document
+        )
         self.assertIn("python3 -m twine check --strict dist/*", self.document)
         self.assertIn("skip-existing: false", self.document)
 

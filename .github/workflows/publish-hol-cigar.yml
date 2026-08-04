@@ -1,9 +1,16 @@
-name: publish-hol-cigar
+name: publish-hol-cigar-honey
 
 on:
-  push:
-    tags:
-      - hol-cigar-v0.9.1-pypi.2
+  workflow_dispatch:
+    inputs:
+      manifest_sha256:
+        description: SHA-256 of the approved GitHub prerelease manifest
+        required: true
+        type: string
+      confirm:
+        description: Type "publish hol-cigar 0.9.2"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,14 +19,21 @@ defaults:
   run:
     shell: bash --noprofile --norc -euo pipefail {0}
 
+concurrency:
+  group: publish-hol-cigar-0.9.2
+  cancel-in-progress: false
+
 jobs:
-  qualify:
-    name: Qualify hol-cigar 0.9.1 developer preview
-    runs-on: macos-15
-    timeout-minutes: 30
+  verify-release-bytes:
+    name: verify exact GitHub prerelease bytes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          ref: v0.9.2
           fetch-depth: 1
           persist-credentials: false
           lfs: false
@@ -27,156 +41,102 @@ jobs:
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          architecture: arm64
+          architecture: x64
           check-latest: false
           python-version: "3.14.6"
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
-        with:
-          version: "0.11.8"
-          enable-cache: true
-
-      - name: Verify immutable release source and package authority
+      - name: Require the approved Honey tag and explicit confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
         run: |
-          test "${GITHUB_REF}" = "refs/tags/hol-cigar-v0.9.1-pypi.2"
-          test "$(git rev-parse --verify HEAD)" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          python3 -m unittest scripts.release.tests.test_build_hol_cigar_pypi
-
-      - name: Run focused Python SDK tests
-        run: |
-          uv sync --project sdk/python --frozen
-          uv run --project sdk/python pytest -q sdk/python/tests
-
-      - name: Build and structurally verify the wheel and source distribution
-        run: |
-          release_root="${RUNNER_TEMP}/hol-cigar-0.9.1-release"
-          test ! -e "${release_root}"
-          python3 scripts/release/build_hol_cigar_pypi.py \
-            --out "${release_root}" \
-            --require-clean \
-            --require-tag hol-cigar-v0.9.1-pypi.2
-          printf 'HOL_CIGAR_RELEASE=%s\n' "${release_root}" >>"${GITHUB_ENV}"
-
-      - name: Qualify clean wheel installation
-        run: |
-          wheel="${HOL_CIGAR_RELEASE}/packages/hol_cigar-0.9.1-py3-none-any.whl"
-          wheel_env="${RUNNER_TEMP}/hol-cigar-wheel-env"
-          uv venv --python 3.14.6 "${wheel_env}"
-          uv pip install --python "${wheel_env}/bin/python" "${wheel}"
-          "${wheel_env}/bin/python" - <<'PY'
-          import json
-          from importlib import metadata, resources
-          import cigar_sdk
-
-          assert metadata.version("hol-cigar") == "0.9.1"
-          assert cigar_sdk.CONTEXT_ABI == "cigar.context.v1"
-          release = json.loads(
-              resources.files("cigar_sdk").joinpath("release.json").read_text()
-          )
-          assert release["release_state"] == "developer-preview"
-          assert release["protocol_home"] == "https://hol.org"
-          PY
-
-      - name: Qualify clean source-distribution installation and tests
-        run: |
-          sdist="${HOL_CIGAR_RELEASE}/packages/hol_cigar-0.9.1.tar.gz"
-          sdist_env="${RUNNER_TEMP}/hol-cigar-sdist-env"
-          uv venv --python 3.14.6 "${sdist_env}"
-          uv pip install --python "${sdist_env}/bin/python" "${sdist}"
-          uv pip install --python "${sdist_env}/bin/python" pytest==9.0.2
-          archive_root="${RUNNER_TEMP}/hol-cigar-sdist-tests"
-          mkdir -m 0700 "${archive_root}"
-          tar -xzf "${sdist}" -C "${archive_root}"
-          "${sdist_env}/bin/python" -m pytest -q \
-            "${archive_root}/hol_cigar-0.9.1/tests"
-
-      - name: Complete the bounded developer-preview qualification receipt
-        run: |
-          python3 - "${HOL_CIGAR_RELEASE}/build-receipt.json" <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          path = Path(os.sys.argv[1])
-          receipt = json.loads(path.read_text())
-          receipt["gates"]["focused-sdk-tests"] = "passed"
-          receipt["gates"]["protocol-drift"] = "passed"
-          receipt["gates"]["wheel-sdist-clean-installs"] = "passed"
-          assert set(receipt["gates"].values()) == {"passed"}
-          receipt["status"] = "passed-developer-preview-package-qualification"
-          path.chmod(0o600)
-          path.write_text(
-              json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
-          )
-          path.chmod(0o400)
-          PY
-          (
-            cd "${HOL_CIGAR_RELEASE}"
-            shasum -a 256 -c SHA256SUMS
-          )
+          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${CONFIRM}" = "publish hol-cigar 0.9.2"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 v0.9.2)"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
-      - name: Preserve qualified distributions and checksum receipt
+      - name: Download and verify the complete GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: |
+          umask 077
+          [[ "${MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          candidate_dir="${RUNNER_TEMP}/hol-cigar-0.9.2-candidate"
+          dist_dir="$(pwd -P)/dist"
+          test ! -e "${candidate_dir}"
+          test ! -e "${dist_dir}"
+          release_state="$(
+            gh release view v0.9.2 \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json isDraft,isPrerelease,tagName \
+              --jq '[.isDraft, .isPrerelease, .tagName] | @tsv'
+          )"
+          test "${release_state}" = $'false\ttrue\tv0.9.2'
+          mkdir -m 0700 "${candidate_dir}" "${dist_dir}"
+          gh release download v0.9.2 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir "${candidate_dir}"
+          test "$(find "${candidate_dir}" -type f | wc -l | tr -d ' ')" = "13"
+          printf '%s  %s\n' \
+            "${MANIFEST_SHA256}" \
+            "${candidate_dir}/honey-release-manifest.json" \
+            | sha256sum --check --strict
+          chmod 0400 "${candidate_dir}"/*
+          python3 scripts/release/verify_honey_release.py "${candidate_dir}"
+          test "$(
+            CANDIDATE_MANIFEST="${candidate_dir}/honey-release-manifest.json" \
+              python3 -c \
+              'import json, os; print(json.load(open(os.environ["CANDIDATE_MANIFEST"]))["source"]["revision"])'
+          )" = "$(git rev-parse HEAD)"
+          install -m 0400 \
+            "${candidate_dir}/hol_cigar-0.9.2-py3-none-any.whl" \
+            "${dist_dir}/hol_cigar-0.9.2-py3-none-any.whl"
+          install -m 0400 \
+            "${candidate_dir}/hol_cigar-0.9.2.tar.gz" \
+            "${dist_dir}/hol_cigar-0.9.2.tar.gz"
+          test "$(find "${dist_dir}" -type f | wc -l | tr -d ' ')" = "2"
+
+      - name: Run the PyPI metadata compatibility check
+        run: |
+          python3 -m pip install \
+            --disable-pip-version-check \
+            --no-input \
+            twine==6.2.0
+          python3 -m twine check --strict dist/*
+
+      - name: Stage only the verified PyPI distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: hol-cigar-0.9.1-distributions
-          path: |
-            ${{ env.HOL_CIGAR_RELEASE }}/packages
-            ${{ env.HOL_CIGAR_RELEASE }}/SHA256SUMS
-            ${{ env.HOL_CIGAR_RELEASE }}/build-receipt.json
+          name: hol-cigar-0.9.2-pypi
+          path: dist/
           if-no-files-found: error
-          include-hidden-files: false
-          retention-days: 7
+          retention-days: 1
           compression-level: 0
+          include-hidden-files: false
 
-  publish:
-    name: Publish hol-cigar 0.9.1 to PyPI
-    needs: qualify
+  publish-to-pypi:
+    name: publish approved alpha to PyPI
+    needs: verify-release-bytes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/p/hol-cigar
     permissions:
-      contents: read
       id-token: write
     steps:
-      - name: Download qualified distributions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - name: Retrieve verified distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: hol-cigar-0.9.1-distributions
-          path: release
+          name: hol-cigar-0.9.2-pypi
+          path: dist/
 
-      - name: Recheck the immutable publication inventory
-        run: |
-          test -f release/packages/hol_cigar-0.9.1.tar.gz
-          test -f release/packages/hol_cigar-0.9.1-py3-none-any.whl
-          test -f release/SHA256SUMS
-          test -f release/build-receipt.json
-          (
-            cd release
-            shasum -a 256 -c SHA256SUMS
-          )
-          python3 - release/build-receipt.json <<'PY'
-          import json
-          import sys
-
-          receipt = json.load(open(sys.argv[1], encoding="utf-8"))
-          assert receipt["distribution"] == "hol-cigar"
-          assert receipt["version"] == "0.9.1"
-          assert receipt["status"] == "passed-developer-preview-package-qualification"
-          assert set(receipt["gates"].values()) == {"passed"}
-          assert receipt["claims"] == {
-              "developer_preview": True,
-              "full_release_qualified": False,
-              "production_qualified": False,
-              "supported": False,
-          }
-          PY
-          test "$(find release/packages -type f | wc -l | tr -d ' ')" = "2"
-
-      - name: Publish with PyPI Trusted Publishing and attestations
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+      - name: Publish with Trusted Publishing and attestations
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
         with:
-          packages-dir: release/packages
+          packages-dir: dist/
+          verify-metadata: true
+          attestations: true
+          skip-existing: false
+          print-hash: true
+          verbose: true
