@@ -118,7 +118,7 @@ unicode-normalization = { version = "=0.1.25" }
 x509-parser = { version = "=0.18.1" }
 wasmtime = { version = "=36.0.13", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
 wasmtime-wasi = { version = "=36.0.13", default-features = false, features = ["p2"] }
-wat = { version = "=1.245.1", default-features = false, features = ["component-model"] }
+wat = { version = "=1.254.0", default-features = false, features = ["component-model"] }
 webpki-roots = { version = "=1.0.8" }
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
 yaml_serde = { version = "=0.10.4" }
