@@ -94,10 +94,12 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
             ["hol_cigar-0.9.2-py3-none-any.whl", "hol_cigar-0.9.2.tar.gz"],
         )
         for binding in (
-            'test "${GITHUB_REF}" = "refs/tags/v0.9.2"',
+            "ref: v0.9.2",
+            'test "${GITHUB_REF}" = "refs/heads/main"',
             'test "${CONFIRM}" = "publish hol-cigar 0.9.2"',
-            "candidate/hol_cigar-0.9.2-py3-none-any.whl",
-            "candidate/hol_cigar-0.9.2.tar.gz",
+            '"${candidate_dir}/hol_cigar-0.9.2-py3-none-any.whl"',
+            '"${candidate_dir}/hol_cigar-0.9.2.tar.gz"',
+            'python3 scripts/release/verify_honey_release.py "${candidate_dir}"',
             "python3 -m twine check --strict dist/*",
             "skip-existing: false",
         ):
