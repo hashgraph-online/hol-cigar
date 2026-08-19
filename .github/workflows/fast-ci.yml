@@ -44,7 +44,7 @@ jobs:
           test "$(cargo --version | awk '{print $2}')" = "1.92.0"
           test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           architecture: arm64
           cache: false
@@ -279,7 +279,7 @@ jobs:
           lfs: false
           submodules: false
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           architecture: arm64
           cache: false
@@ -367,7 +367,7 @@ jobs:
           lfs: false
           submodules: false
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           architecture: arm64
           cache: false
