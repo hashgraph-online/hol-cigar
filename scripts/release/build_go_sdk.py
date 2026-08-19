@@ -52,7 +52,7 @@ MAX_COMMAND_OUTPUT = 16 * 1024 * 1024
 EXPECTED_QUICKSTART_IDENTITY = (
     "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84"
 )
-MINIMUM_GO_VERSION = (1, 26, 5)
+MINIMUM_GO_VERSION = (1, 26, 6)
 MINIMUM_GO_VERSION_TEXT = ".".join(str(component) for component in MINIMUM_GO_VERSION)
 NATIVE_GO_VERSION_PATTERN = re.compile(
     r"go version go(?P<major>[0-9]+)\.(?P<minor>[0-9]+)"

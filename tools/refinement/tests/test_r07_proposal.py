@@ -400,16 +400,34 @@ class ProposalAdapterTests(unittest.TestCase):
 
     def test_search_without_matches_returns_an_empty_passed_result(self) -> None:
         controller = self.fixture.controller(RecordedAdapter(patch_actions()))
-        result = controller.execute(
-            action(
-                "search",
-                "no-match",
-                query="value-that-is-not-present",
-                path="src",
+        with mock.patch("tools.refinement.proposal.shutil.which", return_value=None):
+            result = controller.execute(
+                action(
+                    "search",
+                    "no-match",
+                    query="value-that-is-not-present",
+                    path="src",
+                )
             )
-        )
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["content_bytes"], 0)
+
+    def test_search_falls_back_to_a_bounded_in_process_scan(self) -> None:
+        controller = self.fixture.controller(RecordedAdapter(patch_actions()))
+        with mock.patch("tools.refinement.proposal.shutil.which", return_value=None):
+            result = controller.execute(
+                action(
+                    "search",
+                    "fallback-match",
+                    query="honey",
+                    path="src",
+                )
+            )
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(
+            result["content"],
+            f"{self.fixture.repository}/src/value.txt:1:honey\n",
+        )
 
     def test_two_distinct_repairs_allowed_but_repeat_or_third_aborts(self) -> None:
         allowed = RecordedAdapter(

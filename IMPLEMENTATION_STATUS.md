@@ -11,9 +11,9 @@ Executor: Codex `/root`
 - Rust toolchain: rustc/cargo 1.92.0, stable-aarch64-apple-darwin
 - Node/pnpm: Node 24.10.0; pnpm 10.34.5
 - Python/build tool: CPython 3.14.6; uv 0.11.8
-- Go: minimum supported and CI-pinned version 1.26.5 on darwin/arm64. The local
+- Go: minimum supported and CI-pinned version 1.26.6 on darwin/arm64. The local
   1.26.3 installation is intentionally rejected by the Go SDK producer because
-  it predates standard-library security fixes included in 1.26.5.
+  it predates standard-library security fixes included in 1.26.6.
 - Native tools: protoc 33.2; protoc-gen-prost 0.5.0; protoc-gen-go 1.36.11; protoc-gen-go-grpc 1.6.2; protoc-gen-es 2.12.1; SQLite 3.43.2; Git 2.51.1
 - Container runtime: Docker client/server 29.3.1; Podman unavailable
 - Quality tools: cargo-nextest 0.9.140; cargo-deny 0.20.2; cargo-llvm-cov 0.8.7; just 1.56.0 (installed during WP00 after initial inventory)

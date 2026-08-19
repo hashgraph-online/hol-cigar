@@ -269,7 +269,7 @@ class DemoHarnessTests(unittest.TestCase):
         self,
     ) -> None:
         manifest = quickstarts.load_manifest()
-        self.assertEqual(quickstarts.pinned_go_toolchain(), "go1.26.5")
+        self.assertEqual(quickstarts.pinned_go_toolchain(), "go1.26.6")
         self.assertEqual(
             {item["language"] for item in manifest["quickstarts"]},
             {"rust", "typescript", "python", "go"},
@@ -446,11 +446,11 @@ class DemoHarnessTests(unittest.TestCase):
         self.assertEqual(demo_environment["HOME"], str(state / "home"))
         self.assertEqual(source_environment["HOME"], str(state / "home"))
         self.assertEqual(installed_environment["HOME"], str(state))
-        self.assertEqual(demo_environment["GOTOOLCHAIN"], "go1.26.5")
+        self.assertEqual(demo_environment["GOTOOLCHAIN"], "go1.26.6")
         self.assertEqual(demo_environment["GOPROXY"], "off")
         self.assertEqual(source_environment["CI"], "true")
         self.assertTrue(Path(source_environment["NPM_CONFIG_STORE_DIR"]).is_absolute())
-        self.assertEqual(demos.pinned_go_toolchain(), "go1.26.5")
+        self.assertEqual(demos.pinned_go_toolchain(), "go1.26.6")
         honey_environment = demos.clean_environment(state, include_go_toolchain=False)
         for key in (
             "GOMODCACHE",

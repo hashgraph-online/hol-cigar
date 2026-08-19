@@ -255,7 +255,7 @@ install scripts disabled. The Python producer creates the wheel and sdist togeth
 metadata and `RECORD`, tests their package-local fixtures, and installs each exact artifact plus
 the pinned protobuf runtime dependency from the offline cache into a separate clean CPython 3.14
 environment before importing the complete public SDK and running its semantic workflow. This is
-one native runtime, not an interpreter/platform matrix. The Go producer requires native Go 1.26.5
+one native runtime, not an interpreter/platform matrix. The Go producer requires native Go 1.26.6
 or newer, constructs the canonical module
 ZIP, and verifies it through a fresh file-proxy cache with offline `go list`, `go vet`, `go test`,
 `go mod verify`, and the packaged semantic-bundle workflow. Earlier Go toolchains fail closed.

@@ -49,7 +49,7 @@ jobs:
           architecture: arm64
           cache: false
           check-latest: false
-          go-version: "1.26.5"
+          go-version: "1.26.6"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -76,7 +76,7 @@ jobs:
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
-          test "$(go version | awk '{print $3}')" = "go1.26.5"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
           test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
@@ -284,7 +284,7 @@ jobs:
           architecture: arm64
           cache: false
           check-latest: false
-          go-version: "1.26.5"
+          go-version: "1.26.6"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -309,7 +309,7 @@ jobs:
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
-          test "$(go version | awk '{print $3}')" = "go1.26.5"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -372,7 +372,7 @@ jobs:
           architecture: arm64
           cache: false
           check-latest: false
-          go-version: "1.26.5"
+          go-version: "1.26.6"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -402,7 +402,7 @@ jobs:
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOOS)" = "darwin"
           test "$(go env GOARCH)" = "arm64"
-          test "$(go version | awk '{print $3}')" = "go1.26.5"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
           test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path, PurePosixPath
@@ -15,6 +16,8 @@ from .commands import CommandRegistry, run_named
 
 MAX_TOOL_CONTENT = 1024 * 1024
 MAX_SEARCH_CONTENT = 256 * 1024
+MAX_FALLBACK_SEARCH_BYTES = 8 * 1024 * 1024
+MAX_FALLBACK_SEARCH_MATCHES = 200
 PATCH_HEADER = re.compile(r"^diff --git a/(\S+) b/(\S+)$")
 FORBIDDEN_PATCH_MARKERS = (
     "GIT binary patch",
@@ -220,6 +223,8 @@ class ProposalController:
 
     def _search(self, action: dict[str, Any]) -> bytes:
         root = self._file(action["path"])
+        if shutil.which("rg") is None:
+            return self._fallback_search(root, action["query"])
         result = self._run(
             [
                 "rg",
@@ -238,6 +243,44 @@ class ProposalController:
         if len(result) > MAX_SEARCH_CONTENT:
             raise ProposalError("search result exceeded its smaller bound")
         return result
+
+    def _fallback_search(self, root: Path, query: str) -> bytes:
+        if root.is_file():
+            candidates = [root]
+        elif root.is_dir():
+            candidates = sorted(root.rglob("*"))
+        else:
+            raise ProposalError("search target is not a regular file or directory")
+        output = bytearray()
+        scanned_bytes = 0
+        matches = 0
+        for candidate in candidates:
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            try:
+                if candidate.resolve(strict=True) != candidate:
+                    raise ProposalError("search target contains an unsafe path")
+                payload = candidate.read_bytes()
+            except OSError as error:
+                raise ProposalError("search target cannot be read") from error
+            scanned_bytes += len(payload)
+            if scanned_bytes > MAX_FALLBACK_SEARCH_BYTES:
+                raise ProposalError("fallback search exceeded its scan bound")
+            try:
+                lines = payload.decode("utf-8", errors="strict").splitlines()
+            except UnicodeDecodeError:
+                continue
+            for line_number, line in enumerate(lines, start=1):
+                if query not in line:
+                    continue
+                record = f"{candidate}:{line_number}:{line}\n".encode()
+                if len(output) + len(record) > MAX_SEARCH_CONTENT:
+                    raise ProposalError("search result exceeded its smaller bound")
+                output.extend(record)
+                matches += 1
+                if matches >= MAX_FALLBACK_SEARCH_MATCHES:
+                    return bytes(output)
+        return bytes(output)
 
     def _read(self, action: dict[str, Any]) -> bytes:
         path = self._file(action["path"])
