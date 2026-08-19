@@ -27,7 +27,7 @@ cigar-agent-b-handoff = "cigar_sdk.examples.agent_b_handoff:main"
 [dependency-groups]
 dev = [
   "mypy==1.19.1",
-  "pytest==9.0.2",
+  "pytest==9.0.3",
   "ruff==0.14.10",
 ]
 

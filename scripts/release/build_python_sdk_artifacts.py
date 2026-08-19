@@ -469,7 +469,7 @@ def _validate_lock(document: dict[str, Any], python_version: str) -> dict[str, o
             "requires-dev": {
                 "dev": [
                     {"name": "mypy", "specifier": "==1.19.1"},
-                    {"name": "pytest", "specifier": "==9.0.2"},
+                    {"name": "pytest", "specifier": "==9.0.3"},
                     {"name": "ruff", "specifier": "==0.14.10"},
                 ]
             },
@@ -508,7 +508,7 @@ def _validate_lock(document: dict[str, Any], python_version: str) -> dict[str, o
         "runtime_dependency": "protobuf==6.33.5",
         "development_dependencies": [
             "mypy==1.19.1",
-            "pytest==9.0.2",
+            "pytest==9.0.3",
             "ruff==0.14.10",
         ],
         "build_backend": "hatchling==1.28.0",

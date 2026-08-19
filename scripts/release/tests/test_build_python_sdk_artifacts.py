@@ -170,7 +170,7 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
                 "runtime_dependency": "protobuf==6.33.5",
                 "development_dependencies": [
                     "mypy==1.19.1",
-                    "pytest==9.0.2",
+                    "pytest==9.0.3",
                     "ruff==0.14.10",
                 ],
                 "build_backend": "hatchling==1.28.0",
