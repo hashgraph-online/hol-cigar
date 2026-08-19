@@ -99,32 +99,29 @@ def _manifest(source: Path, *, enable_v5: bool) -> str:
         'serde = { version = "=1.0.228", features = ["derive"] }',
         'serde_json = "=1.0.150"',
     ]
-    return (
-        "\n".join(
-            [
-                "[package]",
-                'name = "honey-092-system-driver"',
-                'version = "0.1.0"',
-                'edition = "2024"',
-                "publish = false",
-                "",
-                "[workspace]",
-                "",
-                "[features]",
-                "default = []",
-                "v5 = []",
-                "",
-                "[dependencies]",
-                *dependencies,
-                "",
-                "[profile.release]",
-                "opt-level = 3",
-                "debug = false",
-                "incremental = false",
-            ]
-        )
-        + "\n"
-    )
+    return "\n".join(
+        [
+            "[package]",
+            'name = "honey-092-system-driver"',
+            'version = "0.1.0"',
+            'edition = "2024"',
+            "publish = false",
+            "",
+            "[workspace]",
+            "",
+            "[features]",
+            "default = []",
+            "v5 = []",
+            "",
+            "[dependencies]",
+            *dependencies,
+            "",
+            "[profile.release]",
+            'opt-level = 3',
+            'debug = false',
+            'incremental = false',
+        ]
+    ) + "\n"
 
 
 def build_driver(source: Path, scratch: Path, *, enable_v5: bool) -> dict[str, Any]:
@@ -203,10 +200,7 @@ def _positive_series(value: Any, count: int, label: str) -> list[int]:
     if (
         not isinstance(value, list)
         or len(value) != count
-        or any(
-            isinstance(item, bool) or not isinstance(item, int) or item <= 0
-            for item in value
-        )
+        or any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in value)
     ):
         raise QualificationError(f"{label} is invalid")
     return value
@@ -244,23 +238,15 @@ def validate_driver_result(value: Any, *, format_name: str, mutations: int) -> N
         != value["physical_after_bytes"] - value["physical_before_bytes"]
     ):
         raise QualificationError("comparison driver result identity drifted")
+    _positive_series(value["mutation_latencies_nanoseconds"], mutations, "mutation latency")
     _positive_series(
-        value["mutation_latencies_nanoseconds"], mutations, "mutation latency"
-    )
-    _positive_series(
-        value["process_cold_startup_nanoseconds"],
-        STARTUP_REPETITIONS,
-        "startup latency",
+        value["process_cold_startup_nanoseconds"], STARTUP_REPETITIONS, "startup latency"
     )
     startup_stages = value["process_cold_startup_stages_nanoseconds"]
-    if not isinstance(startup_stages, dict) or (
-        format_name == "v5" and not startup_stages
-    ):
+    if not isinstance(startup_stages, dict) or (format_name == "v5" and not startup_stages):
         raise QualificationError("startup stage evidence is incomplete")
     if format_name == "v4" and startup_stages:
-        raise QualificationError(
-            "published driver unexpectedly emitted unavailable stage evidence"
-        )
+        raise QualificationError("published driver unexpectedly emitted unavailable stage evidence")
     for stage, durations in startup_stages.items():
         if not isinstance(stage, str) or not stage:
             raise QualificationError("startup stage identity is invalid")
@@ -268,9 +254,7 @@ def validate_driver_result(value: Any, *, format_name: str, mutations: int) -> N
     migration = value["migration"]
     if format_name == "v4":
         if migration is not None:
-            raise QualificationError(
-                "v4 result unexpectedly contains migration evidence"
-            )
+            raise QualificationError("v4 result unexpectedly contains migration evidence")
     elif (
         not isinstance(migration, dict)
         or migration.get("root_revision_exact") is not True
@@ -311,15 +295,11 @@ def summarize_system_pair(
     candidate_startup = distribution(candidate["process_cold_startup_nanoseconds"])
     published_startup_stages = {
         stage: distribution(durations)
-        for stage, durations in published[
-            "process_cold_startup_stages_nanoseconds"
-        ].items()
+        for stage, durations in published["process_cold_startup_stages_nanoseconds"].items()
     }
     candidate_startup_stages = {
         stage: distribution(durations)
-        for stage, durations in candidate[
-            "process_cold_startup_stages_nanoseconds"
-        ].items()
+        for stage, durations in candidate["process_cold_startup_stages_nanoseconds"].items()
     }
     storage_ratio = ratio_ppm(
         candidate["physical_growth_bytes"], published["physical_growth_bytes"]
@@ -341,8 +321,7 @@ def summarize_system_pair(
         <= 1_000_000 + MAXIMUM_LATENCY_REGRESSION_PPM,
         "startup_p95_not_materially_degraded": startup_p95_ratio
         <= 1_000_000 + MAXIMUM_LATENCY_REGRESSION_PPM,
-        "migration_root_revision_exact": candidate["migration"]["root_revision_exact"]
-        is True,
+        "migration_root_revision_exact": candidate["migration"]["root_revision_exact"] is True,
     }
     return {
         "mutations": candidate["mutations"],
@@ -371,9 +350,7 @@ def summarize_system_pair(
     }
 
 
-def run_candidate_test(
-    candidate: Path, identifier: str, arguments: Sequence[str]
-) -> dict[str, Any]:
+def run_candidate_test(candidate: Path, identifier: str, arguments: Sequence[str]) -> dict[str, Any]:
     started = time.monotonic_ns()
     result = command(arguments, cwd=candidate, timeout=1_800)
     return {
@@ -398,9 +375,7 @@ def validate_hiero(path: Path, candidate_commit: str) -> dict[str, Any]:
         or value.get("cohort", {}).get("request_count") != 25
         or value.get("cohort", {}).get("workflow_count") != 5
     ):
-        raise QualificationError(
-            "Hiero disposition is not bound to this 25-case candidate"
-        )
+        raise QualificationError("Hiero disposition is not bound to this 25-case candidate")
     treatments = value.get("treatments", {})
     published = treatments.get("published_0_9_1")
     candidate = treatments.get("candidate_0_9_2_balanced_v1")
@@ -485,11 +460,7 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
         candidate_driver = build_driver(candidate, scratch, enable_v5=True)
         raw: dict[str, dict[str, Any]] = {"published": {}, "candidate": {}}
         for mutations in MUTATION_COUNTS:
-            order = (
-                ("published", "candidate")
-                if mutations == 100
-                else ("candidate", "published")
-            )
+            order = ("published", "candidate") if mutations == 100 else ("candidate", "published")
             for treatment in order:
                 if treatment == "published":
                     raw[treatment][str(mutations)] = run_driver(
@@ -508,18 +479,12 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
                         mutations=mutations,
                     )
         drivers = {
-            "published": {
-                key: value for key, value in published_driver.items() if key != "path"
-            },
-            "candidate": {
-                key: value for key, value in candidate_driver.items() if key != "path"
-            },
+            "published": {key: value for key, value in published_driver.items() if key != "path"},
+            "candidate": {key: value for key, value in candidate_driver.items() if key != "path"},
         }
 
     system_pairs = [
-        summarize_system_pair(
-            raw["published"][str(count)], raw["candidate"][str(count)]
-        )
+        summarize_system_pair(raw["published"][str(count)], raw["candidate"][str(count)])
         for count in MUTATION_COUNTS
     ]
     candidate_tests = [
@@ -573,9 +538,7 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             ["cargo", "test", "-p", "cigar-sdk", "--test", "semantic_reuse"],
         ),
     ]
-    hiero = validate_hiero(
-        arguments.hiero_disposition.resolve(strict=True), candidate_identity["commit"]
-    )
+    hiero = validate_hiero(arguments.hiero_disposition.resolve(strict=True), candidate_identity["commit"])
     acceptance = {
         "all_25_hiero_cases_complete": hiero["checks"]["all_25_complete"],
         "no_workflow_loses_citations_coverage_or_evidence": hiero["checks"][
@@ -598,28 +561,17 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
         "migration_and_recovery_correct": all(
             item["status"] == "pass"
             for item in candidate_tests
-            if item["id"]
-            in {"crash-boundary-recovery", "v4-to-v5-migration", "backup-restore"}
+            if item["id"] in {"crash-boundary-recovery", "v4-to-v5-migration", "backup-restore"}
         )
-        and all(
-            pair["checks"]["migration_root_revision_exact"] for pair in system_pairs
-        ),
+        and all(pair["checks"]["migration_root_revision_exact"] for pair in system_pairs),
     }
     accepted = all(acceptance.values())
     report = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "scope": "local developer-preview correction gate; no publication authority",
-        "authority": {
-            "public_pr": False,
-            "publish": False,
-            "release": False,
-            "tag": False,
-        },
-        "sources": {
-            "published_honey": published_identity,
-            "candidate": candidate_identity,
-        },
+        "authority": {"public_pr": False, "publish": False, "release": False, "tag": False},
+        "sources": {"published_honey": published_identity, "candidate": candidate_identity},
         "environment": {
             "system": platform.system(),
             "release": platform.release(),
