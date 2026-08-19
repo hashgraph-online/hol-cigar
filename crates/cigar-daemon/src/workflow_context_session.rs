@@ -1241,10 +1241,22 @@ pub(crate) fn fuzz_record(data: &[u8]) {
         "workflow-session validation must be deterministic"
     );
     if first.is_ok() {
-        let encoded =
-            serde_json::to_vec(&session).expect("a validated workflow session must serialize");
-        let restored: WorkflowContextSession =
-            serde_json::from_slice(&encoded).expect("a serialized workflow session must decode");
+        let encoded = serde_json::to_vec(&session);
+        assert!(
+            encoded.is_ok(),
+            "a validated workflow session must serialize"
+        );
+        let Ok(encoded) = encoded else {
+            return;
+        };
+        let restored = serde_json::from_slice::<WorkflowContextSession>(&encoded);
+        assert!(
+            restored.is_ok(),
+            "a serialized workflow session must decode"
+        );
+        let Ok(restored) = restored else {
+            return;
+        };
         assert_eq!(session, restored, "workflow-session round trip drifted");
         assert!(
             restored.validate_restored().is_ok(),

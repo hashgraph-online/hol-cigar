@@ -2733,6 +2733,14 @@ where
                     reasons.insert("index_fingerprint_changed".to_owned());
                 }
             }
+            Err(error)
+                if matches!(
+                    error.code(),
+                    RetrievalErrorCode::Cancelled | RetrievalErrorCode::DeadlineExceeded
+                ) =>
+            {
+                return Err(cigar_protocol::ErrorCode::DeadlineExceeded);
+            }
             Err(_error) => {
                 reasons.insert("retrieval_unavailable".to_owned());
             }
@@ -4409,6 +4417,7 @@ mod tests {
             &self.fingerprint
         }
 
+        #[allow(clippy::panic)] // Deliberately injects a panicking dependency into the fail-closed test.
         fn count_exact(&self, bytes: &[u8]) -> Result<u32, MaterializationError> {
             match self.mode.load(Ordering::SeqCst) {
                 0 => {
@@ -5039,26 +5048,42 @@ mod tests {
             bundle_id: bundle_id.clone(),
             profile: MaterializationProfile::CanonicalJson,
         };
+        let encoded_payload = encode_operation_payload(&payload, MAX_OPERATION_PAYLOAD_BYTES)
+            .map_err(|_error| {
+                fixture
+                    .errors
+                    .public_error(cigar_protocol::ErrorCode::IntegrityFailure)
+            })?;
+        let bundle_path =
+            PathParameter::new("bundle_id", bundle_id.as_str()).map_err(|_error| {
+                fixture
+                    .errors
+                    .public_error(cigar_protocol::ErrorCode::IntegrityFailure)
+            })?;
         let request = RequestEnvelope::new(
             "materializeContextBundle",
-            encode_operation_payload(&payload, MAX_OPERATION_PAYLOAD_BYTES)
-                .expect("bounded materialization request must encode"),
+            encoded_payload,
             Some(idempotency_key.to_owned()),
             None,
             None,
             None,
-            vec![
-                PathParameter::new("bundle_id", bundle_id.as_str())
-                    .expect("valid bundle path parameter"),
-            ],
+            vec![bundle_path],
         )
-        .expect("bounded materialization envelope must validate");
+        .map_err(|_error| {
+            fixture
+                .errors
+                .public_error(cigar_protocol::ErrorCode::IntegrityFailure)
+        })?;
         let context = request_context_with_timeout(
             "materializeContextBundle",
             fixture.clock.0,
             timeout_nanoseconds,
         )
-        .expect("bounded request context must validate");
+        .map_err(|_error| {
+            fixture
+                .errors
+                .public_error(cigar_protocol::ErrorCode::IntegrityFailure)
+        })?;
         let response = adapter.call(context, request).await?;
         decode_operation_payload(response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES).map_err(
             |_error| {
