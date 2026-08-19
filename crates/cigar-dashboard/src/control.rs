@@ -38,7 +38,10 @@ const RESOURCE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const DISK_HEADROOM_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_EVIDENCE_ENTRIES: usize = 100_000;
 const MAX_TOOL_VERSION_BYTES: u64 = 4096;
-const TOOL_VERSION_DEADLINE: Duration = Duration::from_secs(2);
+// Hosted qualification runners can be CPU-starved while the workspace is compiling in
+// parallel. Keep the identity probe bounded and fail-closed, but allow enough scheduling
+// headroom for an otherwise healthy pinned executable to report its version.
+const TOOL_VERSION_DEADLINE: Duration = Duration::from_secs(10);
 const MAX_CHILD_OPEN_FILES: u64 = 1024;
 const MAX_SOURCE_INPUTS: usize = 100_000;
 const MAX_SOURCE_INPUT_BYTES: u64 = 512 * 1024 * 1024;

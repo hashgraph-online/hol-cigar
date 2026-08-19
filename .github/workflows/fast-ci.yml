@@ -391,6 +391,9 @@ jobs:
           enable-cache: false
           version: "0.11.8"
 
+      - name: Install the pinned protocol compiler
+        uses: ./.github/actions/setup-protoc
+
       - name: Verify native source and pinned toolchains
         run: |
           test "$(uname -s)" = "Darwin"
