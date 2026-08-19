@@ -1177,7 +1177,7 @@ dependencies = [
  "cigar-protocol",
  "cigar-rust-s3",
  "cigar-testkit",
- "fallible-iterator 0.2.0",
+ "fallible-iterator 0.3.0",
  "hmac 0.13.0",
  "postgres",
  "r2d2",
