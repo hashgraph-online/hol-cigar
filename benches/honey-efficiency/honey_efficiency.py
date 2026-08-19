@@ -64,7 +64,9 @@ def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def sha256_file(path: Path, *, maximum: int = MAX_VERIFIED_COPY_BYTES) -> tuple[str, int]:
+def sha256_file(
+    path: Path, *, maximum: int = MAX_VERIFIED_COPY_BYTES
+) -> tuple[str, int]:
     before = path.lstat()
     if (
         not stat.S_ISREG(before.st_mode)
@@ -165,7 +167,9 @@ def source_binding(driver: Path, profile_path: Path) -> dict[str, Any]:
             ["git", "status", "--porcelain=v1", "--untracked-files=no"]
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise HarnessError("cannot bind the benchmark to the source repository") from error
+        raise HarnessError(
+            "cannot bind the benchmark to the source repository"
+        ) from error
     return {
         "base_commit": base_commit,
         "base_tree": base_tree,
@@ -203,10 +207,11 @@ def build_driver(manifest: Path) -> Path:
     return manifest.parent / "target" / "release" / "cigar-honey-efficiency-driver"
 
 
-def copy_verified_database(source: Path, target: Path, expected_sha256: str) -> dict[str, Any]:
-    if (
-        len(expected_sha256) != 64
-        or any(character not in "0123456789abcdef" for character in expected_sha256)
+def copy_verified_database(
+    source: Path, target: Path, expected_sha256: str
+) -> dict[str, Any]:
+    if len(expected_sha256) != 64 or any(
+        character not in "0123456789abcdef" for character in expected_sha256
     ):
         raise HarnessError("verified-copy SHA-256 must be lowercase hexadecimal")
     digest, size = sha256_file(source)
@@ -282,7 +287,10 @@ def integer_ols_slope_millionths(values: list[int]) -> int:
 
 
 def distribution(values: list[int]) -> dict[str, int]:
-    if not values or any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values):
+    if not values or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in values
+    ):
         raise HarnessError("measurement distribution is invalid")
     return {
         "count": len(values),
@@ -318,7 +326,9 @@ def validate_driver_result(
     ):
         raise HarnessError("driver result is not bound to the selected workload")
     commits = result["commits"]
-    expected_count = int(profile["iterations"]) * int(profile["mutations_per_iteration"])
+    expected_count = int(profile["iterations"]) * int(
+        profile["mutations_per_iteration"]
+    )
     if not isinstance(commits, list) or len(commits) != expected_count:
         raise HarnessError("driver returned an incomplete commit cohort")
     for index, commit in enumerate(commits):
@@ -326,13 +336,16 @@ def validate_driver_result(
             raise HarnessError("commit observation has an unexpected shape")
         if (
             commit.get("iteration") != index // int(profile["mutations_per_iteration"])
-            or commit.get("operation") != index % int(profile["mutations_per_iteration"])
+            or commit.get("operation")
+            != index % int(profile["mutations_per_iteration"])
             or commit.get("kind") != "worker"
             or commit.get("outcome") != "committed"
             or commit.get("receipt_only") is not False
             or commit.get("revision_after") != commit.get("revision_before") + 1
         ):
-            raise HarnessError("commit observation violates the serial workload contract")
+            raise HarnessError(
+                "commit observation violates the serial workload contract"
+            )
         byte_values = commit.get("bytes")
         if (
             not isinstance(byte_values, dict)
@@ -340,7 +353,9 @@ def validate_driver_result(
             or byte_values.get("encoded_delta") != 0
             or byte_values.get("checkpoint") != 0
         ):
-            raise HarnessError("baseline did not reproduce v4 full-snapshot persistence")
+            raise HarnessError(
+                "baseline did not reproduce v4 full-snapshot persistence"
+            )
     return commits
 
 
@@ -381,7 +396,9 @@ def summarize(
     ):
         raise HarnessError("commit timing phase domain changed")
     stage_distributions = {
-        phase: distribution([commit["durations_nanoseconds"][phase] for commit in commits])
+        phase: distribution(
+            [commit["durations_nanoseconds"][phase] for commit in commits]
+        )
         for phase in phases
     }
     startup = driver_result["startup"]
@@ -415,7 +432,9 @@ def summarize(
             "encoded_delta_bytes": 0,
             "full_snapshot_encoded_each_commit": True,
             "persistence_format": PERSISTENCE_FORMAT,
-            "snapshot_bytes_ols_slope_per_operation_millionths": integer_ols_slope_millionths(full_state),
+            "snapshot_bytes_ols_slope_per_operation_millionths": integer_ols_slope_millionths(
+                full_state
+            ),
         },
         "bytes": {
             "durable_added": distribution(durable),
@@ -437,12 +456,20 @@ def summarize(
         },
         "startup_stages": startup_stages,
         "storage": {
-            "database_growth_bytes": max(0, storage_after["database_bytes"] - storage_before["database_bytes"]),
-            "latest_snapshot_growth_bytes": max(0, storage_after["latest_snapshot_bytes"] - storage_before["latest_snapshot_bytes"]),
+            "database_growth_bytes": max(
+                0, storage_after["database_bytes"] - storage_before["database_bytes"]
+            ),
+            "latest_snapshot_growth_bytes": max(
+                0,
+                storage_after["latest_snapshot_bytes"]
+                - storage_before["latest_snapshot_bytes"],
+            ),
             "retained_snapshots_after": storage_after["retained_snapshots"],
             "retained_snapshots_before": storage_before["retained_snapshots"],
             "revision_delta": storage_after["revision"] - storage_before["revision"],
-            "wal_growth_bytes": max(0, storage_after["wal_bytes"] - storage_before["wal_bytes"]),
+            "wal_growth_bytes": max(
+                0, storage_after["wal_bytes"] - storage_before["wal_bytes"]
+            ),
         },
         "timings_nanoseconds": stage_distributions,
         "total_latency_ols_slope_per_operation_millionths": integer_ols_slope_millionths(
@@ -455,7 +482,9 @@ def summarize(
 
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:
-    profile_path = (REPOSITORY_ROOT / "benches/honey-efficiency/profiles.v1.json").resolve()
+    profile_path = (
+        REPOSITORY_ROOT / "benches/honey-efficiency/profiles.v1.json"
+    ).resolve()
     profiles = load_profiles(profile_path)
     profile = profiles[args.profile]
     manifest = REPOSITORY_ROOT / "benches/honey-efficiency/driver/Cargo.toml"
@@ -467,8 +496,15 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise HarnessError("evidence output must be a canonical absolute path")
     timeouts = {"small": 300, "threshold": 1800, "hiero-shaped": 14_400}
     with tempfile.TemporaryDirectory(prefix="cigar-honey-efficiency-") as temporary:
-        scratch = Path(temporary)
-        os.chmod(scratch, 0o700)
+        scratch = Path(temporary).resolve(strict=True)
+        scratch_metadata = scratch.lstat()
+        if (
+            not stat.S_ISDIR(scratch_metadata.st_mode)
+            or stat.S_ISLNK(scratch_metadata.st_mode)
+            or scratch_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(scratch_metadata.st_mode) != 0o700
+        ):
+            raise HarnessError("temporary workspace is not owner-only")
         database = scratch / "workload.sqlite3"
         if args.verified_copy:
             input_binding = copy_verified_database(
@@ -482,7 +518,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     source = source_binding(driver, profile_path)
     raw, summary = summarize(result, args.profile, profile, input_binding, source)
     limits = EvidenceLimits(max_json_bytes=MAX_DRIVER_OUTPUT_BYTES)
-    with EvidenceWorkspace.create(output, repository_root=REPOSITORY_ROOT, limits=limits) as workspace:
+    with EvidenceWorkspace.create(
+        output, repository_root=REPOSITORY_ROOT, limits=limits
+    ) as workspace:
         raw_attachment = workspace.write_json("raw-observations.json", raw)
         if raw_attachment.sha256 != summary["raw_observations_sha256"]:
             raise HarnessError("raw observation publication changed canonical bytes")
@@ -511,7 +549,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
 def verify(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.output)
     limits = EvidenceLimits(max_json_bytes=MAX_DRIVER_OUTPUT_BYTES)
-    with EvidenceWorkspace.create(root, repository_root=REPOSITORY_ROOT, limits=limits) as workspace:
+    with EvidenceWorkspace.create(
+        root, repository_root=REPOSITORY_ROOT, limits=limits
+    ) as workspace:
         payloads = workspace.read_files(set(EVIDENCE_FILES))
     try:
         documents = {name: json.loads(payload) for name, payload in payloads.items()}
@@ -535,14 +575,10 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         for item in manifest.get("artifacts", [])
         if isinstance(item, dict) and set(item) == {"path", "sha256", "bytes"}
     }
-    if (
-        summary.get("raw_observations_sha256") != raw_digest
-        or attachments
-        != {
-            "raw-observations.json": (raw_digest, len(payloads["raw-observations.json"])),
-            "summary.json": (summary_digest, len(payloads["summary.json"])),
-        }
-    ):
+    if summary.get("raw_observations_sha256") != raw_digest or attachments != {
+        "raw-observations.json": (raw_digest, len(payloads["raw-observations.json"])),
+        "summary.json": (summary_digest, len(payloads["summary.json"])),
+    }:
         raise HarnessError("evidence content binding is invalid")
     return {
         "manifest_sha256": sha256_bytes(payloads["baseline-manifest.json"]),
@@ -557,13 +593,17 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     subcommands = result.add_subparsers(dest="command", required=True)
     run = subcommands.add_parser("run", help="run a bounded v4 baseline")
-    run.add_argument("--profile", choices=("small", "threshold", "hiero-shaped"), required=True)
+    run.add_argument(
+        "--profile", choices=("small", "threshold", "hiero-shaped"), required=True
+    )
     run.add_argument("--output", required=True)
     run.add_argument("--driver")
     run.add_argument("--verified-copy")
     run.add_argument("--verified-copy-sha256")
     run.set_defaults(handler=execute)
-    check = subcommands.add_parser("verify", help="verify a baseline evidence directory")
+    check = subcommands.add_parser(
+        "verify", help="verify a baseline evidence directory"
+    )
     check.add_argument("--output", required=True)
     check.set_defaults(handler=verify)
     return result
@@ -574,7 +614,10 @@ def main() -> int:
     if bool(getattr(args, "verified_copy", None)) != bool(
         getattr(args, "verified_copy_sha256", None)
     ):
-        print("honey efficiency harness failed: verified copy and digest must be supplied together", file=sys.stderr)
+        print(
+            "honey efficiency harness failed: verified copy and digest must be supplied together",
+            file=sys.stderr,
+        )
         return 2
     try:
         value = args.handler(args)
