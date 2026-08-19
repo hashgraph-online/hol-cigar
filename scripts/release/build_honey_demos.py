@@ -27,9 +27,9 @@ from verify_package import verify as verify_package
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT_ID = "honey-demos"
 ARTIFACT_KIND = "demo-archive"
-VERSION = "0.9.2"
+VERSION = "0.9.4"
 CONTEXT_ABI = "cigar.context.v1"
-FILENAME = "cigar-honey-demos-0.9.2.tar.gz"
+FILENAME = "cigar-honey-demos-0.9.4.tar.gz"
 RECEIPT = "honey-demo-build-receipt.json"
 CONTRACT = "packaging/honey/contracts/demos-archive.v1.json"
 PROFILE = "packaging/honey/capability-profile.v1.json"

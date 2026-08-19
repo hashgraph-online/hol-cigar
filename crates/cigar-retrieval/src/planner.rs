@@ -5,7 +5,9 @@ use crate::{
     RetrievalCapacity, RetrievalConsistency, RetrievalError, RetrievalErrorCode, RetrievalProfile,
     RetrievalRequest, RetrievalStage,
 };
-use cigar_protocol::{AtomKind, ContentDigest, ContextRequirement, LaneKind, RequirementSelector};
+use cigar_protocol::{
+    AtomKind, ContentDigest, ContextRequirement, LaneKind, OperationClass, RequirementSelector,
+};
 use cigar_store::StoreRevision;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,6 +16,41 @@ use std::time::Duration;
 
 /// Maximum expanded stages in one retrieval plan.
 pub const MAX_PLANNED_STAGES: usize = 16_384;
+
+/// Deterministic workflow risk assigned from trusted contract metadata, never model weights.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum RequirementRiskClass {
+    /// Blocking evidence immediately adjacent to a mediated external mutation.
+    CriticalEffect,
+    /// Evidence whose absence blocks the current workflow step.
+    Blocking,
+    /// Prior decision or tool state needed to preserve workflow continuity.
+    Continuity,
+    /// Evidence that can improve completion quality but cannot authorize an effect.
+    Supporting,
+    /// General nonblocking context.
+    Background,
+}
+
+impl RequirementRiskClass {
+    pub(crate) const fn code(self) -> u8 {
+        match self {
+            Self::CriticalEffect => 0,
+            Self::Blocking => 1,
+            Self::Continuity => 2,
+            Self::Supporting => 3,
+            Self::Background => 4,
+        }
+    }
+
+    pub(crate) const fn reserved_evidence(self) -> u8 {
+        match self {
+            Self::CriticalEffect => 2,
+            Self::Blocking => 1,
+            Self::Continuity | Self::Supporting | Self::Background => 0,
+        }
+    }
+}
 
 /// Versioned deterministic stage caps and timeouts.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -82,6 +119,33 @@ impl QueryPlannerProfile {
         }
     }
 
+    /// Requirement-aware ranking candidate with unchanged retrieval channels and intake caps.
+    #[must_use]
+    pub fn balanced_v2_requirement_aware_candidate() -> Self {
+        Self {
+            exact_graph_depth: 2,
+            candidate_selection: CandidateSelectionProfile {
+                critical_requirement_gain: 12_000_000,
+                requirement_gain: 1_500_000,
+                concept_gain: 250_000,
+                source_diversity_gain: 300_000,
+                section_diversity_gain: 200_000,
+                kind_diversity_gain: 100_000,
+                generic_match_penalty: 2_000_000,
+                redundant_requirement_penalty: 750_000,
+                redundant_concept_penalty: 100_000,
+                ..CandidateSelectionProfile::default()
+            },
+            ..Self::default()
+        }
+    }
+
+    /// CIGAR 0.9.4 retrieval policy; opt-in until its three-way release gates pass.
+    #[must_use]
+    pub fn balanced_v4() -> Self {
+        Self::balanced_v2_requirement_aware_candidate()
+    }
+
     /// Separate benchmark-only current-state augmentation ablation.
     #[must_use]
     pub fn bounded_augmentation_candidate() -> Self {
@@ -134,6 +198,27 @@ pub struct QueryPlan {
     pub candidate_bounds: CandidateBounds,
 }
 
+impl QueryPlan {
+    pub(crate) fn requirement_risk_classes(
+        &self,
+        operation_class: Option<OperationClass>,
+    ) -> Result<Vec<RequirementRiskClass>, RetrievalError> {
+        let classes = requirement_risk_classes(&self.stages, operation_class)?;
+        if self.plan_fingerprint
+            != plan_fingerprint(
+                &self.stages,
+                self.required_revision,
+                &self.candidate_bounds,
+                RetrievalProfile::BalancedV4,
+                Some(&classes),
+            )?
+        {
+            return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration));
+        }
+        Ok(classes)
+    }
+}
+
 /// Stateless deterministic query planner.
 #[derive(Clone, Copy, Debug)]
 pub struct QueryPlanner {
@@ -148,6 +233,7 @@ struct PlanInputs<'a> {
     vector_available: bool,
     vector_processor: Option<&'a dyn QueryVectorProcessor>,
     capacity: Option<&'a RetrievalCapacity>,
+    operation_class: Option<OperationClass>,
 }
 
 impl QueryPlanner {
@@ -210,6 +296,7 @@ impl QueryPlanner {
                 vector_available,
                 vector_processor: None,
                 capacity: None,
+                operation_class: None,
             },
         )
     }
@@ -235,6 +322,7 @@ impl QueryPlanner {
                 vector_available: vector_processor.is_some(),
                 vector_processor,
                 capacity: None,
+                operation_class: None,
             },
         )
     }
@@ -258,6 +346,7 @@ impl QueryPlanner {
                 vector_available,
                 vector_processor: None,
                 capacity: Some(capacity),
+                operation_class: None,
             },
         )
     }
@@ -281,6 +370,34 @@ impl QueryPlanner {
                 vector_available: vector_processor.is_some(),
                 vector_processor,
                 capacity: Some(capacity),
+                operation_class: None,
+            },
+        )
+    }
+
+    /// Expands bounded v4 requirements with risk derived from the trusted operation class.
+    pub fn plan_bounded_for_operation(
+        &self,
+        requirements: &[ContextRequirement],
+        operation_class: OperationClass,
+        capacity: &RetrievalCapacity,
+        partition: &AuthorizedPartition,
+        required_revision: StoreRevision,
+        consistency: RetrievalConsistency,
+    ) -> Result<QueryPlan, RetrievalError> {
+        if self.retrieval_profile != RetrievalProfile::BalancedV4 {
+            return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
+        }
+        self.plan_internal(
+            requirements,
+            PlanInputs {
+                partition,
+                required_revision,
+                consistency,
+                vector_available: false,
+                vector_processor: None,
+                capacity: Some(capacity),
+                operation_class: Some(operation_class),
             },
         )
     }
@@ -297,6 +414,7 @@ impl QueryPlanner {
             vector_available,
             vector_processor,
             capacity,
+            operation_class,
         } = inputs;
         partition.validate()?;
         self.profile.candidate_selection.validate()?;
@@ -458,11 +576,17 @@ impl QueryPlanner {
                 return Err(RetrievalError::new(RetrievalErrorCode::LimitExceeded));
             }
         }
+        let risk_classes = if self.retrieval_profile == RetrievalProfile::BalancedV4 {
+            Some(requirement_risk_classes(&stages, operation_class)?)
+        } else {
+            None
+        };
         let plan_fingerprint = plan_fingerprint(
             &stages,
             required_revision,
             &candidate_bounds,
             self.retrieval_profile,
+            risk_classes.as_deref(),
         )?;
         Ok(QueryPlan {
             stages,
@@ -678,6 +802,65 @@ fn push_stage(
     Ok(())
 }
 
+fn requirement_risk_classes(
+    stages: &[PlannedStage],
+    operation_class: Option<OperationClass>,
+) -> Result<Vec<RequirementRiskClass>, RetrievalError> {
+    let requirement_count = stages
+        .iter()
+        .map(|stage| stage.requirement_index)
+        .max()
+        .map_or(0, |maximum| maximum.saturating_add(1));
+    let mut metadata = vec![None::<(bool, AtomKind)>; requirement_count];
+    for stage in stages {
+        let mut atom_kinds = stage.request.atom_kinds.iter();
+        let atom_kind = *atom_kinds
+            .next()
+            .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
+        if atom_kinds.next().is_some() {
+            return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration));
+        }
+        let slot = metadata
+            .get_mut(stage.requirement_index)
+            .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
+        match slot {
+            Some((blocking, existing_kind)) if *existing_kind == atom_kind => {
+                *blocking |= stage.blocking;
+            }
+            Some(_) => return Err(RetrievalError::new(RetrievalErrorCode::CorruptGeneration)),
+            None => *slot = Some((stage.blocking, atom_kind)),
+        }
+    }
+    metadata
+        .into_iter()
+        .map(|metadata| {
+            let (blocking, atom_kind) = metadata
+                .ok_or_else(|| RetrievalError::new(RetrievalErrorCode::CorruptGeneration))?;
+            Ok(
+                if blocking && matches!(operation_class, Some(OperationClass::ExternalMutation)) {
+                    RequirementRiskClass::CriticalEffect
+                } else if blocking {
+                    RequirementRiskClass::Blocking
+                } else {
+                    match atom_kind {
+                        AtomKind::Decision | AtomKind::Conversation | AtomKind::ToolResult => {
+                            RequirementRiskClass::Continuity
+                        }
+                        AtomKind::SourceCode
+                        | AtomKind::Documentation
+                        | AtomKind::Test
+                        | AtomKind::Artifact
+                        | AtomKind::Schema => RequirementRiskClass::Supporting,
+                        AtomKind::Instruction | AtomKind::Policy => {
+                            RequirementRiskClass::Background
+                        }
+                    }
+                },
+            )
+        })
+        .collect()
+}
+
 fn query_fingerprint(
     requirement_index: usize,
     blocking: bool,
@@ -790,6 +973,7 @@ fn plan_fingerprint(
     revision: StoreRevision,
     bounds: &CandidateBounds,
     retrieval_profile: RetrievalProfile,
+    risk_classes: Option<&[RequirementRiskClass]>,
 ) -> Result<ContentDigest, RetrievalError> {
     let mut hasher = Sha256::new();
     if retrieval_profile == RetrievalProfile::BalancedV1 {
@@ -807,6 +991,17 @@ fn plan_fingerprint(
     );
     for stage in stages {
         update_fingerprint_field(&mut hasher, stage.query_fingerprint.as_str().as_bytes())?;
+    }
+    if retrieval_profile == RetrievalProfile::BalancedV4 {
+        hasher.update(b"CIGAR-REQUIREMENT-RISK-CLASSES\0v1\0");
+        let risk_classes =
+            risk_classes.ok_or_else(|| RetrievalError::new(RetrievalErrorCode::InvalidMetadata))?;
+        for (requirement, risk_class) in risk_classes.iter().copied().enumerate() {
+            update_usize(&mut hasher, requirement)?;
+            hasher.update([risk_class.code()]);
+        }
+    } else if risk_classes.is_some() {
+        return Err(RetrievalError::new(RetrievalErrorCode::InvalidMetadata));
     }
     for (requirement, limit) in &bounds.requirement_limits {
         update_usize(&mut hasher, *requirement)?;
@@ -839,6 +1034,15 @@ fn plan_fingerprint(
         profile.same_lineage_penalty,
         profile.same_content_penalty,
         profile.same_kind_penalty,
+        profile.critical_requirement_gain,
+        profile.requirement_gain,
+        profile.concept_gain,
+        profile.source_diversity_gain,
+        profile.section_diversity_gain,
+        profile.kind_diversity_gain,
+        profile.generic_match_penalty,
+        profile.redundant_requirement_penalty,
+        profile.redundant_concept_penalty,
     ] {
         hasher.update(penalty.to_be_bytes());
     }
@@ -877,13 +1081,14 @@ fn finish_digest(hasher: Sha256) -> Result<ContentDigest, RetrievalError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{QueryPlanner, QueryPlannerProfile};
+    use super::{QueryPlanner, QueryPlannerProfile, RequirementRiskClass};
     use crate::{
         AuthorizedPartition, RetrievalCapacity, RetrievalConsistency, RetrievalErrorCode,
-        RetrievalStage,
+        RetrievalProfile, RetrievalStage,
     };
     use cigar_protocol::{
-        Classification, ContextRequirement, InstructionAuthority, LaneKind, RecordId, UtcTimestamp,
+        Classification, ContextRequirement, InstructionAuthority, LaneKind, OperationClass,
+        RecordId, UtcTimestamp,
     };
     use cigar_store::StoreRevision;
     use std::collections::BTreeMap;
@@ -1088,6 +1293,56 @@ mod tests {
         assert_eq!(plan.stages.len(), 3);
         assert_eq!(total, 8);
         assert!(plan.stages.iter().all(|stage| stage.request.limit <= 3));
+        Ok(())
+    }
+
+    #[test]
+    fn v4_risk_is_derived_from_operation_and_bound_into_plan_identity() -> Result<(), Box<dyn Error>>
+    {
+        let query = requirement(
+            serde_json::json!({"type":"query", "value":"effect authorization evidence"}),
+            true,
+        )?;
+        let capacity = RetrievalCapacity::new(
+            BTreeMap::from([(LaneKind::Evidence, 4_000)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )?;
+        let planner = QueryPlanner::new_with_retrieval_profile(
+            QueryPlannerProfile::balanced_v4(),
+            RetrievalProfile::BalancedV4,
+        )?;
+        let effect = planner.plan_bounded_for_operation(
+            std::slice::from_ref(&query),
+            OperationClass::ExternalMutation,
+            &capacity,
+            &partition()?,
+            StoreRevision(42),
+            RetrievalConsistency::Strong,
+        )?;
+        let read = planner.plan_bounded_for_operation(
+            &[query],
+            OperationClass::Read,
+            &capacity,
+            &partition()?,
+            StoreRevision(42),
+            RetrievalConsistency::Strong,
+        )?;
+        assert_eq!(
+            effect.requirement_risk_classes(Some(OperationClass::ExternalMutation))?,
+            vec![RequirementRiskClass::CriticalEffect]
+        );
+        assert_eq!(
+            read.requirement_risk_classes(Some(OperationClass::Read))?,
+            vec![RequirementRiskClass::Blocking]
+        );
+        assert_ne!(effect.plan_fingerprint, read.plan_fingerprint);
+        assert_eq!(
+            effect
+                .requirement_risk_classes(Some(OperationClass::Read))
+                .map_err(crate::RetrievalError::code),
+            Err(RetrievalErrorCode::CorruptGeneration)
+        );
         Ok(())
     }
 }

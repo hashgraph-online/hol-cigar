@@ -25,7 +25,7 @@ try {
 Require $rejected "malformed fixture unexpectedly parsed"
 
 $plugin = Get-Content -Raw (Join-Path $Root ".claude-plugin/plugin.json") | ConvertFrom-Json
-Require ($plugin.name -eq "cigar" -and $plugin.version -eq "0.9.2") "plugin identity mismatch"
+Require ($plugin.name -eq "cigar" -and $plugin.version -eq "0.9.4") "plugin identity mismatch"
 foreach ($name in @("skills", "agents", "hooks", "mcpServers", "commands")) {
     Require ($null -eq $plugin.PSObject.Properties[$name]) "redundant default component path: $name"
 }

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/comparison-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "comparison_id", "input_id", "input_digest", "trial_id", "evidence_class", "champion_source", "candidate_source", "honey_source", "dataset_epoch", "policy_digest", "bootstrap_repetitions", "assignment_seeds", "confidence_percent", "holm_correction", "evidence_validity", "hard_constraints", "metrics", "performance", "protected_strata", "meaningful_improvements", "reasons", "verdict"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-comparison.v1"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "input_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "input_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "evidence_class": {"$ref": "common-v1.schema.json#/$defs/evidenceClass"},
+    "champion_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "honey_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "dataset_epoch": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "policy_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "bootstrap_repetitions": {"type": "integer", "minimum": 100, "maximum": 1000000},
+    "assignment_seeds": {"type": "integer", "minimum": 1, "maximum": 16},
+    "confidence_percent": {"enum": [90, 95, 99]},
+    "holm_correction": {"type": "boolean"},
+    "evidence_validity": {"$ref": "#/$defs/gates"},
+    "hard_constraints": {"$ref": "#/$defs/gates"},
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/metric"}
+    },
+    "performance": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/performance"}
+    },
+    "protected_strata": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stratum", "tasks", "status", "reasons"],
+        "properties": {
+          "stratum": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "tasks": {"type": "integer", "minimum": 0, "maximum": 100000},
+          "status": {"enum": ["passed", "failed", "insufficient"]},
+          "reasons": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          }
+        }
+      }
+    },
+    "meaningful_improvements": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "reasons": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "verdict": {"enum": ["eligible", "ineligible", "invalid", "needs_human_review"]}
+  },
+  "$defs": {
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "passed", "source_digest"],
+        "properties": {
+          "gate_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "passed": {"type": "boolean"},
+          "source_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "direction", "blocking", "samples", "champion", "candidate", "honey", "benefit", "lower", "upper", "honey_benefit", "honey_lower", "honey_upper", "noninferior_champion", "noninferior_honey", "absolute_slo_passed", "meaningful", "p_value_ppm", "holm_threshold_ppm", "holm_passed", "seed_consistent", "decision"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "direction": {"enum": ["higher", "lower", "neutral"]},
+        "blocking": {"type": "boolean"},
+        "samples": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "champion": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "candidate": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "honey": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "benefit": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "lower": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "upper": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "honey_benefit": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "honey_lower": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "honey_upper": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "noninferior_champion": {"type": "boolean"},
+        "noninferior_honey": {"type": "boolean"},
+        "absolute_slo_passed": {"type": "boolean"},
+        "meaningful": {"type": "boolean"},
+        "p_value_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "holm_threshold_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "holm_passed": {"type": "boolean"},
+        "seed_consistent": {"type": "boolean"},
+        "decision": {"enum": ["improved", "noninferior", "inferior", "insufficient", "diagnostic"]}
+      }
+    },
+    "performance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "champion", "candidate", "relative_benefit", "lower", "upper", "relative_regression_limit", "meaningful_relative_delta", "absolute_slo_passed", "noninferior", "meaningful"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "champion": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+        "candidate": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+        "relative_benefit": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "lower": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "upper": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "relative_regression_limit": {"type": "number", "minimum": 0, "maximum": 1},
+        "meaningful_relative_delta": {"type": "number", "minimum": 0, "maximum": 1},
+        "absolute_slo_passed": {"type": "boolean"},
+        "noninferior": {"type": "boolean"},
+        "meaningful": {"type": "boolean"}
+      }
+    }
+  }
+}

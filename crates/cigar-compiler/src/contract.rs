@@ -3,10 +3,10 @@
 use cigar_policy::PolicyOutcome;
 use cigar_protocol::{
     CandidateDisposition, Classification, ContentDigest, ContextBundle, ContextContract,
-    InstructionAuthority, LaneKind, ManifestEntry, RepresentationKind, SelectionManifest,
-    SourceUri, UtcTimestamp, VersionId,
+    InstructionAuthority, LaneKind, LineageId, ManifestEntry, RepresentationKind,
+    SelectionManifest, SourceUri, UtcTimestamp, VersionId,
 };
-use cigar_retrieval::{CandidateFeatures, RetrievalProfile};
+use cigar_retrieval::{CandidateFeatures, RequirementRankingEvidence, RetrievalProfile};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -149,6 +149,11 @@ pub struct CompilerProfile {
     pub diversity_weight: i64,
     /// Penalty per already-covered requirement/entity in the H1 profile.
     pub redundancy_penalty: i64,
+    /// Evidence items retained per requirement before optional context is saturated.
+    ///
+    /// Zero preserves fill-to-budget behavior. A positive value still admits candidates that
+    /// add a previously uncovered entity bit, then stops packing redundant context.
+    pub sufficient_items_per_requirement: u16,
 }
 
 impl Default for CompilerProfile {
@@ -170,6 +175,7 @@ impl Default for CompilerProfile {
             dependency_cost_penalty: 0,
             diversity_weight: 0,
             redundancy_penalty: 0,
+            sufficient_items_per_requirement: 0,
         }
     }
 }
@@ -192,6 +198,38 @@ impl CompilerProfile {
             diversity_weight: 75_000,
             redundancy_penalty: 90_000,
             ..Self::default()
+        }
+    }
+
+    /// Requirement-aware ranking candidate with the H1 packing policy held constant.
+    #[must_use]
+    pub fn balanced_v2_requirement_aware_candidate() -> Self {
+        Self {
+            profile_id: "cigar.compiler-profile.balanced.v2-candidate.2".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV2RequirementAwareCandidate,
+            ..Self::balanced_v2_candidate()
+        }
+    }
+
+    /// CIGAR 0.9.3 requirement-aware, coverage-saturating production profile.
+    #[must_use]
+    pub fn balanced_v3() -> Self {
+        Self {
+            profile_id: "cigar.compiler-profile.balanced.v3".to_owned(),
+            sufficient_items_per_requirement: 2,
+            ..Self::balanced_v2_requirement_aware_candidate()
+        }
+    }
+
+    /// CIGAR 0.9.4 value-of-information packing profile.
+    #[must_use]
+    pub fn balanced_v4() -> Self {
+        Self {
+            profile_id: "cigar.compiler-profile.balanced.v4".to_owned(),
+            retrieval_profile: RetrievalProfile::BalancedV4,
+            local_swap_passes: 0,
+            sufficient_items_per_requirement: 0,
+            ..Self::balanced_v2_requirement_aware_candidate()
         }
     }
 }
@@ -323,6 +361,8 @@ pub struct CompilerCandidate {
     pub version_id: VersionId,
     /// Stable logical identity used to collapse aliases/duplicates.
     pub logical_id: VersionId,
+    /// Stable semantic lineage used to prove independent corroboration.
+    pub lineage_id: LineageId,
     /// Canonical source URI for deterministic ties.
     pub canonical_uri: SourceUri,
     /// Destination authority/category lane.
@@ -384,6 +424,8 @@ pub struct CompileRequest {
     pub profile: CompilerProfile,
     /// Every authorized and denied considered candidate.
     pub candidates: Vec<CompilerCandidate>,
+    /// H2-only deterministic pre-budget ranking explanation bound to the retrieval plan.
+    pub ranking_evidence: Option<RequirementRankingEvidence>,
 }
 
 /// Invalidation roots registered for the sealed result.
@@ -443,6 +485,96 @@ pub struct ManifestView {
     pub entries: Vec<ManifestViewEntry>,
 }
 
+/// Content-free reason why a v4 root entered the selected dependency closure.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PackingDecisionBasis {
+    /// Explicitly mandatory candidate.
+    Mandatory,
+    /// First admissible item for a blocking requirement.
+    BlockingRequirement,
+    /// Independent corroboration reserved for effect-adjacent evidence.
+    IndependentCorroboration,
+    /// Candidate needed to satisfy a configured lane minimum.
+    LaneMinimum,
+    /// Positive value-of-information admission.
+    MarginalUtility,
+}
+
+/// Content-free reason why v4 stopped considering optional context.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PackingStopReason {
+    /// Every eligible non-dominated root was selected.
+    Exhausted,
+    /// No remaining feasible root had positive contextual marginal utility.
+    NonPositiveMarginalUtility,
+    /// Positive roots remained, but every one exceeded a lane token or item bound.
+    CapacitySaturated,
+}
+
+/// One deterministic v4 root-admission decision.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackingDecision {
+    /// One-based selection order.
+    pub ordinal: usize,
+    /// Root whose dependency closure was admitted.
+    pub selected_version: VersionId,
+    /// Policy reason for admission.
+    pub basis: PackingDecisionBasis,
+    /// Context-sensitive utility at admission time.
+    pub marginal_utility: i64,
+    /// Exact new physical tokens admitted by the root and its unselected closure.
+    pub incremental_tokens: u32,
+    /// Number of newly selected closure members.
+    pub closure_items: usize,
+    /// Requirements represented for the first time by the new closure.
+    pub newly_covered_requirements: usize,
+    /// Requirements gaining source-, lineage-, and content-independent evidence.
+    pub independently_corroborated_requirements: usize,
+    /// Entity bits introduced by the new closure.
+    pub newly_covered_entities: u32,
+    /// Whether the decision was adjacent to an external effect.
+    pub effect_adjacent: bool,
+}
+
+/// Content-free reason why an optional v4 candidate was conservatively dominated.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PackingDominanceReason {
+    /// The winner has the same provenance and no weaker value or greater closure cost.
+    SameProvenanceNoWeakerValue,
+}
+
+/// One conservative v4 dominance result.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackingDominanceDecision {
+    /// Optional candidate excluded from the competitive scan.
+    pub dominated_version: VersionId,
+    /// Candidate proving every admissible value dimension at no greater closure cost.
+    pub dominating_version: VersionId,
+    /// Content-free proof rule used to exclude the dominated candidate.
+    pub reason: PackingDominanceReason,
+}
+
+/// Complete content-free v4 packing explanation sealed by its digest.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackingEvidence {
+    /// Exact v4 compiler profile identifier.
+    pub compiler_profile_id: String,
+    /// Exact profile digest used by the compile.
+    pub compiler_profile_digest: ContentDigest,
+    /// Tokenizer fingerprint used for every exact representation count.
+    pub tokenizer_fingerprint: ContentDigest,
+    /// Digest over canonical candidates, chosen representations, and cached closures.
+    pub workspace_fingerprint: ContentDigest,
+    /// Ordered root admissions.
+    pub decisions: Vec<PackingDecision>,
+    /// Sorted conservative dominance explanations.
+    pub dominance_decisions: Vec<PackingDominanceDecision>,
+    /// Deterministic optional-packing stop reason.
+    pub stop_reason: PackingStopReason,
+    /// Digest over every preceding field and explanation entry.
+    pub evidence_digest: ContentDigest,
+}
+
 /// Sealed plan, manifest, bundle, and invalidation evidence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompileOutput {
@@ -458,6 +590,10 @@ pub struct CompileOutput {
     pub invalidation: InvalidationRegistration,
     /// Protected non-wire accounting for content-equivalent candidates and citations.
     pub content_equivalence: Vec<ContentEquivalenceDiagnostic>,
+    /// H2-only explanation whose digest and decisions are sealed into manifest extensions.
+    pub ranking_evidence: Option<RequirementRankingEvidence>,
+    /// V4-only value-of-information packing explanation sealed into manifest extensions.
+    pub packing_evidence: Option<PackingEvidence>,
 }
 
 impl CompileOutput {

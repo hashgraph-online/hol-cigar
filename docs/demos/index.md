@@ -1,6 +1,6 @@
 # Demo walkthroughs
 
-Honey v0.9.2 packages four installed-artifact stories: offline deterministic context compilation with
+Honey v0.9.3 packages four installed-artifact stories: offline deterministic context compilation with
 prompt-injection/secret-canary defense, two-agent handoff, effect recovery with observational replay,
 and Claude/MCP lifecycle. Its runner verifies independently supplied artifact digests, uses the
 installed runtime and SDK/plugin bytes, runs each component twice from clean state under no-egress

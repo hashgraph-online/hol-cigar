@@ -7,7 +7,8 @@ that consume it. This is a development-source contract, not a beta release or cr
 support claim.
 
 The frozen source-document SHA-256 is
-`9dbc8f3f1eaa4cd48d1a314399e0c20144a60a7b954a414ca9b42b3b90332c85`.
+`a899c3312ebdfad8d29ecf7a52c63bf8bd3bcf92ee478d425364aec46bdde94d`. The validator rejects any
+unreviewed authority drift.
 
 ## Profiles and owners
 
@@ -39,6 +40,12 @@ Each setting carries its own ordered projection of that list. A source absent fr
 CLI layers. Daemon settings accept only the explicit daemon file. Within one layer, duplicate TOML
 keys are syntax errors and synonymous transports are ambiguity errors; field order never decides a
 winner.
+
+The daemon intelligence profile has only explicit daemon-file authority in embedded, local-sidecar,
+and shared-service compositions. Absence selects `balanced_v3` during 0.9.4 qualification; the
+closed accepted values are `balanced_v1`, `balanced_v3`, and opt-in `balanced_v4`. No environment,
+project, CLI, or ambient source may select a profile. The release-candidate gate must update the
+default authority and guide together if `balanced_v4` becomes the qualified default.
 
 For CLI resolution, `CIGAR_ENDPOINT` is rejected unless the same environment layer contains
 `CIGAR_TARGET`. This prevents an endpoint from being reinterpreted according to a target selected by

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/fixture-archive-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "files"],
+  "properties": {
+    "schema_version": {"const": "cigar.fixture-archive.v1"},
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "media_type", "bytes_base64url"],
+        "properties": {
+          "path": {"$ref": "common-v1.schema.json#/$defs/path"},
+          "media_type": {
+            "enum": ["text/plain", "text/markdown", "application/json", "application/yaml", "application/toml", "application/xml", "text/x-protobuf", "text/x-rust", "text/typescript", "text/javascript", "text/x-python", "text/x-go", "text/x-java", "text/x-c", "text/x-c++"]
+          },
+          "bytes_base64url": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 349526,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        }
+      }
+    }
+  }
+}

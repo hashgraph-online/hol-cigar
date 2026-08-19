@@ -1405,12 +1405,17 @@ mod tests {
         read_immutable_file,
     };
     use crate::{
-        ApplicationResourceLimits, DaemonConfig, DeploymentMode, LiveAuthorizationRepositoryError,
-        LiveReplayAuthorizationRepository, LocalIdentity, ProductionAuthorityConfiguration,
-        ProductionEffectRegistry, ProductionPaths, ProductionPrincipalAuthority,
-        ProductionTenantAuthority, ReplayLiveServices, ReplayLiveServicesError,
-        ReplayLiveServicesFactory, TelemetrySettings, WorkerCapacities,
+        ApplicationResourceLimits, DaemonConfig, DeploymentMode, IntelligenceProfile,
+        LiveAuthorizationRepositoryError, LiveReplayAuthorizationRepository, LocalIdentity,
+        ProductionAuthorityConfiguration, ProductionEffectRegistry, ProductionPaths,
+        ProductionPrincipalAuthority, ProductionTenantAuthority, ReplayLiveServices,
+        ReplayLiveServicesError, ReplayLiveServicesFactory, TelemetrySettings, WorkerCapacities,
         execute_process_command_until,
+    };
+    use cigar_api::{
+        CancellationToken as ApiCancellationToken, CapabilitiesResponse, EmptyRequest, OperationId,
+        RequestContext, RequestEnvelope, TraceId, decode_operation_payload,
+        encode_operation_payload,
     };
     use cigar_compiler::ReferenceTokenizerProfile;
     use cigar_crypto::{
@@ -1440,6 +1445,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
     use tempfile::TempDir;
 
     struct Fixture {
@@ -1784,6 +1790,114 @@ mod tests {
         assert_eq!(
             std::fs::read(&fixture.config.production.cursor_signing_key_file)?,
             cursor_key
+        );
+        Ok(())
+    }
+
+    async fn capabilities_after_embedded_restart(
+        config: DaemonConfig,
+        trace: u8,
+    ) -> Result<CapabilitiesResponse, Box<dyn Error>> {
+        let identity = LocalIdentity::from_project_root(&config.production.project_directory)?;
+        let running = compose_production_server(config)?.start_embedded().await?;
+        let accepted_nanos =
+            i128::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos())?;
+        let accepted = UtcTimestamp::from_unix_nanos(accepted_nanos)?;
+        let deadline = UtcTimestamp::from_unix_nanos(
+            accepted_nanos
+                .checked_add(5_000_000_000)
+                .ok_or("capability deadline overflow")?,
+        )?;
+        let context = RequestContext::new(
+            identity.authenticated(),
+            OperationId::new("getCapabilities")?,
+            deadline,
+            TraceId::new(format!("{trace:032x}"))?,
+            ApiCancellationToken::new(),
+            accepted,
+        )?;
+        let request = RequestEnvelope::new(
+            "getCapabilities",
+            encode_operation_payload(&EmptyRequest {}, cigar_api::MAX_OPERATION_PAYLOAD_BYTES)?,
+            None,
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let response = running.facade().call(context, request).await?;
+        let capabilities = decode_operation_payload::<CapabilitiesResponse>(
+            response.payload_cbor(),
+            cigar_api::MAX_OPERATION_PAYLOAD_BYTES,
+        )?;
+        running.shutdown().await?;
+        Ok(capabilities)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn intelligence_behavior_rolls_back_v4_to_v3_and_v1_after_restart()
+    -> Result<(), Box<dyn Error>> {
+        let mut fixture = fixture()?;
+        let profiles = [
+            (
+                IntelligenceProfile::BalancedV4,
+                "intelligence-balanced-v4",
+                "cigar.retrieval-profile.balanced.v4",
+                "cigar.compiler-profile.balanced.v4",
+            ),
+            (
+                IntelligenceProfile::BalancedV3,
+                "intelligence-balanced-v3",
+                "cigar.retrieval-profile.balanced.v2-candidate.2",
+                "cigar.compiler-profile.balanced.v3",
+            ),
+            (
+                IntelligenceProfile::BalancedV1,
+                "intelligence-balanced-v1",
+                "cigar.retrieval-profile.balanced.v1",
+                "cigar.compiler-profile.balanced.v1",
+            ),
+        ];
+        let mut cursor_key = None;
+        let mut revisions = Vec::new();
+        for (index, (profile, capability, retrieval, compiler)) in profiles.into_iter().enumerate()
+        {
+            fixture.config.intelligence_profile = profile;
+            assert_eq!(profile.capability_identifier(), capability);
+            assert_eq!(profile.retrieval_profile().identifier(), retrieval);
+            assert_eq!(profile.compiler_profile().profile_id, compiler);
+
+            let trace = u8::try_from(index)?
+                .checked_add(1)
+                .ok_or("trace overflow")?;
+            let reported =
+                capabilities_after_embedded_restart(fixture.config.clone(), trace).await?;
+            let intelligence: Vec<_> = reported
+                .profiles
+                .iter()
+                .filter(|value| value.starts_with("intelligence-"))
+                .map(String::as_str)
+                .collect();
+            assert_eq!(intelligence, [capability]);
+
+            let current_key = std::fs::read(&fixture.config.production.cursor_signing_key_file)?;
+            if let Some(expected) = cursor_key.as_ref() {
+                assert_eq!(
+                    &current_key, expected,
+                    "profile rollback rotated durable keys"
+                );
+            } else {
+                cursor_key = Some(current_key);
+            }
+            let store = SqliteStore::open(&fixture.config.production.metadata_database)?;
+            store.verify_migration_level()?;
+            revisions.push(store.revision()?);
+        }
+        assert!(
+            revisions
+                .windows(2)
+                .all(|pair| matches!(pair, [left, right] if left <= right)),
+            "behavior rollback moved durable state backwards"
         );
         Ok(())
     }

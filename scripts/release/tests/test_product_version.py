@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,9 +25,11 @@ EXPECTED_MANAGED_PATHS = {
     "Cargo.toml",
     "adapters/claude-code/.claude-plugin/plugin.json",
     "adapters/claude-code/package-manifest.json",
+    "adapters/claude-code/README.md",
     "adapters/claude-code/tests/validate-package.ps1",
     "adapters/claude-code/tests/validate_package.py",
     "benches/cigarbench/local_scale_driver/Cargo.lock",
+    "benches/cigarbench/consumer/Cargo.toml",
     "benches/honey-efficiency/driver/Cargo.lock",
     "conformance/runner/Cargo.toml",
     "crates/cigar-api/release.json",
@@ -54,6 +57,10 @@ EXPECTED_MANAGED_PATHS = {
     "demos/sdk-clients/rust-workflow/Cargo.lock",
     "demos/README.md",
     "demos/agent-handoff/driver.py",
+    "demos/honey-manifest.v1.json",
+    "demos/honey-two-agent/driver.py",
+    "demos/honey-two-agent/honey-demo.json",
+    "demos/run_honey.py",
     "demos/storage-migration/run.py",
     "docs/site/index.md",
     "docs/site-manifest.v1.json",
@@ -74,6 +81,7 @@ EXPECTED_MANAGED_PATHS = {
     "sdk/go/release.json",
     "sdk/go/release_contract_test.go",
     "sdk/python/pyproject.toml",
+    "sdk/python/README.md",
     "sdk/python/src/cigar_sdk/release.json",
     "sdk/python/tests/test_release_contract.py",
     "sdk/python/uv.lock",
@@ -157,15 +165,15 @@ class ProductVersionTests(unittest.TestCase):
             {
                 "schema_version": "cigar.product-version.v1",
                 "product": "cigar",
-                "version": "0.9.2",
-                "target_release_version": "0.9.2",
+                "version": "0.9.4",
+                "target_release_version": "0.9.4",
                 "context_abi": "cigar.context.v1",
                 "release_state": "developer-preview",
                 "channel": "honey",
                 "prerelease": True,
                 "published": False,
                 "supported": False,
-                "tag": "v0.9.2",
+                "tag": "v0.9.4",
             },
         )
         self.assertEqual(
@@ -175,17 +183,17 @@ class ProductVersionTests(unittest.TestCase):
             1,
         )
         self.assertEqual(
-            product_version.python_distribution_version("0.9.2"),
-            "0.9.2",
+            product_version.python_distribution_version("0.9.4"),
+            "0.9.4",
         )
         self.assertEqual(
-            product_version.derived_versions("0.9.2"),
+            product_version.derived_versions("0.9.4"),
             {
-                "typescript": "0.9.2",
-                "python": "0.9.2",
-                "rust": "0.9.2",
-                "plugin": "0.9.2",
-                "archive": "0.9.2",
+                "typescript": "0.9.4",
+                "python": "0.9.4",
+                "rust": "0.9.4",
+                "plugin": "0.9.4",
+                "archive": "0.9.4",
             },
         )
         matrix = json.loads(
@@ -194,55 +202,72 @@ class ProductVersionTests(unittest.TestCase):
             )
         )
         filenames = {entry["id"]: entry["filename"] for entry in matrix["artifacts"]}
-        self.assertEqual(filenames["python-sdk-sdist"], "hol_cigar-0.9.2.tar.gz")
+        self.assertEqual(filenames["python-sdk-sdist"], "hol_cigar-0.9.4.tar.gz")
         self.assertEqual(
             filenames["python-sdk-wheel"],
-            "hol_cigar-0.9.2-py3-none-any.whl",
+            "hol_cigar-0.9.4-py3-none-any.whl",
         )
         self.assertEqual(
             filenames["macos-installer-arm64"],
-            "cigar--0.9.2.arm64_sequoia.bottle.tar.gz",
+            "cigar--0.9.4.arm64_sequoia.bottle.tar.gz",
         )
         product_version.check(self.fixture)
 
     def test_generation_is_deterministic_and_propagates_one_increment(self) -> None:
         manifest = self._manifest()
-        manifest["version"] = "0.9.2-honey.2"
-        manifest["tag"] = "v0.9.2-honey.2"
+        manifest["version"] = "0.9.4-honey.2"
+        manifest["tag"] = "v0.9.4-honey.2"
         self._write_manifest(manifest)
         product_version.generate(self.fixture)
         first = self._managed_bytes()
         product_version.generate(self.fixture)
         self.assertEqual(self._managed_bytes(), first)
         self.assertEqual(list(self.fixture.rglob("*.product-version.*.tmp")), [])
-        self.assertIn(b'version = "0.9.2-honey.2"', first["Cargo.toml"])
-        self.assertIn(b'version = "0.9.2.dev2"', first["sdk/python/pyproject.toml"])
+        self.assertIn(b'version = "0.9.4-honey.2"', first["Cargo.toml"])
+        self.assertIn(b'version = "0.9.4.dev2"', first["sdk/python/pyproject.toml"])
         self.assertIn(
-            b'"product_version": "0.9.2-honey.2"',
+            b'"product_version": "0.9.4-honey.2"',
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b'"filename": "hol_cigar-0.9.2.dev2.tar.gz"',
+            b'"filename": "hol_cigar-0.9.4.dev2.tar.gz"',
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b'"filename": "cigar--0.9.2-honey.2.arm64_sequoia.bottle.tar.gz"',
+            b'"filename": "cigar--0.9.4-honey.2.arm64_sequoia.bottle.tar.gz"',
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b'"install_target": "homebrew-cellar/cigar/0.9.2-honey.2"',
+            b'"install_target": "homebrew-cellar/cigar/0.9.4-honey.2"',
             first["packaging/artifact-matrix.v1.json"],
         )
         self.assertIn(
-            b"hol_cigar-0.9.2.dev2.dist-info/",
+            b"hol_cigar-0.9.4.dev2.dist-info/",
             first["packaging/contracts/python-wheel.v1.json"],
         )
         self.assertIn(
-            b"hol_cigar-0.9.2.dev2-py3-none-any.whl",
+            b"hol_cigar-0.9.4.dev2-py3-none-any.whl",
             first["demos/README.md"],
         )
         self.assertIn(
-            b'"version": "0.9.2-honey.2"', first["sdk/typescript/package.json"]
+            b'"version": "0.9.4-honey.2"', first["sdk/typescript/package.json"]
+        )
+        self.assertIn(
+            b'"product_version": "0.9.4-honey.2"',
+            first["demos/honey-manifest.v1.json"],
+        )
+        self.assertIn(
+            b'PRODUCT_VERSION = "0.9.4-honey.2"', first["demos/run_honey.py"]
+        )
+        self.assertIn(
+            hashlib.sha256(first["demos/agent-handoff/driver.py"]).hexdigest().encode(),
+            first["demos/honey-two-agent/driver.py"],
+        )
+        two_agent = json.loads(first["demos/honey-two-agent/honey-demo.json"])
+        self.assertEqual(
+            two_agent["driver_digest"],
+            "1220"
+            + hashlib.sha256(first["demos/honey-two-agent/driver.py"]).hexdigest(),
         )
 
     def test_generator_does_not_mutate_excluded_version_domains(self) -> None:
@@ -251,8 +276,8 @@ class ProductVersionTests(unittest.TestCase):
             for relative in EXCLUDED_FIXTURES
         }
         manifest = self._manifest()
-        manifest["version"] = "0.9.2-honey.2"
-        manifest["tag"] = "v0.9.2-honey.2"
+        manifest["version"] = "0.9.4-honey.2"
+        manifest["tag"] = "v0.9.4-honey.2"
         self._write_manifest(manifest)
         product_version.generate(self.fixture)
         after = {
@@ -264,7 +289,7 @@ class ProductVersionTests(unittest.TestCase):
     def test_check_rejects_managed_drift(self) -> None:
         path = self.fixture / "sdk/typescript/package.json"
         path.write_text(
-            path.read_text(encoding="utf-8").replace('"version": "0.9.2"', '"version": "9.9.9"'),
+            path.read_text(encoding="utf-8").replace('"version": "0.9.4"', '"version": "9.9.9"'),
             encoding="utf-8",
         )
         with self.assertRaisesRegex(product_version.VersionError, "version drift"):
@@ -282,8 +307,8 @@ class ProductVersionTests(unittest.TestCase):
         path = self.fixture / product_version.MANIFEST_PATH
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                '  "tag": "v0.9.2"\n',
-                '  "tag": "v0.9.2",\n  "tag": "v0.9.2"\n',
+                '  "tag": "v0.9.4"\n',
+                '  "tag": "v0.9.4",\n  "tag": "v0.9.4"\n',
             ),
             encoding="utf-8",
         )

@@ -38,14 +38,14 @@ from source_descriptor import SourceDescriptorError, build_source_descriptor
 from verify_honey_release import verify as verify_public_candidate
 
 
-VERSION = "0.9.2"
+VERSION = "0.9.4"
 ABI = "cigar.context.v1"
 TARGET = "aarch64-apple-darwin"
 RUNTIME_NAME = f"cigar-{VERSION}-{TARGET}.tar.gz"
 TOOL_NAME = f"cigar-conformance-{VERSION}-{TARGET}.tar.gz"
 TYPESCRIPT_NAME = f"cigar-sdk-{VERSION}.tgz"
-PYTHON_WHEEL_NAME = "hol_cigar-0.9.2-py3-none-any.whl"
-PYTHON_SDIST_NAME = "hol_cigar-0.9.2.tar.gz"
+PYTHON_WHEEL_NAME = "hol_cigar-0.9.4-py3-none-any.whl"
+PYTHON_SDIST_NAME = "hol_cigar-0.9.4.tar.gz"
 RUST_NAME = f"cigar-rust-sdk-{VERSION}-local-registry.tar.gz"
 CLAUDE_NAME = f"cigar-claude-code-{VERSION}.tar.gz"
 DEMO_NAME = f"cigar-honey-demos-{VERSION}.tar.gz"

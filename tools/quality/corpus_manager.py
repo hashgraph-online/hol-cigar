@@ -45,6 +45,7 @@ CORPUS_ROOT = FUZZ_ROOT / "corpus"
 ARTIFACT_ROOT = FUZZ_ROOT / "artifacts"
 CAMPAIGN_PATH = FUZZ_ROOT / "campaign-v1.json"
 POLICY_PATH = FUZZ_ROOT / "corpus-policy.v1.json"
+EXPECTED_CAMPAIGN_TARGET_COUNT = 19
 HEX_SHA1 = re.compile(r"^[0-9a-f]{40}$")
 SAFE_TARGET = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 CORPUS_LIMIT_FIELDS = frozenset(
@@ -508,6 +509,8 @@ def execution_source_state(
             raise CorpusFailure(f"execution source content changed: {relative}")
         mirror_entries.append(current)
     for relative in expected_directories:
+        if relative in allowed_runtime_directories:
+            continue
         mode = stat.S_IMODE(
             (mirror / Path(*PurePosixPath(relative).parts))
             .stat(follow_symlinks=False)
@@ -521,8 +524,12 @@ def execution_source_state(
         path = mirror / Path(*PurePosixPath(relative).parts)
         if stat.S_IMODE(path.stat(follow_symlinks=False).st_mode) != 0o700:
             raise CorpusFailure("execution artifact scratch is not mode 0700")
-    artifact_files = [path for path in artifact_root.rglob("*") if path.is_file()]
-    if artifact_files:
+    runtime_artifact_files = [
+        path
+        for path in artifact_root.rglob("*")
+        if path.is_file() and path.relative_to(mirror).as_posix() not in expected_files
+    ]
+    if runtime_artifact_files:
         raise CorpusFailure("execution source retained a crash artifact")
     tracked_state = tracked_source_digest(mirror_entries)
     if tracked_state != tracked_source_digest(entries):
@@ -562,7 +569,11 @@ def harden_execution_source(mirror: Path, entries: list[dict[str, Any]]) -> None
         mode = 0o500 if expected_files[relative]["git_mode"] == "100755" else 0o400
         path.chmod(mode)
     artifact_root = mirror / "fuzz" / "artifacts"
-    private_mkdir(artifact_root, exist_ok=False)
+    if artifact_root.exists() or artifact_root.is_symlink():
+        if artifact_root.is_symlink() or not artifact_root.is_dir():
+            raise CorpusFailure("execution artifact root is not a safe directory")
+    else:
+        private_mkdir(artifact_root, exist_ok=False)
     directories = [path for path in mirror.rglob("*") if path.is_dir()]
     for directory in sorted(
         directories, key=lambda path: len(path.parts), reverse=True
@@ -940,8 +951,14 @@ def load_policy() -> tuple[dict[str, Any], list[str]]:
     if policy.get("schema_version") != "cigar.fuzz-corpus-policy.v1":
         raise CorpusFailure("unexpected corpus policy schema")
     targets = campaign.get("targets")
-    if not isinstance(targets, list) or len(targets) != 14 or len(set(targets)) != 14:
-        raise CorpusFailure("campaign must declare exactly fourteen unique targets")
+    if (
+        not isinstance(targets, list)
+        or len(targets) != EXPECTED_CAMPAIGN_TARGET_COUNT
+        or len(set(targets)) != EXPECTED_CAMPAIGN_TARGET_COUNT
+    ):
+        raise CorpusFailure(
+            f"campaign must declare exactly {EXPECTED_CAMPAIGN_TARGET_COUNT} unique targets"
+        )
     if any(
         not isinstance(target, str)
         or SAFE_TARGET.fullmatch(target) is None
@@ -1883,7 +1900,7 @@ def verify_minimized_output(
         "source_working_corpus_unchanged",
         "source_corpus_before",
         "source_corpus_after",
-        "all_fourteen_targets_snapshotted",
+        "all_campaign_targets_snapshotted",
         "dependency_mode",
         "cargo_fuzz_execution",
         "read_only_candidate",
@@ -1906,7 +1923,7 @@ def verify_minimized_output(
         )
     if report.get("source_working_corpus_unchanged") is not True:
         raise CorpusFailure("minimization did not prove the source corpus unchanged")
-    if report.get("all_fourteen_targets_snapshotted") is not True:
+    if report.get("all_campaign_targets_snapshotted") is not True:
         raise CorpusFailure("minimization did not snapshot all campaign source corpora")
     if report.get("dependency_mode") != "locked-offline-cargo-wrapper":
         raise CorpusFailure("minimization dependencies were not locked and offline")
@@ -2074,7 +2091,7 @@ def verify_minimized_output(
         or before != after
     ):
         raise CorpusFailure(
-            "all-fourteen source corpus snapshots are incomplete or changed"
+            "campaign source corpus snapshots are incomplete or changed"
         )
     expected_policy = {
         "path": "fuzz/corpus-policy.v1.json",
@@ -2306,7 +2323,7 @@ def verify_minimized_output(
         "execution_source_before": expected_execution_before,
         "execution_source_after": expected_execution_after,
         "success_scratch_absent": True,
-        "all_fourteen_targets_snapshotted": True,
+        "all_campaign_targets_snapshotted": True,
         "deterministic_second_run_equivalent": True,
         "target_count": len(verified),
         "targets": verified,
@@ -2579,7 +2596,9 @@ def minimize_command(args: argparse.Namespace) -> None:
         "source_working_corpus_unchanged": True,
         "source_corpus_before": before,
         "source_corpus_after": after,
-        "all_fourteen_targets_snapshotted": len(before) == 14 and before == after,
+        "all_campaign_targets_snapshotted": (
+            len(before) == EXPECTED_CAMPAIGN_TARGET_COUNT and before == after
+        ),
         "dependency_mode": "locked-offline-cargo-wrapper",
         "cargo_fuzz_execution": cargo_fuzz_execution,
         "read_only_candidate": {

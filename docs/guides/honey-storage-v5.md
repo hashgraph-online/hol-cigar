@@ -1,6 +1,6 @@
-# Honey 0.9.2 storage migration and maintenance
+# Honey 0.9.3 storage migration and maintenance
 
-Honey 0.9.2 uses SQLite repository format v5: ordinary revisions are authenticated typed deltas,
+Honey 0.9.3 uses SQLite repository format v5: ordinary revisions are authenticated typed deltas,
 with bounded checkpoints for restart and exact-revision reconstruction. These are local offline
 administration commands, not new v1 API operations. Atomic context compilation and remote retention
 administration remain future proposals.

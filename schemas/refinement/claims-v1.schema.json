@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/claims-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "claims_id", "observation_id", "output_digest", "answer_status", "claims"],
+  "properties": {
+    "schema_version": {"const": "cigar.answer-claims.v1"},
+    "claims_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "output_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "answer_status": {"enum": ["answered", "abstained", "insufficient_evidence"]},
+    "claims": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "statement_digest", "citations"],
+        "properties": {
+          "claim_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "statement_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "citations": {
+            "type": "array",
+            "maxItems": 1024,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          }
+        }
+      }
+    }
+  }
+}

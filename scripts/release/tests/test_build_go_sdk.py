@@ -87,7 +87,7 @@ class GoSdkBuilderTests(unittest.TestCase):
             "semantic_bundle_identity": builder.EXPECTED_QUICKSTART_IDENTITY,
             "tool": {
                 "name": "go",
-                "version": "go version go1.26.5 darwin/arm64",
+                "version": "go version go1.26.6 darwin/arm64",
                 "sha256": "c" * 64,
                 "bytes": 1,
             },
@@ -418,18 +418,18 @@ class GoSdkBuilderTests(unittest.TestCase):
             builder._require_host()
 
     def test_go_toolchain_floor_rejects_vulnerable_patch_versions(self) -> None:
-        with self.assertRaisesRegex(ReleaseError, r"requires Go >=1\.26\.5"):
-            builder._require_supported_go_toolchain("go version go1.26.4 darwin/arm64")
+        with self.assertRaisesRegex(ReleaseError, r"requires Go >=1\.26\.6"):
+            builder._require_supported_go_toolchain("go version go1.26.5 darwin/arm64")
         self.assertEqual(
-            builder._require_supported_go_toolchain("go version go1.26.5 darwin/arm64"),
-            (1, 26, 5),
+            builder._require_supported_go_toolchain("go version go1.26.6 darwin/arm64"),
+            (1, 26, 6),
         )
         self.assertEqual(
             builder._require_supported_go_toolchain("go version go1.27.0 darwin/arm64"),
             (1, 27, 0),
         )
         with self.assertRaisesRegex(ReleaseError, "native macOS arm64"):
-            builder._require_supported_go_toolchain("go version go1.26.5 linux/arm64")
+            builder._require_supported_go_toolchain("go version go1.26.6 linux/arm64")
 
 
 if __name__ == "__main__":

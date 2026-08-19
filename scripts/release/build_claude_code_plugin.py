@@ -374,7 +374,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9.2",
+        "marketing_name": "CIGAR Honey v0.9.4",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,

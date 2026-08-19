@@ -33,7 +33,7 @@ from verify_package import verify as verify_package
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PRODUCT_VERSION = "0.9.2"
+PRODUCT_VERSION = "0.9.4"
 CONTEXT_ABI = "cigar.context.v1"
 DEMOS_ARTIFACT_ID = "honey-demos"
 DEMOS_CONTRACT_REFERENCE = "packaging/honey/contracts/demos-archive.v1.json"

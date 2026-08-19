@@ -23,7 +23,7 @@ Local source-derived qualification:
 ```text
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/validate_metadata.py
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/build_archives.py --out /tmp/cigar-dist
-python3 scripts/release/verify_package.py /tmp/cigar-dist/cigar-0.9.2-source.tar.gz --contract packaging/contracts/source-archive.v1.json
+python3 scripts/release/verify_package.py /tmp/cigar-dist/cigar-0.9.4-source.tar.gz --contract packaging/contracts/source-archive.v1.json
 SOURCE_DATE_EPOCH=1700000000 python3 scripts/release/check_reproducibility.py --report /tmp/cigar-reproducibility.json
 python3 scripts/release/check_docs.py
 python3 scripts/release/exercise_runbooks.py --mode static --out /tmp/cigar-runbooks
@@ -111,12 +111,12 @@ caller-selected executable:
 CIGAR_NO_EGRESS_ENFORCED=1 \
 CIGAR_EVIDENCE_DIR=/private/tmp/cigar-installed-qualification \
   python3 scripts/release/qualify_install.py \
-    /private/tmp/cigar-macos-arm64-build/cigar-0.9.2-aarch64-apple-darwin.tar.gz \
+    /private/tmp/cigar-macos-arm64-build/cigar-0.9.4-aarch64-apple-darwin.tar.gz \
     --contract packaging/contracts/macos-runtime-archive.v1.json \
     --runtime-build-receipt \
       /private/tmp/cigar-macos-arm64-build/native-build-receipt.json \
     --qualification-tool-archive \
-      /private/tmp/cigar-conformance-tool-build/cigar-conformance-0.9.2-aarch64-apple-darwin.tar.gz \
+      /private/tmp/cigar-conformance-tool-build/cigar-conformance-0.9.4-aarch64-apple-darwin.tar.gz \
     --qualification-tool-contract packaging/contracts/macos-conformance-runner.v1.json \
     --qualification-tool-build-receipt \
       /private/tmp/cigar-conformance-tool-build/macos-conformance-development-build.json \
@@ -255,7 +255,7 @@ install scripts disabled. The Python producer creates the wheel and sdist togeth
 metadata and `RECORD`, tests their package-local fixtures, and installs each exact artifact plus
 the pinned protobuf runtime dependency from the offline cache into a separate clean CPython 3.14
 environment before importing the complete public SDK and running its semantic workflow. This is
-one native runtime, not an interpreter/platform matrix. The Go producer requires native Go 1.26.5
+one native runtime, not an interpreter/platform matrix. The Go producer requires native Go 1.26.6
 or newer, constructs the canonical module
 ZIP, and verifies it through a fresh file-proxy cache with offline `go list`, `go vet`, `go test`,
 `go mod verify`, and the packaged semantic-bundle workflow. Earlier Go toolchains fail closed.

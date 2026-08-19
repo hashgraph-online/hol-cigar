@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/decision-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision_id", "trial_id", "comparison_id", "champion_source", "candidate_source", "policy_digest", "decision", "reasons", "passed_gates", "failed_gates", "human_review"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-decision.v1"},
+    "decision_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "champion_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "candidate_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "policy_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "decision": {"enum": ["promote", "reject_invalid_evidence", "reject_hard_invariant", "reject_inferior", "reject_no_meaningful_improvement", "reject_overfit_or_inconsistent", "reject_performance", "reject_compatibility", "needs_human_review"]},
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+    },
+    "passed_gates": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "failed_gates": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "human_review": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer_id", "approval_digest"],
+          "properties": {
+            "reviewer_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+            "approval_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -3,7 +3,7 @@
 # bounded files readable only by the service identity. The pre-existing keystore and exact 32-byte
 # cursor key are immutable mode 0400 in shared mode; other credential handles are mode 0600.
 mode = "shared"
-# Honey 0.9.2 exposes only the 0.9.1-compatible balanced profile.
+# Honey 0.9.3 exposes only the 0.9.1-compatible balanced profile.
 intelligence_profile = "balanced_v1"
 state_directory = "/var/lib/cigar"
 runtime_directory = "/run/cigar"

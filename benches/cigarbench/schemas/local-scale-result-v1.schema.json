@@ -22,6 +22,7 @@
     "observed",
     "roots",
     "storage",
+    "lifecycle",
     "checks",
     "claims",
     "receipt_id"
@@ -64,6 +65,17 @@
         "retained_snapshots": {"type": "integer", "minimum": 1},
         "backup_file_count": {"type": "integer", "minimum": 1},
         "backup_repository_revision": {"type": "integer", "minimum": 1}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cold_start_nanoseconds", "steady_state_nanoseconds", "restart_nanoseconds", "warm_start_nanoseconds"],
+      "properties": {
+        "cold_start_nanoseconds": {"type": "integer", "minimum": 1},
+        "steady_state_nanoseconds": {"type": "integer", "minimum": 1},
+        "restart_nanoseconds": {"type": "integer", "minimum": 1},
+        "warm_start_nanoseconds": {"type": "integer", "minimum": 1}
       }
     },
     "checks": {

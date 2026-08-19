@@ -69,6 +69,7 @@ _LOCK_FILE_FLAGS = os.O_RDWR | _NOFOLLOW | _CLOEXEC | _NONBLOCK
 _CREATE_FILE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW | _CLOEXEC
 MAXIMUM_PATH_DEPTH = 64
 MAXIMUM_DIRECTORY_ENTRIES = 1_100_000
+EXPECTED_CAMPAIGN_TARGET_COUNT = 19
 
 
 class FuzzLedgerError(RuntimeError):
@@ -129,8 +130,8 @@ def _campaign() -> tuple[list[str], int, str]:
     if (
         document.get("schema_version") != "cigar.fuzz-campaign.v1"
         or not isinstance(targets, list)
-        or len(targets) != 14
-        or len(set(targets)) != 14
+        or len(targets) != EXPECTED_CAMPAIGN_TARGET_COUNT
+        or len(set(targets)) != EXPECTED_CAMPAIGN_TARGET_COUNT
         or any(
             not isinstance(target, str) or SAFE_ID.fullmatch(target) is None
             for target in targets

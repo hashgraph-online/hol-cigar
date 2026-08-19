@@ -1,5 +1,6 @@
 //! Windows implementation and local safety proofs.
 
+use crate::pointer::bounded_utf16_to_string;
 use std::ffi::{OsStr, c_void};
 use std::fs::File;
 use std::io;
@@ -598,24 +599,10 @@ fn sid_to_string(sid: PSID) -> io::Result<String> {
     }
     let allocation = LocalAllocation::new(text_pointer.cast::<c_void>())?;
     let pointer = allocation.as_ptr().cast::<u16>();
-    let mut length = None;
-    for index in 0..MAX_SID_TEXT_UNITS {
-        // SAFETY: the Windows contract guarantees a NUL-terminated allocation. We impose a strict
-        // upper bound and inspect one initialized UTF-16 unit at a time without writing.
-        if unsafe { *pointer.add(index) } == 0 {
-            length = Some(index);
-            break;
-        }
-    }
-    let length = length.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "owner SID text exceeded bound")
-    })?;
-    // SAFETY: the preceding bounded scan proved that exactly `length` initialized units precede
-    // the terminator in this still-live LocalAlloc buffer.
-    let units = unsafe { std::slice::from_raw_parts(pointer, length) };
-    String::from_utf16(units).map_err(|_error| {
-        io::Error::new(io::ErrorKind::InvalidData, "owner SID was invalid UTF-16")
-    })
+    // SAFETY: the Windows conversion contract returns a live NUL-terminated UTF-16 allocation.
+    // `allocation` retains it throughout the bounded scan and decode.
+    unsafe { bounded_utf16_to_string(pointer, MAX_SID_TEXT_UNITS) }
+        .map_err(|message| io::Error::new(io::ErrorKind::InvalidData, message))
 }
 
 fn null_terminated(value: &OsStr) -> Vec<u16> {

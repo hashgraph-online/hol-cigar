@@ -7,6 +7,7 @@ export * from "./generated/errors.js";
 export * from "./generated/models.js";
 export * from "./idempotency.js";
 export * from "./types.js";
+export * from "./workflow-session.js";
 
 /** Exact Protobuf package name of the stable Context ABI implemented by this SDK. */
 export const CONTEXT_ABI = "cigar.context.v1" as const;

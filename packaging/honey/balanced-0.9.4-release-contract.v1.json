@@ -1,0 +1,444 @@
+{
+  "schema_version": "cigar.honey-balanced-release-contract.v1",
+  "release": {
+    "name": "CIGAR Honey 0.9.4",
+    "version": "0.9.4",
+    "channel": "honey",
+    "release_state": "developer-preview",
+    "supported": false,
+    "production_qualified": false
+  },
+  "comparators": [
+    {
+      "treatment_id": "honey-0.9.2-balanced-v1",
+      "version": "0.9.2",
+      "commit": "35538959bce7497311906e4d370334a87abd362b",
+      "tree": "1157c5fb32b7faed65a8db5ae1e44505636b872f",
+      "context_abi": "cigar.context.v1",
+      "selection_profile": "balanced_v1",
+      "source_set_sha256": "d0ead9aac2f71d422fd49b35a0a490109f1cf0ae7700a4aba7987c234d53fa63",
+      "role": "stable-behavior-and-latency-floor"
+    },
+    {
+      "treatment_id": "honey-0.9.3-balanced-v3",
+      "version": "0.9.3",
+      "commit": "a049fbc8ed81c9adc6b1a066ca053c5befc2578a",
+      "tree": "7179f2d0b78c8af314aebc8c86d62a0b6067e6ec",
+      "context_abi": "cigar.context.v1",
+      "selection_profile": "balanced_v3",
+      "source_set_sha256": "26db1bf0d00d77c3539f7592ae047c353660db4bdd6e49b1fa3279c85344d11e",
+      "role": "immediate-quality-token-and-speed-baseline"
+    }
+  ],
+  "candidate": {
+    "version": "0.9.4",
+    "authority_checkpoint_commit": "165891bfe95af4707797f240d67c7a44cabf1220",
+    "authority_checkpoint_tree": "ce83b53b6aee5b2e71c5314cfbb57b3850c9852e",
+    "final_source_binding": "required-after-freeze",
+    "final_source_bound": false,
+    "default_profile_during_qualification": "balanced_v3",
+    "qualification_profile": "balanced_v4",
+    "release_profiles": ["balanced_v4"],
+    "replay_profiles": ["balanced_v1", "balanced_v3"],
+    "accepted_configuration_values": [
+      "balanced_v1",
+      "balanced_v3",
+      "balanced_v4"
+    ],
+    "capability_identifiers": [
+      "intelligence-balanced-v1",
+      "intelligence-balanced-v3",
+      "intelligence-balanced-v4"
+    ],
+    "context_abi": "cigar.context.v1",
+    "protocol_min": "1.0",
+    "protocol_max": "1.x",
+    "public_operations": 45,
+    "nominal_payload_types": 70,
+    "storage_format": "sqlite-v5"
+  },
+  "profile_bindings": {
+    "balanced_v1": {
+      "purpose": "frozen-0.9.2-replay-and-behavior-rollback",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v1",
+      "retrieval_digest": "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea",
+      "compiler_id": "cigar.compiler-profile.balanced.v1",
+      "compiler_digest": "122045f764c2c4b1a0ee6ecf6078050cfd939ff37c1b91edd8c4a38e8525e43cacb9",
+      "immutable": true
+    },
+    "balanced_v3": {
+      "purpose": "frozen-0.9.3-replay-default-and-behavior-rollback",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.2",
+      "retrieval_digest": "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a",
+      "compiler_id": "cigar.compiler-profile.balanced.v3",
+      "compiler_digest": "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7",
+      "immutable": true
+    },
+    "balanced_v4": {
+      "purpose": "0.9.4-opt-in-release-candidate",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v4",
+      "retrieval_digest": "1220f5e7f91cefdaea9b0748999b173fa38e005a350a6f533396e281d1c342c2d910",
+      "compiler_id": "cigar.compiler-profile.balanced.v4",
+      "compiler_digest": "1220d28b42286c3db066f73b70b670ee32b13311319fd512d682e9f843864749bcf2",
+      "maximum_cancellation_scan_interval_candidates": 32,
+      "maximum_requirements": 256,
+      "repair_enabled": false,
+      "exact_token_accounting": true
+    }
+  },
+  "thresholds": {
+    "context_correctness_and_efficiency": {
+      "minimum_valid_completion_rate_millionths": 1000000,
+      "minimum_blocking_coverage_rate_millionths": 1000000,
+      "minimum_gold_source_coverage_rate_millionths": 1000000,
+      "minimum_citation_resolvability_rate_millionths": 1000000,
+      "maximum_unauthorized_selected_items": 0,
+      "maximum_unproven_selected_catalog_items": 0,
+      "maximum_mean_exact_tokens": 1050,
+      "maximum_per_workflow_mean_token_regression_vs_0_9_3_millionths": 20000,
+      "minimum_useful_selection_precision_millionths": 600000,
+      "maximum_semantic_duplicate_rate_millionths": 10000,
+      "maximum_exact_content_duplicates": 0
+    },
+    "retrieval_compiler_speed": {
+      "maximum_reducer_p50_ratio_vs_0_9_3_millionths": 1000000,
+      "maximum_reducer_p95_ratio_vs_0_9_3_millionths": 1000000,
+      "minimum_small_workflow_reducer_p95_improvement_millionths": 300000,
+      "minimum_aggregate_phase_p50_improvement_vs_0_9_3_millionths": 200000,
+      "minimum_aggregate_phase_p50_improvement_vs_0_9_2_millionths": 500000,
+      "maximum_compiler_p95_regression_vs_0_9_3_millionths": 50000,
+      "minimum_request_allocation_reduction_at_128_and_512_candidates_millionths": 400000,
+      "speed_claim_interval": "paired-bootstrap-95-percent",
+      "speed_claim_interval_may_include_regression_boundary": false
+    },
+    "actual_workflow": {
+      "minimum_valid_terminal_completion_rate_millionths": 1000000,
+      "minimum_tool_effect_correctness_rate_millionths": 1000000,
+      "minimum_required_evidence_recall_rate_millionths": 1000000,
+      "minimum_citation_resolvability_rate_millionths": 1000000,
+      "maximum_policy_or_replay_violations": 0,
+      "minimum_median_cigar_overhead_improvement_vs_0_9_3_millionths": 200000,
+      "minimum_median_cigar_tokens_improvement_vs_0_9_3_millionths": 150000,
+      "minimum_median_cigar_tokens_improvement_vs_0_9_2_millionths": 500000,
+      "minimum_delta_reuse_rate_millionths": 700000,
+      "maximum_negative_case_failures": 0,
+      "required_negative_case_count": 9
+    },
+    "reliability": {
+      "maximum_unexpected_process_exits": 0,
+      "maximum_invariant_violations": 0,
+      "maximum_data_loss_events": 0,
+      "maximum_unreconciled_effects": 0,
+      "installed_soak_hours": 24,
+      "cumulative_fuzz_hours": 168,
+      "maximum_unique_fuzz_crashes": 0,
+      "required_recovery_rate_millionths": 1000000,
+      "required_deterministic_unsigned_artifact_match_rate_millionths": 1000000
+    }
+  },
+  "retained_results": {
+    "source_linked_context_diagnostic": {
+      "status": "pass-diagnostic-not-final-rc",
+      "workflows": 5,
+      "measured_trials_per_workflow_per_treatment": 20,
+      "treatment_observations": 300,
+      "candidate_mean_exact_tokens": 622.63,
+      "candidate_completion_rate_millionths": 1000000,
+      "candidate_blocking_coverage_rate_millionths": 1000000,
+      "candidate_gold_coverage_rate_millionths": 1000000,
+      "candidate_citation_resolvability_rate_millionths": 1000000,
+      "candidate_useful_precision_millionths": 1000000,
+      "candidate_semantic_duplicate_rate_millionths": 0,
+      "token_improvement_vs_0_9_3_millionths": 503230,
+      "token_improvement_vs_0_9_2_millionths": 723640,
+      "aggregate_phase_p50_improvement_vs_0_9_3_millionths": 638460,
+      "aggregate_phase_p50_improvement_vs_0_9_2_millionths": 513220,
+      "reducer_p50_improvement_vs_0_9_3_millionths": 697900,
+      "reducer_p95_improvement_vs_0_9_3_millionths": 742070,
+      "compiler_p95_improvement_vs_0_9_3_millionths": 679870,
+      "raw_bytes": 377850,
+      "raw_sha256": "74ccfdb8ba0b67168dcfc3355cf435f4df14def2517002405e07fd0acea81c11",
+      "report_bytes": 95958,
+      "report_sha256": "baeea0ffeaaf542cd9476188b38b405f4d26d1d4e0ac6a2c7109e2d04f5553e6",
+      "candidate_runner_sha256": "7380163d1dbd5c0cc0af4f50c9694bf2b8f2b31b9ccbd16baa787a5141f91813"
+    },
+    "deterministic_workflow_rc_diagnostic": {
+      "status": "pass-diagnostic-not-final-rc",
+      "evidence_id": "1bc1d82ab0214100c613a17c24c069357b477e38382967f7b12f710fa1345a3f",
+      "configuration_sha256": "975b756a5a26c98a012b9595591284aaa09412e28c4ef6617a8cddaeba38a3a7",
+      "raw_observations_sha256": "b47ede5192c13fbedd9987701d44c231b051ac03956e9cf09ea0816bf5059a5c",
+      "aggregate_report_sha256": "b4ab4e1b06ed04c001a3bde72d442782ed3c81f23529f2afd4f9deb46c2c579f",
+      "claim_ledger_sha256": "238708a086fa1e187eac0e33940d9fa8f7240d5c3435762536ad9e4d62bc8e71",
+      "candidate_evidence_commit": "2f68682fdbcbbccba0e33f53994f2930c4a74a9e",
+      "candidate_evidence_tree": "60eae30c574f35cafa61b787adbc1d6c46172f1e",
+      "candidate_source_set_sha256": "89591fa0088108dfc0deb32f04f74a0d9f9ee7e0baa9851c1656e1118118ee5d",
+      "candidate_runner_sha256": "15c804815e8779e7b80e0fb720bad6fd0c6bd1cc4167308d44e7b2636eee948f",
+      "workflows": 5,
+      "measured_trials_per_workflow_per_treatment": 50,
+      "candidate_observations": 250,
+      "total_observations": 750,
+      "passed_claims": 44,
+      "not_evaluated_claims": ["H094-G07-128-512-allocation"],
+      "candidate_mean_exact_tokens": 625.4,
+      "candidate_mean_delta_reuse_millionths": 751337,
+      "candidate_completion_rate_millionths": 1000000,
+      "candidate_blocking_coverage_rate_millionths": 1000000,
+      "candidate_gold_coverage_rate_millionths": 1000000,
+      "candidate_citation_resolvability_rate_millionths": 1000000,
+      "candidate_replay_rate_millionths": 1000000,
+      "candidate_fail_closed_rate_millionths": 1000000,
+      "negative_cases_passed": 9,
+      "token_improvement_vs_0_9_3_millionths": 500391,
+      "token_improvement_vs_0_9_2_millionths": 722174,
+      "pipeline_latency_improvement_vs_0_9_3_millionths": 597806,
+      "pipeline_latency_improvement_vs_0_9_2_millionths": 773056,
+      "provider_metrics_excluded_from_cigar_claims": true,
+      "live_provider_campaign_executed": false
+    },
+    "packing_allocation_source_qualification": {
+      "status": "pass-source-diagnostic-not-final-rc",
+      "final_rc_rerun_required": true,
+      "evidence_id": "ef5e518d6e9663b9d91a0c0688fd96825946c2d845d2c0bc2dc37f1e83a9a4fa",
+      "source_commit": "1d7bf983b3627cd5ca0fb6561e619fba026be79d",
+      "source_tree": "8ba598800021d0b1a2883f8eabed96128776d099",
+      "measurement_method": "system-allocator-peak-live-above-precompiled-request-baseline-v1",
+      "candidate_counts": [128, 512],
+      "warmups_per_treatment_per_count": 40,
+      "measured_pairs_per_count": 200,
+      "bootstrap_resamples": 10000,
+      "minimum_peak_live_reduction_millionths": 400000,
+      "configuration_sha256": "d664f33084b16a24ecbe40e1ab96e8b4366858a1d188e669393d02e53ea820ce",
+      "driver_source_sha256": "9cb2011fa2e5244351883402f698ea6acc04a944f3eea11c048db48c72df89e0",
+      "driver_lock_sha256": "ca938308ea5977f8b9a4966e76566469cbe23b5457a99904dca0237c99ce2960",
+      "driver_binary_sha256": "a8c2a004a02cadcd01ae1f02efbeeb901836077d6430ee7c3538d3b8694fc6c5",
+      "raw_bytes": 177226,
+      "raw_sha256": "e281221927beeacb0fd30342f199698eacd26e27d1e8a1874faf085becc6c8f2",
+      "report_bytes": 4508,
+      "report_sha256": "7f5ac2a6b01cdcafae737ea72720841dcba61a0d5339fe3b4054a006b5c0cf6d",
+      "cells": [
+        {
+          "candidate_count": 128,
+          "balanced_v3_peak_live_bytes_p50": 765346,
+          "balanced_v4_peak_live_bytes_p50": 407118,
+          "balanced_v4_peak_live_bytes_maximum": 407118,
+          "peak_live_reduction_millionths": 468060,
+          "peak_live_reduction_95pct_bootstrap_interval_millionths": [
+            468060,
+            468060
+          ],
+          "allocated_bytes_ratio_millionths": 873191,
+          "allocation_count_ratio_millionths": 795839,
+          "status": "passed"
+        },
+        {
+          "candidate_count": 512,
+          "balanced_v3_peak_live_bytes_p50": 2799874,
+          "balanced_v4_peak_live_bytes_p50": 1308590,
+          "balanced_v4_peak_live_bytes_maximum": 1308590,
+          "peak_live_reduction_millionths": 532625,
+          "peak_live_reduction_95pct_bootstrap_interval_millionths": [
+            532625,
+            532625
+          ],
+          "allocated_bytes_ratio_millionths": 909587,
+          "allocation_count_ratio_millionths": 871872,
+          "status": "passed"
+        }
+      ]
+    },
+    "source_qualification": {
+      "status": "pass-source-only",
+      "authority_checkpoint_commit": "165891bfe95af4707797f240d67c7a44cabf1220",
+      "product_version_managed_files": 75,
+      "honey_authority_files": 15,
+      "artifact_definitions": 22,
+      "contract_definitions": 19,
+      "evidence_categories": 30,
+      "rust_workspace_all_targets": "pass-offline",
+      "go_sdk": "pass-offline",
+      "typescript_source_tests": 29,
+      "python_source_tests_passed": 27,
+      "python_source_tests_total": 28,
+      "python_remaining_result": "environment-has-installed-0.9.3-distribution-metadata",
+      "cross_sdk_replay_tests": 2,
+      "documentation_pages": 78,
+      "documentation_links": 114,
+      "documentation_code_blocks": 56,
+      "retrieval_v3_equivalence_cases": 102400,
+      "context_abi": "cigar.context.v1"
+    }
+  },
+  "gate_results": [
+    {
+      "id": "version-and-honey-authority",
+      "status": "pass",
+      "scope": "source"
+    },
+    {
+      "id": "protocol-and-public-surface-drift",
+      "status": "pass",
+      "scope": "source"
+    },
+    {
+      "id": "legacy-profile-compatibility",
+      "status": "pass",
+      "scope": "source-and-frozen-replay"
+    },
+    {
+      "id": "storage-format-v5-no-schema-change",
+      "status": "pass",
+      "scope": "source-and-focused-runtime"
+    },
+    {
+      "id": "behavior-rollback-after-restart",
+      "status": "pass",
+      "scope": "source-runtime"
+    },
+    {
+      "id": "four-sdk-workflow-parity",
+      "status": "pass",
+      "scope": "source"
+    },
+    {
+      "id": "property-model-and-miri",
+      "status": "pass",
+      "scope": "source-diagnostic"
+    },
+    {
+      "id": "manual-security-review",
+      "status": "deferred",
+      "scope": "final-delta-after-retained-review-through-531eed5e"
+    },
+    {
+      "id": "telemetry-and-support-bundle-canaries",
+      "status": "pass",
+      "scope": "local-synthetic-source-runtime"
+    },
+    {
+      "id": "documentation-surfaces",
+      "status": "pass",
+      "scope": "source"
+    },
+    {
+      "id": "dedicated-128-512-allocation-threshold",
+      "status": "pass-source-qualification",
+      "scope": "clean-source-1d7bf983-rerun-required-after-final-freeze"
+    },
+    {
+      "id": "final-clean-source-binding",
+      "status": "deferred",
+      "scope": "final-rc"
+    },
+    {
+      "id": "installed-three-way-context-and-workflows",
+      "status": "deferred",
+      "scope": "installed-final-rc"
+    },
+    {
+      "id": "upgrade-from-0.9.2-and-0.9.3",
+      "status": "deferred",
+      "scope": "installed-final-rc"
+    },
+    {
+      "id": "binary-rollback-on-separately-restored-state",
+      "status": "deferred",
+      "scope": "installed-final-rc"
+    },
+    {
+      "id": "clean-artifact-installs",
+      "status": "deferred",
+      "scope": "installed-final-rc"
+    },
+    {
+      "id": "dependency-security-scanners",
+      "status": "deferred",
+      "scope": "final-rc"
+    },
+    {
+      "id": "fuzz-mutation-and-sanitizers",
+      "status": "deferred",
+      "scope": "final-rc"
+    },
+    {
+      "id": "checksums-sbom-provenance-and-license-bindings",
+      "status": "deferred",
+      "scope": "closed-artifact-set"
+    },
+    {
+      "id": "two-builder-reproducibility",
+      "status": "deferred",
+      "scope": "closed-artifact-set"
+    },
+    {
+      "id": "independent-evidence-recomputation",
+      "status": "deferred",
+      "scope": "final-rc"
+    },
+    {
+      "id": "signing-and-notarization",
+      "status": "deferred",
+      "scope": "promotion"
+    },
+    {
+      "id": "installed-runtime-soak-24h",
+      "status": "deferred-last",
+      "scope": "installed-final-rc"
+    },
+    {
+      "id": "release-owner-authorization",
+      "status": "deferred",
+      "scope": "promotion"
+    }
+  ],
+  "mandatory_gates": [
+    "version-and-honey-authority",
+    "protocol-and-public-surface-drift",
+    "legacy-profile-compatibility",
+    "storage-format-v5-no-schema-change",
+    "behavior-rollback-after-restart",
+    "four-sdk-workflow-parity",
+    "property-model-and-miri",
+    "manual-security-review",
+    "telemetry-and-support-bundle-canaries",
+    "documentation-surfaces",
+    "dedicated-128-512-allocation-threshold",
+    "final-clean-source-binding",
+    "installed-three-way-context-and-workflows",
+    "upgrade-from-0.9.2-and-0.9.3",
+    "binary-rollback-on-separately-restored-state",
+    "clean-artifact-installs",
+    "dependency-security-scanners",
+    "fuzz-mutation-and-sanitizers",
+    "checksums-sbom-provenance-and-license-bindings",
+    "two-builder-reproducibility",
+    "independent-evidence-recomputation",
+    "signing-and-notarization",
+    "installed-runtime-soak-24h",
+    "release-owner-authorization"
+  ],
+  "known_limits": {
+    "source_diagnostics_are_final_rc_evidence": false,
+    "source_tests_are_installed_artifact_tests": false,
+    "live_provider_completion_claim": false,
+    "cross_machine_wall_clock_claim": false,
+    "remote_shared_multitenancy_in_scope": false,
+    "in_place_state_downgrade_allowed": false,
+    "balanced_v4_is_default_during_qualification": false,
+    "provider_latency_or_tokens_enter_cigar_claims": false,
+    "retained_manual_review_covers_final_unbound_source": false,
+    "candidate_may_be_promoted_before_all_mandatory_gates_pass": false,
+    "soak_may_run_before_other_candidate_gates": false
+  },
+  "authority": {
+    "push_public": false,
+    "open_public_pr": false,
+    "merge": false,
+    "tag": false,
+    "release": false,
+    "publish": false,
+    "deploy": false,
+    "sign": false,
+    "notarize": false,
+    "claim_production_qualified": false
+  }
+}

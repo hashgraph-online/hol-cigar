@@ -88,7 +88,7 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
                 "report_schema_sha256": contract.REPORT_SCHEMA_SHA256,
             },
             "product": {
-                "version": "0.9.2",
+                "version": "0.9.3",
                 "release_state": "developer-preview",
                 "context_abi": "cigar.context.v1",
                 "target_triple": "aarch64-apple-darwin",

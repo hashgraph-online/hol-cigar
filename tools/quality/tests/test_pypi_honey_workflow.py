@@ -19,22 +19,18 @@ class PyPIHoneyWorkflowTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", self.document)
         self.assertNotIn("pull_request:", self.document)
         self.assertNotIn("push:\n", self.document)
-        self.assertIn("ref: v0.9.2", self.document)
+        self.assertIn("ref: v0.9.4", self.document)
         self.assertIn('test "${GITHUB_REF}" = "refs/heads/main"', self.document)
-        self.assertIn(
-            'test "${CONFIRM}" = "publish hol-cigar 0.9.2"', self.document
-        )
+        self.assertIn('test "${CONFIRM}" = "publish hol-cigar 0.9.4"', self.document)
         self.assertIn("environment:\n      name: pypi", self.document)
 
     def test_exact_release_bytes_are_verified_before_staging(self) -> None:
-        self.assertIn("gh release download v0.9.2", self.document)
+        self.assertIn("gh release download v0.9.4", self.document)
         self.assertIn(
             'python3 scripts/release/verify_honey_release.py "${candidate_dir}"',
             self.document,
         )
-        self.assertIn(
-            '"${candidate_dir}/honey-release-manifest.json"', self.document
-        )
+        self.assertIn('"${candidate_dir}/honey-release-manifest.json"', self.document)
         self.assertIn("python3 -m twine check --strict dist/*", self.document)
         self.assertIn("skip-existing: false", self.document)
 
@@ -53,7 +49,9 @@ class PyPIHoneyWorkflowTests(unittest.TestCase):
         self.assertIn("print-hash: true", publish)
 
     def test_python_alpha_scope_is_machine_readable(self) -> None:
-        publication = json.loads(REQUIREMENTS.read_text(encoding="utf-8"))["publication"]
+        publication = json.loads(REQUIREMENTS.read_text(encoding="utf-8"))[
+            "publication"
+        ]
         self.assertEqual(publication["pypi_project"], "hol-cigar")
         self.assertEqual(publication["pypi_release_state"], "alpha")
         self.assertEqual(publication["pypi_scope"], "python-sdk-only")

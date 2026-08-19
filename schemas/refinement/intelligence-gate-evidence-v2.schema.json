@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/intelligence-gate-evidence-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_id", "purpose", "source", "plan_id", "build_set_id", "policy_digest", "receipts"],
+  "properties": {
+    "schema_version": {"const": "cigar.intelligence-gate-evidence.v2"},
+    "evidence_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "purpose": {"const": "private-candidate-nomination-only"},
+    "source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "plan_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "build_set_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "policy_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "receipts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "intelligence-gate-receipt-v1.schema.json"}
+    }
+  }
+}

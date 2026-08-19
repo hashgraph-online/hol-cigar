@@ -1,0 +1,200 @@
+{
+  "schema_version": "cigar.three-way-cohort.v1",
+  "cohort_id": "12201ba730a0756d2799ae5d4df57361fa567a1c4c9833f52e78daa0516add8bc1c9",
+  "profile_id": "cigar.honey.0.9.2-h1.refinement.macos-arm64.v1",
+  "evidence_class": "development",
+  "kernel": {
+    "development_manifest": {
+      "artifact_id": "cigarbench-development-manifest-v1",
+      "path": "refinement/corpus/development-manifest-v1.json",
+      "sha256": "42349de6fab53ee0b96727c4618d56a5e47cc2255236c145323f8be588e3fef7",
+      "bytes": 188043
+    },
+    "efficiency_fixtures": {
+      "artifact_id": "honey-efficiency-qualification-fixtures-v1",
+      "path": "benches/honey-efficiency/qualification-fixtures.v1.json",
+      "sha256": "0a3637e53a6ba17f1662460434cb0406478656f392df50907fd002bd6d7a5c82",
+      "bytes": 3937
+    },
+    "task_count": 270,
+    "protected_strata": [
+      "Agent-Handoff",
+      "CatalogMutation",
+      "CrossRuntime-Replay",
+      "EffectCrash",
+      "LongRepo-Change",
+      "MultiProject-Switch",
+      "Needle-and-Distractor",
+      "PolicyBoundary",
+      "Temporal-Truth"
+    ]
+  },
+  "downstream": {
+    "humidor_source": {
+      "repository": "https://github.com/hashgraph-online/humidor.git",
+      "source": {
+        "revision": "edc1991169e57c4c4a2e5be76816766e7c4c83b2",
+        "tree": "c54593e3c1150a3b381a3e20f767a37ee3c0a314"
+      }
+    },
+    "cedar_source": {
+      "repository": "https://github.com/hashgraph-online/humidor-infra.git",
+      "source": {
+        "revision": "ae62154a813a8ad29ef674a49ec4d78ab59c61a0",
+        "tree": "0f6f9ef7e5cc4c0f035187f77bebecdeecf30d3d"
+      }
+    },
+    "fixtures": [
+      {
+        "artifact_id": "humidor-seeded-six-workflows-v1",
+        "repository_role": "humidor",
+        "path": "workflows/task_packages/fixtures/seeded-tenant.v1.json",
+        "sha256": "93e117e958bfb3adef28a0f6a970cb5fe03abc2a35926aa57a14a061d21e9bfc",
+        "bytes": 2956
+      },
+      {
+        "artifact_id": "humidor-prompt-regression-cases-v1",
+        "repository_role": "humidor",
+        "path": "workflows/prompts/fixtures/regression-cases.v1.json",
+        "sha256": "20ebb5d67767da9348535018feee9be489dbb59a75ee10d9f5442ee9f86c06b7",
+        "bytes": 6973
+      },
+      {
+        "artifact_id": "humidor-development-evaluation-dataset-v1",
+        "repository_role": "humidor",
+        "path": "services/evaluation/datasets/development.v1.json",
+        "sha256": "e7e8ef55666c429ad8eb8fb7384d78ec67fa84926549914bc8bda7e12b667d03",
+        "bytes": 13654
+      },
+      {
+        "artifact_id": "cedar-full-stack-e2e-profile-v1",
+        "repository_role": "cedar",
+        "path": "release/e2e/full-stack-profile.v1.json",
+        "sha256": "b78e71a296e17ba86dcadca0fa0dfe33a1c6d6da43c06c5bf032c79586d79177",
+        "bytes": 6397
+      },
+      {
+        "artifact_id": "cedar-refinement-downstream-profile-v3",
+        "repository_role": "cedar",
+        "path": "release/refinement-downstream/profile.v3.json",
+        "sha256": "4889132e0aeea30a1558235a68da49c4cdd385d8bb80305e125662af1a7c4a83",
+        "bytes": 1932
+      },
+      {
+        "artifact_id": "cedar-local-reliability-policy-v1",
+        "repository_role": "cedar",
+        "path": "release/development/local-reliability-policy.v1.json",
+        "sha256": "f1c535a6cdca97be81967786ea5ed1193aaf893689c97c7b94a5b4062ba653fd",
+        "bytes": 1835
+      }
+    ],
+    "workflows": [
+      "marketing_campaign",
+      "product_requirements_document",
+      "code_review",
+      "executive_briefing",
+      "customer_escalation",
+      "employee_onboarding"
+    ]
+  },
+  "scenario_classes": [
+    {
+      "id": "large-catalogs-and-long-documents",
+      "kernel_strata": ["CatalogMutation", "LongRepo-Change"],
+      "downstream_coverage": ["six-workflow-uat"],
+      "required": true
+    },
+    {
+      "id": "duplicate-and-near-duplicate-evidence",
+      "kernel_strata": ["Needle-and-Distractor"],
+      "downstream_coverage": ["context-quality-metrics"],
+      "required": true
+    },
+    {
+      "id": "mandatory-and-conflicting-sources",
+      "kernel_strata": ["PolicyBoundary", "Temporal-Truth"],
+      "downstream_coverage": ["missing-evidence", "unresolved-conflict"],
+      "required": true
+    },
+    {
+      "id": "revoked-or-expired-authorization",
+      "kernel_strata": ["PolicyBoundary"],
+      "downstream_coverage": ["source-acl-revocation", "expired-approval"],
+      "required": true
+    },
+    {
+      "id": "poisoned-and-prompt-injection-content",
+      "kernel_strata": ["PolicyBoundary"],
+      "downstream_coverage": ["prompt-injection"],
+      "required": true
+    },
+    {
+      "id": "sparse-graphs-and-pruned-indexes",
+      "kernel_strata": ["LongRepo-Change", "Needle-and-Distractor"],
+      "downstream_coverage": ["optional-degradation"],
+      "required": true
+    },
+    {
+      "id": "restart-and-crash-recovery",
+      "kernel_strata": ["CrossRuntime-Replay", "EffectCrash"],
+      "downstream_coverage": ["restart-recovery", "crash-between-dispatch-and-receipt"],
+      "required": true
+    },
+    {
+      "id": "storage-migration-and-compaction",
+      "kernel_strata": ["CatalogMutation", "CrossRuntime-Replay"],
+      "downstream_coverage": ["cigar-sidecar-restart"],
+      "required": true
+    },
+    {
+      "id": "warm-and-cold-semantic-reuse",
+      "kernel_strata": ["MultiProject-Switch"],
+      "downstream_coverage": ["fresh-root", "warm-repeat"],
+      "required": true
+    },
+    {
+      "id": "missing-corrupt-and-stale-evidence",
+      "kernel_strata": ["CrossRuntime-Replay", "Temporal-Truth"],
+      "downstream_coverage": ["missing-evidence", "cigar-degraded-recovery"],
+      "required": true
+    },
+    {
+      "id": "agent-handoff-recipient-binding",
+      "kernel_strata": ["Agent-Handoff"],
+      "downstream_coverage": ["two-agent", "six-workflow-uat"],
+      "required": true
+    },
+    {
+      "id": "effect-ambiguity-and-reconciliation",
+      "kernel_strata": ["EffectCrash"],
+      "downstream_coverage": ["unknown", "reconcile", "no-redispatch"],
+      "required": true
+    }
+  ],
+  "execution_matrix": {
+    "source_roles": ["published-honey", "champion", "candidate"],
+    "lanes": ["kernel-source", "source-sidecar", "installed-sidecar", "humidor-source", "humidor-installed"],
+    "assignment_seeds": 2,
+    "fresh_roots": true,
+    "reliability_runs": 3,
+    "restart_boundaries": [
+      "after-context-compilation-before-consumption",
+      "during-pending-effect-reconciliation"
+    ]
+  },
+  "measurement_rules": {
+    "identical_assignments": true,
+    "randomized_treatment_order": true,
+    "exact_source_receipts": true,
+    "cold_and_warm_runs": true,
+    "paired_metrics": true,
+    "pareto_comparison": "candidate-vs-honey-and-champion"
+  },
+  "content_safety": {
+    "synthetic_only": true,
+    "aggregate_hidden_partitions": true,
+    "raw_content_in_receipts": false,
+    "secret_values": false,
+    "tenant_content": false
+  }
+}

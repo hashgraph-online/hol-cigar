@@ -3,6 +3,14 @@
 use crate::{CandidateFeatures, RetrievalError, RetrievalErrorCode};
 use cigar_protocol::ContentDigest;
 use sha2::{Digest, Sha256};
+use std::sync::OnceLock;
+
+static BALANCED_V1_DIGEST: OnceLock<Result<ContentDigest, RetrievalError>> = OnceLock::new();
+static BALANCED_V2_CANDIDATE_DIGEST: OnceLock<Result<ContentDigest, RetrievalError>> =
+    OnceLock::new();
+static BALANCED_V2_REQUIREMENT_AWARE_DIGEST: OnceLock<Result<ContentDigest, RetrievalError>> =
+    OnceLock::new();
+static BALANCED_V4_DIGEST: OnceLock<Result<ContentDigest, RetrievalError>> = OnceLock::new();
 
 /// Frozen, digest-bound retrieval profiles used by published Honey and H1.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -12,6 +20,10 @@ pub enum RetrievalProfile {
     BalancedV1,
     /// Honey 0.9.2 H1 integer lexical/metadata/graph profile.
     BalancedV2Candidate,
+    /// Requirement-aware ranking refinement over the first experimental profile.
+    BalancedV2RequirementAwareCandidate,
+    /// CIGAR 0.9.4 risk-reserved retrieval with marginal-utility stopping.
+    BalancedV4,
 }
 
 impl RetrievalProfile {
@@ -21,6 +33,10 @@ impl RetrievalProfile {
         match self {
             Self::BalancedV1 => "cigar.retrieval-profile.balanced.v1",
             Self::BalancedV2Candidate => "cigar.retrieval-profile.balanced.v2-candidate.1",
+            Self::BalancedV2RequirementAwareCandidate => {
+                "cigar.retrieval-profile.balanced.v2-candidate.2"
+            }
+            Self::BalancedV4 => "cigar.retrieval-profile.balanced.v4",
         }
     }
 
@@ -32,6 +48,10 @@ impl RetrievalProfile {
             Self::BalancedV2Candidate => {
                 ([280, 190, 145, 65, 90, 70, 85, 100, 70, 35, 45], [145, 110])
             }
+            Self::BalancedV2RequirementAwareCandidate | Self::BalancedV4 => (
+                [180, 190, 260, 65, 90, 70, 100, 100, 70, 35, 50],
+                [145, 110],
+            ),
         }
     }
 
@@ -40,12 +60,33 @@ impl RetrievalProfile {
     pub const fn planning(self) -> (u16, bool) {
         match self {
             Self::BalancedV1 => (0, false),
-            Self::BalancedV2Candidate => (2, false),
+            Self::BalancedV2Candidate
+            | Self::BalancedV2RequirementAwareCandidate
+            | Self::BalancedV4 => (2, false),
         }
+    }
+
+    /// Whether this profile uses requirement-aware post-governance ranking evidence.
+    #[must_use]
+    pub const fn requirement_aware(self) -> bool {
+        matches!(
+            self,
+            Self::BalancedV2RequirementAwareCandidate | Self::BalancedV4
+        )
     }
 
     /// Immutable algorithm/configuration digest.
     pub fn digest(self) -> Result<ContentDigest, RetrievalError> {
+        let digest = match self {
+            Self::BalancedV1 => &BALANCED_V1_DIGEST,
+            Self::BalancedV2Candidate => &BALANCED_V2_CANDIDATE_DIGEST,
+            Self::BalancedV2RequirementAwareCandidate => &BALANCED_V2_REQUIREMENT_AWARE_DIGEST,
+            Self::BalancedV4 => &BALANCED_V4_DIGEST,
+        };
+        digest.get_or_init(|| self.compute_digest()).clone()
+    }
+
+    fn compute_digest(self) -> Result<ContentDigest, RetrievalError> {
         let mut hasher = Sha256::new();
         hasher.update(b"CIGAR-RETRIEVAL-PROFILE\0v1\0");
         hasher.update(self.identifier().as_bytes());
@@ -56,6 +97,16 @@ impl RetrievalProfile {
         let (depth, augment) = self.planning();
         hasher.update(depth.to_be_bytes());
         hasher.update([u8::from(augment)]);
+        if self == Self::BalancedV4 {
+            // Digest-bind the v4-only dense/risk/stop semantics. Selection weights and bounds are
+            // additionally bound into every plan fingerprint.
+            hasher.update(b"CIGAR-RETRIEVAL-V4-POLICY\0v1\0");
+            hasher.update(256_u16.to_be_bytes());
+            hasher.update(32_u16.to_be_bytes());
+            hasher.update([2, 1, 0, 0, 0]);
+            hasher.update(b"independent-source-lineage-content\0");
+            hasher.update(b"positive-contextual-marginal-utility\0");
+        }
         let mut digest = String::from("1220");
         use std::fmt::Write as _;
         for byte in hasher.finalize() {
@@ -139,6 +190,14 @@ mod tests {
             RetrievalProfile::BalancedV1.digest()?,
             RetrievalProfile::BalancedV2Candidate.digest()?
         );
+        assert_ne!(
+            RetrievalProfile::BalancedV2Candidate.digest()?,
+            RetrievalProfile::BalancedV2RequirementAwareCandidate.digest()?
+        );
+        assert_ne!(
+            RetrievalProfile::BalancedV2RequirementAwareCandidate.digest()?,
+            RetrievalProfile::BalancedV4.digest()?
+        );
         assert_eq!(
             RetrievalProfile::BalancedV1.digest()?.as_str(),
             "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea"
@@ -146,6 +205,20 @@ mod tests {
         assert_eq!(
             RetrievalProfile::BalancedV2Candidate.digest()?.as_str(),
             "12208f5c83267949db9ed969f9b5f153c2be125b7d54875e2d72acad556b9a28183c"
+        );
+        assert_eq!(
+            RetrievalProfile::BalancedV2RequirementAwareCandidate
+                .digest()?
+                .as_str(),
+            "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a"
+        );
+        assert_eq!(
+            RetrievalProfile::BalancedV4.identifier(),
+            "cigar.retrieval-profile.balanced.v4"
+        );
+        assert_eq!(
+            RetrievalProfile::BalancedV4.digest()?.as_str(),
+            "1220f5e7f91cefdaea9b0748999b173fa38e005a350a6f533396e281d1c342c2d910"
         );
         Ok(())
     }

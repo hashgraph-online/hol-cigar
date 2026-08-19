@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/loop-event-v1.schema.json",
+  "$defs": {
+    "nullableIdentifier": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/identifier"}
+      ]
+    },
+    "nullableGitObject": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/gitObject"}
+      ]
+    },
+    "nullablePhase": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["started", "scheduled", "materialized", "proposed", "gated", "evaluated", "terminal"]}
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "sequence", "previous_event_id", "run_id", "iteration", "phase", "resume_phase", "trial_id", "champion_revision", "champion_tree", "artifact_ids", "reservation_id", "status", "failure_category", "candidate_revision", "candidate_tree"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-loop-event.v1"},
+    "event_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "sequence": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+    "previous_event_id": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "iteration": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "phase": {"enum": ["started", "scheduled", "materialized", "interrupted", "proposed", "gated", "evaluated", "terminal", "paused"]},
+    "resume_phase": {"$ref": "#/$defs/nullablePhase"},
+    "trial_id": {"$ref": "#/$defs/nullableIdentifier"},
+    "champion_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "champion_tree": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "artifact_ids": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+    },
+    "reservation_id": {"$ref": "#/$defs/nullableIdentifier"},
+    "status": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "failure_category": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "candidate_revision": {"$ref": "#/$defs/nullableGitObject"},
+    "candidate_tree": {"$ref": "#/$defs/nullableGitObject"}
+  }
+}

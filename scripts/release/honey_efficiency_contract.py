@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate frozen Honey 0.9.2 efficiency inputs and qualification reports."""
+"""Validate frozen Honey 0.9.3 efficiency inputs and qualification reports."""
 
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ FIXTURE_SHA256 = "0a3637e53a6ba17f1662460434cb0406478656f392df50907fd002bd6d7a5c
 VERIFIED_COPY_SHA256 = (
     "e8b59c505e71a02d78d14884ee4402c95932f5ab1225a6aec4f14f99d13ebc23"
 )
-PROFILE_SHA256 = "670b0feb26e4c833e83da3b994f1c4ef57bae697de699a98fccca6cb251cc022"
+PROFILE_SHA256 = "3031e97359cc5422829aa1568c17e3b93611bbfe7aa9ec0a154105ae219a3e1d"
 REPORT_SCHEMA_SHA256 = (
-    "0adf646d6b2dfe1201b1389a6421cb78dc9cbc1ed1ed868fc58b90ede362c012"
+    "32b9ca66f7adfe14259b92dd690038d07204c35a950bd7fc11a100ece5417962"
 )
 MAX_JSON_BYTES = 64 * 1024 * 1024
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -477,7 +477,7 @@ def validate_qualification_profile(document: Any, payload: bytes) -> Mapping[str
     )
     if (
         root["schema_version"] != QUALIFICATION_PROFILE_VERSION
-        or root["product_version"] != "0.9.2"
+        or root["product_version"] != "0.9.3"
         or root["release_state"] != "developer-preview"
         or root["context_abi"] != "cigar.context.v1"
         or root["fail_closed"] is not True
@@ -609,7 +609,7 @@ def validate_report(
     ):
         raise EfficiencyContractError("qualification report identity is invalid")
     if root["product"] != {
-        "version": "0.9.2",
+        "version": "0.9.3",
         "release_state": "developer-preview",
         "context_abi": "cigar.context.v1",
         "target_triple": "aarch64-apple-darwin",

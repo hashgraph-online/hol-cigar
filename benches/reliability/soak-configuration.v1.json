@@ -1,0 +1,59 @@
+{
+  "schema_version": "cigar.h094-installed-soak-configuration.v1",
+  "profiles": {
+    "soak-smoke": {
+      "duration_seconds": 120,
+      "sample_interval_seconds": 5,
+      "warmup_seconds": 20,
+      "maximum_sample_gap_seconds": 15,
+      "maximum_coordinator_rss_slope_bytes_per_hour": 1048576,
+      "installed_interval_seconds": 60,
+      "scale_interval_seconds": 60,
+      "maintenance_interval_seconds": 60,
+      "compile_interval_seconds": 30,
+      "liveness_interval_seconds": 5
+    },
+    "soak-rc-24h": {
+      "duration_seconds": 86400,
+      "sample_interval_seconds": 10,
+      "warmup_seconds": 3600,
+      "maximum_sample_gap_seconds": 30,
+      "maximum_coordinator_rss_slope_bytes_per_hour": 0,
+      "installed_interval_seconds": 3600,
+      "scale_interval_seconds": 900,
+      "maintenance_interval_seconds": 1800,
+      "compile_interval_seconds": 60,
+      "liveness_interval_seconds": 10
+    }
+  },
+  "required_operations": [
+    "backup_verify",
+    "compile",
+    "context_switch",
+    "delta",
+    "discovery_ingestion",
+    "effect",
+    "fault_recovery",
+    "gc_plan_execute",
+    "handoff",
+    "ordered_shutdown",
+    "post_run_verify",
+    "reconcile_compensate",
+    "replay",
+    "retrieval",
+    "runtime_liveness",
+    "space_checkpoint_event"
+  ],
+  "maximum_cycle_output_bytes": 8388608,
+  "maximum_coordinator_rss_slope_bytes_per_hour": 0,
+  "content_forbidden_keys": [
+    "atom_content",
+    "credential",
+    "prompt",
+    "query",
+    "source_path",
+    "source_uri",
+    "tenant_name",
+    "tool_arguments"
+  ]
+}

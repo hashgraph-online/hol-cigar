@@ -1863,6 +1863,35 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn read_only_blob_root_fails_closed_without_partial_publication()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let directory = tempfile::tempdir()?;
+        let provider = Arc::new(MemoryKeyProvider::default());
+        let key = provider.create(CreateKeyRequest {
+            tenant: "tenant-a".to_owned(),
+            purpose: KeyPurpose::BlobEncryption,
+            algorithm: KeyAlgorithm::XChaCha20Poly1305,
+            created_at: 1,
+            activated_at: 1,
+        })?;
+        let store = LocalBlobStore::open(directory.path(), provider)?;
+        let (blob, _digest) = fixture()?;
+        let original = std::fs::metadata(directory.path())?.permissions();
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o500))?;
+        let publication = store.put("tenant-a", &key.key_ref, &blob, 1);
+        std::fs::set_permissions(directory.path(), original)?;
+        assert_eq!(
+            publication.map_err(|error| error.code()),
+            Err(BlobErrorCode::Unavailable)
+        );
+        assert!(!directory.path().join("tenant-a").exists());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn permission_loss_is_unavailable_without_quarantine_or_plaintext_diagnostic()
     -> Result<(), Box<dyn std::error::Error>> {
         use std::os::unix::fs::PermissionsExt as _;

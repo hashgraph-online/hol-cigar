@@ -145,11 +145,11 @@ class FuzzAccumulationTests(unittest.TestCase):
                 previous_corpora[target] = after
         return receipts
 
-    def test_exact_fourteen_target_threshold_and_aggregate_reconcile(self) -> None:
+    def test_exact_nineteen_target_threshold_and_aggregate_reconcile(self) -> None:
         summary = self.validate(self.complete_receipts(), require_threshold=True)
         self.assertEqual(summary["status"], "passed")
-        self.assertEqual(summary["campaign"]["target_count"], 14)
-        self.assertEqual(summary["metrics"]["fuzz.total_seconds"], 14 * self.threshold)
+        self.assertEqual(summary["campaign"]["target_count"], 19)
+        self.assertEqual(summary["metrics"]["fuzz.total_seconds"], 19 * self.threshold)
         self.assertEqual(summary["metrics"]["fuzz.unresolved_defect_count"], 0)
         for target in self.targets:
             self.assertEqual(

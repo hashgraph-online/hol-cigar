@@ -531,7 +531,7 @@ _PROHIBITED_RELEASE_STATUSES = frozenset(
     {"failed", "skipped", "waived", "quarantined", "unknown"}
 )
 _RELEASE_REQUIREMENTS_V1_SHA256 = (
-    "76c9b45ead8c8fc13d1624e559ad27fb6005aa0ca237ca2398d0ba86481b765c"
+    "9542c0ecfbddfae1f86f8d2210b05fff5112bc9ddcc9c8709badd1afd1b89a66"
 )
 _QUALIFICATION_CATEGORY_MAP_V1_SHA256 = (
     "4b5a677ab88ff1e5072c0506fd99303c4b0830731653766fe929a625e1ed3537"

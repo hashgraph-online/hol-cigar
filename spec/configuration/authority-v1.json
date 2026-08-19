@@ -524,6 +524,28 @@
       "macos_disposition": "active"
     },
     {
+      "id": "daemon.intelligence_profile",
+      "owner": "cigar-daemon",
+      "profiles": [
+        "embedded",
+        "local_sidecar",
+        "shared_service"
+      ],
+      "precedence": [
+        "explicit_config"
+      ],
+      "allowed_sources": [
+        "explicit_config"
+      ],
+      "default_semantics": "balanced_v3_when_absent",
+      "required_semantics": "closed_balanced_v1_balanced_v3_balanced_v4",
+      "secret_classification": "non_secret",
+      "value_form": "typed_value",
+      "provenance_label": "intelligence_profile",
+      "project_configuration_forbidden": true,
+      "macos_disposition": "active"
+    },
+    {
       "id": "daemon.local_sqlite_capacity_profile",
       "owner": "cigar-daemon",
       "profiles": [

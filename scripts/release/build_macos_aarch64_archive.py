@@ -87,6 +87,7 @@ SOURCE_INCLUDES = (
     "rust-toolchain.toml",
     "rustfmt.toml",
     "clippy.toml",
+    "benches/cigarbench/consumer/**",
     "crates/**",
     "conformance/runner/**",
     "sdk/rust/**",

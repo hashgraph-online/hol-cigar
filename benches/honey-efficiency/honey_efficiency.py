@@ -467,7 +467,15 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise HarnessError("evidence output must be a canonical absolute path")
     timeouts = {"small": 300, "threshold": 1800, "hiero-shaped": 14_400}
     with tempfile.TemporaryDirectory(prefix="cigar-honey-efficiency-") as temporary:
-        scratch = Path(temporary)
+        scratch = Path(temporary).resolve(strict=True)
+        scratch_metadata = scratch.lstat()
+        if (
+            not stat.S_ISDIR(scratch_metadata.st_mode)
+            or stat.S_ISLNK(scratch_metadata.st_mode)
+            or scratch_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(scratch_metadata.st_mode) != 0o700
+        ):
+            raise HarnessError("temporary workspace is not owner-only")
         database = scratch / "workload.sqlite3"
         if args.verified_copy:
             input_binding = copy_verified_database(

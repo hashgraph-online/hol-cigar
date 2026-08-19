@@ -18,8 +18,10 @@
   "targets": [
     "builtin_source_parsers",
     "canonical_json_cbor",
+    "compiler_candidate_packing",
     "contract_compiler_candidates",
     "delta_roundtrip",
+    "dependency_closure",
     "effect_journal_recovery",
     "extension_frames",
     "handoff_accept_merge",
@@ -29,6 +31,9 @@
     "mcp_messages",
     "policy_parse_evaluate",
     "public_record_decoders",
-    "replay_envelopes"
+    "ranking_evidence_decode_validate",
+    "replay_envelopes",
+    "retrieval_plan_result_reduction",
+    "workflow_session_records"
   ]
 }

@@ -448,6 +448,14 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
     published_identity = git_identity(published, expected_commit=PUBLISHED_COMMIT)
     with tempfile.TemporaryDirectory(prefix="cigar-honey-092-focused-") as temporary:
         scratch = Path(temporary).resolve(strict=True)
+        scratch_metadata = scratch.lstat()
+        if (
+            not stat.S_ISDIR(scratch_metadata.st_mode)
+            or stat.S_ISLNK(scratch_metadata.st_mode)
+            or scratch_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(scratch_metadata.st_mode) != 0o700
+        ):
+            raise QualificationError("temporary workspace is not owner-only")
         published_driver = build_driver(published, scratch, enable_v5=False)
         candidate_driver = build_driver(candidate, scratch, enable_v5=True)
         raw: dict[str, dict[str, Any]] = {"published": {}, "candidate": {}}

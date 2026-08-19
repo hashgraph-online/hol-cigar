@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/honey-installed-soak-report.v1.schema.json",
+  "title": "CIGAR Honey installed-runtime soak qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"profile_id": {"const": "soak-smoke"}}},
+      "then": {
+        "properties": {
+          "coordinator_rss_slope_bytes_per_hour": {"type": "integer", "maximum": 1048576}
+        }
+      },
+      "else": {
+        "properties": {
+          "coordinator_rss_slope_bytes_per_hour": {"type": "integer", "maximum": 0}
+        }
+      }
+    }
+  ],
+  "required": [
+    "schema_version", "status", "profile_id", "source_revision", "configuration", "artifacts",
+    "plan", "result", "samples", "cycle_receipt_count", "cycle_receipts_root",
+    "duration_seconds", "sample_count", "warmup_sample_count", "maximum_sample_gap_nanoseconds",
+    "coordinator_rss_slope_bytes_per_hour", "completed_cycles", "operation_counts",
+    "all_required_operations_exercised", "all_artifacts_immutable", "rust_result_verified",
+    "report_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.h094-installed-soak-report.v1"},
+    "status": {"const": "passed"},
+    "profile_id": {"enum": ["soak-smoke", "soak-rc-24h"]},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "configuration": {"$ref": "#/$defs/file"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cigar", "cigard", "install_qualifier", "soak_binary", "compile_driver", "scale_driver", "effects_test", "daemon_test", "gc_test", "runner"],
+      "properties": {
+        "cigar": {"$ref": "#/$defs/file"},
+        "cigard": {"$ref": "#/$defs/file"},
+        "install_qualifier": {"$ref": "#/$defs/file"},
+        "soak_binary": {"$ref": "#/$defs/file"},
+        "compile_driver": {"$ref": "#/$defs/file"},
+        "scale_driver": {"$ref": "#/$defs/file"},
+        "effects_test": {"$ref": "#/$defs/file"},
+        "daemon_test": {"$ref": "#/$defs/file"},
+        "gc_test": {"$ref": "#/$defs/file"},
+        "runner": {"$ref": "#/$defs/file"}
+      }
+    },
+    "plan": {"$ref": "#/$defs/file"},
+    "result": {"$ref": "#/$defs/file"},
+    "samples": {"$ref": "#/$defs/file"},
+    "cycle_receipt_count": {"type": "integer", "minimum": 5, "maximum": 100000},
+    "cycle_receipts_root": {"$ref": "#/$defs/sha256"},
+    "duration_seconds": {"type": "integer", "minimum": 120, "maximum": 604800},
+    "sample_count": {"type": "integer", "minimum": 3, "maximum": 100000},
+    "warmup_sample_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "maximum_sample_gap_nanoseconds": {"type": "integer", "minimum": 1, "maximum": 30000000000},
+    "coordinator_rss_slope_bytes_per_hour": {"type": "integer"},
+    "completed_cycles": {"$ref": "#/$defs/counts"},
+    "operation_counts": {"$ref": "#/$defs/counts"},
+    "all_required_operations_exercised": {"const": true},
+    "all_artifacts_immutable": {"const": true},
+    "rust_result_verified": {"const": true},
+    "report_id": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/", "maxLength": 4096},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

@@ -1212,7 +1212,7 @@ fn candidate_features(
         requirement_coverage_bits: 0,
         entity_coverage_bits: 0,
     };
-    if profile == RetrievalProfile::BalancedV2Candidate {
+    if profile != RetrievalProfile::BalancedV1 {
         features.exact_match = if evidence.contains(&MatchEvidence::ExactIdentity) {
             10_000
         } else if evidence.contains(&MatchEvidence::ExactPath)

@@ -1,6 +1,6 @@
 module cigar-sdk-recorded-workflow
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/CIGAR/cigar/sdk/go v0.0.0

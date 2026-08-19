@@ -1365,6 +1365,66 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn sustained_overload_is_bounded_rejected_and_closes_readiness()
+    -> Result<(), Box<dyn Error>> {
+        let directory = tempfile::tempdir()?;
+        let fixture = fixture(directory.path())?;
+        fixture
+            .checks
+            .block_compilation
+            .store(true, Ordering::Release);
+        let workers = Arc::clone(&fixture.dependencies.workers);
+        let readiness = Arc::clone(&fixture.dependencies.readiness_gate);
+        let server = DaemonServer::local(
+            fixture.config,
+            fixture.dependencies,
+            LocalIdentity::new("tenant-a", "principal-a")?,
+        )?;
+        let running = server.start().await?;
+        workers.try_enqueue(WorkerKind::Compilation, worker_job()?)?;
+        while !fixture.checks.compilation_entered.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+        for _ in 0..8 {
+            workers.try_enqueue(WorkerKind::Compilation, worker_job()?)?;
+        }
+        let overloaded = workers.try_enqueue(WorkerKind::Compilation, worker_job()?);
+        assert_eq!(
+            overloaded.err().map(|failure| failure.code()),
+            Some(QueueErrorCode::Full)
+        );
+        assert!(!readiness.is_open());
+        let queue = workers
+            .runtime()
+            .queue(WorkerKind::Compilation)
+            .ok_or("compilation queue missing")?;
+        let overloaded_metrics = queue.metrics()?;
+        assert_eq!(overloaded_metrics.capacity, 8);
+        assert_eq!(overloaded_metrics.depth, 8);
+        assert_eq!(overloaded_metrics.rejection_count, 1);
+
+        fixture
+            .checks
+            .release_compilation
+            .store(true, Ordering::Release);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while queue.metrics().is_ok_and(|metrics| metrics.depth != 0) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await?;
+        let drained = queue.metrics()?;
+        assert_eq!(drained.capacity, 8);
+        assert_eq!(drained.depth, 0);
+        assert_eq!(drained.rejection_count, 1);
+        let receipt = running.shutdown().await?;
+        assert!(receipt.shutdown.failed.is_none());
+        assert!(!readiness.is_open());
+        assert!(fixture.store.integrity_check().is_ok());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn supervisor_polls_durable_truth_immediately_after_startup_and_while_idle()
     -> Result<(), Box<dyn Error>> {
         let directory = tempfile::tempdir()?;

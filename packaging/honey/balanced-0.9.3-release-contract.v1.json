@@ -1,0 +1,94 @@
+{
+  "schema_version": "cigar.honey-balanced-release-contract.v1",
+  "release": {
+    "name": "CIGAR Honey 0.9.3",
+    "version": "0.9.3",
+    "channel": "honey",
+    "release_state": "developer-preview",
+    "supported": false,
+    "production_qualified": false
+  },
+  "previous_candidate": {
+    "version": "0.9.2",
+    "commit": "35538959bce7497311906e4d370334a87abd362b",
+    "tree": "1157c5fb32b7faed65a8db5ae1e44505636b872f",
+    "context_abi": "cigar.context.v1",
+    "role": "behavior-and-performance-comparator"
+  },
+  "candidate": {
+    "version": "0.9.3",
+    "starting_commit": "35538959bce7497311906e4d370334a87abd362b",
+    "final_source_binding": "required-after-freeze",
+    "default_profile": "balanced_v3",
+    "release_profiles": ["balanced_v3"],
+    "replay_profiles": ["balanced_v1"],
+    "capability_identifiers": [
+      "intelligence-balanced-v3",
+      "intelligence-balanced-v1"
+    ]
+  },
+  "profile_bindings": {
+    "balanced_v1": {
+      "purpose": "legacy-replay",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v1",
+      "compiler_id": "cigar.compiler-profile.balanced.v1"
+    },
+    "balanced_v3": {
+      "purpose": "release-default",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.2",
+      "retrieval_digest": "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a",
+      "compiler_id": "cigar.compiler-profile.balanced.v3",
+      "compiler_digest": "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7"
+    }
+  },
+  "improvements": {
+    "token_reduction": {
+      "mechanism": "coverage-saturating-optional-packing",
+      "sufficient_items_per_requirement": 2,
+      "redundant_fixture_baseline_tokens": 100,
+      "redundant_fixture_candidate_tokens": 20,
+      "fixture_reduction_millionths": 800000,
+      "generalized_claim": false
+    },
+    "completion_efficacy": {
+      "mechanism": "requirement-aware-ranking-with-authenticated-evidence",
+      "blocking_candidates_protected": true,
+      "uncovered_blocking_requirement_fails_closed": true,
+      "live_provider_completion_claim": false
+    },
+    "speed": {
+      "mechanism": "incremental-ranking-state",
+      "removed_inner_selected_candidate_scan": true,
+      "bounded_similarity_work_before": "cubic",
+      "bounded_similarity_work_after": "quadratic",
+      "operation_count_fixture_candidates": 128,
+      "prior_similarity_evaluations": 349504,
+      "candidate_similarity_updates": 8128,
+      "similarity_work_reduction_millionths": 976744
+    }
+  },
+  "mandatory_gates": [
+    "clean-committed-source",
+    "authority-drift",
+    "focused-tests",
+    "compiler-token-saturation",
+    "critical-requirement-recall",
+    "ranking-evidence-integrity",
+    "zero-budget-overflow",
+    "completion-proxy-nonregression",
+    "latency-nonregression",
+    "artifact-contracts",
+    "installed-runtime",
+    "sdk-clean-installs",
+    "artifact-checksums"
+  ],
+  "authority": {
+    "push_public": false,
+    "open_public_pr": false,
+    "merge": false,
+    "tag": false,
+    "release": false,
+    "publish": false,
+    "deploy": false
+  }
+}

@@ -20,6 +20,14 @@ class ReleaseContractTests(unittest.TestCase):
         package_metadata = metadata.metadata("hol-cigar")
         self.assertEqual(package_metadata["License-Expression"], "Apache-2.0")
         self.assertEqual(package_metadata.get_all("License-File"), ["LICENSE", "NOTICE"])
+        self.assertEqual(
+            package_metadata.get_all("Project-URL"),
+            [
+                "Homepage, https://hol.org",
+                "Repository, https://github.com/hashgraph-online/hol-cigar",
+                "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
+            ],
+        )
 
 
 if __name__ == "__main__":

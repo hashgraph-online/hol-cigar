@@ -354,6 +354,22 @@ mod tests {
     use super::{TerminalContext, confirmation_needed, progress_start, run};
     use std::ffi::OsString;
 
+    const SUPPORT_SOURCE_CANARY: &str = "SOURCE-CONTENT-CANARY-7f9d4c21";
+    const SUPPORT_PROMPT_CANARY: &str = "PROMPT-CANARY-7f9d4c21";
+    const SUPPORT_SECRET_CANARY: &str = "SECRET-CANARY-0123456789abcdef0123456789abcdef";
+    const SUPPORT_PATH_CANARY: &str = "private-path-canary-7f9d4c21";
+    const SUPPORT_USER_CANARY: &str = "user-identity-canary@example.invalid";
+    const SUPPORT_TOOL_ARGUMENT_CANARY: &str = "tool-argument-canary-7f9d4c21";
+
+    const SUPPORT_CANARIES: [&str; 6] = [
+        SUPPORT_SOURCE_CANARY,
+        SUPPORT_PROMPT_CANARY,
+        SUPPORT_SECRET_CANARY,
+        SUPPORT_PATH_CANARY,
+        SUPPORT_USER_CANARY,
+        SUPPORT_TOOL_ARGUMENT_CANARY,
+    ];
+
     fn args(values: &[&str]) -> Vec<OsString> {
         values.iter().map(OsString::from).collect()
     }
@@ -377,6 +393,53 @@ mod tests {
         Ok(())
     }
 
+    fn support_tar_file_names(bytes: &[u8]) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let mut names = Vec::new();
+        let mut offset = 0_usize;
+        loop {
+            let header = bytes
+                .get(offset..offset.saturating_add(512))
+                .ok_or("truncated support archive header")?;
+            if header.iter().all(|byte| *byte == 0) {
+                let trailer = bytes
+                    .get(offset..offset.saturating_add(1024))
+                    .ok_or("truncated support archive trailer")?;
+                if !trailer.iter().all(|byte| *byte == 0) {
+                    return Err("invalid support archive trailer".into());
+                }
+                if offset.saturating_add(1024) != bytes.len() {
+                    return Err("trailing support archive bytes".into());
+                }
+                break;
+            }
+            if header.get(257..263) != Some(b"ustar\0".as_slice()) {
+                return Err("invalid support archive header".into());
+            }
+            let name_bytes = header
+                .get(..100)
+                .and_then(|field| field.split(|byte| *byte == 0).next())
+                .ok_or("missing support archive member name")?;
+            names.push(std::str::from_utf8(name_bytes)?.to_owned());
+            let size_field = std::str::from_utf8(
+                header
+                    .get(124..136)
+                    .ok_or("missing support archive member size")?,
+            )?
+            .trim_matches(['\0', ' ']);
+            let size = usize::from_str_radix(size_field, 8)?;
+            let padded_size = size
+                .checked_add(511)
+                .ok_or("support archive member size overflow")?
+                / 512
+                * 512;
+            offset = offset
+                .checked_add(512)
+                .and_then(|value| value.checked_add(padded_size))
+                .ok_or("support archive offset overflow")?;
+        }
+        Ok(names)
+    }
+
     fn embedded_daemon_fixture()
     -> Result<(tempfile::TempDir, cigar_daemon::DaemonConfig), Box<dyn std::error::Error>> {
         use cigar_crypto::{
@@ -389,16 +452,24 @@ mod tests {
         let root = std::fs::canonicalize(directory.path())?;
         let state = root.join("state");
         let runtime = root.join("run");
-        let project = root.join("project");
+        let project = root.join(SUPPORT_PATH_CANARY);
         let trusted = root.join("trusted");
         let secrets = root.join("secrets");
         for path in [&state, &runtime, &project, &trusted, &secrets] {
             std::fs::create_dir_all(path)?;
         }
         let project = std::fs::canonicalize(project)?;
+        std::fs::write(
+            project.join("private-context.txt"),
+            format!("{SUPPORT_SOURCE_CANARY}\n{SUPPORT_PROMPT_CANARY}\n"),
+        )?;
         let passphrase_file = secrets.join("keystore-passphrase");
         let passphrase = b"0123456789abcdef0123456789abcdef";
         restricted_write(&passphrase_file, passphrase)?;
+        restricted_write(
+            &secrets.join("operator-token"),
+            SUPPORT_SECRET_CANARY.as_bytes(),
+        )?;
         let keystore_file = state.join("keystore.cigar");
         let keystore = EncryptedDevelopmentKeystore::open(
             &keystore_file,
@@ -436,7 +507,7 @@ mod tests {
                     operator: true,
                     not_before: UtcTimestamp::parse_rfc3339("2020-01-01T00:00:00Z")?,
                     expires_at: UtcTimestamp::parse_rfc3339("2099-01-01T00:00:00Z")?,
-                    roles: vec!["developer".to_owned()],
+                    roles: vec![SUPPORT_USER_CANARY.to_owned()],
                     project_ids: vec![project_id],
                     capabilities: vec![Capability::ReadContext],
                     delegatable_capabilities: Vec::new(),
@@ -577,7 +648,7 @@ mod tests {
     async fn version_and_help_are_stable_without_a_target() {
         let version = run(args(&["version"]), TerminalContext::default()).await;
         assert_eq!(version.status, 0);
-        assert!(version.stdout.contains("\"version\":\"0.9.2\""));
+        assert!(version.stdout.contains("\"version\":\"0.9.4\""));
         assert!(version.stderr.is_empty());
 
         let help = run(Vec::new(), TerminalContext::default()).await;
@@ -847,8 +918,15 @@ mod tests {
             .state_directory
             .parent()
             .ok_or("missing fixture root")?;
-        let support_one = fixture_root.join("support-one.tar");
-        let support_two = fixture_root.join("support-two.tar");
+        let support_one = fixture_root.join(format!("{SUPPORT_TOOL_ARGUMENT_CANARY}-one.tar"));
+        let support_two = fixture_root.join(format!("{SUPPORT_TOOL_ARGUMENT_CANARY}-two.tar"));
+        let expected_files = [
+            "inventory.json",
+            "build.json",
+            "configuration.json",
+            "diagnostics.json",
+            "platform.json",
+        ];
         for support in [&support_one, &support_two] {
             let support_text = support.display().to_string();
             let created = run(
@@ -866,18 +944,43 @@ mod tests {
             )
             .await;
             assert_eq!(created.status, 0, "{}", created.stderr);
-            assert!(created.stdout.contains("\"content_free\":true"));
-            assert!(created.stdout.contains("\"created\":true"));
+            let output: serde_json::Value = serde_json::from_str(&created.stdout)?;
+            assert_eq!(
+                output.pointer("/result/content_free"),
+                Some(&serde_json::Value::Bool(true))
+            );
+            assert_eq!(
+                output.pointer("/result/created"),
+                Some(&serde_json::Value::Bool(true))
+            );
+            assert_eq!(
+                output
+                    .pointer("/result/archive")
+                    .and_then(serde_json::Value::as_str),
+                Some(support_text.as_str())
+            );
+            let files = output
+                .pointer("/result/files")
+                .and_then(serde_json::Value::as_array)
+                .ok_or("missing support archive inventory")?;
+            assert_eq!(
+                files
+                    .iter()
+                    .map(|entry| entry.get("path").and_then(serde_json::Value::as_str))
+                    .collect::<Vec<_>>(),
+                expected_files.iter().copied().map(Some).collect::<Vec<_>>()
+            );
         }
         let support_bytes = std::fs::read(&support_one)?;
         assert_eq!(support_bytes, std::fs::read(&support_two)?);
         assert_eq!(support_bytes.len() % 512, 0);
-        assert!(support_bytes.windows(6).any(|window| window == b"ustar\0"));
-        for excluded in [
-            b"0123456789abcdef0123456789abcdef".as_slice(),
-            cli_config_text.as_bytes(),
-            fixture_root.display().to_string().as_bytes(),
-        ] {
+        assert_eq!(support_tar_file_names(&support_bytes)?, expected_files);
+        let fixture_root_text = fixture_root.display().to_string();
+        for excluded in SUPPORT_CANARIES
+            .iter()
+            .map(|canary| canary.as_bytes())
+            .chain([cli_config_text.as_bytes(), fixture_root_text.as_bytes()])
+        {
             assert!(
                 !support_bytes
                     .windows(excluded.len())

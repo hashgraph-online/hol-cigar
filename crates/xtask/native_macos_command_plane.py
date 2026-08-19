@@ -1914,7 +1914,7 @@ def _development_product_version() -> str:
             release_identity == ("developer-preview", "honey")
             and (
                 re.fullmatch(r"0\.9\.2-honey\.[1-9][0-9]*", version) is None
-                or document.get("target_release_version") != "0.9.2"
+                or document.get("target_release_version") != "0.9.3"
                 or document.get("tag") != f"v{version}"
             )
         )

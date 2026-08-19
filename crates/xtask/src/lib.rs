@@ -2770,7 +2770,7 @@ fn bootstrap(root: &Path) -> Result<(), TaskError> {
             name: "Go",
             program: "go",
             arguments: &["version"],
-            expected: "1.26.5",
+            expected: "1.26.6",
             install: "https://go.dev/doc/install",
             required: true,
         },

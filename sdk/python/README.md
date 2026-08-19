@@ -2,7 +2,7 @@
 
 `hol-cigar` is the Python SDK for CIGAR, an alpha project from [HOL.org](https://hol.org).
 
-> **Alpha developer preview:** `0.9.2` is an unsupported proof of concept for Python 3.14. The SDK
+> **Alpha developer preview:** `0.9.4` is an unsupported proof of concept for Python 3.14. The SDK
 > does not include the CIGAR daemon. The Honey daemon is qualified separately only on Apple-silicon
 > macOS; do not treat this package as production-ready or cross-platform runtime support.
 
@@ -14,7 +14,7 @@ The PyPI distribution is named `hol-cigar`; its stable Python import namespace r
 The exported `cigar_sdk.CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
 
 ```sh
-python3.14 -m pip install --pre 'hol-cigar==0.9.2'
+python3.14 -m pip install --pre 'hol-cigar==0.9.4'
 ```
 
 ```python

@@ -7,15 +7,16 @@ Governed context, bounded agent authority, and replayable evidence for AI agent 
 CIGAR is an open protocol developed by [HOL](https://hol.org).
 
 [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
-[0.9.2 alpha](#cigar-honey-092-alpha) · [Release gates](#092-alpha-release-gates) ·
+[0.9.4 candidate](#cigar-honey-094-candidate) · [Candidate evidence](#094-candidate-evidence) ·
+[Release gates](#094-candidate-release-gates) ·
 [Documentation](#documentation) ·
 [Security](#security)
 
 > [!IMPORTANT]
-> The current private product identity is **CIGAR Honey 0.9.2 alpha** (`0.9.2`). Its Python
-> development distribution is `hol-cigar==0.9.2`. This is unsupported evaluation software: it is not
+> The current private product identity is **CIGAR Honey 0.9.4 candidate** (`0.9.4`). Its Python
+> development distribution is `hol-cigar==0.9.4`. This is unsupported evaluation software: it is not
 > production-qualified, signed, or notarized. See [current status](#current-status) and the exact
-> [alpha release gates](#092-alpha-release-gates) before evaluating it.
+> [candidate release gates](#094-candidate-release-gates) before evaluating it.
 
 ## Why CIGAR?
 
@@ -54,7 +55,7 @@ Choose the path that matches what you are trying to do:
 | Goal | Start here |
 |---|---|
 | Use the published Python SDK baseline | Install `hol-cigar==0.9.1` from PyPI; the import package remains `cigar_sdk`. |
-| Evaluate the private Honey 0.9.2 alpha | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
+| Evaluate the private Honey 0.9.4 candidate | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
 | Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
 | Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
 | Try MCP or Claude Code | Follow the [MCP and Claude Code guide](docs/guides/honey-mcp-claude.md). |
@@ -101,12 +102,14 @@ The public protocol currently defines seven services covering catalog, context, 
 effects, replay, and operations. See the [public API reference](docs/reference/public-api.md) for the
 operation-level contract.
 
-## CIGAR Honey 0.9.2 alpha
+## CIGAR Honey 0.9.4 candidate
 
-Honey is the first bounded CIGAR profile intended for hands-on local evaluation. The 0.9.2 release-candidate
-repairs persistence, restart, retrieval, duplicate-content, and correlation-related efficiency
-issues observed during proof-of-concept testing. It remains a developer preview, not a supported
-service or a security certification.
+Honey is the first bounded CIGAR profile intended for hands-on local evaluation. The private 0.9.4
+candidate adds the explicit `balanced_v4` profile: risk-aware ranking protects blocking and
+effect-adjacent evidence, exact-token packing stops when marginal utility is exhausted, and dense
+request-scoped state reduces repeated ranking and compiler work. During qualification, an omitted
+profile still selects frozen `balanced_v3`; `balanced_v1` remains selectable for exact 0.9.2 replay.
+The candidate remains a developer preview, not a supported service or security certification.
 
 ### Selected scope
 
@@ -127,11 +130,38 @@ service or a security certification.
   outside the separately bounded `hol-cigar` SDK profile;
 - HTTPS effects, arbitrary extensions, live-provider replay, and remote OTLP;
 - vector retrieval in the selected release profile;
-- general benchmark or efficacy claims; and
+- generalized model-provider completion or cross-workload performance claims; and
 - production support, Apple signing/notarization, long-duration qualification, and GA guarantees.
 
 The repository contains implementation and design work beyond Honey. Code presence does not imply
 that a surface is selected, packaged, qualified, published, or supported by this release profile.
+
+## 0.9.4 candidate evidence
+
+The independent Hiero Pentest RC comparison ran five governed workflows with 50 measured trials per
+workflow and treatment: 250 observations for each of 0.9.2, 0.9.3, and 0.9.4, plus registered
+warmups. Treatments were release-built from immutable commits, interleaved in randomized blocks,
+and executed against a recorded provider under network denial.
+
+| Metric | 0.9.2 / `balanced_v1` | 0.9.3 / `balanced_v3` | 0.9.4 / `balanced_v4` |
+|---|---:|---:|---:|
+| Valid completion and blocking/gold/citation coverage | 100% | 100% | **100%** |
+| Useful-selection precision | 27.1% | 50.0% | **100%** |
+| Semantic duplicate rate | 46.1% | 0% | **0%** |
+| Mean exact selected tokens | 2,251.05 | 1,251.78 | **625.40** |
+| Internal CIGAR pipeline p50 | 2.049 ms | 1.852 ms | **0.738 ms** |
+| Internal CIGAR pipeline p95 | 7.658 ms | 3.268 ms | **1.216 ms** |
+
+All 44 evaluated claims passed. Relative to 0.9.3, 0.9.4 used 50.039% fewer exact tokens and
+reduced mean internal CIGAR pipeline latency by 59.627%; every workflow independently reduced mean
+tokens by approximately 50%. The separately evaluated 128/512 allocation gate is not inferred from
+this workflow cohort.
+
+These are deterministic, source-bound measurements—not final installed-artifact, live-model,
+security-certification, or universal performance claims. See the
+[full Hiero three-way report](docs/release/honey-0.9.4-hiero-three-way-comparison.md) and
+[0.9.4 candidate release notes](RELEASE_NOTES_HONEY_v0.9.4.md). The retained evidence ID is
+`ae0abda8daa92a00b1c5e1d75b947ee35d9abc75ef7364be0549558ad7b5c1e4`.
 
 ## Current status
 
@@ -140,9 +170,9 @@ The checked-in product authority currently declares:
 | Property | Value |
 |---|---|
 | Project | [HOL.org](https://hol.org) alpha project |
-| Marketing name | CIGAR Honey 0.9.2 alpha |
-| Version | `0.9.2` |
-| Python distribution | `hol-cigar==0.9.2` (import `cigar_sdk`) |
+| Marketing name | CIGAR Honey 0.9.4 candidate |
+| Version | `0.9.4` |
+| Python distribution | `hol-cigar==0.9.4` (import `cigar_sdk`) |
 | Context ABI | `cigar.context.v1` |
 | Release state | Alpha / `developer-preview` |
 | Target | `aarch64-apple-darwin` |
@@ -168,9 +198,9 @@ Progress toward the broader CIGAR v1 design is tracked in
 [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) against [`prd.md`](prd.md). Those planning
 documents do not expand Honey's release claims.
 
-## 0.9.2 alpha release gates
+## 0.9.4 candidate release gates
 
-The alpha cut uses a scoped, fail-closed distribution gate. It establishes that the exact source
+The candidate cut uses a scoped, fail-closed distribution gate. It establishes that the exact source
 and package bytes are internally consistent and installable; it does not establish production
 readiness or a conclusive efficiency or efficacy claim.
 
@@ -179,14 +209,13 @@ readiness or a conclusive efficiency or efficacy claim.
 | Frozen source | One clean committed revision and tree, no Git replacement objects, consistent product/Honey authority, generated clients, contracts, and documentation. |
 | Regression checks | Python SDK tests, lint, formatting, and strict typing; release-tool regression tests; documentation checks; Rust workspace tests and warnings-denied Clippy. |
 | Exact artifacts | The closed 13-file Honey inventory is rebuilt from the frozen commit; every contract and checksum passes; the public verifier returns `passed-artifact-integrity`. |
-| Python package | The `hol_cigar-0.9.2` wheel and sdist pass strict Twine metadata checks and clean Python 3.14 installs in the non-admin qualification environment. Imports, the 45-operation surface, shared fixture, and both entry points must pass. |
+| Python package | The `hol_cigar-0.9.4` wheel and sdist pass strict metadata checks and clean Python 3.14 installs in the non-admin qualification environment. Imports, the 45-operation surface, shared fixture, and both entry points must pass. |
 | Publication control | The tag resolves to the frozen commit; GitHub prerelease downloads match the manifest; PyPI uses the protected `pypi` environment, Trusted Publishing, attestations, and explicit owner approval. A clean post-publication install and published hashes must match. |
 
-Full Honey efficiency-cohort generation, downstream shadow qualification, longevity, production
-chaos, cross-platform qualification, signing, and notarization remain separate qualification work.
-They are not prerequisites for the `hol-cigar` Python alpha, and no release may imply they passed.
-The public manifest must continue to report `supported=false` and
-`production_qualified=false`.
+Installed-artifact workflow qualification, upgrade and rollback rehearsal, final reproducibility,
+long-running fuzz/sanitizer/soak campaigns, signing, and notarization remain separate work. No
+candidate package may imply they passed. The public manifest must continue to report
+`supported=false` and `production_qualified=false`.
 
 ## Repository map
 

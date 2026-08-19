@@ -26,7 +26,7 @@ BASELINE_ID = "cigar.development.protocol-baseline.v1"
 BASELINE_PATH = "packaging/development/protocol-baseline.v1.json"
 SCHEMA_PATH = "packaging/development/schemas/protocol-baseline.v1.schema.json"
 SCHEMA_SHA256 = "35f9bc9eb346fec90e75be1a626d1d0d62cba29440e25ad2c713cb295018a945"
-BASELINE_SHA256 = "b79ef8126fee298ab9985a033488d9a14376139cad1170729ace3d72bf3b3444"
+BASELINE_SHA256 = "5e15aff189c6e7860079fb404c2b84a6b8c4e37c4967be37b9e13b15886b54ee"
 
 CONTEXT_ABI = "cigar.context.v1"
 PROTOCOL_MIN = "1.0"
@@ -623,11 +623,12 @@ def _validate_protocol_identity(root: Path) -> None:
         raise ReleaseError("development/Honey product Context ABI binding is invalid")
     protocol_source = _read_bound_text(root, "crates/cigar-protocol/src/lib.rs")
     for declaration in (
+        f'pub const CONTEXT_ABI: &str = "{CONTEXT_ABI}";',
         f'pub const PROTOCOL_MIN: &str = "{PROTOCOL_MIN}";',
         f'pub const PROTOCOL_MAX: &str = "{PROTOCOL_MAX}";',
     ):
         if protocol_source.count(declaration) != 1:
-            raise ReleaseError("Rust protocol range declaration drifted")
+            raise ReleaseError("Rust protocol identity or range declaration drifted")
     context_proto = _read_bound_text(root, "schemas/proto/context_abi.proto")
     if (
         len(re.findall(r"^package cigar\.context\.v1;$", context_proto, re.MULTILINE))

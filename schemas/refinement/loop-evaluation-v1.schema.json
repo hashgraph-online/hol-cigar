@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/loop-evaluation-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evaluation_id", "evaluator_id", "trial_id", "decision", "failure_category", "reasons", "diff_snapshot_id", "gate_id", "metrics", "hard_invariants"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-loop-evaluation.v1"},
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "evaluator_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "decision": {"enum": ["nominate", "reject_gate", "reject_leakage", "reject_incorrect", "reject_metric_gaming", "reject_test_weakening", "reject_evaluator_edit", "reject_invalid"]},
+    "failure_category": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+    },
+    "diff_snapshot_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "gate_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "metrics": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "numerator", "denominator", "unit"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "numerator": {"type": "integer", "minimum": -1000000000000, "maximum": 1000000000000},
+          "denominator": {"type": "integer", "minimum": 1, "maximum": 1000000000000},
+          "unit": {"enum": ["ratio", "count", "tokens", "milliseconds", "bytes", "microusd"]}
+        }
+      }
+    },
+    "hard_invariants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status"],
+        "properties": {
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "status": {"enum": ["passed", "failed", "not_evaluated"]}
+        }
+      }
+    }
+  }
+}

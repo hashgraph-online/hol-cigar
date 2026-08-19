@@ -11,7 +11,6 @@ const MAX_METRICS_BYTES: usize = 1024 * 1024;
 const MAX_METRICS_LINES: usize = 4_096;
 const MAX_LINE_BYTES: usize = 1_024;
 const MAX_HELP_BYTES: usize = 256;
-const MAX_SERIES: usize = 256;
 
 const AUTHORIZED_REQUESTS: &str = "cigar_daemon_authorized_requests_total";
 const REJECTED_REQUESTS: &str = "cigar_daemon_rejected_requests_total";
@@ -226,22 +225,18 @@ fn parse_sample(
     let number = value
         .parse::<u64>()
         .map_err(|_error| MetricsError::InvalidValue)?;
-    if samples.len() >= MAX_SERIES {
-        return Err(MetricsError::LimitExceeded);
-    }
-    if samples
-        .insert(
-            SeriesKey {
-                name: definition.name,
-                label_key,
-                label_value,
-            },
-            number,
-        )
-        .is_some()
-    {
+    let key = SeriesKey {
+        name: definition.name,
+        label_key,
+        label_value,
+    };
+    if samples.contains_key(&key) {
         return Err(MetricsError::DuplicateSeries);
     }
+    if samples.len() >= maximum_daemon_series() {
+        return Err(MetricsError::LimitExceeded);
+    }
+    samples.insert(key, number);
     Ok(())
 }
 

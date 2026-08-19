@@ -41,6 +41,16 @@
         }
       ]
     },
+    "compiler_candidate_packing": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "mandatory-alias-budget-edge",
+          "sha1": "b0712dc77bc7f7d7514c5f5ae5105ad02582dce2",
+          "sha256": "58de41cecf7df4699912e8f9c8ba31e61298082112c5955a2ac9bf48523ffda1"
+        }
+      ]
+    },
     "contract_compiler_candidates": {
       "named_fixtures": [
         {
@@ -55,9 +65,25 @@
       "named_fixtures": [
         {
           "classification": "hand-authored-seed",
+          "name": "block-size-boundaries",
+          "sha1": "9f74936db1394ab0bfd92e356df2f67c96be95af",
+          "sha256": "6925a627493c97560ef6259ccf277c531d7d604194e1f95ce9eeb07c0cfb458e"
+        },
+        {
+          "classification": "hand-authored-seed",
           "name": "two-bodies",
           "sha1": "53291d32d17cb311d3065dabbc9f6ed4db0319ce",
           "sha256": "a7abe2019f7bd6e750b72761a982baa76551a9c70694d9d32885038e287e7b13"
+        }
+      ]
+    },
+    "dependency_closure": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "cycle-and-diamond",
+          "sha1": "b0504a938f887b29a0257873073dd8d2cddcb8d9",
+          "sha256": "1cd3da918efa064b14dbb2867bc525058d91fbcecb5d1dc53ad9bc8e982d5346"
         }
       ]
     },
@@ -151,9 +177,25 @@
       "named_fixtures": [
         {
           "classification": "hand-authored-seed",
+          "name": "compatibility-unknown-field",
+          "sha1": "61810e50afc5c7c10c3ee5b0da461cc23d501ec0",
+          "sha256": "1b2066a640aa33b036544045521e845ee9662632812c10a5120f644d5b211307"
+        },
+        {
+          "classification": "hand-authored-seed",
           "name": "minimal-invalid",
           "sha1": "c4d96c021ba749fc1cbe47c97dcb182def54d256",
           "sha256": "874faf50893cb5683a8916fcba4e00fa56aa25ed21807174e289d8bebbc8ceee"
+        }
+      ]
+    },
+    "ranking_evidence_decode_validate": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "runner-up-digest-tamper",
+          "sha1": "13528cf6528d3869948ddbf557c6bf7a8297b949",
+          "sha256": "55addbfb718d73ab8dbea09aa51ad0ca8cd7521825854d0bf4964909c84a3de3"
         }
       ]
     },
@@ -161,9 +203,41 @@
       "named_fixtures": [
         {
           "classification": "hand-authored-seed",
+          "name": "unknown-field-invocation",
+          "sha1": "c278f6d14f51073cf658556050b7407e8c172a6e",
+          "sha256": "793f50c5a1fc04e0e8d19ae382f7db20d418d53640b42bcf51c584c6a76f3609"
+        },
+        {
+          "classification": "hand-authored-seed",
           "name": "minimal-replay",
           "sha1": "988e7ece0c0142b802248004810279a0a07ad5e0",
           "sha256": "dd678f58f1eb80b99991329f64f7d1dc6a4588792e86a7a8bfa9f661279763c5"
+        }
+      ]
+    },
+    "retrieval_plan_result_reduction": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "four-requirement-alias-boundaries",
+          "sha1": "e1d0cbd1046128baa30a29f70eed6e3f16e8c388",
+          "sha256": "826a49bf9da850c28d5de4d0234f25066a11e8efce5f460786f7c94feae43ccc"
+        }
+      ]
+    },
+    "workflow_session_records": {
+      "named_fixtures": [
+        {
+          "classification": "hand-authored-seed",
+          "name": "impossible-effect-phase",
+          "sha1": "358f06eb6235e1e21241e6e73b0fd385a3e91b1e",
+          "sha256": "754ef3fddfc09af822280b611a6f1a9229042bc9202e1075ef99902d31ed4115"
+        },
+        {
+          "classification": "hand-authored-seed",
+          "name": "valid-new-session",
+          "sha1": "1095f68fdc116b57de3d4518100aefea3f4d3ec7",
+          "sha256": "21fb2a2f5583449562730f38bb241186586cbdd66baecad0f4581dd1418dd594"
         }
       ]
     }

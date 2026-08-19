@@ -58,6 +58,16 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
             npm=None,
         )
 
+    def test_tool_receipts_use_the_dedicated_bounded_executable_limit(self) -> None:
+        tool = self.base / "node"
+        with mock.patch.object(
+            builder, "_read_stable_file", return_value=b"verified-tool"
+        ) as read:
+            record = builder._tool_record(tool, "node", "v24.10.0")
+        read.assert_called_once_with(tool, builder.MAX_TOOL_BYTES, "node executable")
+        self.assertEqual(builder.MAX_TOOL_BYTES, 128 * 1024 * 1024)
+        self.assertEqual(record["bytes"], len(b"verified-tool"))
+
     def entries(
         self,
         configuration: builder.BuildConfiguration,
@@ -235,9 +245,9 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "0.9.2")
+        self.assertEqual(configuration.version, "0.9.4")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
-        self.assertEqual(configuration.filename, "cigar-sdk-0.9.2.tgz")
+        self.assertEqual(configuration.filename, "cigar-sdk-0.9.4.tgz")
         self.assertEqual(
             set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
         )
@@ -247,7 +257,7 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
         self.assertEqual(
             set(configuration.sdk_sources), set(builder.SDK_BUILD_SOURCE_PATHS)
         )
-        self.assertEqual(len(builder.EXPECTED_PACKAGE_PATHS), 74)
+        self.assertEqual(len(builder.EXPECTED_PACKAGE_PATHS), 78)
 
     def test_configuration_requires_the_exact_matrix_producer_binding(self) -> None:
         load_json = builder.load_json
@@ -275,13 +285,13 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-sdk-0.9.2.tgz"
+        filename = "cigar-sdk-0.9.4.tgz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
         self.assertEqual(first["archive"], second["archive"])
         self.assertEqual(first["status"], "built-unqualified")
-        self.assertEqual(first["payload_file_count"], 74)
+        self.assertEqual(first["payload_file_count"], 78)
         self.assertEqual(
             first["claims"],
             {

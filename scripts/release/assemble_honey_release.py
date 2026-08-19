@@ -48,7 +48,7 @@ REQUIREMENTS_PATH = "packaging/honey/release-requirements.v1.json"
 MANIFEST_NAME = "honey-release-manifest.json"
 CHECKSUM_NAME = "SHA256SUMS"
 MANIFEST_SCHEMA = "cigar.honey.release-manifest.v1"
-EXPECTED_VERSION = "0.9.2"
+EXPECTED_VERSION = "0.9.4"
 EXPECTED_ABI = "cigar.context.v1"
 EXPECTED_CHANNEL = "honey"
 EXPECTED_STATE = "developer-preview"
@@ -101,6 +101,7 @@ RECEIPT_AUTHORITY_PATHS: dict[str, tuple[str, ...]] = {
         "sdk/python/pyproject.toml",
         "sdk/python/uv.lock",
         "sdk/python/src/cigar_sdk/release.json",
+        "sdk/workflow-context-session.v1.json",
     ),
     "python-sdk-sdist": (
         *COMMON_HONEY_AUTHORITY_PATHS,
@@ -109,6 +110,7 @@ RECEIPT_AUTHORITY_PATHS: dict[str, tuple[str, ...]] = {
         "sdk/python/pyproject.toml",
         "sdk/python/uv.lock",
         "sdk/python/src/cigar_sdk/release.json",
+        "sdk/workflow-context-session.v1.json",
     ),
     "rust-sdk-local-registry": (
         *COMMON_HONEY_AUTHORITY_PATHS,
@@ -246,7 +248,7 @@ def _load_configuration(root: Path) -> Configuration:
     if (
         not isinstance(product, dict)
         or product.get("version") != EXPECTED_VERSION
-        or product.get("target_release_version") != "0.9.2"
+        or product.get("target_release_version") != "0.9.4"
         or product.get("context_abi") != EXPECTED_ABI
         or product.get("release_state") != EXPECTED_STATE
         or product.get("channel") != EXPECTED_CHANNEL

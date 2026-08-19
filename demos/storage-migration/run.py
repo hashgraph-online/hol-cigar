@@ -167,7 +167,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     report = {
         "schema_version": "cigar.generated-storage-migration-demo.v1",
         "demo_id": "generated-v4-v5-storage-migration",
-        "product_version": "0.9.2",
+        "product_version": "0.9.4",
         "network_required": False,
         "credentials_required": False,
         "clean_runs": 2,

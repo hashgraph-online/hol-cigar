@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/loop-seeds-v1.schema.json",
+  "$defs": {
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_id", "category", "adapter_lane", "patch_kind", "expected_decision", "expected_failure_category", "expected_candidate_commit"],
+      "properties": {
+        "seed_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "category": {"enum": ["known-good", "known-bad", "leaky", "faster-but-wrong", "metric-gaming", "test-weakening", "evaluator-edit"]},
+        "adapter_lane": {"enum": ["hosted", "local"]},
+        "patch_kind": {"enum": ["correct-answer", "incorrect-answer", "synthetic-canary", "fast-incorrect-answer", "metric-control-edit", "test-control-edit", "evaluator-control-edit"]},
+        "expected_decision": {"enum": ["nominate", "reject_leakage", "reject_incorrect", "reject_invalid"]},
+        "expected_failure_category": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+        "expected_candidate_commit": {"type": "boolean"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "qualification_id", "seeds"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-loop-seeds.v1"},
+    "qualification_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "seeds": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/seed"}
+    }
+  }
+}

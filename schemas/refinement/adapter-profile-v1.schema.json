@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/adapter-profile-v1.schema.json",
+  "$defs": {
+    "profile": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "adapter", "model", "endpoint", "credential_handle", "executable", "arguments", "timeout_seconds", "maximum_response_bytes", "maximum_retries", "sampling", "artifact_digests", "prompt_digests"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-adapter-profile.v1"},
+    "profile_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "adapter": {"enum": ["recorded-proposal-v1", "subprocess-jsonl-v1", "patch-json-v1", "openai-compatible-tools-v1", "openai-responses-tools-v1", "codex-cli-tools-v1"]},
+    "model": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "endpoint": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "credential_handle": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "executable": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "arguments": {"type": "array", "maxItems": 128, "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+    "maximum_response_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+    "maximum_retries": {"type": "integer", "minimum": 0, "maximum": 8},
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "seed", "reasoning_effort"],
+      "properties": {
+        "temperature": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 0, "maximum": 2}]},
+        "seed": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 2147483647}]},
+        "reasoning_effort": {"oneOf": [{"type": "null"}, {"enum": ["none", "low", "medium", "high", "xhigh", "max"]}]}
+      }
+    },
+    "artifact_digests": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}},
+    "prompt_digests": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}}
+  }
+    }
+  },
+  "allOf": [{"$ref": "#/$defs/profile"}]
+}

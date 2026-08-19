@@ -67,6 +67,7 @@ MUTATION_THRESHOLD_PERCENT = 90.0
 MAXIMUM_SUBPROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
 MAXIMUM_EVIDENCE_DOCUMENT_BYTES = 16 * 1024 * 1024
 DEFAULT_SMOKE_SEED = 190000
+EXPECTED_CAMPAIGN_TARGET_COUNT = 19
 # A cold AddressSanitizer/libFuzzer build is part of each target process's wall
 # time. Keep that build allowance fixed and reviewable rather than deriving it
 # from host speed or observed execution. The campaign's requested fuzz seconds
@@ -1300,8 +1301,14 @@ def private_worker_state_is_within_limits(
 
 def validate_campaign(campaign: dict[str, Any]) -> list[str]:
     targets = campaign.get("targets")
-    if not isinstance(targets, list) or len(targets) != 14 or len(set(targets)) != 14:
-        raise GateFailure("campaign must contain exactly fourteen unique targets")
+    if (
+        not isinstance(targets, list)
+        or len(targets) != EXPECTED_CAMPAIGN_TARGET_COUNT
+        or len(set(targets)) != EXPECTED_CAMPAIGN_TARGET_COUNT
+    ):
+        raise GateFailure(
+            f"campaign must contain exactly {EXPECTED_CAMPAIGN_TARGET_COUNT} unique targets"
+        )
     if any(
         not isinstance(target, str)
         or SAFE_TARGET.fullmatch(target) is None
@@ -1722,7 +1729,9 @@ def smoke(args: argparse.Namespace) -> None:
         "outcome": {
             "viability_passed": True,
             "campaign_smoke_passed": qualifying_smoke,
-            "all_fourteen_targets_executed": len(fuzz_results) == 14,
+            "all_campaign_targets_executed": (
+                len(fuzz_results) == EXPECTED_CAMPAIGN_TARGET_COUNT
+            ),
             "crash_count": 0,
             "sanitizer_failure_count": 0,
             "seven_day_equivalent_satisfied": False,
@@ -2110,7 +2119,7 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
             len(fuzz_results) == len(targets)
             and all(isinstance(item, dict) for item in fuzz_results)
             and [item.get("target") for item in fuzz_results] == targets,
-            "ASan result set does not exactly match the fourteen campaign targets",
+            "ASan result set does not exactly match the campaign targets",
         )
         for index, item in enumerate(fuzz_results):
             if not isinstance(item, dict):
@@ -2539,7 +2548,7 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
         == {
             "viability_passed",
             "campaign_smoke_passed",
-            "all_fourteen_targets_executed",
+            "all_campaign_targets_executed",
             "crash_count",
             "sanitizer_failure_count",
             "seven_day_equivalent_satisfied",
@@ -2549,7 +2558,7 @@ def verify_evidence(args: argparse.Namespace, *, include_mutation: bool = True) 
         }
         and smoke_outcome.get("viability_passed") is True
         and smoke_outcome.get("campaign_smoke_passed") is True
-        and smoke_outcome.get("all_fourteen_targets_executed") is True
+        and smoke_outcome.get("all_campaign_targets_executed") is True
         and type(smoke_outcome.get("crash_count")) is int
         and smoke_outcome.get("crash_count") == 0
         and type(smoke_outcome.get("sanitizer_failure_count")) is int
@@ -2649,11 +2658,12 @@ def main() -> int:
         raise GateFailure("--runs must be between 1 and 1000000")
     if not 1 <= seconds <= 3_600:
         raise GateFailure("--seconds must be between 1 and 3600")
-    if not 1 <= jobs <= 14:
+    if not 1 <= jobs <= EXPECTED_CAMPAIGN_TARGET_COUNT:
         raise GateFailure(
-            "--jobs must be between 1 and the fourteen-target campaign size"
+            f"--jobs must be between 1 and the {EXPECTED_CAMPAIGN_TARGET_COUNT}-target "
+            "campaign size"
         )
-    if not 1 <= seed <= 2_147_483_647 - 13:
+    if not 1 <= seed <= 2_147_483_647 - (EXPECTED_CAMPAIGN_TARGET_COUNT - 1):
         raise GateFailure("--seed is outside the reviewed positive libFuzzer range")
     args.function(args)
     return 0

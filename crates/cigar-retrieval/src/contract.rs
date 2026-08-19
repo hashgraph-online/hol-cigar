@@ -61,6 +61,24 @@ pub struct CandidateSelectionProfile {
     pub same_content_penalty: i64,
     /// Quantized MMR penalty for an atom kind already represented.
     pub same_kind_penalty: i64,
+    /// Gain for covering a previously uncovered blocking requirement.
+    pub critical_requirement_gain: i64,
+    /// Gain for covering any other previously uncovered requirement.
+    pub requirement_gain: i64,
+    /// Gain for each newly covered distinct query concept bit.
+    pub concept_gain: i64,
+    /// Gain for introducing a canonical source not yet represented.
+    pub source_diversity_gain: i64,
+    /// Gain for introducing a source section/path not yet represented.
+    pub section_diversity_gain: i64,
+    /// Gain for introducing an evidence kind not yet represented.
+    pub kind_diversity_gain: i64,
+    /// Penalty for a weak one-concept lexical match without declared or exact evidence.
+    pub generic_match_penalty: i64,
+    /// Penalty for each requirement already represented by selected evidence.
+    pub redundant_requirement_penalty: i64,
+    /// Penalty for each already represented query-concept bit.
+    pub redundant_concept_penalty: i64,
 }
 
 impl Default for CandidateSelectionProfile {
@@ -83,6 +101,15 @@ impl Default for CandidateSelectionProfile {
             same_lineage_penalty: 2_000_000,
             same_content_penalty: 3_000_000,
             same_kind_penalty: 100_000,
+            critical_requirement_gain: 0,
+            requirement_gain: 0,
+            concept_gain: 0,
+            source_diversity_gain: 0,
+            section_diversity_gain: 0,
+            kind_diversity_gain: 0,
+            generic_match_penalty: 0,
+            redundant_requirement_penalty: 0,
+            redundant_concept_penalty: 0,
         }
     }
 }
@@ -118,6 +145,15 @@ impl CandidateSelectionProfile {
                 self.same_lineage_penalty,
                 self.same_content_penalty,
                 self.same_kind_penalty,
+                self.critical_requirement_gain,
+                self.requirement_gain,
+                self.concept_gain,
+                self.source_diversity_gain,
+                self.section_diversity_gain,
+                self.kind_diversity_gain,
+                self.generic_match_penalty,
+                self.redundant_requirement_penalty,
+                self.redundant_concept_penalty,
             ]
             .iter()
             .any(|penalty| *penalty < 0)

@@ -13,6 +13,7 @@ mod remote;
 mod semantic_reuse;
 mod transport;
 mod verify;
+mod workflow_session;
 
 pub use client::*;
 #[cfg(feature = "embedded-daemon")]
@@ -24,6 +25,7 @@ pub use remote::*;
 pub use semantic_reuse::*;
 pub use transport::*;
 pub use verify::*;
+pub use workflow_session::*;
 
 /// Frozen API payload and operation types used by typed client methods.
 pub use cigar_api as api;

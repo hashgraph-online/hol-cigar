@@ -48,7 +48,7 @@ INPUT_SCHEMA_VERSION = "cigar.honey.evidence-input.v1"
 CHECK_SCHEMA_VERSION = "cigar.honey.evidence-check.v1"
 LEDGER_NAME = "honey-evidence.json"
 INPUT_NAME = "honey-evidence-input.json"
-EXPECTED_VERSION = "0.9.2"
+EXPECTED_VERSION = "0.9.4"
 EXPECTED_ABI = "cigar.context.v1"
 EXPECTED_STATE = "developer-preview"
 EXPECTED_PROFILE = "cigar.honey.local-developer-preview.macos-arm64.v1"
@@ -398,7 +398,7 @@ def _load_authority(root: Path) -> Authority:
         "schema_version": "cigar.product-version.v1",
         "product": "cigar",
         "version": EXPECTED_VERSION,
-        "target_release_version": "0.9.2",
+        "target_release_version": "0.9.4",
         "context_abi": EXPECTED_ABI,
         "release_state": EXPECTED_STATE,
         "channel": "honey",

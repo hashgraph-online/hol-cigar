@@ -76,6 +76,19 @@ pub struct GovernedCache {
     entries: BTreeMap<CacheKey, Entry>,
 }
 
+/// Content-free bounded-cache occupancy used by overload and soak qualification.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GovernedCacheMetrics {
+    /// Configured maximum entry count.
+    pub maximum_entries: usize,
+    /// Configured maximum resident payload bytes.
+    pub maximum_bytes: usize,
+    /// Current entry count.
+    pub entries: usize,
+    /// Current resident payload bytes.
+    pub resident_bytes: usize,
+}
+
 impl std::fmt::Debug for GovernedCache {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -218,6 +231,17 @@ impl GovernedCache {
         self.entries.is_empty()
     }
 
+    /// Returns current count/byte occupancy without exposing keys or cached content.
+    #[must_use]
+    pub fn metrics(&self) -> GovernedCacheMetrics {
+        GovernedCacheMetrics {
+            maximum_entries: self.maximum_entries,
+            maximum_bytes: self.maximum_bytes,
+            entries: self.entries.len(),
+            resident_bytes: self.resident_bytes,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn corrupt_for_test(&mut self, key: &CacheKey) {
         if let Some(entry) = self.entries.get_mut(key) {
@@ -289,6 +313,34 @@ mod tests {
             cache.get(&key, &policy, 7, |_key| true),
             Some(b"recomputed".to_vec())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn repeated_churn_stays_within_count_and_byte_bounds_and_evicts_deterministically()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let policy = content('a')?;
+        let mut first = GovernedCache::new(8, 64).ok_or("valid cache bounds")?;
+        let mut second = GovernedCache::new(8, 64).ok_or("valid cache bounds")?;
+        for round in 0..10_000_u64 {
+            let character = char::from_digit(u32::try_from(round % 10)?, 10)
+                .ok_or("cache fixture character")?;
+            let key = CacheKey::new(
+                CacheLayer::Bundle,
+                "tenant-a",
+                "private",
+                content(character)?,
+            )
+            .ok_or("valid cache key")?;
+            let bytes = vec![u8::try_from(round % 251)?; usize::try_from(round % 15 + 1)?];
+            assert!(first.insert(key.clone(), bytes.clone(), policy.clone(), round));
+            assert!(second.insert(key, bytes, policy.clone(), round));
+            let first_metrics = first.metrics();
+            assert!(first_metrics.entries <= first_metrics.maximum_entries);
+            assert!(first_metrics.resident_bytes <= first_metrics.maximum_bytes);
+            assert_eq!(first_metrics, second.metrics());
+        }
+        assert_eq!(format!("{first:?}"), format!("{second:?}"));
         Ok(())
     }
 }

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/trial-history-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trial_id", "family_id", "hypothesis_fingerprint", "patch_fingerprint", "outcome", "failure_category", "primary_effect", "evaluation_cost", "model_dependent", "affected_strata"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-trial-history.v1"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "family_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "hypothesis_fingerprint": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "patch_fingerprint": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "outcome": {"enum": ["invalid", "rejected", "promoted"]},
+    "failure_category": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+    "primary_effect": {"type": "number", "minimum": -1000000, "maximum": 1000000},
+    "evaluation_cost": {"type": "number", "minimum": 0, "maximum": 1000000},
+    "model_dependent": {"type": "boolean"},
+    "affected_strata": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}}
+  }
+}

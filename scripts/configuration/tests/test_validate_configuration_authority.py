@@ -132,6 +132,23 @@ class ConfigurationAuthorityTests(unittest.TestCase):
         self.assertEqual(setting["secret_classification"], "non_secret")
         self.assertTrue(setting["project_configuration_forbidden"])
 
+    def test_intelligence_profile_is_explicit_closed_and_available_to_every_daemon_profile(
+        self,
+    ) -> None:
+        setting = self.setting("daemon.intelligence_profile")
+        self.assertEqual(
+            setting["profiles"], ["embedded", "local_sidecar", "shared_service"]
+        )
+        self.assertEqual(setting["allowed_sources"], ["explicit_config"])
+        self.assertEqual(setting["precedence"], ["explicit_config"])
+        self.assertEqual(setting["default_semantics"], "balanced_v3_when_absent")
+        self.assertEqual(
+            setting["required_semantics"],
+            "closed_balanced_v1_balanced_v3_balanced_v4",
+        )
+        self.assertEqual(setting["secret_classification"], "non_secret")
+        self.assertTrue(setting["project_configuration_forbidden"])
+
     def test_source_inventory_paths_reject_absolute_traversal_and_symlink_escape(
         self,
     ) -> None:

@@ -27,7 +27,7 @@ from release_lib import ReleaseError, reject_evidence_directory
 
 MANIFEST_PATH = "packaging/product-version.v1.json"
 DEVELOPMENT_TARGET_RELEASE = "1.0.0"
-HONEY_TARGET_RELEASE = "0.9.2"
+HONEY_TARGET_RELEASE = "0.9.4"
 HONEY_CHANNEL = "honey"
 EXPECTED_CONTEXT_ABI = "cigar.context.v1"
 MAX_JSON_BYTES = 16 * 1024 * 1024
@@ -96,6 +96,7 @@ CARGO_DEPENDENCY_BINDINGS: dict[str, tuple[str, ...]] = {
         "cigar-daemon",
         "cigar-protocol",
     ),
+    "benches/cigarbench/consumer/Cargo.toml": ("cigar-daemon",),
 }
 
 ROOT_CARGO_PACKAGES = (
@@ -125,6 +126,7 @@ ROOT_CARGO_PACKAGES = (
     "cigar-store",
     "cigar-testkit",
     "cigar-windows-ipc",
+    "cigarbench-consumer",
     "xtask",
 )
 CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
@@ -303,6 +305,14 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
         _surrounded('PRODUCT_VERSION = "', '"'),
         1,
     ),
+    "demos/run_honey.py": (
+        _surrounded('PRODUCT_VERSION = "', '"'),
+        1,
+    ),
+    "demos/honey-manifest.v1.json": (
+        _surrounded('"product_version": "', '"'),
+        1,
+    ),
     "demos/agent-handoff/driver.py": (
         _surrounded('version.get("version") == "', '",'),
         1,
@@ -313,15 +323,37 @@ TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
     ),
     "demos/README.md": (
         re.compile(
-            rf"(?:--expected-version |cigar-sdk-|cigar-go-sdk-)"
+            rf"(?<!_)(?:--expected-version |cigar-(?:claude-code-)?|cigar-sdk-|cigar-go-sdk-)"
             rf"(?P<version>{PRODUCT_VERSION_FRAGMENT})"
-            r"(?=(?:\s|\.crate|\.tgz|-py3-none-any\.whl|\.tar\.gz))"
+            r"(?=(?:\s|\.crate|\.tgz|-py3-none-any\.whl|\.tar\.gz|-aarch64-apple-darwin))"
         ),
-        4,
+        6,
+    ),
+    "adapters/claude-code/README.md": (
+        re.compile(
+            rf"(?:CIGAR Honey `|cigar-(?:claude-code-)?)"
+            rf"(?P<version>{PRODUCT_VERSION_FRAGMENT})"
+            r"(?=(?:`|-aarch64-apple-darwin\.tar\.gz|\.tar\.gz))"
+        ),
+        6,
+    ),
+    "sdk/python/README.md": (
+        re.compile(
+            rf"(?:preview:\*\* `|hol-cigar==)"
+            rf"(?P<version>{PRODUCT_VERSION_FRAGMENT})"
+            r"(?=(?:`|'))"
+        ),
+        2,
     ),
     "scripts/release/README.md": (
-        _surrounded("verify_package.py /tmp/cigar-dist/cigar-", "-source.tar.gz"),
-        1,
+        re.compile(
+            rf"(?:verify_package\.py /tmp/cigar-dist/cigar-|"
+            rf"qualify_install\.py \\\n    /private/tmp/cigar-macos-arm64-build/cigar-|"
+            rf"/private/tmp/cigar-conformance-tool-build/cigar-conformance-)"
+            rf"(?P<version>{PRODUCT_VERSION_FRAGMENT})"
+            r"(?=(?:-source|-aarch64-apple-darwin)\.tar\.gz)"
+        ),
+        3,
     ),
 }
 PYTHON_TEXT_VERSION_BINDINGS: dict[str, tuple[re.Pattern[str], int]] = {
@@ -343,6 +375,12 @@ DERIVED_VERSION_CONSUMERS = {
         1,
     ),
 }
+HONEY_TWO_AGENT_DRIVER = "demos/agent-handoff/driver.py"
+HONEY_TWO_AGENT_WRAPPER = "demos/honey-two-agent/driver.py"
+HONEY_TWO_AGENT_MANIFEST = "demos/honey-two-agent/honey-demo.json"
+HONEY_TWO_AGENT_DIGEST_BINDING = re.compile(
+    r'(?<=SHARED_DRIVER_SHA256 = \(\n    ")[0-9a-f]{64}(?="\n\))'
+)
 
 LEGACY_EXACT_VERSION_ALLOWED: dict[str, str] = {
     "Cargo.lock": "third-party package versions",
@@ -747,6 +785,8 @@ def managed_paths() -> tuple[str, ...]:
         *TEXT_VERSION_BINDINGS,
         *PYTHON_TEXT_VERSION_BINDINGS,
         *DERIVED_VERSION_CONSUMERS,
+        HONEY_TWO_AGENT_WRAPPER,
+        HONEY_TWO_AGENT_MANIFEST,
         "packaging/artifact-matrix.v1.json",
         "packaging/local-archives.v1.json",
         "docs/site-manifest.v1.json",
@@ -1050,6 +1090,41 @@ def _update_text_consumers(root: Path, version: str, *, write: bool) -> None:
             )
 
 
+def _update_honey_two_agent_driver_binding(root: Path, *, write: bool) -> None:
+    shared = root / HONEY_TWO_AGENT_DRIVER
+    wrapper = root / HONEY_TWO_AGENT_WRAPPER
+    _safe_regular_file(root, HONEY_TWO_AGENT_DRIVER)
+    _safe_regular_file(root, HONEY_TWO_AGENT_WRAPPER)
+    digest = hashlib.sha256(shared.read_bytes()).hexdigest()
+    text = wrapper.read_text(encoding="utf-8")
+    if len(HONEY_TWO_AGENT_DIGEST_BINDING.findall(text)) != 1:
+        raise VersionError("Honey two-agent shared-driver digest binding drift")
+    generated = HONEY_TWO_AGENT_DIGEST_BINDING.sub(digest, text)
+    if write:
+        _write(wrapper, generated)
+    elif generated != text:
+        raise VersionError("Honey two-agent shared-driver digest is stale")
+
+    manifest = root / HONEY_TWO_AGENT_MANIFEST
+    _safe_regular_file(root, HONEY_TWO_AGENT_MANIFEST)
+    document = _read_json(manifest)
+    if (
+        not isinstance(document, dict)
+        or document.get("schema_version") != "cigar.demo-manifest.v1"
+        or document.get("demo_id") != "honey-two-agent-handoff"
+        or document.get("driver") != "driver.py"
+    ):
+        raise VersionError("Honey two-agent manifest identity drift")
+    wrapper_digest = "1220" + hashlib.sha256(generated.encode("utf-8")).hexdigest()
+    manifest_text = _replace_json_string_field(
+        manifest.read_text(encoding="utf-8"), "driver_digest", wrapper_digest
+    )
+    if write:
+        _write(manifest, manifest_text)
+    elif manifest_text != manifest.read_text(encoding="utf-8"):
+        raise VersionError("Honey two-agent manifest driver digest is stale")
+
+
 def legacy_exact_version_paths(root: Path) -> set[str]:
     excluded_directories = {
         ".git",
@@ -1347,6 +1422,7 @@ def generate(root: Path) -> None:
     _update_release_records(root, version, abi, write=True)
     _update_json_package_versions(root, version, write=True)
     _update_text_consumers(root, version, write=True)
+    _update_honey_two_agent_driver_binding(root, write=True)
     _update_documents(root, version, abi, write=True)
     _update_plugin_package_manifest(root, write=True)
     check(root)
@@ -1364,6 +1440,7 @@ def check(root: Path) -> None:
     _update_release_records(root, version, abi, write=False)
     _update_json_package_versions(root, version, write=False)
     _update_text_consumers(root, version, write=False)
+    _update_honey_two_agent_driver_binding(root, write=False)
     _update_documents(root, version, abi, write=False)
     _update_plugin_package_manifest(root, write=False)
     _check_legacy_exact_version_consumers(root)

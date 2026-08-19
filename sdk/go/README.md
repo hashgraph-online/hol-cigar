@@ -1,6 +1,6 @@
 # CIGAR Go SDK
 
-The Go 1.26.5-or-newer module exposes all 45 frozen CIGAR v1 HTTP operations, generated
+The Go 1.26.6-or-newer module exposes all 45 frozen CIGAR v1 HTTP operations, generated
 Protobuf records and gRPC client/server stubs, context cancellation, typed problems, bounded deadlines,
 idempotency-preserving safe retry, cursor iteration, closable/resumable SSE,
 and local semantic bundle/delta verification.

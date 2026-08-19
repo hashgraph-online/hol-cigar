@@ -29,11 +29,11 @@ and the no-egress mechanism.
 <!-- docs-check: illustrative -->
 ```sh
 python3 demos/run_honey.py \
-  --runtime-archive dist/cigar-0.9.2-aarch64-apple-darwin.tar.gz \
+  --runtime-archive dist/cigar-0.9.4-aarch64-apple-darwin.tar.gz \
   --runtime-sha256 "$RUNTIME_SHA256" \
-  --python-wheel dist/hol_cigar-0.9.2-py3-none-any.whl \
+  --python-wheel dist/hol_cigar-0.9.4-py3-none-any.whl \
   --python-wheel-sha256 "$PYTHON_WHEEL_SHA256" \
-  --claude-plugin-archive dist/cigar-claude-code-0.9.2.tar.gz \
+  --claude-plugin-archive dist/cigar-claude-code-0.9.4.tar.gz \
   --claude-plugin-sha256 "$CLAUDE_PLUGIN_SHA256" \
   --output honey-installed-demos.json
 ```
@@ -172,15 +172,15 @@ installs each into a clean temporary root, and never falls back to source:
 ```sh
 python3 demos/installed_artifact_test.py \
   --cigar-binary dist/bin/cigar \
-  --expected-version 0.9.2 \
-  --rust-archive dist/sdk/cigar-sdk-0.9.2.crate \
+  --expected-version 0.9.4 \
+  --rust-archive dist/sdk/cigar-sdk-0.9.4.crate \
   --cargo-home dist/offline/cargo-home \
   --rustup-home dist/offline/rustup-home \
-  --typescript-tarball dist/sdk/cigar-sdk-0.9.2.tgz \
+  --typescript-tarball dist/sdk/cigar-sdk-0.9.4.tgz \
   --pnpm-store dist/offline/pnpm-store \
-  --python-wheel dist/sdk/hol_cigar-0.9.2-py3-none-any.whl \
+  --python-wheel dist/sdk/hol_cigar-0.9.4-py3-none-any.whl \
   --python-wheelhouse dist/sdk/wheelhouse \
-  --go-archive dist/sdk/cigar-go-sdk-0.9.2.tar.gz \
+  --go-archive dist/sdk/cigar-go-sdk-0.9.4.tar.gz \
   --go-mod-cache dist/offline/go-mod-cache \
   --output reports/demos/installed-artifacts.json
 ```

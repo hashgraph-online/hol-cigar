@@ -17,7 +17,7 @@ Start at the [documentation home](site/index.md). The published set is declared 
 - [Troubleshooting](troubleshooting/index.md)
 - [Release verification](release/verification.md)
 
-The Honey 0.9.2 alpha path has its own bounded installation and usage guides:
+The Honey 0.9.3 alpha path has its own bounded installation and usage guides:
 
 - [Honey install](guides/honey-install.md)
 - [Honey offline quickstart](guides/honey-quickstart.md)

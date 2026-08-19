@@ -1,11 +1,11 @@
 {
   "schema_version": "cigar.local-archives.v1",
-  "product_version": "0.9.2",
+  "product_version": "0.9.4",
   "context_abi": "cigar.context.v1",
   "archives": [
     {
       "id": "source",
-      "filename": "cigar-0.9.2-source.tar.gz",
+      "filename": "cigar-0.9.4-source.tar.gz",
       "contract": "packaging/contracts/source-archive.v1.json",
       "include": [
         ".cargo/**", ".config/**", ".devcontainer/**", ".github/**", ".dockerignore", ".gitignore", ".gitleaks.toml",
@@ -19,7 +19,7 @@
     },
     {
       "id": "docs",
-      "filename": "cigar-0.9.2-docs.tar.gz",
+      "filename": "cigar-0.9.4-docs.tar.gz",
       "contract": "packaging/contracts/docs-archive.v1.json",
       "include": [
         "README.md", "LICENSE", "NOTICE", "docs/**", "packaging/artifact-matrix.v1.json",
@@ -29,25 +29,25 @@
     },
     {
       "id": "schemas",
-      "filename": "cigar-0.9.2-schemas.tar.gz",
+      "filename": "cigar-0.9.4-schemas.tar.gz",
       "contract": "packaging/contracts/schemas-archive.v1.json",
       "include": ["LICENSE", "NOTICE", "schemas/**", "packaging/licenses/**", "packaging/schemas/**"]
     },
     {
       "id": "conformance",
-      "filename": "cigar-0.9.2-conformance.tar.gz",
+      "filename": "cigar-0.9.4-conformance.tar.gz",
       "contract": "packaging/contracts/conformance-archive.v1.json",
       "include": ["LICENSE", "NOTICE", "conformance/**", "schemas/vectors/**", "packaging/licenses/**"]
     },
     {
       "id": "benchmarks",
-      "filename": "cigar-0.9.2-benchmarks.tar.gz",
+      "filename": "cigar-0.9.4-benchmarks.tar.gz",
       "contract": "packaging/contracts/benchmark-archive.v1.json",
       "include": ["LICENSE", "NOTICE", "baselines/**", "benches/**", "packaging/licenses/**"]
     },
     {
       "id": "licenses",
-      "filename": "cigar-0.9.2-licenses.tar.gz",
+      "filename": "cigar-0.9.4-licenses.tar.gz",
       "contract": "packaging/contracts/license-archive.v1.json",
       "include": ["LICENSE", "NOTICE", "SECURITY.md", "packaging/licenses/**"]
     }

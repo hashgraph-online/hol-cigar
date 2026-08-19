@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/tool-result-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "action_id", "status", "content", "content_sha256", "content_bytes", "reason"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-tool-result.v1"},
+    "action_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "status": {"enum": ["passed", "failed", "denied"]},
+    "content": {"oneOf": [{"type": "null"}, {"$ref": "common-v1.schema.json#/$defs/longText"}]},
+    "content_sha256": {"$ref": "common-v1.schema.json#/$defs/sha256"},
+    "content_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+    "reason": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"}
+  }
+}

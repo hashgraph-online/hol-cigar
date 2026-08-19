@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/honey-0.9.4-comparator-baselines.v1.schema.json",
+  "title": "CIGAR Honey 0.9.4 immutable comparator baselines",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "schema_binding",
+    "verifier_binding",
+    "candidate_policy",
+    "harness_binding",
+    "treatments"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "cigar.honey-0.9.4-comparator-baselines.v1"
+    },
+    "manifest_id": {
+      "const": "cigar.honey.0.9.4.three-way-comparators.v1"
+    },
+    "schema_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "packaging/honey/schemas/honey-0.9.4-comparator-baselines.v1.schema.json"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "verifier_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "baselines/cigarbench/verify_honey_094_baselines.py"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_version",
+        "candidate_source_state",
+        "forbid_comparator_source_reuse",
+        "forbidden_commits",
+        "forbidden_trees"
+      ],
+      "properties": {
+        "candidate_version": {"const": "0.9.4"},
+        "candidate_source_state": {"const": "unbound-until-candidate-freeze"},
+        "forbid_comparator_source_reuse": {"const": true},
+        "forbidden_commits": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gitObject"}
+        },
+        "forbidden_trees": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gitObject"}
+        }
+      },
+      "$comment": "The reference validator enforces the relational rule that a supplied 0.9.4 candidate commit/tree is absent from both forbidden inventories."
+    },
+    "harness_binding": {"$ref": "#/$defs/harnessBinding"},
+    "treatments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "honey-0.9.2-balanced-v1",
+        "honey-0.9.3-balanced-v3"
+      ],
+      "properties": {
+        "honey-0.9.2-balanced-v1": {
+          "allOf": [
+            {"$ref": "#/$defs/treatment"},
+            {
+              "properties": {
+                "treatment_id": {"const": "honey-0.9.2-balanced-v1"},
+                "version": {"const": "0.9.2"},
+                "source": {
+                  "properties": {
+                    "commit": {"const": "35538959bce7497311906e4d370334a87abd362b"},
+                    "tree": {"const": "1157c5fb32b7faed65a8db5ae1e44505636b872f"},
+                    "treatment_id": {"const": "honey-0.9.2-balanced-v1"},
+                    "version": {"const": "0.9.2"},
+                    "profile": {
+                      "properties": {
+                        "selection_profile_id": {"const": "balanced_v1"},
+                        "retrieval_profile_id": {"const": "cigar.retrieval-profile.balanced.v1"},
+                        "retrieval_profile_digest": {"const": "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "honey-0.9.3-balanced-v3": {
+          "allOf": [
+            {"$ref": "#/$defs/treatment"},
+            {
+              "properties": {
+                "treatment_id": {"const": "honey-0.9.3-balanced-v3"},
+                "version": {"const": "0.9.3"},
+                "source": {
+                  "properties": {
+                    "commit": {"const": "a049fbc8ed81c9adc6b1a066ca053c5befc2578a"},
+                    "tree": {"const": "7179f2d0b78c8af314aebc8c86d62a0b6067e6ec"},
+                    "treatment_id": {"const": "honey-0.9.3-balanced-v3"},
+                    "version": {"const": "0.9.3"},
+                    "profile": {
+                      "properties": {
+                        "selection_profile_id": {"const": "balanced_v3"},
+                        "retrieval_profile_id": {"const": "cigar.retrieval-profile.balanced.v2-candidate.2"},
+                        "retrieval_profile_digest": {"const": "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "multihashSha256": {
+      "type": "string",
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "gitObject": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "safePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "profileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_profile_id",
+        "retrieval_profile_id",
+        "retrieval_profile_digest",
+        "retrieval_authority_path",
+        "retrieval_authority_sha256",
+        "release_profile_path",
+        "release_profile_sha256"
+      ],
+      "properties": {
+        "selection_profile_id": {"type": "string", "minLength": 1},
+        "retrieval_profile_id": {"type": "string", "minLength": 1},
+        "retrieval_profile_digest": {"$ref": "#/$defs/multihashSha256"},
+        "retrieval_authority_path": {"$ref": "#/$defs/safePath"},
+        "retrieval_authority_sha256": {"$ref": "#/$defs/sha256"},
+        "release_profile_path": {"$ref": "#/$defs/safePath"},
+        "release_profile_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "goldenBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compiler_authority_path",
+        "compiler_authority_sha256",
+        "materializer_digests"
+      ],
+      "properties": {
+        "compiler_authority_path": {"$ref": "#/$defs/safePath"},
+        "compiler_authority_sha256": {"$ref": "#/$defs/sha256"},
+        "materializer_digests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claude-prompt", "fact-set", "json", "markdown", "mcp-resource"],
+          "properties": {
+            "claude-prompt": {"$ref": "#/$defs/multihashSha256"},
+            "fact-set": {"$ref": "#/$defs/multihashSha256"},
+            "json": {"$ref": "#/$defs/multihashSha256"},
+            "markdown": {"$ref": "#/$defs/multihashSha256"},
+            "mcp-resource": {"$ref": "#/$defs/multihashSha256"}
+          }
+        }
+      }
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "revision_kind",
+        "worktree_dirty",
+        "worktree_status",
+        "source_file_count",
+        "source_files",
+        "source_set_sha256",
+        "cargo_lock",
+        "profile",
+        "goldens",
+        "treatment_id",
+        "version"
+      ],
+      "properties": {
+        "commit": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "revision_kind": {"const": "commit"},
+        "worktree_dirty": {"const": false},
+        "worktree_status": {"type": "array", "maxItems": 0},
+        "source_file_count": {"type": "integer", "minimum": 1, "maximum": 256},
+        "source_files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {"$ref": "#/$defs/fileBinding"}
+        },
+        "source_set_sha256": {"$ref": "#/$defs/sha256"},
+        "cargo_lock": {"$ref": "#/$defs/fileBinding"},
+        "profile": {"$ref": "#/$defs/profileBinding"},
+        "goldens": {"$ref": "#/$defs/goldenBinding"},
+        "treatment_id": {"type": "string", "minLength": 1},
+        "version": {"enum": ["0.9.2", "0.9.3"]}
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "bytes", "mode", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "mode": {"const": "0755"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binaryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_revision",
+        "context_abi",
+        "protocol_min",
+        "protocol_max",
+        "build_profile",
+        "enabled_features"
+      ],
+      "properties": {
+        "version": {"enum": ["0.9.2", "0.9.3"]},
+        "source_revision": {"$ref": "#/$defs/gitObject"},
+        "context_abi": {"const": "cigar.context.v1"},
+        "protocol_min": {"const": "1.0"},
+        "protocol_max": {"const": "1.x"},
+        "build_profile": {"const": "release"},
+        "enabled_features": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "installedBinaryBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "binary_id", "bytes", "identity", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "binary_id": {"enum": ["cigar", "cigard"]},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "identity": {"$ref": "#/$defs/binaryIdentity"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binaryMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cigar", "cigard"],
+      "properties": {
+        "cigar": {"$ref": "#/$defs/artifactBinding"},
+        "cigard": {"$ref": "#/$defs/artifactBinding"}
+      }
+    },
+    "installedBinaryMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cigar", "cigard"],
+      "properties": {
+        "cigar": {"$ref": "#/$defs/installedBinaryBinding"},
+        "cigard": {"$ref": "#/$defs/installedBinaryBinding"}
+      }
+    },
+    "hieroExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hiero_source_set_sha256", "runner_binary_sha256", "installed_runner"],
+      "properties": {
+        "hiero_source_set_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_binary_sha256": {"$ref": "#/$defs/sha256"},
+        "installed_runner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["binary_id", "bytes", "mode", "sha256", "source_access_test"],
+          "properties": {
+            "binary_id": {"const": "hiero-cigar-bench-runner"},
+            "bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+            "mode": {"const": "0755"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "source_access_test": {"const": "pass-with-bound-source-root-denied"}
+          }
+        }
+      }
+    },
+    "treatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "treatment_id",
+        "version",
+        "source",
+        "artifacts",
+        "artifact_set_sha256",
+        "installed_binaries",
+        "installed_binary_set_sha256",
+        "hiero_execution",
+        "qualification_status"
+      ],
+      "properties": {
+        "treatment_id": {"type": "string", "minLength": 1},
+        "version": {"enum": ["0.9.2", "0.9.3"]},
+        "source": {"$ref": "#/$defs/sourceBinding"},
+        "artifacts": {"$ref": "#/$defs/binaryMap"},
+        "artifact_set_sha256": {"$ref": "#/$defs/sha256"},
+        "installed_binaries": {"$ref": "#/$defs/installedBinaryMap"},
+        "installed_binary_set_sha256": {"$ref": "#/$defs/sha256"},
+        "hiero_execution": {"$ref": "#/$defs/hieroExecution"},
+        "qualification_status": {"const": "pass"}
+      }
+    },
+    "evidenceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_name", "bytes", "sha256"],
+      "properties": {
+        "artifact_name": {"type": "string", "minLength": 1, "maxLength": 255},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "harnessBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_template_sha256",
+        "orchestrator_sha256",
+        "runner_source_sha256",
+        "raw_evidence",
+        "report",
+        "workflow_count",
+        "trials_per_workflow",
+        "warmups_per_workflow"
+      ],
+      "properties": {
+        "manifest_template_sha256": {"$ref": "#/$defs/sha256"},
+        "orchestrator_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_source_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_evidence": {"$ref": "#/$defs/evidenceArtifact"},
+        "report": {"$ref": "#/$defs/evidenceArtifact"},
+        "workflow_count": {"const": 5},
+        "trials_per_workflow": {"const": 20},
+        "warmups_per_workflow": {"const": 5}
+      }
+    }
+  }
+}

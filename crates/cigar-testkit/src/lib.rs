@@ -1166,6 +1166,98 @@ fn special_non_record_valid(fixture: &ProtocolFixture) -> bool {
     }
 }
 
+/// Public transport boundary selected for a deterministic workflow trial.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowTransportMode {
+    /// Listener-free public embedded API boundary.
+    Embedded,
+    /// Public local sidecar process/API boundary.
+    LocalSidecar,
+}
+
+impl WorkflowTransportMode {
+    /// Stable fixture spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Embedded => "embedded",
+            Self::LocalSidecar => "local_sidecar",
+        }
+    }
+}
+
+/// One closed negative-case class required in every actual-workflow trial.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowNegativeCase {
+    /// Retrieved data contains an instruction-like prompt injection.
+    RetrievedPromptInjection,
+    /// A model result names evidence outside the citation manifest.
+    ForgedCitation,
+    /// An effect attempts to reuse a non-current context bundle.
+    StaleBundle,
+    /// A selected source is revoked before use.
+    RevokedSource,
+    /// An alias resolves outside the authorized project partition.
+    CrossProjectAlias,
+    /// A tool result digest does not match its sealed observation.
+    PoisonedToolOutput,
+    /// A replay substitutes any exact cycle identity.
+    ReplaySubstitution,
+    /// The deterministic provider crosses its registered deadline.
+    ProviderTimeout,
+    /// Effect dispatch returns without a provable terminal outcome.
+    AmbiguousEffectResult,
+}
+
+/// Complete ordered negative-case matrix for workflow qualification.
+pub const WORKFLOW_NEGATIVE_CASES: [WorkflowNegativeCase; 9] = [
+    WorkflowNegativeCase::RetrievedPromptInjection,
+    WorkflowNegativeCase::ForgedCitation,
+    WorkflowNegativeCase::StaleBundle,
+    WorkflowNegativeCase::RevokedSource,
+    WorkflowNegativeCase::CrossProjectAlias,
+    WorkflowNegativeCase::PoisonedToolOutput,
+    WorkflowNegativeCase::ReplaySubstitution,
+    WorkflowNegativeCase::ProviderTimeout,
+    WorkflowNegativeCase::AmbiguousEffectResult,
+];
+
+/// Deterministic coordinates that vary one paired workflow trial.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WorkflowTrialSchedule {
+    /// Embedded or local-sidecar public boundary.
+    pub mode: WorkflowTransportMode,
+    /// Selected restart-point ordinal.
+    pub restart_point: usize,
+    /// Selected single-axis mutation ordinal.
+    pub mutation_axis: usize,
+}
+
+/// Returns the registered trial-modulo schedule without randomness or global state.
+///
+/// The workflow ordinal rotates restart injection while preserving exact pairing between
+/// treatments. Five mutation axes are always available. Invalid or unbounded inputs fail closed.
+#[must_use]
+pub fn workflow_trial_schedule(
+    workflow_ordinal: usize,
+    trial: usize,
+    restart_point_count: usize,
+) -> Option<WorkflowTrialSchedule> {
+    if workflow_ordinal >= 5 || trial >= 10_000 || !(3..=16).contains(&restart_point_count) {
+        return None;
+    }
+    let coordinate = workflow_ordinal.checked_add(trial)?;
+    Some(WorkflowTrialSchedule {
+        mode: if trial.is_multiple_of(2) {
+            WorkflowTransportMode::Embedded
+        } else {
+            WorkflowTransportMode::LocalSidecar
+        },
+        restart_point: coordinate % restart_point_count,
+        mutation_axis: coordinate % 5,
+    })
+}
+
 /// Renders the checked-in portable fixture manifest with stable ordering.
 pub fn render_protocol_fixture_manifest() -> Result<String, serde_json::Error> {
     #[derive(Serialize)]
@@ -1187,7 +1279,10 @@ pub fn render_protocol_fixture_manifest() -> Result<String, serde_json::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{deterministic_protocol_fixture, fixture_actual_valid, protocol_fixtures};
+    use super::{
+        WORKFLOW_NEGATIVE_CASES, WorkflowTransportMode, deterministic_protocol_fixture,
+        fixture_actual_valid, protocol_fixtures, workflow_trial_schedule,
+    };
     use std::collections::BTreeSet;
 
     #[test]
@@ -1305,5 +1400,34 @@ mod tests {
                 "required inventory type {target} lacks a fixture constructor"
             );
         }
+    }
+
+    #[test]
+    fn workflow_schedule_covers_transports_restarts_and_mutations() {
+        let schedules = (0..20)
+            .filter_map(|trial| workflow_trial_schedule(0, trial, 3))
+            .collect::<Vec<_>>();
+        assert_eq!(schedules.len(), 20);
+        assert!(
+            schedules
+                .iter()
+                .any(|schedule| schedule.mode == WorkflowTransportMode::Embedded)
+        );
+        assert!(
+            schedules
+                .iter()
+                .any(|schedule| schedule.mode == WorkflowTransportMode::LocalSidecar)
+        );
+        assert_eq!(
+            schedules
+                .iter()
+                .map(|schedule| schedule.mutation_axis)
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([0, 1, 2, 3, 4])
+        );
+        assert_eq!(WORKFLOW_NEGATIVE_CASES.len(), 9);
+        assert!(workflow_trial_schedule(5, 0, 3).is_none());
+        assert!(workflow_trial_schedule(0, 10_000, 3).is_none());
+        assert!(workflow_trial_schedule(0, 0, 2).is_none());
     }
 }
