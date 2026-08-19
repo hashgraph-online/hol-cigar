@@ -5,10 +5,14 @@ use cigar_canon::{
 use cigar_catalog::{ProjectIdentity, ProjectIdentityInput};
 use cigar_compiler::ConservativeEstimator;
 use cigar_crypto::MemoryKeyProvider;
-use cigar_effects::{EffectCrashPoint, EffectFaultModel};
+use cigar_effects::{EffectCrashPoint, EffectFaultModel, ModelEffectState, RecoveryDisposition};
 use cigar_policy::CapabilityAuthority;
 use cigar_protocol::{
     Capability, CapabilityGrant, ExtensionMap, RecordId, SchemaVersion, UtcTimestamp, Validate,
+};
+use cigar_store::{
+    AccessContext, CancellationToken, InMemoryStore, Repository, SnapshotSelection, StoreErrorCode,
+    StoreRevision,
 };
 use proptest::collection::{btree_map, btree_set, vec};
 use proptest::prelude::*;
@@ -130,17 +134,73 @@ proptest! {
     }
 
     #[test]
-    fn every_effect_fault_schedule_preserves_effect_safety(
-        point_index in any::<usize>(),
-        seed in any::<u64>(),
+    fn every_effect_fault_transition_recovers_to_its_exact_contract(seed in any::<u64>()) {
+        for point in EffectCrashPoint::ALL {
+            let snapshot = EffectFaultModel::inject(point, seed);
+            let encoded = snapshot.to_json().expect("snapshot serializes");
+            let decoded = cigar_effects::FaultSnapshot::from_json(&encoded)
+                .expect("snapshot decodes");
+            prop_assert_eq!(decoded.point(), point);
+            prop_assert_eq!(decoded.seed(), seed);
+            prop_assert!(decoded.recover().verify().is_ok());
+        }
+    }
+
+    #[test]
+    fn two_worker_effect_fence_is_exact_once_for_every_seed(seed in any::<u64>()) {
+        let run = EffectFaultModel::inject(
+            EffectCrashPoint::TwoWorkersClaimOneOutboxItem,
+            seed,
+        ).recover();
+        prop_assert!(run.verify().is_ok());
+        prop_assert_eq!(run.state(), ModelEffectState::Succeeded);
+        prop_assert_eq!(run.disposition(), RecoveryDisposition::FenceLosingWorker);
+        prop_assert_eq!(run.connector_calls(), 1);
+        prop_assert_eq!(run.remote_commit_count(), 1);
+        prop_assert_eq!(run.accepted_receipts(), 1);
+    }
+
+    #[test]
+    fn cancellation_is_sticky_shared_and_prevents_repository_access(
+        clone_count in 1_usize..64,
+        cancelling_clone in any::<usize>(),
+        repeated_cancels in 0_usize..64,
     ) {
-        let point = EffectCrashPoint::ALL[point_index % EffectCrashPoint::ALL.len()];
-        let snapshot = EffectFaultModel::inject(point, seed);
-        let encoded = snapshot.to_json().expect("snapshot serializes");
-        let decoded = cigar_effects::FaultSnapshot::from_json(&encoded).expect("snapshot decodes");
-        prop_assert_eq!(decoded.point(), point);
-        prop_assert_eq!(decoded.seed(), seed);
-        prop_assert!(decoded.recover().verify().is_ok());
+        let store = InMemoryStore::default();
+        let access = AccessContext::new(record(30), "property-cancellation")
+            .expect("fixed access context");
+        let token = CancellationToken::default();
+        let clones = (0..clone_count).map(|_| token.clone()).collect::<Vec<_>>();
+        let before = store.begin_read(
+            access.clone(),
+            SnapshotSelection::Latest,
+            token.clone(),
+        );
+        prop_assert!(before.is_ok());
+        drop(before);
+
+        clones[cancelling_clone % clones.len()].cancel();
+        for _ in 0..repeated_cancels {
+            token.cancel();
+        }
+        prop_assert!(token.is_cancelled());
+        prop_assert!(clones.iter().all(CancellationToken::is_cancelled));
+
+        let read_code = store
+            .begin_read(
+                access.clone(),
+                SnapshotSelection::Latest,
+                token.clone(),
+            )
+            .err()
+            .map(|error| error.code());
+        let write_code = store
+            .begin_write(access, StoreRevision(0), token)
+            .err()
+            .map(|error| error.code());
+        prop_assert_eq!(read_code, Some(StoreErrorCode::Cancelled));
+        prop_assert_eq!(write_code, Some(StoreErrorCode::Cancelled));
+        prop_assert_eq!(store.revision().expect("store revision remains readable"), StoreRevision(0));
     }
 
     #[test]

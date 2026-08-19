@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import io
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -50,7 +51,7 @@ from signatures import sign, verify as verify_signature
 from verify_package import verify as verify_package
 
 
-PRODUCT_VERSION = "0.9.2"
+PRODUCT_VERSION = "0.9.4"
 PYTHON_DISTRIBUTION_VERSION = python_distribution_version(PRODUCT_VERSION)
 
 
@@ -167,16 +168,40 @@ def _run(
     environment: dict[str, str] | None = None,
     expected: int = 0,
 ) -> subprocess.CompletedProcess[str]:
-    raw = run_bounded(
-        arguments,
-        cwd=root,
-        env=environment,
-        timeout=600,
-        max_stdout=32 * 1024 * 1024,
-        max_stderr=32 * 1024 * 1024,
-    )
+    command_label = Path(arguments[1] if len(arguments) > 1 else arguments[0]).name
+    source_before = _clean_source_snapshot(root)
+    try:
+        raw = run_bounded(
+            arguments,
+            cwd=root,
+            env=environment,
+            timeout=600,
+            max_stdout=32 * 1024 * 1024,
+            max_stderr=32 * 1024 * 1024,
+        )
+    except Exception as error:
+        try:
+            source_after = _clean_source_snapshot(root)
+        except ReleaseError as source_error:
+            raise ReleaseError(
+                f"{command_label} left the qualification source unclean or unbound"
+            ) from source_error
+        if source_after != source_before:
+            raise ReleaseError(
+                f"{command_label} changed the qualification source identity"
+            ) from error
+        raise
+    try:
+        source_after = _clean_source_snapshot(root)
+    except ReleaseError as source_error:
+        raise ReleaseError(
+            f"{command_label} left the qualification source unclean or unbound"
+        ) from source_error
+    if source_after != source_before:
+        raise ReleaseError(
+            f"{command_label} changed the qualification source identity"
+        )
     if raw.returncode != expected:
-        command_label = Path(arguments[1] if len(arguments) > 1 else arguments[0]).name
         raise ReleaseError(
             f"{command_label}: {process_failure_summary(raw, 'local qualification command')}"
         )
@@ -187,6 +212,43 @@ def _run(
         raw.stderr.decode("utf-8", errors="replace"),
     )
     return result
+
+
+def _git_output(root: Path, *arguments: str) -> bytes:
+    result = run_bounded(
+        ["git", *arguments],
+        cwd=root,
+        timeout=60,
+        max_stdout=32 * 1024 * 1024,
+        max_stderr=1024 * 1024,
+    )
+    if result.returncode != 0:
+        raise ReleaseError(
+            process_failure_summary(result, "qualification Git identity command")
+        )
+    return result.stdout
+
+
+def _clean_source_snapshot(root: Path) -> tuple[str, str]:
+    revision = _git_output(root, "rev-parse", "--verify", "HEAD").strip().decode(
+        "ascii", errors="strict"
+    )
+    tree = _git_output(root, "rev-parse", "--verify", "HEAD^{tree}").strip().decode(
+        "ascii", errors="strict"
+    )
+    object_id = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+    if object_id.fullmatch(revision) is None or object_id.fullmatch(tree) is None:
+        raise ReleaseError("qualification Git source identity is malformed")
+    status = _git_output(
+        root,
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+    )
+    if status:
+        raise ReleaseError("qualification requires a clean committed source tree")
+    return revision, tree
 
 
 def _qualification_environment(epoch: int) -> dict[str, str]:

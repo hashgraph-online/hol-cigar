@@ -39,24 +39,26 @@ class FuzzMetricPolicyTests(unittest.TestCase):
             "category": "fuzz",
             "metrics": {
                 **{name: 604_800 for name in cls.target_names},
-                "fuzz.total_seconds": 8_467_200,
+                "fuzz.total_seconds": 11_491_200,
                 "fuzz.unresolved_defect_count": 0,
             },
         }
 
-    def test_policy_names_exact_fourteen_targets_and_reconciled_aggregate(self) -> None:
-        self.assertEqual(len(self.target_names), 14)
+    def test_policy_names_exact_nineteen_targets_and_reconciled_aggregate(self) -> None:
+        self.assertEqual(len(self.target_names), 19)
         observed = _enforce_metric_gates(
             [deepcopy(self.passing_receipt)], self.requirements
         )
-        self.assertEqual(observed["fuzz:fuzz.total_seconds"], 8_467_200)
+        self.assertEqual(observed["fuzz:fuzz.total_seconds"], 11_491_200)
         self.assertEqual(
             {name.removeprefix("fuzz.target_seconds.") for name in self.target_names},
             {
                 "builtin_source_parsers",
                 "canonical_json_cbor",
+                "compiler_candidate_packing",
                 "contract_compiler_candidates",
                 "delta_roundtrip",
+                "dependency_closure",
                 "effect_journal_recovery",
                 "extension_frames",
                 "handoff_accept_merge",
@@ -66,14 +68,17 @@ class FuzzMetricPolicyTests(unittest.TestCase):
                 "mcp_messages",
                 "policy_parse_evaluate",
                 "public_record_decoders",
+                "ranking_evidence_decode_validate",
                 "replay_envelopes",
+                "retrieval_plan_result_reduction",
+                "workflow_session_records",
             },
         )
 
     def test_aggregate_only_or_duplicate_summary_cannot_pass(self) -> None:
         aggregate_only = deepcopy(self.passing_receipt)
         aggregate_only["metrics"] = {
-            "fuzz.total_seconds": 8_467_200,
+            "fuzz.total_seconds": 11_491_200,
             "fuzz.unresolved_defect_count": 0,
         }
         with self.assertRaisesRegex(ReleaseError, "target inventory"):
@@ -114,7 +119,7 @@ class FuzzMetricPolicyTests(unittest.TestCase):
     def test_fractional_or_unexpected_target_metrics_fail_closed(self) -> None:
         fractional = deepcopy(self.passing_receipt)
         fractional["metrics"][self.target_names[0]] = 604_800.5
-        fractional["metrics"]["fuzz.total_seconds"] = 8_467_200.5
+        fractional["metrics"]["fuzz.total_seconds"] = 11_491_200.5
         with self.assertRaisesRegex(ReleaseError, "nonnegative integer"):
             _enforce_metric_gates([fractional], self.requirements)
 

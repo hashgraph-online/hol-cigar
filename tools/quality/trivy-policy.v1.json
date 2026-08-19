@@ -68,7 +68,7 @@
     "source_archive": {
       "artifact_id": "source",
       "builder_path": "scripts/release/build_archives.py",
-      "builder_sha256": "0e912b97fae173a6e40e33101c033b8dc94e1c6b5ad397dc39b7cd8fe88ba597",
+      "builder_sha256": "5fb695841fb3d5a70d6e261e0dca3a12883ee890d6e07ffa90c778bceda5f816",
       "manifest_path": "packaging/local-archives.v1.json"
     },
     "stale_lock_path": "vendor/aws-creds-0.39.1/Cargo.lock"

@@ -339,12 +339,12 @@ qualification result is claimed. The representative `cigar-canon` diagnostic
 sets none of these release metrics.
 
 `fuzz_accumulation.py` is the release-campaign ledger verifier. It accepts only
-signed worker receipts for the exact 14-target ASan policy, publishes immutable
+signed worker receipts for the exact 19-target ASan policy, publishes immutable
 hash-chained create-new entries, checks worker trust/time windows, rejects
 overlap/replay/mixed candidates/stale binaries/corrupt corpus lineage, resets an
 affected target after a defect, and emits exact per-target plus aggregate
 metrics. It does not launch a fuzzer. Each target must independently accumulate
-604,800 clean CPU-seconds and the reconciled aggregate must be 8,467,200 seconds.
+604,800 clean CPU-seconds and the reconciled aggregate must be 11,491,200 seconds.
 Each qualifying libFuzzer target has a deterministic wall bound equal to its
 canonical campaign duration plus a fixed 900-second cold instrumented-build
 allowance. The bound is recorded in every process receipt and `verify-smoke`

@@ -152,11 +152,11 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "0.9.2")
+        self.assertEqual(configuration.version, "0.9.4")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.filename,
-            "cigar-claude-code-0.9.2.tar.gz",
+            "cigar-claude-code-0.9.4.tar.gz",
         )
         self.assertEqual(
             set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
@@ -187,7 +187,7 @@ class ClaudeCodePluginBuilderTests(unittest.TestCase):
         first = self.produce(first_root)
         second = self.produce(second_root)
 
-        filename = "cigar-claude-code-0.9.2.tar.gz"
+        filename = "cigar-claude-code-0.9.4.tar.gz"
         first_archive = first_root / filename
         second_archive = second_root / filename
         self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())

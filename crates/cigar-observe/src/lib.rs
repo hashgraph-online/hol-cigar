@@ -188,6 +188,19 @@ pub const CACHE_REASON_VALUES: &[&str] = &[
     "not_configured",
 ];
 const CACHE_TOKEN_KINDS: &[&str] = &["read", "write"];
+/// Closed workflow context-cycle terminal outcomes.
+pub const WORKFLOW_CONTEXT_OUTCOME_VALUES: &[&str] =
+    &["checkpointed", "quarantined", "replay_verified"];
+/// Closed workflow context selection paths.
+pub const WORKFLOW_CONTEXT_SELECTION_VALUES: &[&str] = &["full", "delta", "forced_full"];
+/// Closed semantic delta block outcomes.
+pub const WORKFLOW_DELTA_BLOCK_VALUES: &[&str] = &["reused", "changed"];
+/// Closed crash-recovery boundary classes.
+pub const WORKFLOW_RECOVERY_BOUNDARY_VALUES: &[&str] = &["context", "provider", "effect", "replay"];
+/// Closed exact replay-dimension statuses.
+pub const WORKFLOW_REPLAY_DIMENSION_STATUS_VALUES: &[&str] = &["equal", "different"];
+/// Closed workflow replay-verification outcomes.
+pub const WORKFLOW_REPLAY_VERIFICATION_VALUES: &[&str] = &["verified", "mismatched", "invalid"];
 const HANDOFF_OUTCOMES: &[&str] = &["accepted", "rejected", "expired"];
 const RECONCILIATION_OUTCOMES: &[&str] = &["resolved", "unresolved", "failed"];
 const DATABASE_STATES: &[&str] = &["active", "idle", "maximum"];
@@ -338,6 +351,36 @@ pub const DAEMON_METRICS: &[MetricDefinition] = &[
         "cigar_context_cache_tokens_total",
         "Provider cache-read and cache-write tokens.",
         label("kind", CACHE_TOKEN_KINDS),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_cycles_total",
+        "Durable workflow context cycles by closed terminal outcome.",
+        label("outcome", WORKFLOW_CONTEXT_OUTCOME_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_selections_total",
+        "Workflow context selections by full, delta, or forced-full path.",
+        label("kind", WORKFLOW_CONTEXT_SELECTION_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_delta_blocks_total",
+        "Semantic delta blocks classified as exactly reused or changed.",
+        label("kind", WORKFLOW_DELTA_BLOCK_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_recoveries_total",
+        "Crash recoveries by closed workflow boundary class.",
+        label("boundary", WORKFLOW_RECOVERY_BOUNDARY_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_replay_dimensions_total",
+        "Exact workflow replay dimensions by equality status.",
+        label("status", WORKFLOW_REPLAY_DIMENSION_STATUS_VALUES),
+    ),
+    MetricDefinition::counter(
+        "cigar_workflow_context_replay_verifications_total",
+        "Workflow replay verification attempts by closed outcome.",
+        label("outcome", WORKFLOW_REPLAY_VERIFICATION_VALUES),
     ),
     MetricDefinition::counter(
         "cigar_handoff_acceptance_total",
@@ -561,11 +604,11 @@ mod tests {
 
     #[test]
     fn metric_catalog_is_unique_bounded_and_content_free() {
-        assert_eq!(DAEMON_METRICS.len(), 65);
-        assert_eq!(maximum_daemon_series(), 256);
+        assert_eq!(DAEMON_METRICS.len(), 71);
+        assert_eq!(maximum_daemon_series(), 273);
         let names: BTreeSet<_> = DAEMON_METRICS.iter().map(|metric| metric.name).collect();
         assert_eq!(names.len(), DAEMON_METRICS.len());
-        assert!(maximum_daemon_series() <= 256);
+        assert!(maximum_daemon_series() <= 288);
         for definition in DAEMON_METRICS {
             assert!(definition.name.starts_with("cigar_"));
             assert!(

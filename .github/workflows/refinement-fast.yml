@@ -1,0 +1,99 @@
+name: refinement-fast
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-fast-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  refinement-contracts:
+    name: refinement contracts / no secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CIGAR_RUN_AUTHORITY: "diagnostic"
+      CIGAR_NO_PROMOTION: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - name: Verify the root-owned system Python
+        run: |
+          test "$(/usr/bin/python3 -c 'import platform; print(platform.python_version_tuple()[:2])')" = "('3', '12')"
+          resolved_python="$(readlink -f /usr/bin/python3)"
+          test "${resolved_python}" = "/usr/bin/python3.12"
+          test "$(stat --format='%U:%G:%a' "${resolved_python}")" = "root:root:755"
+
+      - name: Audit refinement workflow trust boundaries
+        run: |
+          /usr/bin/python3 tools/refinement/operations.py audit-workflows \
+            --repository "${GITHUB_WORKSPACE}" \
+            --policy "${GITHUB_WORKSPACE}/refinement/operations/workflow-policy-v1.json"
+
+      - name: Run focused controller, schema, adapter, scheduler, and operations tests
+        run: |
+          /usr/bin/python3 -B -m unittest \
+            tools.refinement.tests.test_r01_contracts \
+            tools.refinement.tests.test_r02_controller \
+            tools.refinement.tests.test_r07_proposal \
+            tools.refinement.tests.test_r08_experiment \
+            tools.refinement.tests.test_r10_operations \
+            tools.refinement.tests.test_r11_loop \
+            -v
+
+      - name: Create a content-addressed diagnostic evidence bundle
+        run: |
+          umask 077
+          source_revision="$(git rev-parse --verify HEAD)"
+          source_tree="$(git rev-parse --verify 'HEAD^{tree}')"
+          receipt="${RUNNER_TEMP}/refinement-fast-receipt.json"
+          bundle="${RUNNER_TEMP}/refinement-fast-evidence"
+          policy_id="$(/usr/bin/python3 -c 'import json; print(json.load(open("refinement/operations/limits-v1.json"))["policy_id"])')"
+          /usr/bin/python3 tools/refinement/operations.py receipt \
+            --run-id "pr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --authority diagnostic \
+            --status passed \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            >"${receipt}"
+          chmod 0400 "${receipt}"
+          /usr/bin/python3 tools/refinement/operations.py bundle create \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output-root "${bundle}" \
+            --run-id "pr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --evidence-class diagnostic \
+            --retention-days 14 \
+            --source-revision "${source_revision}" \
+            --source-tree "${source_tree}" \
+            --policy-id "${policy_id}" \
+            --authority diagnostic-only \
+            --attachment "receipt.json=${receipt}"
+          printf 'CIGAR_REFINEMENT_BUNDLE=%s\n' "${bundle}" >>"${GITHUB_ENV}"
+
+      - name: Upload immutable diagnostic evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-fast-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_REFINEMENT_BUNDLE }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 14
+          compression-level: 0
+
+      - name: Assert refinement checks left source clean
+        if: ${{ always() }}
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

@@ -1,0 +1,123 @@
+{
+  "schema_version": "cigar.sdk-workflow-context-session.v1",
+  "maximum_delta_chain_length": 8,
+  "maximum_replay_cycles": 64,
+  "phases": [
+    "new",
+    "plan_created",
+    "target_bundle_loaded",
+    "delta_compiled",
+    "bundle_ready",
+    "materialized",
+    "model_invocation_pending",
+    "model_result_recorded",
+    "effect_prepared",
+    "observation_recorded",
+    "effect_authorization_revalidated",
+    "effect_authorized",
+    "effect_revalidated",
+    "effect_dispatching",
+    "effect_ambiguous",
+    "effect_settled",
+    "checkpointed",
+    "finished",
+    "replay_verified",
+    "quarantined"
+  ],
+  "error_codes": [
+    "invalid_transition",
+    "invalid_event",
+    "identity_mismatch",
+    "invalidated",
+    "limit_exceeded"
+  ],
+  "resume_actions": [
+    { "action": "create_context_plan", "operation_id": "createContextPlan" },
+    { "action": "compile_context_bundle", "operation_id": "compileContextBundle" },
+    { "action": "compile_context_delta", "operation_id": "compileContextDelta" },
+    { "action": "apply_context_delta", "operation_id": null },
+    { "action": "materialize_context_bundle", "operation_id": "materializeContextBundle" },
+    { "action": "begin_model_invocation", "operation_id": null },
+    { "action": "resume_model_invocation", "operation_id": null },
+    { "action": "prepare_effect_or_ingest_observation", "operation_id": null },
+    { "action": "ingest_observation", "operation_id": "ingestCatalog" },
+    { "action": "authorize_effect_or_checkpoint", "operation_id": "authorizeEffect" },
+    { "action": "revalidate_context_bundle", "operation_id": "revalidateContextBundle" },
+    { "action": "dispatch_effect", "operation_id": "dispatchEffect" },
+    { "action": "observe_effect", "operation_id": "getEffectStatus" },
+    { "action": "reconcile_effect", "operation_id": "reconcileEffect" },
+    { "action": "checkpoint", "operation_id": null },
+    { "action": "materialize_or_finish", "operation_id": null },
+    { "action": "replay", "operation_id": "createReplay" },
+    { "action": "complete", "operation_id": null }
+  ],
+  "events": [
+    "plan_created",
+    "bundle_compiled",
+    "delta_compiled",
+    "delta_applied",
+    "materialized",
+    "model_invocation_started",
+    "model_result_recorded",
+    "effect_prepared",
+    "observation_recorded",
+    "effect_authorized",
+    "effect_revalidated",
+    "effect_dispatched",
+    "effect_observed",
+    "cycle_checkpointed",
+    "finished",
+    "replay_verified",
+    "context_quarantined"
+  ],
+  "quarantine_reasons": [
+    "cancelled",
+    "revoked",
+    "invalidated"
+  ],
+  "retry_fences": {
+    "provider_invocation": "durable_invocation_and_idempotency_key_digest_required_before_call",
+    "effect_retry": "durable_reconciliation_count_must_advance_before_authorized_for_retry"
+  },
+  "replay_comparison_dimensions": [
+    "bundle_delta_selection",
+    "materialization",
+    "model_result_identity",
+    "tool_effect_decisions",
+    "outcome"
+  ],
+  "replay_verification": "all_exact_identity_dimensions_must_equal",
+  "telemetry": {
+    "maximum_added_series": 17,
+    "label_policy": "single_closed_static_dimension_no_identifiers_or_content",
+    "families": [
+      "cigar_workflow_context_cycles_total",
+      "cigar_workflow_context_selections_total",
+      "cigar_workflow_context_delta_blocks_total",
+      "cigar_workflow_context_recoveries_total",
+      "cigar_workflow_context_replay_dimensions_total",
+      "cigar_workflow_context_replay_verifications_total"
+    ]
+  },
+  "effect_states": {
+    "prepared": "prepared",
+    "authorized": "authorized",
+    "dispatching": "dispatching",
+    "ambiguous": "unknown",
+    "retry": "authorized_for_retry",
+    "terminal": [
+      "succeeded",
+      "failed",
+      "manual_resolution",
+      "rejected",
+      "expired",
+      "cancelled",
+      "compensated",
+      "compensation_failed"
+    ]
+  },
+  "identity_formats": {
+    "semantic": "sha2-256-multihash-lowercase-hex",
+    "record": "uuid-v7-lowercase"
+  }
+}

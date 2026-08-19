@@ -75,7 +75,7 @@ FILE_POLICY_IDS = [
     "immutable_secret_handle",
 ]
 EXPECTED_AUTHORITY_SHA256 = (
-    "fce749b1ae72ba663a7c619d3c1db1f598b338a9c5a43260d0ae942166d3dad3"
+    "a899c3312ebdfad8d29ecf7a52c63bf8bd3bcf92ee478d425364aec46bdde94d"
 )
 
 

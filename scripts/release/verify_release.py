@@ -715,8 +715,10 @@ def _validate_sboms(
     binding = load_json(binding_path)
     if (
         not isinstance(binding, dict)
-        or set(binding) != {"schema_version", "artifacts", "component_count"}
+        or set(binding)
+        != {"schema_version", "artifacts", "component_count", "component_scope"}
         or binding.get("schema_version") != "cigar.sbom-artifacts.v1"
+        or binding.get("component_scope") != "repository-locked-dependency-union"
     ):
         raise ReleaseError("SBOM artifact binding has an unexpected shape")
     records = binding.get("artifacts")
@@ -785,7 +787,12 @@ def _validate_sboms(
         if isinstance(annotation, dict)
         and annotation.get("annotator") == "Tool: cigar-release-sbom-v1"
     ]
-    if binding_comments != [f"CIGAR artifact binding: {artifact_binding}"]:
+    component_scope = binding["component_scope"]
+    expected_comment = (
+        f"CIGAR component scope: {component_scope}; this is not per-artifact "
+        f"reachability evidence. CIGAR artifact binding: {artifact_binding}"
+    )
+    if binding_comments != [expected_comment]:
         raise ReleaseError("SPDX document does not bind the exact release artifact set")
     packages = spdx.get("packages")
     if not isinstance(packages, list) or len(packages) != count:
@@ -839,11 +846,17 @@ def _validate_sboms(
         for value in root_properties or []
         if isinstance(value, dict) and value.get("name") == "cigar:artifacts"
     ]
+    scope_properties = [
+        value.get("value")
+        for value in root_properties or []
+        if isinstance(value, dict) and value.get("name") == "cigar:component-scope"
+    ]
     if (
         not isinstance(cdx_root, dict)
         or cdx_root.get("name") != "cigar"
         or cdx_root.get("version") != product_version
         or artifact_properties != [artifact_binding]
+        or scope_properties != [component_scope]
     ):
         raise ReleaseError(
             "CycloneDX document does not bind the exact release artifact set and version"

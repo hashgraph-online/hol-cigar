@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/opportunities-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_id", "signals"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-opportunities.v1"},
+    "registry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "signals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {"$ref": "opportunity-signal-v1.schema.json"}
+    }
+  }
+}

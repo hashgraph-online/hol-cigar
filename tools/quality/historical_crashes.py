@@ -45,6 +45,7 @@ HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_ID = re.compile(r"^[a-z][a-z0-9-]{2,95}$")
 SAFE_TARGET = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
+EXPECTED_CAMPAIGN_TARGET_COUNT = 19
 EXPECTED_ARTIFACT_PREFIXES = (
     "crash-",
     "leak-",
@@ -406,8 +407,8 @@ def _corpus_inventory(
     if (
         campaign.get("schema_version") != "cigar.fuzz-campaign.v1"
         or not isinstance(targets, list)
-        or len(targets) != 14
-        or len(set(targets)) != 14
+        or len(targets) != EXPECTED_CAMPAIGN_TARGET_COUNT
+        or len(set(targets)) != EXPECTED_CAMPAIGN_TARGET_COUNT
         or any(
             not isinstance(target, str) or SAFE_TARGET.fullmatch(target) is None
             for target in targets

@@ -1,0 +1,156 @@
+{
+  "schema_version": "cigar.workflow-efficacy.workflows.v1",
+  "fixture_set_id": "hiero-deterministic-actual-workflows-v1",
+  "provider": {
+    "mode": "recorded",
+    "configuration_id": "hiero-provider-tape-v1",
+    "tape_digest": "12201111111111111111111111111111111111111111111111111111111111111111",
+    "model_id": "deterministic-hiero-security-v1",
+    "temperature_millionths": 0,
+    "maximum_output_tokens": 1024
+  },
+  "execution": {
+    "modes": [
+      "embedded",
+      "local_sidecar"
+    ],
+    "mode_rule": "trial_mod_2",
+    "no_egress": true,
+    "context_cycles": 3,
+    "minimum_deltas": 2,
+    "maximum_turns": 3,
+    "maximum_cigar_tokens": 5000,
+    "maximum_provider_tokens": 3072,
+    "maximum_wall_time_ms": 30000
+  },
+  "negative_cases": [
+    "retrieved_prompt_injection",
+    "forged_citation",
+    "stale_bundle",
+    "revoked_source",
+    "cross_project_alias",
+    "poisoned_tool_output",
+    "replay_substitution",
+    "provider_timeout",
+    "ambiguous_effect_result"
+  ],
+  "mutation_axes": [
+    "evidence_source",
+    "requirement",
+    "authorization_rule",
+    "tool_result",
+    "source_generation"
+  ],
+  "workflows": [
+    {
+      "id": "solo",
+      "governed_source": {
+        "relative_path": "scripts/continuous_solo_ai_pentest.py",
+        "sha256": "c20cfaffd8db4d68e33bf862a295a334dd6b1da21054be02822d17f349d2f075",
+        "generation": 7
+      },
+      "task_id": "hiero.solo.audit.v1",
+      "requirements": [
+        {"id": "solo-entrypoint", "class": "blocking", "evidence": ["solo-runtime", "solo-harness"]},
+        {"id": "solo-effect-proof", "class": "effect_adjacent", "evidence": ["finding-proof", "effect-policy"]}
+      ],
+      "alternative_evidence_sets": [["solo-runtime", "solo-harness"], ["solo-template", "solo-oracle"]],
+      "tools": [
+        {"id": "solo-harness", "effect": false, "argument_schema": "hiero.tool.solo-harness.v1"},
+        {"id": "publish-finding", "effect": true, "argument_schema": "hiero.effect.publish-finding.v1"}
+      ],
+      "terminal": {"outcome": "validated_finding", "assertions": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]},
+      "citation_oracle": ["solo-runtime", "finding-proof"],
+      "policy_denials": ["publish_without_revalidation", "unscoped_project"],
+      "restart_points": ["after_bundle", "after_delta_1", "before_effect_dispatch"]
+    },
+    {
+      "id": "consensus-node",
+      "governed_source": {
+        "relative_path": "scripts/continuous_consensus_node_pentest.py",
+        "sha256": "4189fe5c7b2cfbdbdc9debef0e16f5c2d46513f86fab4550fac20f954a87cad7",
+        "generation": 11
+      },
+      "task_id": "hiero.consensus-node.audit.v1",
+      "requirements": [
+        {"id": "consensus-state-transition", "class": "blocking", "evidence": ["consensus-handler", "state-oracle"]},
+        {"id": "consensus-reproducer", "class": "effect_adjacent", "evidence": ["divergence-proof", "runtime-permit"]}
+      ],
+      "alternative_evidence_sets": [["consensus-handler", "state-oracle"], ["consensus-test", "record-stream-oracle"]],
+      "tools": [
+        {"id": "consensus-replay", "effect": false, "argument_schema": "hiero.tool.consensus-replay.v1"},
+        {"id": "schedule-runtime", "effect": true, "argument_schema": "hiero.effect.schedule-runtime.v1"}
+      ],
+      "terminal": {"outcome": "replay_confirmed_divergence", "assertions": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]},
+      "citation_oracle": ["consensus-handler", "divergence-proof"],
+      "policy_denials": ["runtime_without_permit", "stale_consensus_source"],
+      "restart_points": ["after_bundle", "after_delta_2", "after_effect_intent"]
+    },
+    {
+      "id": "blocknode-tss",
+      "governed_source": {
+        "relative_path": "hiero_audit_core/attack_domains.py",
+        "sha256": "aa0e2101f65300f623b8ac79923b55517f7b0f824dee1341ec0cf3cf0e115436",
+        "generation": 5
+      },
+      "task_id": "hiero.blocknode-tss.audit.v1",
+      "requirements": [
+        {"id": "tss-share-validation", "class": "blocking", "evidence": ["share-parser", "threshold-oracle"]},
+        {"id": "tss-runtime-fence", "class": "effect_adjacent", "evidence": ["key-boundary-proof", "runtime-permit"]}
+      ],
+      "alternative_evidence_sets": [["share-parser", "threshold-oracle"], ["signature-test", "roster-oracle"]],
+      "tools": [
+        {"id": "tss-fixture", "effect": false, "argument_schema": "hiero.tool.tss-fixture.v1"},
+        {"id": "schedule-tss-runtime", "effect": true, "argument_schema": "hiero.effect.schedule-tss-runtime.v1"}
+      ],
+      "terminal": {"outcome": "threshold_boundary_validated", "assertions": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]},
+      "citation_oracle": ["share-parser", "key-boundary-proof"],
+      "policy_denials": ["key_material_egress", "runtime_without_permit"],
+      "restart_points": ["after_bundle", "after_delta_1", "ambiguous_effect"]
+    },
+    {
+      "id": "json-rpc",
+      "governed_source": {
+        "relative_path": "scripts/continuous_json_rpc_pentest.py",
+        "sha256": "234f0b6e860d8e0dcd9f5518816164593895b75d1d3ac7aba87b0f188d348c86",
+        "generation": 13
+      },
+      "task_id": "hiero.json-rpc.audit.v1",
+      "requirements": [
+        {"id": "rpc-input-boundary", "class": "blocking", "evidence": ["rpc-handler", "semantic-oracle"]},
+        {"id": "rpc-live-probe", "class": "effect_adjacent", "evidence": ["rpc-proof", "probe-permit"]}
+      ],
+      "alternative_evidence_sets": [["rpc-handler", "semantic-oracle"], ["rpc-fixture", "batch-oracle"]],
+      "tools": [
+        {"id": "json-rpc-fixture", "effect": false, "argument_schema": "hiero.tool.json-rpc-fixture.v1"},
+        {"id": "probe-relay", "effect": true, "argument_schema": "hiero.effect.probe-relay.v1"}
+      ],
+      "terminal": {"outcome": "semantic_mismatch_validated", "assertions": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]},
+      "citation_oracle": ["rpc-handler", "rpc-proof"],
+      "policy_denials": ["relay_probe_without_scope", "forged_rpc_citation"],
+      "restart_points": ["after_bundle", "after_delta_2", "before_effect_dispatch"]
+    },
+    {
+      "id": "evm-tx-liveness",
+      "governed_source": {
+        "relative_path": "scripts/continuous_evm_tx_liveness_pentest.py",
+        "sha256": "0fdc4dd09bc3b7f93d9e53a2bd5d22df0f6a33bab52c35a0fe79d3d9f744a202",
+        "generation": 17
+      },
+      "task_id": "hiero.evm-tx-liveness.audit.v1",
+      "requirements": [
+        {"id": "evm-liveness-state", "class": "blocking", "evidence": ["tx-runtime", "liveness-oracle"]},
+        {"id": "evm-submit-fence", "class": "effect_adjacent", "evidence": ["receipt-proof", "submit-permit"]}
+      ],
+      "alternative_evidence_sets": [["tx-runtime", "liveness-oracle"], ["tx-fixture", "receipt-oracle"]],
+      "tools": [
+        {"id": "evm-liveness-fixture", "effect": false, "argument_schema": "hiero.tool.evm-liveness.v1"},
+        {"id": "submit-synthetic-tx", "effect": true, "argument_schema": "hiero.effect.submit-synthetic-tx.v1"}
+      ],
+      "terminal": {"outcome": "liveness_boundary_validated", "assertions": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]},
+      "citation_oracle": ["tx-runtime", "receipt-proof"],
+      "policy_denials": ["mainnet_submission", "submit_without_revalidation"],
+      "restart_points": ["after_bundle", "after_delta_1", "after_effect_intent"]
+    }
+  ]
+}

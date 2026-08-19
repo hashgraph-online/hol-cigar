@@ -25,7 +25,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const PROFILE_SCHEMA: &str = "cigar.local-scale-profile.v1";
 const BINDING_SCHEMA: &str = "cigar.local-scale-binding.v1";
@@ -114,7 +114,7 @@ impl Profile {
     fn validate(&self, production: bool) -> Result<()> {
         let common = self.schema_version == PROFILE_SCHEMA
             && self.platform == PLATFORM
-            && self.atoms >= 12
+            && self.atoms >= if production { 12 } else { 2 }
             && self.edges > 0
             && self.blob_objects > 0
             && self.blob_objects <= self.atoms
@@ -154,12 +154,17 @@ impl Profile {
         {
             return Err(error(DriverErrorCode::InvalidProfile));
         }
-        if !production
-            && (self.id != "scaled_fixture"
-                || self.capacity_profile != "standard"
-                || self.maximum_database_bytes == 0)
-        {
-            return Err(error(DriverErrorCode::InvalidProfile));
+        if !production {
+            let registered_capacity = match self.capacity_profile.as_str() {
+                "standard" => 4_294_967_296,
+                "large_local" => MAX_DATABASE_BYTES,
+                _ => return Err(error(DriverErrorCode::InvalidProfile)),
+            };
+            if self.id != "scaled_fixture"
+                || self.maximum_database_bytes != registered_capacity
+            {
+                return Err(error(DriverErrorCode::InvalidProfile));
+            }
         }
         Ok(())
     }
@@ -270,6 +275,15 @@ struct StorageEvidence {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+struct LifecycleEvidence {
+    cold_start_nanoseconds: u64,
+    steady_state_nanoseconds: u64,
+    restart_nanoseconds: u64,
+    warm_start_nanoseconds: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct Claims {
     physical_scale_execution_attempted: bool,
     distinct_authoritative_atoms: bool,
@@ -298,6 +312,7 @@ struct ResultBody {
     observed: Counts,
     roots: Roots,
     storage: StorageEvidence,
+    lifecycle: LifecycleEvidence,
     checks: Vec<Check>,
     claims: Claims,
 }
@@ -329,6 +344,10 @@ fn now_unix_nanos() -> Result<i128> {
         .duration_since(UNIX_EPOCH)
         .map_err(|_| error(DriverErrorCode::StoreFailure))?;
     i128::try_from(duration.as_nanos()).map_err(|_| error(DriverErrorCode::StoreFailure))
+}
+
+fn elapsed_nanoseconds(started: Instant) -> Result<u64> {
+    u64::try_from(started.elapsed().as_nanos()).map_err(|_| error(DriverErrorCode::StoreFailure))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -824,6 +843,7 @@ fn parse_result(bytes: &[u8]) -> Result<RunResult> {
             "observed",
             "roots",
             "storage",
+            "lifecycle",
             "checks",
             "claims",
             "receipt_id",
@@ -1154,6 +1174,7 @@ fn validate_workspace_entries(workspace: &Path, device: u64) -> Result<()> {
         "database.sqlite3-shm",
         "database.sqlite3-wal",
         "database.sqlite3.cigar-revision",
+        "database.sqlite3.cigar-runtime.lock",
         "keystore.cbor",
         "keys.json",
         "owner.json",
@@ -1529,24 +1550,24 @@ fn open_qualification_crypto(
     Ok((provider, keys, repository))
 }
 
-fn capacity_profile(production: bool) -> SqliteCapacityProfile {
-    if production {
-        SqliteCapacityProfile::LargeLocal
-    } else {
-        SqliteCapacityProfile::Standard
+fn capacity_profile(profile: &Profile) -> Result<SqliteCapacityProfile> {
+    match profile.capacity_profile.as_str() {
+        "standard" => Ok(SqliteCapacityProfile::Standard),
+        "large_local" => Ok(SqliteCapacityProfile::LargeLocal),
+        _ => Err(error(DriverErrorCode::InvalidProfile)),
     }
 }
 
 fn open_store(
     workspace: &Path,
     repository: Arc<QualificationBlobRepository>,
-    production: bool,
+    profile: &Profile,
 ) -> Result<SqliteStore> {
     let erased: Arc<dyn RepositoryBlobStore> = repository;
     SqliteStore::open_with_blob_repository_and_capacity_profile(
         workspace.join("database.sqlite3"),
         erased,
-        capacity_profile(production),
+        capacity_profile(profile)?,
     )
     .map_err(|store_error| {
         if store_error.code() == StoreErrorCode::LimitExceeded {
@@ -1557,11 +1578,11 @@ fn open_store(
     })
 }
 
-fn validate_store_profile(store: &SqliteStore, profile: &Profile, production: bool) -> Result<()> {
+fn validate_store_profile(store: &SqliteStore, profile: &Profile) -> Result<()> {
     let configuration = store
         .configuration()
         .map_err(|_| error(DriverErrorCode::StoreFailure))?;
-    if store.capacity_profile() != capacity_profile(production)
+    if store.capacity_profile() != capacity_profile(profile)?
         || configuration.max_database_bytes != profile.maximum_database_bytes
         || !configuration.journal_mode.eq_ignore_ascii_case("wal")
         || configuration.synchronous != 2
@@ -2098,13 +2119,13 @@ fn reopen_blob_repository(
 fn open_store_at(
     database: &Path,
     repository: Arc<QualificationBlobRepository>,
-    production: bool,
+    profile: &Profile,
 ) -> Result<SqliteStore> {
     let erased: Arc<dyn RepositoryBlobStore> = repository;
     SqliteStore::open_with_blob_repository_and_capacity_profile(
         database,
         erased,
-        capacity_profile(production),
+        capacity_profile(profile)?,
     )
     .map_err(|_| error(DriverErrorCode::StoreFailure))
 }
@@ -2137,6 +2158,10 @@ fn validate_result(result: &RunResult, profile: &Profile, production: bool) -> R
         || body.storage.retained_snapshots == 0
         || body.storage.backup_file_count == 0
         || body.storage.backup_repository_revision == 0
+        || body.lifecycle.cold_start_nanoseconds == 0
+        || body.lifecycle.steady_state_nanoseconds == 0
+        || body.lifecycle.restart_nanoseconds == 0
+        || body.lifecycle.warm_start_nanoseconds == 0
         || body.checks.len() != expected_checks.len()
         || body
             .checks
@@ -2215,12 +2240,13 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
     }
     let (provider, keys, repository) =
         open_qualification_crypto(&inputs.workspace, &owner, is_new)?;
+    let cold_start_started = Instant::now();
     let store = open_store(
         &inputs.workspace,
         Arc::clone(&repository),
-        inputs.production,
+        &profile,
     )?;
-    validate_store_profile(&store, &profile, inputs.production)?;
+    validate_store_profile(&store, &profile)?;
     store
         .integrity_check()
         .map_err(|_| error(DriverErrorCode::IntegrityFailure))?;
@@ -2234,6 +2260,8 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
         &profile_sha256,
         is_new,
     )?;
+    let cold_start_nanoseconds = elapsed_nanoseconds(cold_start_started)?;
+    let steady_state_started = Instant::now();
     let loaded = load_catalog(
         &store,
         &inputs.workspace,
@@ -2263,10 +2291,12 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
     let storage = store
         .storage_statistics()
         .map_err(|_| error(DriverErrorCode::StoreFailure))?;
+    let steady_state_nanoseconds = elapsed_nanoseconds(steady_state_started)?;
     drop(store);
     drop(repository);
     drop(provider);
 
+    let restart_started = Instant::now();
     let (provider, reopened_keys, repository) =
         open_qualification_crypto(&inputs.workspace, &owner, false)?;
     if reopened_keys != keys {
@@ -2275,9 +2305,9 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
     let store = open_store(
         &inputs.workspace,
         Arc::clone(&repository),
-        inputs.production,
+        &profile,
     )?;
-    validate_store_profile(&store, &profile, inputs.production)?;
+    validate_store_profile(&store, &profile)?;
     let after_reopen = store
         .catalog_statistics()
         .map_err(|_| error(DriverErrorCode::StoreFailure))?;
@@ -2285,6 +2315,31 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
         return Err(error(DriverErrorCode::IntegrityFailure));
     }
     verify_deep_integrity(&store, repository.as_ref(), &profile)?;
+    let restart_nanoseconds = elapsed_nanoseconds(restart_started)?;
+
+    drop(store);
+    drop(repository);
+    drop(provider);
+    let warm_start_started = Instant::now();
+    let (provider, warm_keys, repository) =
+        open_qualification_crypto(&inputs.workspace, &owner, false)?;
+    if warm_keys != keys {
+        return Err(error(DriverErrorCode::IntegrityFailure));
+    }
+    let store = open_store(
+        &inputs.workspace,
+        Arc::clone(&repository),
+        &profile,
+    )?;
+    validate_store_profile(&store, &profile)?;
+    let warm_statistics = store
+        .catalog_statistics()
+        .map_err(|_| error(DriverErrorCode::StoreFailure))?;
+    if warm_statistics != after_reopen {
+        return Err(error(DriverErrorCode::IntegrityFailure));
+    }
+    verify_deep_integrity(&store, repository.as_ref(), &profile)?;
+    let warm_start_nanoseconds = elapsed_nanoseconds(warm_start_started)?;
 
     let backup_path = inputs.workspace.join("backup");
     let manifest = if backup_path.exists() {
@@ -2359,9 +2414,9 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
     let restored_store = open_store_at(
         &restored_path.join("database.sqlite3"),
         Arc::clone(&restored_repository),
-        inputs.production,
+        &profile,
     )?;
-    validate_store_profile(&restored_store, &profile, inputs.production)?;
+    validate_store_profile(&restored_store, &profile)?;
     let restored_statistics = restored_store
         .catalog_statistics()
         .map_err(|_| error(DriverErrorCode::StoreFailure))?;
@@ -2411,6 +2466,12 @@ fn execute_run(inputs: &RunInputs, control: &mut RunControl) -> Result<RunResult
             backup_file_count: u64::try_from(manifest.files.len())
                 .map_err(|_| error(DriverErrorCode::BackupFailure))?,
             backup_repository_revision: manifest.repository_revision,
+        },
+        lifecycle: LifecycleEvidence {
+            cold_start_nanoseconds,
+            steady_state_nanoseconds,
+            restart_nanoseconds,
+            warm_start_nanoseconds,
         },
         checks: [
             "catalog-counts-and-roots",
@@ -2870,6 +2931,31 @@ mod tests {
         assert_eq!(
             profile.counts().referenced_blob_bytes,
             PRODUCTION_REFERENCED_BYTES
+        );
+    }
+
+    #[test]
+    fn scaled_fixture_selects_only_registered_capacity_profiles() {
+        let standard = fixture_profile(1);
+        standard.validate(false).expect("standard fixture profile");
+        assert_eq!(
+            capacity_profile(&standard).expect("standard capacity"),
+            SqliteCapacityProfile::Standard
+        );
+
+        let mut large_local = standard.clone();
+        large_local.capacity_profile = "large_local".to_owned();
+        large_local.maximum_database_bytes = MAX_DATABASE_BYTES;
+        large_local.validate(false).expect("large-local fixture profile");
+        assert_eq!(
+            capacity_profile(&large_local).expect("large-local capacity"),
+            SqliteCapacityProfile::LargeLocal
+        );
+
+        large_local.maximum_database_bytes -= 1;
+        assert_eq!(
+            large_local.validate(false).expect_err("mismatched capacity must fail").0,
+            DriverErrorCode::InvalidProfile
         );
     }
 

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/honey-workflow-efficacy.v1.schema.json",
+  "title": "CIGAR Honey deterministic workflow fixture set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fixture_set_id", "provider", "execution", "negative_cases", "mutation_axes", "workflows"],
+  "properties": {
+    "schema_version": {"const": "cigar.workflow-efficacy.workflows.v1"},
+    "fixture_set_id": {"const": "hiero-deterministic-actual-workflows-v1"},
+    "provider": {"$ref": "#/$defs/provider"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "negative_cases": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "retrieved_prompt_injection"}, {"const": "forged_citation"},
+        {"const": "stale_bundle"}, {"const": "revoked_source"},
+        {"const": "cross_project_alias"}, {"const": "poisoned_tool_output"},
+        {"const": "replay_substitution"}, {"const": "provider_timeout"},
+        {"const": "ambiguous_effect_result"}
+      ],
+      "items": false,
+      "minItems": 9,
+      "maxItems": 9
+    },
+    "mutation_axes": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "evidence_source"}, {"const": "requirement"},
+        {"const": "authorization_rule"}, {"const": "tool_result"},
+        {"const": "source_generation"}
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "workflows": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/workflow"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^(1220)?[0-9a-f]{64}$"},
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "provider": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "configuration_id", "tape_digest", "model_id", "temperature_millionths", "maximum_output_tokens"],
+      "properties": {
+        "mode": {"const": "recorded"}, "configuration_id": {"$ref": "#/$defs/identifier"},
+        "tape_digest": {"$ref": "#/$defs/digest"}, "model_id": {"$ref": "#/$defs/identifier"},
+        "temperature_millionths": {"const": 0}, "maximum_output_tokens": {"type": "integer", "minimum": 1, "maximum": 8192}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["modes", "mode_rule", "no_egress", "context_cycles", "minimum_deltas", "maximum_turns", "maximum_cigar_tokens", "maximum_provider_tokens", "maximum_wall_time_ms"],
+      "properties": {
+        "modes": {"const": ["embedded", "local_sidecar"]}, "mode_rule": {"const": "trial_mod_2"},
+        "no_egress": {"const": true}, "context_cycles": {"const": 3}, "minimum_deltas": {"const": 2},
+        "maximum_turns": {"type": "integer", "minimum": 3, "maximum": 64},
+        "maximum_cigar_tokens": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "maximum_provider_tokens": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "maximum_wall_time_ms": {"type": "integer", "minimum": 1, "maximum": 300000}
+      }
+    },
+    "requirement": {
+      "type": "object", "additionalProperties": false, "required": ["id", "class", "evidence"],
+      "properties": {"id": {"$ref": "#/$defs/identifier"}, "class": {"enum": ["blocking", "effect_adjacent"]}, "evidence": {"type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}}
+    },
+    "tool": {
+      "type": "object", "additionalProperties": false, "required": ["id", "effect", "argument_schema"],
+      "properties": {"id": {"$ref": "#/$defs/identifier"}, "effect": {"type": "boolean"}, "argument_schema": {"$ref": "#/$defs/identifier"}}
+    },
+    "workflow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "governed_source", "task_id", "requirements", "alternative_evidence_sets", "tools", "terminal", "citation_oracle", "policy_denials", "restart_points"],
+      "properties": {
+        "id": {"enum": ["solo", "consensus-node", "blocknode-tss", "json-rpc", "evm-tx-liveness"]},
+        "governed_source": {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "generation"], "properties": {"relative_path": {"type": "string", "pattern": "^[^/].*$", "maxLength": 256}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "generation": {"type": "integer", "minimum": 1}}},
+        "task_id": {"$ref": "#/$defs/identifier"},
+        "requirements": {"type": "array", "minItems": 2, "maxItems": 16, "items": {"$ref": "#/$defs/requirement"}},
+        "alternative_evidence_sets": {"type": "array", "minItems": 2, "maxItems": 8, "items": {"type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}},
+        "tools": {"type": "array", "minItems": 2, "maxItems": 16, "items": {"$ref": "#/$defs/tool"}},
+        "terminal": {"type": "object", "additionalProperties": false, "required": ["outcome", "assertions"], "properties": {"outcome": {"$ref": "#/$defs/identifier"}, "assertions": {"const": ["all_blocking_covered", "citation_resolved", "effect_exactly_once"]}}},
+        "citation_oracle": {"type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "policy_denials": {"type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "restart_points": {"type": "array", "minItems": 3, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}
+      }
+    }
+  }
+}

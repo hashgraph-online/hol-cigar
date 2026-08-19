@@ -111,7 +111,7 @@ class FuzzEvidenceTests(unittest.TestCase):
             "source_revision": source_binding["git_head"],
             "source_binding": source_binding,
             "source_working_corpus_unchanged": True,
-            "all_fourteen_targets_snapshotted": True,
+            "all_campaign_targets_snapshotted": True,
             "source_corpus_before": states,
             "source_corpus_after": states,
             "dependency_mode": "locked-offline-cargo-wrapper",
@@ -746,7 +746,7 @@ class FuzzEvidenceTests(unittest.TestCase):
             "outcome": {
                 "viability_passed": True,
                 "campaign_smoke_passed": True,
-                "all_fourteen_targets_executed": True,
+                "all_campaign_targets_executed": True,
                 "crash_count": 0,
                 "sanitizer_failure_count": 0,
                 "seven_day_equivalent_satisfied": False,
@@ -939,7 +939,7 @@ class FuzzEvidenceTests(unittest.TestCase):
                 document["campaign"]["target_count"] = 13
 
             def campaign_count_float(document: dict[str, Any]) -> None:
-                document["campaign"]["target_count"] = 14.0
+                document["campaign"]["target_count"] = 19.0
 
             def outcome_viability(document: dict[str, Any]) -> None:
                 document["outcome"]["viability_passed"] = False

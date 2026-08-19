@@ -8,6 +8,8 @@
 
 #![cfg_attr(not(windows), allow(dead_code))]
 
+mod pointer;
+
 #[cfg(windows)]
 mod windows;
 

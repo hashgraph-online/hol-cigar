@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cigar.invalid/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
-  "title": "CIGAR Honey 0.9.2 efficiency and reliability qualification",
+  "title": "CIGAR Honey 0.9.3 efficiency and reliability qualification",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -40,7 +40,7 @@
       "additionalProperties": false,
       "required": ["version", "release_state", "context_abi", "target_triple", "prerelease", "supported", "production_qualified"],
       "properties": {
-        "version": {"const": "0.9.2"},
+        "version": {"const": "0.9.3"},
         "release_state": {"const": "developer-preview"},
         "context_abi": {"const": "cigar.context.v1"},
         "target_triple": {"const": "aarch64-apple-darwin"},

@@ -172,6 +172,10 @@ fn candidate(
     Ok(CompilerCandidate {
         version_id: version(value)?,
         logical_id: version(value)?,
+        lineage_id: cigar_protocol::LineageId::new(format!(
+            "01890f47-8e7d-7b42-a1d2-3c4d5e6f{:04x}",
+            u16::from(value)
+        ))?,
         canonical_uri: SourceUri::new(format!("file:///fixture/{value:02x}.md"))?,
         lane,
         mandatory: false,
@@ -214,6 +218,7 @@ fn compile_request(
         contract,
         profile,
         candidates,
+        ranking_evidence: None,
     })
 }
 

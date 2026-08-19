@@ -39,6 +39,21 @@ mod server;
 mod space_handoff_adapters;
 mod telemetry;
 mod worker;
+#[allow(
+    dead_code,
+    reason = "H094-400 coordinator integration follows the durable state and recovery contracts"
+)]
+mod workflow_context_adapters;
+#[allow(
+    dead_code,
+    reason = "H094-400 coordinator integration follows the durable state and recovery contracts"
+)]
+mod workflow_context_session;
+#[allow(
+    dead_code,
+    reason = "H094-400 coordinator integration follows the durable state and recovery contracts"
+)]
+mod workflow_context_store;
 
 pub use application::*;
 pub use auth::*;
@@ -76,3 +91,10 @@ pub use server::*;
 pub use space_handoff_adapters::*;
 pub use telemetry::*;
 pub use worker::*;
+
+/// Fuzz-only strict decoder and invariant checker for durable workflow-session records.
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub fn fuzz_workflow_session_record(data: &[u8]) {
+    workflow_context_session::fuzz_record(data);
+}

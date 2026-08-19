@@ -112,6 +112,7 @@ class HoneyProfileTests(unittest.TestCase):
         for relative in (
             "crates/xtask/native_macos_command_plane.py",
             "crates/xtask/tests/test_native_macos_command_plane.py",
+            "tools/refinement/tests/test_r11_loop.py",
         ):
             self.assertEqual(exemptions[relative]["findings"], ["private-key"])
 

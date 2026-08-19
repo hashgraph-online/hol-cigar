@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/honey-three-way-context.v1.schema.json",
+  "title": "CIGAR Honey three-way context evidence manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "configuration_id",
+    "cohort",
+    "evidence_id",
+    "attachments"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "cigar.workflow-efficacy.evidence-manifest.v1"
+    },
+    "configuration_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "cohort": {
+      "enum": ["historical", "rc"]
+    },
+    "evidence_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuration",
+        "raw_observations",
+        "environment_receipt",
+        "aggregate_report",
+        "claim_ledger"
+      ],
+      "properties": {
+        "configuration": {"$ref": "#/$defs/attachment"},
+        "raw_observations": {"$ref": "#/$defs/attachment"},
+        "environment_receipt": {"$ref": "#/$defs/attachment"},
+        "aggregate_report": {"$ref": "#/$defs/attachment"},
+        "claim_ledger": {"$ref": "#/$defs/attachment"}
+      }
+    }
+  },
+  "$defs": {
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "bytes", "sha256"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*\\.json$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

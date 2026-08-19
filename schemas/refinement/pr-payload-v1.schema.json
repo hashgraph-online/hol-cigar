@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/pr-payload-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "payload_id", "operation", "trial_id", "base_revision", "candidate_revision", "candidate_tree", "branch", "evaluation_id", "merge_authority", "publication_authority"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-pr-payload.v1"},
+    "payload_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "operation": {"const": "create-review-request-only"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "base_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "candidate_revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "candidate_tree": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+    "branch": {
+      "type": "string",
+      "minLength": 14,
+      "maxLength": 80,
+      "pattern": "^refine/trial-[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "merge_authority": {"const": false},
+    "publication_authority": {"const": false}
+  }
+}

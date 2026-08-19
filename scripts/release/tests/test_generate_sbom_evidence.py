@@ -17,6 +17,7 @@ if str(RELEASE) not in sys.path:
     sys.path.insert(0, str(RELEASE))
 
 import generate_sbom  # noqa: E402
+import verify_release  # noqa: E402
 from evidence_workspace import EvidenceWorkspaceError  # noqa: E402
 from release_lib import ReleaseError  # noqa: E402
 
@@ -132,6 +133,35 @@ class SbomEvidenceTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {}, clear=True):
                 with self.assertRaisesRegex(ReleaseError, "must be empty"):
                     generate_sbom.SbomOutput.open(self.arguments(out=destination), root)
+
+    def test_generated_documents_match_release_verifier_contract(self) -> None:
+        root = RELEASE.parents[1]
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw).resolve()
+            artifact = base / "fixture-artifact.tar.gz"
+            artifact.write_bytes(b"non-release SBOM contract fixture")
+            destination = base / "sbom"
+            arguments = SimpleNamespace(
+                root=root,
+                artifact=[artifact],
+                out=destination,
+                evidence_dir=None,
+                source_date_epoch="1700000000",
+                require_reviewed_licenses=True,
+            )
+            with (
+                mock.patch.object(
+                    generate_sbom, "parse_arguments", return_value=arguments
+                ),
+                mock.patch.dict(os.environ, {}, clear=True),
+            ):
+                self.assertEqual(generate_sbom.main(), 0)
+            validated = verify_release._validate_sboms(  # noqa: SLF001
+                destination,
+                {"fixture": artifact},
+                "0.9.4",
+            )
+            self.assertEqual(len(validated), 3)
 
 
 if __name__ == "__main__":

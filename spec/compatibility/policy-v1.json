@@ -227,8 +227,8 @@
     "stored_records": {
       "binding": {
         "file_count": 30,
-        "inventory_sha256": "2e4467ac033d9420df5838e32ce9a75689f1dc8ddc7ac0425604c4e55a7b09c7",
-        "total_bytes": 1369503
+        "inventory_sha256": "69b99a0e1f61fdce8e477c295cbd59edf7187e241e2ba21db97b2676063fcb0f",
+        "total_bytes": 1390063
       },
       "codec_paths": [
         "crates/cigar-daemon/src/catalog_context_application.rs",

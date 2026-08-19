@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/task-packet-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "packet_id", "champion", "architecture_summary", "failure_cluster", "hypothesis", "constraints", "allowed_paths", "forbidden_paths", "budgets", "named_gates", "public_examples", "prior_rejections", "required_final_schema"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-task-packet.v1"},
+    "packet_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "champion": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "architecture_summary": {"$ref": "common-v1.schema.json#/$defs/longText"},
+    "failure_cluster": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "hypothesis": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+    "constraints": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+    },
+    "allowed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/path"}
+    },
+    "forbidden_paths": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/path"}
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "lines", "turns", "input_tokens", "output_tokens", "wall_seconds", "cost_usd"],
+      "properties": {
+        "files": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "lines": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "turns": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "input_tokens": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "output_tokens": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "wall_seconds": {"type": "integer", "minimum": 1, "maximum": 604800},
+        "cost_usd": {"type": "number", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "named_gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "public_examples": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "prior_rejections": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+    },
+    "required_final_schema": {"$ref": "common-v1.schema.json#/$defs/path"}
+  }
+}

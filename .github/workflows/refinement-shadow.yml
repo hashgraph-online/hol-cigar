@@ -1,0 +1,69 @@
+name: refinement-shadow-evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Exact candidate Git revision
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: refinement-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    name: shadow evaluation disabled pending trusted controller
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: refinement-shadow
+    env:
+      CIGAR_RUN_AUTHORITY: "shadow"
+      CIGAR_NO_PROMOTION: "1"
+    steps:
+      - name: Record the fail-closed shadow status
+        env:
+          CIGAR_CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        run: |
+          receipt="${RUNNER_TEMP}/refinement-shadow-disabled"
+          mkdir -p "${receipt}"
+          python3 - "${receipt}/status.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          payload = {
+              "schema_version": "cigar.refinement-shadow-status.v1",
+              "status": "disabled",
+              "candidate_ref": os.environ["CIGAR_CANDIDATE_REF"],
+              "reason": "trusted controller isolation is required",
+              "candidate_code_executed": False,
+              "signed": False,
+          }
+          path = Path(sys.argv[1])
+          path.write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          path.chmod(0o400)
+          PY
+          printf 'CIGAR_SHADOW_STATUS=%s\n' "${receipt}" >>"${GITHUB_ENV}"
+          printf 'Shadow evaluation is disabled until candidate execution is isolated from signing authority. No candidate code ran and no qualification evidence was signed.\n' >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload unsigned disabled-status receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: refinement-shadow-disabled-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CIGAR_SHADOW_STATUS }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 90
+          compression-level: 0

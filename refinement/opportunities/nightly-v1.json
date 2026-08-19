@@ -1,0 +1,20 @@
+{
+  "schema_version": "cigar.refinement-opportunities.v1",
+  "registry_id": "122060621eacd0dbdb253e9935d77ccde3edbfd7ba9c9a9078f4f5156fe8f713cc3f",
+  "signals": [
+    {
+      "schema_version": "cigar.refinement-opportunity-signal.v1",
+      "signal_id": "1220c34d2b5c8b8831370a406ebdefb7d039eef1bcb882d7fb229e5329a6439297c3",
+      "source_kind": "kpi_cluster",
+      "visibility": "public",
+      "summary": "The current development profile still has measurable critical-recall headroom on long-repository dependency closure.",
+      "source_commitment": "122086ce338dfd05639da4ddce0efb0a341e333937e79ea303905bddd04830937230",
+      "owner_hint": "feature-extraction",
+      "metric": "critical_recall",
+      "magnitude": 0.2,
+      "estimated_cost": 20.0,
+      "strata": ["LongRepo-Change"],
+      "reproducible": true
+    }
+  ]
+}

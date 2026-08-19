@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/honey-compile-load-reliability.v1.schema.json",
+  "title": "CIGAR Honey bounded compile-load qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "source_revision",
+    "configuration",
+    "driver",
+    "candidate",
+    "raw",
+    "queue_capacity_fixed",
+    "all_cells_deterministic",
+    "allocation_probe",
+    "cells",
+    "report_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.h094-bound-compile-load-result.v1"},
+    "status": {"const": "passed"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "configuration": {"$ref": "#/$defs/file"},
+    "driver": {"$ref": "#/$defs/file"},
+    "candidate": {"$ref": "#/$defs/file"},
+    "raw": {"$ref": "#/$defs/file"},
+    "queue_capacity_fixed": {"const": true},
+    "all_cells_deterministic": {"const": true},
+    "allocation_probe": {"$ref": "#/$defs/allocation_probe"},
+    "cells": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/cell"}
+    },
+    "report_id": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/", "maxLength": 4096},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "concurrency",
+        "queue_capacity",
+        "iterations",
+        "wall_nanoseconds",
+        "operation_nanoseconds_p50",
+        "operation_nanoseconds_p95",
+        "maximum_queue_depth",
+        "rejected",
+        "completed",
+        "deterministic"
+      ],
+      "properties": {
+        "operation": {"enum": ["full_bundle", "delta"]},
+        "concurrency": {"enum": [1, 2, 4, 8, 16]},
+        "queue_capacity": {"const": 32},
+        "iterations": {"const": 40},
+        "wall_nanoseconds": {"type": "integer", "minimum": 1},
+        "operation_nanoseconds_p50": {"type": "integer", "minimum": 1},
+        "operation_nanoseconds_p95": {"type": "integer", "minimum": 1},
+        "maximum_queue_depth": {"type": "integer", "minimum": 0, "maximum": 32},
+        "rejected": {"const": 0},
+        "completed": {"const": 40},
+        "deterministic": {"const": true}
+      }
+    },
+    "allocation_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warmup_iterations",
+        "measurement_iterations",
+        "operations_per_iteration",
+        "live_bytes_before",
+        "live_bytes_after",
+        "live_allocations_before",
+        "live_allocations_after",
+        "peak_live_bytes",
+        "zero_monotonic_growth"
+      ],
+      "properties": {
+        "warmup_iterations": {"const": 128},
+        "measurement_iterations": {"const": 2000},
+        "operations_per_iteration": {"const": 2},
+        "live_bytes_before": {"type": "integer", "minimum": 0},
+        "live_bytes_after": {"type": "integer", "minimum": 0},
+        "live_allocations_before": {"type": "integer", "minimum": 0},
+        "live_allocations_after": {"type": "integer", "minimum": 0},
+        "peak_live_bytes": {"type": "integer", "minimum": 0},
+        "zero_monotonic_growth": {"const": true}
+      }
+    }
+  }
+}

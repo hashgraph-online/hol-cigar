@@ -79,11 +79,11 @@
       "sha256": "0a3637e53a6ba17f1662460434cb0406478656f392df50907fd002bd6d7a5c82"
     },
     "efficiency_profile": {
-      "path": "packaging/honey/efficiency-qualification-profile.v1.json",
+      "path": "packaging/honey/efficiency-qualification-profile-0.9.2.v1.json",
       "sha256": "670b0feb26e4c833e83da3b994f1c4ef57bae697de699a98fccca6cb251cc022"
     },
     "efficiency_report_schema": {
-      "path": "packaging/honey/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
+      "path": "packaging/honey/schemas/honey-efficiency-reliability-qualification-0.9.2.v1.schema.json",
       "sha256": "0adf646d6b2dfe1201b1389a6421cb78dc9cbc1ed1ed868fc58b90ede362c012"
     }
   },

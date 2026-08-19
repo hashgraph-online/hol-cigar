@@ -29,8 +29,8 @@ ERROR_COUNT = 34
 CLI_MAPPING_COUNT = 34
 CLI_OPERATION_COUNT = 33
 MCP_MAPPING_COUNT = 10
-METRIC_FAMILY_COUNT = 65
-METRIC_SERIES_MAXIMUM = 256
+METRIC_FAMILY_COUNT = 71
+METRIC_SERIES_MAXIMUM = 273
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
 PROBLEM_FIELDS = {
@@ -45,6 +45,7 @@ PROBLEM_FIELDS = {
 }
 METRIC_LABEL_KEYS = {
     "encoding",
+    "boundary",
     "file",
     "outcome",
     "stage",
@@ -54,6 +55,7 @@ METRIC_LABEL_KEYS = {
     "reason",
     "record",
     "state",
+    "status",
     "worker",
     "event",
 }
@@ -1328,7 +1330,7 @@ def _validate_observability(
     labels = {key for key, _constant in label_rows}
     value_domains: dict[str, tuple[str, ...]] = {}
     for constant, raw_values in re.findall(
-        r"(?:pub )?const ([A-Z][A-Z0-9_]*): &\[&str\] = &\[(.*?)\];",
+        r"(?:pub )?const ([A-Z][A-Z0-9_]*):\s*&\[&str\]\s*=\s*&\[(.*?)\];",
         metrics,
         re.DOTALL,
     ):

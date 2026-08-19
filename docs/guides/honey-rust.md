@@ -1,6 +1,6 @@
 # Honey Rust SDK
 
-Honey ships `cigar-rust-sdk-0.9.2-local-registry.tar.gz`, a self-contained offline Cargo
+Honey ships `cigar-rust-sdk-0.9.3-local-registry.tar.gz`, a self-contained offline Cargo
 registry kit. It includes the public SDK crate, required unpublished internal crates, registry index,
 checksums, and consumer configuration. Honey does not publish to crates.io.
 
@@ -13,7 +13,7 @@ without referring to the CIGAR source checkout.
 <!-- docs-check: illustrative -->
 ```sh
 mkdir -p "$HOME/.local/share/cigar-honey/rust-registry"
-tar -xzf cigar-rust-sdk-0.9.2-local-registry.tar.gz -C "$HOME/.local/share/cigar-honey/rust-registry"
+tar -xzf cigar-rust-sdk-0.9.3-local-registry.tar.gz -C "$HOME/.local/share/cigar-honey/rust-registry"
 cd "$HOME/.local/share/cigar-honey/rust-registry"
 cargo check --manifest-path examples/consumer/Cargo.toml --locked --offline
 cargo test --manifest-path examples/consumer/Cargo.toml --locked --offline

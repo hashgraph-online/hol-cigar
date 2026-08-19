@@ -1,6 +1,6 @@
 {
   "name": "@cigar/sdk",
-  "version": "0.9.2",
+  "version": "0.9.4",
   "description": "CIGAR v1 TypeScript SDK",
   "license": "Apache-2.0",
   "repository": {

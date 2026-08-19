@@ -53,6 +53,10 @@
       "reason": "Windows-only implementation is outside the native macOS release cohort"
     },
     {
+      "name": "cigarbench-consumer",
+      "reason": "benchmark consumer harness, not a shipped production runtime or SDK package"
+    },
+    {
       "name": "xtask",
       "reason": "workspace automation, not a shipped product runtime or SDK package"
     }

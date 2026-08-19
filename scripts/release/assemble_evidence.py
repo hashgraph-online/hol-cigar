@@ -31,6 +31,9 @@ from release_lib import (
 from verify_package import verify as verify_package
 
 
+EXPECTED_FUZZ_TARGET_COUNT = 19
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=repo_root())
@@ -391,8 +394,8 @@ def _enforce_fuzz_metric_shape(
     ]
     expected_control_names = {"fuzz.total_seconds", "fuzz.unresolved_defect_count"}
     if (
-        len(target_names) != 14
-        or len(set(target_names)) != 14
+        len(target_names) != EXPECTED_FUZZ_TARGET_COUNT
+        or len(set(target_names)) != EXPECTED_FUZZ_TARGET_COUNT
         or set(gate_names) != set(target_names) | expected_control_names
         or any(
             re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name.removeprefix(target_prefix))
@@ -400,7 +403,9 @@ def _enforce_fuzz_metric_shape(
             for name in target_names
         )
     ):
-        raise ReleaseError("release fuzz policy does not name exactly fourteen targets")
+        raise ReleaseError(
+            f"release fuzz policy does not name exactly {EXPECTED_FUZZ_TARGET_COUNT} targets"
+        )
 
     metrics = fuzz_receipts[0].get("metrics")
     if not isinstance(metrics, dict) or set(metrics) != set(gate_names):

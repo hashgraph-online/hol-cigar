@@ -24,26 +24,26 @@ from release_lib import ReleaseError, load_json  # noqa: E402
 
 
 EXPECTED_ARTIFACTS = [
-    ("source", "cigar-0.9.2-source.tar.gz"),
-    ("docs", "cigar-0.9.2-docs.tar.gz"),
+    ("source", "cigar-0.9.4-source.tar.gz"),
+    ("docs", "cigar-0.9.4-docs.tar.gz"),
     (
         "schemas-conformance",
-        "cigar-0.9.2-schemas-conformance.tar.gz",
+        "cigar-0.9.4-schemas-conformance.tar.gz",
     ),
     (
         "macos-runtime-aarch64",
-        "cigar-0.9.2-aarch64-apple-darwin.tar.gz",
+        "cigar-0.9.4-aarch64-apple-darwin.tar.gz",
     ),
-    ("typescript-sdk", "cigar-sdk-0.9.2.tgz"),
-    ("python-sdk-wheel", "hol_cigar-0.9.2-py3-none-any.whl"),
-    ("python-sdk-sdist", "hol_cigar-0.9.2.tar.gz"),
+    ("typescript-sdk", "cigar-sdk-0.9.4.tgz"),
+    ("python-sdk-wheel", "hol_cigar-0.9.4-py3-none-any.whl"),
+    ("python-sdk-sdist", "hol_cigar-0.9.4.tar.gz"),
     (
         "rust-sdk-local-registry",
-        "cigar-rust-sdk-0.9.2-local-registry.tar.gz",
+        "cigar-rust-sdk-0.9.4-local-registry.tar.gz",
     ),
-    ("claude-code-plugin", "cigar-claude-code-0.9.2.tar.gz"),
-    ("honey-demos", "cigar-honey-demos-0.9.2.tar.gz"),
-    ("release-notes", "RELEASE_NOTES_HONEY_v0.9.2.md"),
+    ("claude-code-plugin", "cigar-claude-code-0.9.4.tar.gz"),
+    ("honey-demos", "cigar-honey-demos-0.9.4.tar.gz"),
+    ("release-notes", "RELEASE_NOTES_HONEY_v0.9.4.md"),
     ("release-manifest", "honey-release-manifest.json"),
     ("checksums", "SHA256SUMS"),
 ]

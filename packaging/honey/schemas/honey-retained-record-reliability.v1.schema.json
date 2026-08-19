@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.dev/schemas/honey-retained-record-reliability.v1.schema.json",
+  "title": "CIGAR Honey retained-record reliability qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "source_revision",
+    "source_tree_sha256",
+    "configuration",
+    "driver",
+    "candidate",
+    "record_counts",
+    "observations",
+    "all_lifecycle_phases_measured",
+    "all_roots_exact_after_restart_and_restore",
+    "report_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "cigar.h094-retained-record-result.v1"},
+    "status": {"const": "passed"},
+    "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "source_tree_sha256": {"$ref": "#/$defs/sha256"},
+    "configuration": {"$ref": "#/$defs/file"},
+    "driver": {"$ref": "#/$defs/file"},
+    "candidate": {"$ref": "#/$defs/file"},
+    "record_counts": {"const": [8, 128, 4096, 100000, 1000000]},
+    "observations": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "all_lifecycle_phases_measured": {"const": true},
+    "all_roots_exact_after_restart_and_restore": {"const": true},
+    "report_id": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "multihash": {"type": "string", "pattern": "^1220[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/", "maxLength": 4096},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cold_start_nanoseconds", "steady_state_nanoseconds", "restart_nanoseconds", "warm_start_nanoseconds"],
+      "properties": {
+        "cold_start_nanoseconds": {"type": "integer", "minimum": 1},
+        "steady_state_nanoseconds": {"type": "integer", "minimum": 1},
+        "restart_nanoseconds": {"type": "integer", "minimum": 1},
+        "warm_start_nanoseconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_count", "wall_nanoseconds", "database_bytes", "lifecycle", "catalog_root_equal_after_restart", "profile", "binding", "driver_receipt", "driver_receipt_id"],
+      "properties": {
+        "record_count": {"enum": [8, 128, 4096, 100000, 1000000]},
+        "wall_nanoseconds": {"type": "integer", "minimum": 1},
+        "database_bytes": {"type": "integer", "minimum": 1},
+        "lifecycle": {"$ref": "#/$defs/lifecycle"},
+        "catalog_root_equal_after_restart": {"const": true},
+        "profile": {"$ref": "#/$defs/file"},
+        "binding": {"$ref": "#/$defs/file"},
+        "driver_receipt": {"$ref": "#/$defs/file"},
+        "driver_receipt_id": {"$ref": "#/$defs/multihash"}
+      }
+    }
+  }
+}

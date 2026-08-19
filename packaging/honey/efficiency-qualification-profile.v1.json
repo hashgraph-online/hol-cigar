@@ -1,7 +1,7 @@
 {
   "schema_version": "cigar.honey-efficiency-qualification-profile.v1",
-  "profile_id": "cigar.honey.0.9.2.efficiency-reliability.macos-arm64.v1",
-  "product_version": "0.9.2",
+  "profile_id": "cigar.honey.0.9.3.efficiency-reliability.macos-arm64.v1",
+  "product_version": "0.9.3",
   "release_state": "developer-preview",
   "context_abi": "cigar.context.v1",
   "fail_closed": true,
@@ -27,7 +27,7 @@
     {
       "id": "H91-INPUT-QUALIFICATION-FIXTURES",
       "path": "benches/honey-efficiency/qualification-fixtures.v1.json",
-      "bytes": 3939,
+      "bytes": 3937,
       "sha256": "0a3637e53a6ba17f1662460434cb0406478656f392df50907fd002bd6d7a5c82"
     },
     {
@@ -39,8 +39,8 @@
     {
       "id": "H91-INPUT-QUALIFICATION-REPORT-SCHEMA",
       "path": "packaging/honey/schemas/honey-efficiency-reliability-qualification.v1.schema.json",
-      "bytes": 11548,
-      "sha256": "0adf646d6b2dfe1201b1389a6421cb78dc9cbc1ed1ed868fc58b90ede362c012"
+      "bytes": 11538,
+      "sha256": "32b9ca66f7adfe14259b92dd690038d07204c35a950bd7fc11a100ece5417962"
     },
     {
       "id": "H91-INPUT-PAIRED-RAW-BENCHMARK",

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 SHARED_DRIVER_SHA256 = (
-    "5a2d4cacc4e2fcad51a944ebd4a2e128a801b7e22c81f5b212172bf25c5834a0"
+    "9e6692f9f6f292e67d9459cc7faaa8a923e8a5221119166d46544f8c91e070d3"
 )
 
 

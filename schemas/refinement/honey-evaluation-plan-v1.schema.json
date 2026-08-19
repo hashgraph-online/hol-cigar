@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/honey-evaluation-plan-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "profile_id", "cohort_id", "cycle", "evidence_class", "harness_source", "product_sources", "external_sources", "cells", "gates", "authority"],
+  "properties": {
+    "schema_version": {"const": "cigar.honey-evaluation-plan.v1"},
+    "plan_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "profile_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "cohort_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "cycle": {"enum": ["cycle-a", "cycle-b", "cycle-c"]},
+    "hypothesis_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "evidence_class": {"const": "development"},
+    "harness_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "product_sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["published_honey", "champion", "candidate"],
+      "properties": {
+        "published_honey": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+        "champion": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+        "candidate": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"}
+      }
+    },
+    "intelligence_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"const": "balanced.v1"},
+        "champion": {"enum": ["balanced.v1", "balanced.v2-candidate.1", "balanced.v2-candidate.2"]},
+        "candidate": {"enum": ["balanced.v2-candidate.1", "balanced.v2-candidate.2", "balanced.v3"]}
+      }
+    },
+    "external_sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["humidor", "cedar"],
+      "properties": {
+        "humidor": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+        "cedar": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"}
+      }
+    },
+    "cells": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell_id", "source_role", "lane", "fresh_root", "status"],
+        "properties": {
+          "cell_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "source_role": {"enum": ["published-honey", "champion", "candidate"]},
+          "lane": {"enum": ["kernel-source", "source-sidecar", "installed-sidecar", "humidor-source", "humidor-installed"]},
+          "fresh_root": {"const": true},
+          "status": {"const": "planned"}
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execute_tests", "edit_product", "create_pull_request", "merge", "release", "publish", "push_public"],
+      "properties": {
+        "execute_tests": {"const": true},
+        "edit_product": {"const": false},
+        "create_pull_request": {"const": false},
+        "merge": {"const": false},
+        "release": {"const": false},
+        "publish": {"const": false},
+        "push_public": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"cycle": {"const": "cycle-b"}}},
+      "then": {
+        "required": ["hypothesis_id", "intelligence_profiles"],
+        "properties": {
+          "intelligence_profiles": {
+            "oneOf": [
+              {
+                "properties": {
+                  "champion": {"const": "balanced.v1"},
+                  "candidate": {"const": "balanced.v2-candidate.1"}
+                }
+              },
+              {
+                "properties": {
+                  "champion": {"const": "balanced.v2-candidate.1"},
+                  "candidate": {"const": "balanced.v2-candidate.1"}
+                }
+              },
+              {
+                "properties": {
+                  "champion": {"const": "balanced.v2-candidate.1"},
+                  "candidate": {"const": "balanced.v2-candidate.2"}
+                }
+              },
+              {
+                "properties": {
+                  "champion": {"const": "balanced.v2-candidate.2"},
+                  "candidate": {"const": "balanced.v3"}
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

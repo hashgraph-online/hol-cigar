@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Produce one closed Honey 0.9.2 efficiency/reliability qualification report."""
+"""Produce one closed Honey 0.9.3 efficiency/reliability qualification report."""
 
 from __future__ import annotations
 
@@ -622,7 +622,7 @@ def build_report(
             "report_schema_sha256": contract.REPORT_SCHEMA_SHA256,
         },
         "product": {
-            "version": "0.9.2",
+            "version": "0.9.3",
             "release_state": "developer-preview",
             "context_abi": "cigar.context.v1",
             "target_triple": "aarch64-apple-darwin",

@@ -15,4 +15,4 @@ SDK-specific READMEs document clean install, transport, cancellation, streaming,
 safe-retry behavior. No client automatically retries `dispatchEffect`.
 
 Each installed SDK exports its idiomatic `CONTEXT_ABI`/`ContextABI` constant with the exact value
-`cigar.context.v1`; the packaged `release.json` binds that value to package version `0.9.2`.
+`cigar.context.v1`; the packaged `release.json` binds that value to package version `0.9.4`.

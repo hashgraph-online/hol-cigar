@@ -268,7 +268,7 @@ impl ExtensionBackend for WasiPreview2Backend {
         store.set_epoch_deadline(1);
         store.epoch_deadline_callback(move |context| {
             if context.data().cancellation.is_cancelled() || Instant::now() >= deadline {
-                Err(wasmtime::Error::msg("extension execution interrupted"))
+                Ok(UpdateDeadline::Interrupt)
             } else {
                 Ok(UpdateDeadline::Continue(1))
             }
@@ -339,7 +339,8 @@ fn component_engine(activated: &ActivatedExtension) -> Result<Engine, ExtensionH
     let mut config = Config::new();
     config
         .wasm_component_model(true)
-        .wasm_shared_everything_threads(false)
+        .wasm_features(wasmtime::WasmFeatures::THREADS, false)
+        .wasm_features(wasmtime::WasmFeatures::SHARED_EVERYTHING_THREADS, false)
         .consume_fuel(true)
         .epoch_interruption(true);
     let recursion_stack = usize::from(activated.manifest().limits.max_recursion_depth)

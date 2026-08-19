@@ -144,16 +144,16 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         self,
     ) -> None:
         configuration = builder._load_configuration(self.root)
-        self.assertEqual(configuration.version, "0.9.2")
-        self.assertEqual(configuration.python_version, "0.9.2")
+        self.assertEqual(configuration.version, "0.9.4")
+        self.assertEqual(configuration.python_version, "0.9.4")
         self.assertEqual(configuration.context_abi, "cigar.context.v1")
         self.assertEqual(
             configuration.sdist_filename,
-            "hol_cigar-0.9.2.tar.gz",
+            "hol_cigar-0.9.4.tar.gz",
         )
         self.assertEqual(
             configuration.wheel_filename,
-            "hol_cigar-0.9.2-py3-none-any.whl",
+            "hol_cigar-0.9.4-py3-none-any.whl",
         )
         self.assertEqual(
             set(configuration.authority), set(builder.HONEY_AUTHORITY_PATHS)
@@ -197,8 +197,8 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         second = self.produce(second_root)
 
         filenames = {
-            "hol_cigar-0.9.2.tar.gz",
-            "hol_cigar-0.9.2-py3-none-any.whl",
+            "hol_cigar-0.9.4.tar.gz",
+            "hol_cigar-0.9.4-py3-none-any.whl",
             "python-sdk-build-receipt.json",
         }
         self.assertEqual(first, second)
@@ -242,7 +242,7 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         )
 
     def test_sdist_tests_and_fixtures_are_self_contained(self) -> None:
-        prefix = "hol_cigar-0.9.2"
+        prefix = "hol_cigar-0.9.4"
         with tarfile.open(fileobj=io.BytesIO(self.sdist_bytes), mode="r:gz") as archive:
             members = {
                 member.name: archive.extractfile(member).read()
@@ -257,12 +257,23 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
             self.assertEqual(
                 packaged, (self.root / "sdk/fixtures" / fixture).read_bytes()
             )
-        test_payloads = [
-            payload
+        test_members = {
+            name: payload
             for name, payload in members.items()
             if name.startswith(f"{prefix}/tests/") and name.endswith(".py")
-        ]
-        self.assertEqual(len(test_payloads), 5)
+        }
+        self.assertEqual(
+            {Path(name).name for name in test_members},
+            {
+                "test_agent_b_example.py",
+                "test_client.py",
+                "test_digest.py",
+                "test_hardening.py",
+                "test_release_contract.py",
+                "test_workflow_session.py",
+            },
+        )
+        test_payloads = list(test_members.values())
         self.assertTrue(
             all(
                 b"importlib" in payload or b"resources" not in payload
@@ -279,7 +290,7 @@ class PythonSdkArtifactBuilderTests(unittest.TestCase):
         wheel.write_bytes(self.wheel_bytes)
         os.chmod(wheel, 0o600)
         payloads, _ = builder._read_wheel(wheel, self.configuration, 1_700_000_000)
-        record = "hol_cigar-0.9.2.dist-info/RECORD"
+        record = "hol_cigar-0.9.4.dist-info/RECORD"
         tampered = dict(payloads)
         tampered["cigar_sdk/client.py"] += b"\n"
         with self.assertRaisesRegex(ReleaseError, "RECORD binding differs"):

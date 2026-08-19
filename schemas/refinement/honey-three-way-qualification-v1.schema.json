@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/honey-three-way-qualification-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "qualification_id", "trial_id", "evidence_class", "partition", "plan_id", "build_set_id", "manifest_id", "tier0_attachment_id", "sources", "consumer_digests", "intelligence_profile", "token_budget", "tasks", "assignment_seeds", "evaluation_count", "evaluation_ids_digest", "run_ids_digest", "comparison_input_id", "comparison_id", "comparison_verdict", "tier1_complete", "aggregate", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.honey-three-way-qualification.v1"},
+    "qualification_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "trial_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "evidence_class": {"const": "development"},
+    "partition": {"const": "development"},
+    "plan_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "build_set_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "manifest_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "tier0_attachment_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "sources": {"$ref": "#/$defs/sourceMap"},
+    "consumer_digests": {"$ref": "#/$defs/digestMap"},
+    "intelligence_profile": {"const": "balanced.v1"},
+    "token_budget": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "tasks": {"type": "integer", "minimum": 18, "maximum": 270},
+    "assignment_seeds": {"type": "integer", "minimum": 2, "maximum": 16},
+    "evaluation_count": {"type": "integer", "minimum": 108, "maximum": 12960},
+    "evaluation_ids_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "run_ids_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_input_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "comparison_verdict": {"enum": ["eligible", "ineligible", "invalid", "needs_human_review"]},
+    "tier1_complete": {"const": false},
+    "aggregate": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["treatment", "critical_context_recall_ppm", "evidence_item_precision_ppm", "evidence_token_precision_ppm", "verified_task_success_ppm", "mean_selected_tokens"],
+        "properties": {
+          "treatment": {"enum": ["honey", "champion", "candidate"]},
+          "critical_context_recall_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "evidence_item_precision_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "evidence_token_precision_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "verified_task_success_ppm": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "mean_selected_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+        }
+      }
+    },
+    "attestation": {"$ref": "intelligence-profile-evaluation-v1.schema.json#/$defs/attestation"}
+  },
+  "$defs": {
+    "sourceMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+        "champion": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+        "candidate": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"}
+      }
+    },
+    "digestMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "champion": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "candidate": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    }
+  }
+}

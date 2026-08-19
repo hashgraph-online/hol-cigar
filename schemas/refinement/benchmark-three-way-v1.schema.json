@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/benchmark-three-way-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "three_way_result_id", "run_id", "pair_id", "task_id", "order", "assignment_digests", "consumer_digests", "outcomes", "observation_ids", "observations", "status"],
+  "properties": {
+    "schema_version": {"const": "cigar.benchmark-three-way.v1"},
+    "three_way_result_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "run_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "pair_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "order": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"enum": ["honey", "champion", "candidate"]}
+    },
+    "assignment_digests": {"$ref": "#/$defs/digestMap"},
+    "consumer_digests": {"$ref": "#/$defs/digestMap"},
+    "outcomes": {"$ref": "#/$defs/outcomeMap"},
+    "observation_ids": {"$ref": "#/$defs/nullableDigestMap"},
+    "observations": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "items": {"$ref": "observation-v2.schema.json"}
+    },
+    "status": {"enum": ["completed", "completed-with-treatment-failures"]}
+  },
+  "$defs": {
+    "digestMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "champion": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "candidate": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    },
+    "nullableDigestMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+        "champion": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+        "candidate": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"}
+      }
+    },
+    "outcomeMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["honey", "champion", "candidate"],
+      "properties": {
+        "honey": {"$ref": "#/$defs/outcome"},
+        "champion": {"$ref": "#/$defs/outcome"},
+        "candidate": {"$ref": "#/$defs/outcome"}
+      }
+    },
+    "outcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "observation_id", "failure"],
+          "properties": {
+            "status": {"const": "completed"},
+            "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+            "failure": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "observation_id", "failure"],
+          "properties": {
+            "status": {"const": "failed"},
+            "observation_id": {"type": "null"},
+            "failure": {"$ref": "#/$defs/failure"}
+          }
+        }
+      ]
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "exit_code", "failure_code", "stdout_bytes", "stdout_digest", "stderr_bytes", "stderr_digest", "duration_ms"],
+      "properties": {
+        "category": {"const": "process-exit"},
+        "exit_code": {"type": "integer", "minimum": 1, "maximum": 255},
+        "failure_code": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+        "stdout_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "stdout_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "stderr_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+        "stderr_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "duration_ms": {"type": "integer", "minimum": 0, "maximum": 604800000}
+      }
+    }
+  }
+}

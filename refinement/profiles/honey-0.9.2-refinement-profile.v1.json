@@ -1,0 +1,259 @@
+{
+  "schema_version": "cigar.honey-refinement-profile.v1",
+  "profile_id": "cigar.honey.0.9.2-h1.refinement.macos-arm64.v1",
+  "target": {
+    "candidate_version": "0.9.2",
+    "release_target": "0.9.2",
+    "channel": "honey",
+    "evidence_class": "development",
+    "platform": "macos-arm64",
+    "topology": "host-native-local-sidecar"
+  },
+  "frozen_sources": {
+    "published_honey": {
+      "repository": "https://github.com/hashgraph-online/hol-cigar.git",
+      "version": "0.9.1",
+      "source": {
+        "revision": "ee9b52b69f4245c27b46da6ef2fc4a070430caed",
+        "tree": "7c36625bfa09417150f3b0ec6dafc7161105234f"
+      },
+      "tag": "hol-cigar-v0.9.1-pypi.2",
+      "immutable": true
+    },
+    "champion": {
+      "repository": "https://github.com/hashgraph-online/shadow-cigar.git",
+      "version": "0.9.2",
+      "source": {
+        "revision": "b864d4e142de434790ec11f470dfe2eeb51f9099",
+        "tree": "ef62fcf807bac088239d6e29c64f64ce595414cf"
+      },
+      "tag": null,
+      "immutable": true
+    }
+  },
+  "candidate_policy": {
+    "base": {
+      "revision": "b864d4e142de434790ec11f470dfe2eeb51f9099",
+      "tree": "ef62fcf807bac088239d6e29c64f64ce595414cf"
+    },
+    "branch_pattern": "^(?:refine/honey-0\\.9\\.2-[a-z0-9][a-z0-9._-]{0,63}|release/honey-0\\.9\\.2-h1)$",
+    "descendant_required": true,
+    "isolated_worktree_required": true,
+    "champion_replacement_rule": "pareto-superior-only",
+    "final_signed_source_rule": "qualify-after-private-merge"
+  },
+  "scope": {
+    "allowed_components": [
+      {
+        "id": "context-quality",
+        "paths": ["crates/cigar-retrieval", "crates/cigar-compiler", "crates/cigar-code-intel"],
+        "objectives": ["critical-context-recall", "first-useful-evidence-rank", "citation-resolvability", "required-source-coverage", "lineage-diversity", "duplicate-suppression"],
+        "activation": "measured-gap-only",
+        "maximum_files": 10,
+        "maximum_lines": 500
+      },
+      {
+        "id": "token-efficiency",
+        "paths": ["crates/cigar-compiler"],
+        "objectives": ["duplicate-representation-reduction", "budget-displacement-reduction", "physical-input-token-reduction"],
+        "activation": "measured-gap-only",
+        "maximum_files": 8,
+        "maximum_lines": 400
+      },
+      {
+        "id": "semantic-reuse",
+        "paths": ["crates/cigar-compiler", "crates/cigar-store", "crates/cigar-catalog"],
+        "objectives": ["safe-reuse-hit-rate", "authorization-invalidation", "policy-invalidation", "catalog-invalidation", "materializer-invalidation"],
+        "activation": "measured-gap-only",
+        "maximum_files": 10,
+        "maximum_lines": 500
+      },
+      {
+        "id": "incremental-storage",
+        "paths": ["crates/cigar-store", "crates/cigar-catalog"],
+        "objectives": ["storage-v5-growth", "compaction-correctness", "migration-recovery", "backup-pin-legal-hold-preservation"],
+        "activation": "measured-gap-only",
+        "maximum_files": 10,
+        "maximum_lines": 500
+      },
+      {
+        "id": "startup-and-recovery",
+        "paths": ["crates/cigar-daemon", "crates/cigar-store"],
+        "objectives": ["bounded-checkpoint-selection", "readiness-latency", "full-history-authentication", "crash-recovery"],
+        "activation": "measured-gap-only",
+        "maximum_files": 8,
+        "maximum_lines": 400
+      },
+      {
+        "id": "operational-explainability",
+        "paths": ["crates/cigar-compiler", "crates/cigar-retrieval", "crates/cigar-observe"],
+        "objectives": ["selection-reason-codes", "displacement-reason-codes", "cache-miss-reason-codes", "invalidation-reason-codes", "recovery-reason-codes", "fail-closed-reason-codes"],
+        "activation": "measured-gap-only",
+        "maximum_files": 8,
+        "maximum_lines": 400
+      },
+      {
+        "id": "security-correctness",
+        "paths": ["crates/cigar-policy", "crates/cigar-effects", "crates/cigar-replay"],
+        "objectives": ["authorization-correctness", "effect-safety", "replay-integrity"],
+        "activation": "hard-invariant-correction-only",
+        "maximum_files": 8,
+        "maximum_lines": 400
+      }
+    ],
+    "frozen_paths": [
+      "crates/cigar-api",
+      "crates/cigar-protocol",
+      "proto",
+      "schemas",
+      "sdk",
+      "Cargo.lock",
+      "packaging/product-version.v1.json",
+      "packaging/honey",
+      "refinement/corpus",
+      "refinement/policy/promotion-v1.json",
+      "scripts/release",
+      ".github"
+    ],
+    "external_responsibilities": [
+      "connectors",
+      "organizational-workflows",
+      "cloud-deployment",
+      "operator-dashboards",
+      "cross-repository-composition",
+      "release-publication"
+    ]
+  },
+  "frozen_contract": {
+    "context_abi": "cigar.context.v1",
+    "protocol_minimum": "1.0",
+    "protocol_maximum": "1.x",
+    "public_v1_operations": 45,
+    "public_v1_payloads": 70,
+    "balanced_v1_compatibility": true,
+    "breaking_changes_allowed": false
+  },
+  "hard_invariants": [
+    {"id": "artifact-digests", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "assignment-balance", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "attachment-integrity", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "benchmark-immutability", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "clean-source-before-and-after", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "contamination", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "evaluator-attestation", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "exact-pins", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "observation-chain", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "source-identity", "source": "promotion-policy-tier0", "failure_effect": "reject-candidate"},
+    {"id": "api-sdk-compatibility", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "conformance", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "deterministic-repeat", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "effect-journal-durability", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "prompt-injection-authority", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "required-tests", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "security-findings", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "silent-merge-conflicts", "source": "promotion-policy-tier1", "failure_effect": "reject-candidate"},
+    {"id": "zero-authorization-violations", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"},
+    {"id": "zero-budget-overflow", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"},
+    {"id": "zero-digest-mismatches", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"},
+    {"id": "zero-prohibited-materialization", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"},
+    {"id": "complete-selected-provenance", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"},
+    {"id": "zero-unsafe-effect-retries", "source": "promotion-policy-metric", "failure_effect": "reject-candidate"}
+  ],
+  "evaluation": {
+    "cohort": {
+      "artifact_id": "honey-0.9.2-three-way-cohort-v1",
+      "path": "refinement/cohorts/honey-0.9.2-three-way.v1.json",
+      "sha256": "24a75ae8711eb9ec53d884784d46b34bd342ddf7aeb237c9d8c401680404d422",
+      "bytes": 6939
+    },
+    "promotion_policy": {
+      "artifact_id": "constrained-pareto-promotion-policy-v1",
+      "path": "refinement/policy/promotion-v1.json",
+      "sha256": "3b9036bb7e9559f6bfad4701e34db17fc47593f7f85dea25b5656b9ca264a0c4",
+      "bytes": 5495
+    },
+    "efficiency_profile": {
+      "artifact_id": "honey-efficiency-reliability-profile-v1",
+      "path": "packaging/honey/efficiency-qualification-profile.v1.json",
+      "sha256": "3031e97359cc5422829aa1568c17e3b93611bbfe7aa9ec0a154105ae219a3e1d",
+      "bytes": 7624
+    },
+    "identical_inputs_required": true,
+    "three_treatments_required": true,
+    "content_safe_receipts_required": true
+  },
+  "cycles": [
+    {
+      "ordinal": 1,
+      "id": "cycle-a",
+      "purpose": "Correct and freeze measurement infrastructure; make no CIGAR product-behavior change.",
+      "allowed_change_class": "measurement-harness-only",
+      "maximum_product_hypotheses": 0,
+      "entry_gate": "evaluation-corpus-and-metric-freeze",
+      "exit_gate": "three-way-baseline-replayable"
+    },
+    {
+      "ordinal": 2,
+      "id": "cycle-b",
+      "purpose": "Test at most three isolated product hypotheses derived from measured Cycle A gaps.",
+      "allowed_change_class": "targeted-product-improvement",
+      "maximum_product_hypotheses": 3,
+      "entry_gate": "cycle-a-evidence-accepted",
+      "exit_gate": "candidate-nomination"
+    },
+    {
+      "ordinal": 3,
+      "id": "cycle-c",
+      "purpose": "Run resilience, adversarial, restart, recovery, and regression reduction without adding feature scope.",
+      "allowed_change_class": "resilience-and-regression-only",
+      "maximum_product_hypotheses": 0,
+      "entry_gate": "candidate-nominated",
+      "exit_gate": "private-merge-ready"
+    }
+  ],
+  "promotion_thresholds": [
+    {"id": "workflow-completion", "operator": "exactly", "value": 1.0, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "required-source-coverage", "operator": "exactly", "value": 1.0, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "citation-resolvability", "operator": "at-least", "value": 0.99, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "duplicate-selected-content", "operator": "at-most", "value": 0.05, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "budget-displaced-to-selected", "operator": "less-than", "value": 10.0, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "latency-slope", "operator": "at-most", "value": 10.0, "unit": "milliseconds-per-request", "scope": "global"},
+    {"id": "startup-at-retention-ceiling", "operator": "at-most", "value": 30.0, "unit": "seconds", "scope": "global"},
+    {"id": "steady-state-storage-growth", "operator": "less-than", "value": 1048576, "unit": "bytes-per-compilation", "scope": "global"},
+    {"id": "lineage-diversity-delta", "operator": "nonnegative", "value": 0.0, "unit": "ratio", "scope": "global-and-workflow"},
+    {"id": "hard-invariants", "operator": "all-pass", "value": "pass", "unit": "status", "scope": "global"},
+    {"id": "protected-strata", "operator": "all-pass", "value": "pass", "unit": "status", "scope": "protected-stratum"},
+    {"id": "public-v1-operation-count", "operator": "unchanged", "value": 45, "unit": "count", "scope": "protocol"},
+    {"id": "public-v1-payload-count", "operator": "unchanged", "value": 70, "unit": "count", "scope": "protocol"}
+  ],
+  "deferred_work": [
+    "seven-day-fuzz",
+    "four-hour-mutation",
+    "twenty-four-hour-soak",
+    "production-chaos-matrix",
+    "large-scale-qualification",
+    "developer-id-notarization",
+    "two-builder-reproducibility",
+    "cloud-cigar",
+    "containerized-cigar",
+    "remote-multi-tenancy",
+    "shared-postgresql-s3",
+    "connector-development",
+    "organizational-workflow-features",
+    "dashboard-product-features",
+    "public-release-publication"
+  ],
+  "human_breakpoints": [
+    {"ordinal": 1, "id": "public-pr-creation", "required_before": "public-repository-mutation", "automation_may_continue_without_approval": false}
+  ],
+  "authority": {
+    "create_private_draft_pull_request": true,
+    "approve": false,
+    "merge": true,
+    "tag": false,
+    "release": false,
+    "publish": false,
+    "deploy": false,
+    "push_public": false
+  }
+}

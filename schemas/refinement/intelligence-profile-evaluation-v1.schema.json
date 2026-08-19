@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/intelligence-profile-evaluation-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evaluation_id", "task_id", "task_lineage_id", "stratum", "seed_index", "treatment", "profile_id", "observation_id", "manifest_id", "oracle_digest", "archive_digest", "bridge_digest", "selected_evidence_digest", "mapped_blocks", "unmapped_blocks", "verifier_result_digest", "isolation_digest", "metrics", "attestation"],
+  "properties": {
+    "schema_version": {"const": "cigar.intelligence-profile-evaluation.v1"},
+    "evaluation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "task_lineage_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "stratum": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "seed_index": {"type": "integer", "minimum": 0, "maximum": 15},
+    "treatment": {"enum": ["honey", "champion", "candidate"]},
+    "profile_id": {"enum": ["balanced.v1", "balanced.v2-candidate.1", "balanced.v2-candidate.2", "balanced.v3"]},
+    "observation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "manifest_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "oracle_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "archive_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "bridge_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "selected_evidence_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "mapped_blocks": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "unmapped_blocks": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "verifier_result_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "isolation_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/metric"}
+    },
+    "attestation": {"$ref": "#/$defs/attestation"}
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "numerator", "denominator", "value", "unit", "applicable"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "numerator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+        "denominator": {"type": "number", "minimum": 0, "maximum": 1000000000000000},
+        "value": {"type": "number", "minimum": -1000000000000000, "maximum": 1000000000000000},
+        "unit": {"enum": ["boolean", "count", "ratio", "rank", "tokens", "milliseconds", "bytes", "usd"]},
+        "applicable": {"type": "boolean"}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "key_fingerprint", "custody", "mac"],
+      "properties": {
+        "algorithm": {"const": "hmac-sha256-v1"},
+        "key_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "key_fingerprint": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "custody": {"const": "external-independent"},
+        "mac": {"$ref": "common-v1.schema.json#/$defs/sha256"}
+      }
+    }
+  }
+}

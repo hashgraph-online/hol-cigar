@@ -5,6 +5,12 @@ manual page. Core groups are source, context, project, focus, space, handoff, ef
 backup, migration, revision compaction, integrity, garbage collection, diagnostics, daemon/MCP
 service, plugin, and release verification.
 
+`cigar help`, `cigar completion <bash|zsh|fish>`, and `cigar man` return the checked-in help,
+completion, and manual assets. A source test derives the public command groups and long options from
+the parser and requires all five user-facing assets to match, including the closed value domains for
+output, target, color, Unicode, and completion shell. Unsupported completion shells fail with the
+stable invalid-command category.
+
 Machine output is one `cigar.cli.output.v1` JSON object on stdout. Progress is restricted to an
 interactive stderr and disabled by `--quiet`. Use `--authorization-file`; credentials in arguments,
 URLs, project configuration, or debug output are rejected. Mutations require `--yes` unless

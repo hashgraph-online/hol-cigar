@@ -15,24 +15,24 @@ Publish one crate at a time and wait until crates.io resolves the exact version 
 
 1. `cigar-aws-creds = 0.39.1-cigar.1`
 2. `cigar-rust-s3 = 0.37.2-cigar.1`
-3. `cigar-canon = 0.9.2`
-4. `cigar-protocol = 0.9.2`
-5. `cigar-testkit = 0.9.2`
-6. `cigar-windows-ipc = 0.9.2`
-7. `cigar-crypto = 0.9.2`
-8. `cigar-replay = 0.9.2`
-9. `cigar-policy = 0.9.2`
-10. `cigar-store = 0.9.2`
-11. `cigar-effects = 0.9.2`
-12. `cigar-retrieval = 0.9.2`
-13. `cigar-space = 0.9.2`
-14. `cigar-catalog = 0.9.2`
-15. `cigar-code-intel = 0.9.2`
-16. `cigar-compiler = 0.9.2`
-17. `cigar-api = 0.9.2`
-18. `cigar-observe = 0.9.2`
-19. `cigar-daemon = 0.9.2`
-20. `cigar-sdk = 0.9.2`
+3. `cigar-canon = 0.9.4`
+4. `cigar-protocol = 0.9.4`
+5. `cigar-testkit = 0.9.4`
+6. `cigar-windows-ipc = 0.9.4`
+7. `cigar-crypto = 0.9.4`
+8. `cigar-replay = 0.9.4`
+9. `cigar-policy = 0.9.4`
+10. `cigar-store = 0.9.4`
+11. `cigar-effects = 0.9.4`
+12. `cigar-retrieval = 0.9.4`
+13. `cigar-space = 0.9.4`
+14. `cigar-catalog = 0.9.4`
+15. `cigar-code-intel = 0.9.4`
+16. `cigar-compiler = 0.9.4`
+17. `cigar-api = 0.9.4`
+18. `cigar-observe = 0.9.4`
+19. `cigar-daemon = 0.9.4`
+20. `cigar-sdk = 0.9.4`
 
 `cigar-testkit` is a versioned development dependency used during package verification.
 `cigar-windows-ipc` is a normal Windows-only daemon dependency, so a macOS-only check is not a
@@ -94,7 +94,7 @@ The qualifier runs `cargo package --locked --allow-dirty --offline` for every cr
 above. For every archive, it rejects unsafe paths and links, missing release assets, path
 dependencies in the normalized manifest, unexpected tests, a changed security-fork identity, a
 lost Ring selection, restored Surf/async-std exposure, or missing proto/migrations. It then compiles
-a clean project depending only on `cigar-sdk = 0.9.2` from the local registry.
+a clean project depending only on `cigar-sdk = 0.9.4` from the local registry.
 
 The evidence document uses the closed schema
 `cigar.rust-publication-chain-qualification.v1`. Its writer validates that it contains only package
@@ -120,7 +120,7 @@ Before calling this chain release-ready:
    receipt for each crate, compare it with the approved package, and stop immediately on any
    identity, version, checksum, feature, or ownership mismatch.
 4. From a clean environment with no workspace patch or local registry replacement, compile and
-   test `cigar-sdk = 0.9.2` from crates.io on the supported platform matrix.
+   test `cigar-sdk = 0.9.4` from crates.io on the supported platform matrix.
 5. Reconcile the published archives with release signing, SBOM, license, provenance, artifact
    inventory, and final release-policy evidence.
 

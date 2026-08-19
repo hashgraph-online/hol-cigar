@@ -68,6 +68,7 @@ AUTHORITY_PATHS = (
     f"{SDK_RELATIVE}/pyproject.toml",
     f"{SDK_RELATIVE}/uv.lock",
     f"{SDK_RELATIVE}/src/cigar_sdk/release.json",
+    "sdk/workflow-context-session.v1.json",
 )
 HONEY_AUTHORITY_PATHS = (
     "packaging/product-version.v1.json",
@@ -79,6 +80,7 @@ HONEY_AUTHORITY_PATHS = (
     f"{SDK_RELATIVE}/pyproject.toml",
     f"{SDK_RELATIVE}/uv.lock",
     f"{SDK_RELATIVE}/src/cigar_sdk/release.json",
+    "sdk/workflow-context-session.v1.json",
 )
 SOURCE_INCLUDES = (
     ".gitignore",
@@ -89,6 +91,7 @@ SOURCE_INCLUDES = (
     "packaging/contracts/python-wheel.v1.json",
     "sdk/fixtures/problem-index-unavailable-v1.json",
     "sdk/fixtures/semantic-bundle-v1.json",
+    "sdk/workflow-context-session.v1.json",
     "sdk/python/**",
     "scripts/release/build_python_sdk_artifacts.py",
     "scripts/release/evidence_workspace.py",
@@ -247,9 +250,7 @@ def _authority_digests(
 
 
 def _python_distribution_version(version: str) -> str:
-    stable = re.fullmatch(
-        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
-    )
+    stable = re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version)
     if stable is not None:
         return ".".join(stable.groups())
     match = re.fullmatch(
@@ -407,8 +408,8 @@ def _validate_pyproject(document: dict[str, Any], python_version: str) -> None:
         raise ReleaseError("Python project identity or runtime metadata is stale")
     if project.get("urls") != {
         "Homepage": "https://hol.org",
-        "Repository": "https://github.com/HGraphPunks/cigar",
-        "Issues": "https://github.com/HGraphPunks/cigar/issues",
+        "Repository": "https://github.com/hashgraph-online/hol-cigar",
+        "Issues": "https://github.com/hashgraph-online/hol-cigar/issues",
     }:
         raise ReleaseError("Python project URL metadata is stale")
     if document.get("build-system") != {
@@ -556,6 +557,7 @@ def _source_assets(root: Path) -> dict[str, bytes]:
         "pyproject.toml",
         "src/cigar_sdk/__init__.py",
         "src/cigar_sdk/release.json",
+        "src/cigar_sdk/workflow-context-session.v1.json",
         "src/cigar_sdk/py.typed",
     }
     if not required.issubset(assets) or not any(
@@ -574,6 +576,14 @@ def _source_assets(root: Path) -> dict[str, bytes]:
         )
         if packaged != reference:
             raise ReleaseError(f"packaged Python SDK fixture is stale: {fixture}")
+    packaged_contract = assets.get("src/cigar_sdk/workflow-context-session.v1.json")
+    contract_reference = _read_stable_file(
+        root / "sdk/workflow-context-session.v1.json",
+        MAX_SOURCE_BYTES,
+        "sdk/workflow-context-session.v1.json",
+    )
+    if packaged_contract != contract_reference:
+        raise ReleaseError("packaged Python workflow-session contract is stale")
     aliases: set[str] = set()
     for relative, payload in assets.items():
         safe_relative_path(relative)
@@ -617,7 +627,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9.2",
+        "marketing_name": "CIGAR Honey v0.9.4",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,
@@ -1361,8 +1371,14 @@ def _metadata_summary(
         ("Version", configuration.python_version),
         ("Summary", "HOL.org CIGAR Python SDK alpha"),
         ("Project-URL", "Homepage, https://hol.org"),
-        ("Project-URL", "Repository, https://github.com/HGraphPunks/cigar"),
-        ("Project-URL", "Issues, https://github.com/HGraphPunks/cigar/issues"),
+        (
+            "Project-URL",
+            "Repository, https://github.com/hashgraph-online/hol-cigar",
+        ),
+        (
+            "Project-URL",
+            "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
+        ),
         ("License-Expression", "Apache-2.0"),
         ("License-File", "LICENSE"),
         ("License-File", "NOTICE"),

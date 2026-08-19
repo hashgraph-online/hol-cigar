@@ -5,6 +5,7 @@ mod compiler;
 mod contract;
 mod delta;
 mod materializer;
+mod packing_workspace;
 mod present;
 mod tokenizer;
 

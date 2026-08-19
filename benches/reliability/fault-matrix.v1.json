@@ -1,0 +1,156 @@
+{
+  "schema_version": "cigar.h094-fault-matrix.v1",
+  "cases": [
+    {
+      "case_id": "context-durable-process-kill",
+      "faults": ["process_kill_context_boundaries"],
+      "package": "cigar-store",
+      "test": "sqlite_v5::tests::process_kill_matrix_recovers_only_prior_or_complete_revisions",
+      "injection_mode": "real_process_kill",
+      "expected": "exact_recovery"
+    },
+    {
+      "case_id": "effect-durable-process-kill",
+      "faults": ["process_kill_effect_boundaries", "disk_full"],
+      "package": "cigar-effects",
+      "test": "efx_c01_through_c24_use_real_process_kill_and_fresh_recovery",
+      "injection_mode": "real_process_kill_and_store_fault",
+      "expected": "exact_recovery"
+    },
+    {
+      "case_id": "read-only-filesystem",
+      "faults": ["read_only_filesystem"],
+      "package": "cigar-store",
+      "test": "blob::tests::read_only_blob_root_fails_closed_without_partial_publication",
+      "injection_mode": "filesystem_permission_mutation",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "blob-publication-fsync",
+      "faults": ["fsync_error"],
+      "package": "cigar-store",
+      "test": "blob::tests::every_publication_failpoint_is_atomic_and_reconcilable",
+      "injection_mode": "durable_publication_failpoint",
+      "expected": "exact_recovery"
+    },
+    {
+      "case_id": "truncated-checkpoint-chain",
+      "faults": ["truncated_checkpoint"],
+      "package": "cigar-store",
+      "test": "sqlite_v5::tests::missing_wrong_reordered_and_truncated_chain_rows_fail_closed",
+      "injection_mode": "durable_chain_mutation",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "corrupt-index",
+      "faults": ["corrupt_index"],
+      "package": "cigar-store",
+      "test": "sqlite::projection_generation_tests::startup_recovers_corrupt_rows_fts_and_generation_metadata",
+      "injection_mode": "projection_corruption",
+      "expected": "exact_recovery"
+    },
+    {
+      "case_id": "stale-vector-watermark",
+      "faults": ["stale_watermark"],
+      "package": "cigar-retrieval",
+      "test": "durable_vector::tests::stale_watermark_and_missing_activation_select_deterministic_fallback",
+      "injection_mode": "activation_watermark_mutation",
+      "expected": "deterministic_degradation"
+    },
+    {
+      "case_id": "missing-encrypted-blob",
+      "faults": ["missing_blob"],
+      "package": "cigar-store",
+      "test": "backup::tests::signed_backup_verifies_restores_empty_and_preserves_root",
+      "injection_mode": "physical_blob_removal",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "permission-change",
+      "faults": ["permission_change"],
+      "package": "cigar-store",
+      "test": "conformance::tests::sqlite_permission_change_fails_closed",
+      "injection_mode": "filesystem_permission_mutation",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "clock-rollback",
+      "faults": ["clock_rollback"],
+      "package": "cigar-catalog",
+      "test": "ingestion::tests::source_observation_uses_a_monotonic_logical_successor_when_wall_clock_regresses",
+      "injection_mode": "wall_clock_substitution",
+      "expected": "exact_recovery"
+    },
+    {
+      "case_id": "clock-advance",
+      "faults": ["clock_advance"],
+      "package": "cigar-effects",
+      "test": "approval_binding_rejects_stale_version_digest_time_and_provenance",
+      "injection_mode": "authority_clock_substitution",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "worker-panic",
+      "faults": ["worker_panic"],
+      "package": "cigar-daemon",
+      "test": "production_runtime::tests::poison_worker_failure_closes_readiness_dispatch_and_every_queue",
+      "injection_mode": "worker_panic",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "vector-outage-permitted",
+      "faults": ["vector_outage_permitted_degradation"],
+      "package": "cigar-retrieval",
+      "test": "index::tests::graph_cycles_are_bounded_and_vector_denial_or_fallback_is_explicit",
+      "injection_mode": "vector_backend_denial",
+      "expected": "deterministic_degradation"
+    },
+    {
+      "case_id": "vector-outage-required",
+      "faults": ["vector_outage_required_fail_closed"],
+      "package": "cigar-daemon",
+      "test": "production_vector::tests::restart_corruption_repair_and_storage_outage_preserve_mandatory_generation",
+      "injection_mode": "mandatory_vector_storage_outage",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "tokenizer-binding",
+      "faults": ["tokenizer_unavailable", "tokenizer_wrong_digest"],
+      "package": "cigar-daemon",
+      "test": "catalog_context_application::tests::tokenizer_registry_resolves_known_and_rejects_duplicate_conflicting_or_unknown_entries",
+      "injection_mode": "dependency_binding_substitution",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "materialization-runtime-dependency",
+      "faults": [
+        "tokenizer_crash",
+        "tokenizer_timeout",
+        "tokenizer_oversized_output",
+        "materializer_crash",
+        "materializer_timeout",
+        "materializer_oversized_output"
+      ],
+      "package": "cigar-daemon",
+      "test": "catalog_context_application::tests::tokenizer_and_materialization_dependency_faults_fail_closed",
+      "injection_mode": "blocking_dependency_fault",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "materializer-unavailable",
+      "faults": ["materializer_unavailable"],
+      "package": "cigar-compiler",
+      "test": "missing_extra_or_digest_mismatched_bodies_fail_closed",
+      "injection_mode": "materialization_body_dependency_removal",
+      "expected": "fail_closed"
+    },
+    {
+      "case_id": "materializer-wrong-digest",
+      "faults": ["materializer_wrong_digest"],
+      "package": "cigar-daemon",
+      "test": "catalog_context_application::tests::wrong_materializer_digest_is_rejected_after_exact_render",
+      "injection_mode": "materializer_binding_substitution",
+      "expected": "fail_closed"
+    }
+  ]
+}

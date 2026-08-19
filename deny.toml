@@ -32,19 +32,6 @@ skip = [
   { name = "tower-http", version = "=0.6.11" },
   { name = "wasi", version = "=0.11.1+wasi-snapshot-preview1" },
   { name = "windows-sys", version = "=0.52.0" },
-  # The supported Wasmtime 36.0.13 line uses windows-sys 0.60 and the 0.53
-  # target packages. These are Windows-only transitive crates and are not
-  # linked into the local Apple-silicon Honey release cohort.
-  { name = "windows-sys", version = "=0.60.2" },
-  { name = "windows-targets", version = "=0.53.5" },
-  { name = "windows_aarch64_gnullvm", version = "=0.53.1" },
-  { name = "windows_aarch64_msvc", version = "=0.53.1" },
-  { name = "windows_i686_gnu", version = "=0.53.1" },
-  { name = "windows_i686_gnullvm", version = "=0.53.1" },
-  { name = "windows_i686_msvc", version = "=0.53.1" },
-  { name = "windows_x86_64_gnu", version = "=0.53.1" },
-  { name = "windows_x86_64_gnullvm", version = "=0.53.1" },
-  { name = "windows_x86_64_msvc", version = "=0.53.1" },
   # Windows-only transitive compatibility split: sysinfo's windows 0.61 line
   # still requires windows-link 0.1 while the current windows-sys/reqwest graph
   # requires 0.2. Neither crate is linked into the macOS release cohort.

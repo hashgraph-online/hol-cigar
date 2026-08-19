@@ -22,7 +22,7 @@ SPEC.loader.exec_module(corpus_manager)
 class CorpusManagerTests(unittest.TestCase):
     def test_campaign_policy_is_complete_and_regression_is_pinned(self) -> None:
         policy, targets = corpus_manager.load_policy()
-        self.assertEqual(len(targets), 14)
+        self.assertEqual(len(targets), 19)
         self.assertEqual(
             policy["limits"],
             {
@@ -360,11 +360,13 @@ class CorpusManagerTests(unittest.TestCase):
             (mirror / "crates" / "example").mkdir(parents=True, mode=0o700)
             files = {
                 "fuzz/Cargo.toml": (b"[workspace]\n", "100644"),
+                "fuzz/artifacts/.gitkeep": (b"tracked marker\n", "100644"),
                 "crates/example/build.rs": (b"fn main() {}\n", "100755"),
             }
             entries = []
             for relative, (body, git_mode) in files.items():
                 path = mirror / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(body)
                 entries.append(
                     {
@@ -742,7 +744,7 @@ class CorpusManagerTests(unittest.TestCase):
                 "schema_version": "cigar.fuzz-corpus-minimization.v1",
                 "created_at": corpus_manager.utc_now(),
                 "source_working_corpus_unchanged": True,
-                "all_fourteen_targets_snapshotted": True,
+                "all_campaign_targets_snapshotted": True,
                 "source_corpus_before": source_snapshots,
                 "source_corpus_after": source_snapshots,
                 "dependency_mode": "locked-offline-cargo-wrapper",

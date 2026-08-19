@@ -48,7 +48,7 @@ class HoneyConfigurationTests(unittest.TestCase):
                 "schema_version": "cigar.product-version.v1",
                 "product": "cigar",
                 "version": honey.EXPECTED_VERSION,
-                "target_release_version": "0.9.2",
+                "target_release_version": "0.9.4",
                 "context_abi": honey.EXPECTED_ABI,
                 "release_state": honey.EXPECTED_STATE,
                 "channel": "honey",
@@ -96,7 +96,7 @@ class HoneyConfigurationTests(unittest.TestCase):
                     "id": f"payload-{index:02d}",
                     "kind": "release-notes" if index == 10 else "payload-archive",
                     "filename": (
-                        "RELEASE_NOTES_HONEY_v0.9.2.md"
+                        "RELEASE_NOTES_HONEY_v0.9.4.md"
                         if index == 10
                         else f"payload-{index:02d}.tar.gz"
                     ),
@@ -172,7 +172,7 @@ class HoneyConfigurationTests(unittest.TestCase):
     def test_loads_exact_thirteen_attachment_honey_projection(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             configuration = honey._load_configuration(self._root(Path(raw)))
-        self.assertEqual(configuration.version, "0.9.2")
+        self.assertEqual(configuration.version, "0.9.4")
         self.assertEqual(len(configuration.artifacts), 13)
         self.assertEqual(
             {spec.filename for spec in configuration.artifacts if spec.generated},

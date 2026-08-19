@@ -164,6 +164,41 @@ class DevelopmentProtocolBaselineTests(unittest.TestCase):
                 self.mutate_json(root, relative, mutation)
                 with self.assertRaisesRegex(baseline.ReleaseError, message):
                     baseline.validate(root)
+                with self.assertRaisesRegex(baseline.ReleaseError, message):
+                    baseline.generate(root)
+
+    def test_context_abi_identity_cannot_be_rebaselined(self) -> None:
+        mutations = (
+            (
+                "packaging/product-version.v1.json",
+                '"context_abi": "cigar.context.v1"',
+                '"context_abi": "cigar.context.v2"',
+                "product Context ABI",
+            ),
+            (
+                "schemas/proto/context_abi.proto",
+                "package cigar.context.v1;",
+                "package cigar.context.v2;",
+                "Context ABI Proto package",
+            ),
+            (
+                "crates/cigar-protocol/src/lib.rs",
+                'pub const CONTEXT_ABI: &str = "cigar.context.v1";',
+                'pub const CONTEXT_ABI: &str = "cigar.context.v2";',
+                "Rust protocol identity",
+            ),
+        )
+        for relative, before, after, message in mutations:
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as raw:
+                root = self.staged_root(Path(raw))
+                path = root / relative
+                source = path.read_text(encoding="utf-8")
+                self.assertEqual(source.count(before), 1)
+                path.write_text(source.replace(before, after, 1), encoding="utf-8")
+                with self.assertRaisesRegex(baseline.ReleaseError, message):
+                    baseline.validate(root)
+                with self.assertRaisesRegex(baseline.ReleaseError, message):
+                    baseline.generate(root)
 
     def test_generated_digest_and_runtime_proto_drift_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

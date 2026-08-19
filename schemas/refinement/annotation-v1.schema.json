@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/annotation-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "annotation_id", "task_id", "treatment_blinded", "reviewers", "annotations", "resolution", "agreement", "checks", "status", "quarantine_reasons"],
+  "properties": {
+    "schema_version": {"const": "cigar.corpus-annotation.v1"},
+    "annotation_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "task_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "treatment_blinded": {"type": "boolean"},
+    "reviewers": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+    },
+    "annotations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviewer_id", "critical_evidence", "relevant_evidence", "prohibited_evidence", "answerable_from_permitted", "prohibited_required"],
+        "properties": {
+          "reviewer_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "critical_evidence": {
+            "type": "array",
+            "maxItems": 4096,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          },
+          "relevant_evidence": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          },
+          "prohibited_evidence": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+          },
+          "answerable_from_permitted": {"type": "boolean"},
+          "prohibited_required": {"type": "boolean"}
+        }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resolver_id", "critical_evidence", "relevant_evidence", "prohibited_evidence", "outcome"],
+      "properties": {
+        "resolver_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "critical_evidence": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "relevant_evidence": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "prohibited_evidence": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/identifier"}
+        },
+        "outcome": {"enum": ["accepted", "quarantined"]}
+      }
+    },
+    "agreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matches", "comparisons", "parts_per_million", "threshold_parts_per_million", "passed"],
+      "properties": {
+        "matches": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "comparisons": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "parts_per_million": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "threshold_parts_per_million": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier_reviewed", "baseline_solvable", "license_reviewed", "canary_scan_clear", "contamination_scan_clear"],
+      "properties": {
+        "verifier_reviewed": {"type": "boolean"},
+        "baseline_solvable": {"type": "boolean"},
+        "license_reviewed": {"type": "boolean"},
+        "canary_scan_clear": {"type": "boolean"},
+        "contamination_scan_clear": {"type": "boolean"}
+      }
+    },
+    "status": {"enum": ["qualified", "diagnostic", "quarantined"]},
+    "quarantine_reasons": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "common-v1.schema.json#/$defs/shortText"}
+    }
+  }
+}

@@ -154,13 +154,13 @@ python3 tools/quality/corpus_manager.py verify \
 STAGED_SMOKE="$(mktemp -d)"
 chmod 700 "$STAGED_SMOKE"
 python3 tools/quality/fuzz_and_mutation.py smoke \
-  --runs 1 --jobs 14 \
+  --runs 1 --jobs 19 \
   --corpus-dir "$AUDIT_DIR/minimized-all/corpus" \
   --evidence-dir "$STAGED_SMOKE"
 ```
 
 The smoke runner accepts an explicit corpus only when it is external, contains exactly all
-fourteen campaign targets, and every target digest matches the adjacent minimization report bound
+all 19 campaign targets, and every target digest matches the adjacent minimization report bound
 to the current campaign and corpus policy. It still copies each staged target into a separate
 private worker directory before invoking libFuzzer.
 
@@ -190,8 +190,8 @@ equivalent release threshold.
 
 `tools/quality/fuzz_accumulation.py` maintains the cumulative evidence without launching a fuzzer.
 `append` verifies a signed worker bundle and publishes one immutable hash-chained entry; `inspect`
-checks a partial ledger; `verify` additionally requires every one of the 14 targets to have at
-least 604,800 clean CPU-seconds and the exact 8,467,200-second aggregate. It rejects replayed IDs,
+checks a partial ledger; `verify` additionally requires every one of the 19 targets to have at
+least 604,800 clean CPU-seconds and the exact 11,491,200-second aggregate. It rejects replayed IDs,
 overlap, clock reversal, mixed candidates, untrusted workers, stale binary/toolchain/source
 bindings, corrupt corpus lineage, and post-defect accumulation. `recover` removes only bounded
 tool-owned pending entry files after an interrupted append. Worker corpora remain private and

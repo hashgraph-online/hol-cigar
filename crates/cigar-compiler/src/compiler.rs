@@ -3,21 +3,27 @@
 use crate::{
     CompileOutput, CompileRequest, CompilerCandidate, CompilerError, CompilerErrorCode,
     CompilerProfile, ContentEquivalenceDiagnostic, DispositionRecord, FrozenInputs,
-    InvalidationRegistration, LossClass, RepresentationVariant, Selection, manifest_entries,
+    InvalidationRegistration, LossClass, PackingEvidence, RepresentationVariant, Selection,
+    manifest_entries,
 };
 use cigar_canon::{
-    SemanticEnvelopeProfile, normalize_nfc, parse_strict_json, semantic_multihash_v1,
+    CanonicalNode, MAX_CANONICAL_ARRAY_ITEMS, MAX_CANONICAL_DEPTH, MAX_CANONICAL_MAP_ENTRIES,
+    SemanticEnvelopeProfile, multihash_v1, normalize_nfc, semantic_multihash_v1,
     to_deterministic_cbor,
 };
 use cigar_policy::PolicyOutcome;
 use cigar_protocol::{
-    CandidateDisposition, ContentDigest, ContextBlock, ContextBundle, ContextContract, ContextPlan,
-    DispositionReason, ExtensionMap, FixedPoint, LaneKind, PlanLane, RepresentationKind,
-    RequirementSelector, SchemaVersion, SelectionManifest, Validate, VersionId,
+    CandidateDisposition, CanonicalValue, ContentDigest, ContextBlock, ContextBundle,
+    ContextContract, ContextPlan, DispositionReason, ExtensionKey, ExtensionMap, FixedPoint,
+    LaneKind, PlanLane, RepresentationKind, RequirementSelector, SchemaVersion, SelectionManifest,
+    Validate, VersionId,
 };
+use cigar_retrieval::{CandidateSelectionBasis, RequirementRankingEvidence};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 
 const MAX_CANDIDATES: usize = 10_000;
 const MAX_DEPENDENCY_VISITS: usize = 100_000;
@@ -57,6 +63,12 @@ struct ContentEquivalenceState {
     members_by_representative: BTreeMap<VersionId, BTreeSet<VersionId>>,
     provenance_by_representative: BTreeMap<VersionId, BTreeSet<ContentDigest>>,
     representative_by_member: BTreeMap<VersionId, VersionId>,
+    singleton_compacted: bool,
+}
+
+struct CompilationEvidence {
+    ranking: Option<RequirementRankingEvidence>,
+    packing: Option<PackingEvidence>,
 }
 
 impl ContentEquivalenceState {
@@ -73,6 +85,25 @@ impl ContentEquivalenceState {
             .cloned()
             .unwrap_or_else(|| BTreeSet::from([representative.clone()]))
     }
+
+    fn compact_singletons(&mut self) {
+        let singleton = self.members_by_representative.len()
+            == self.provenance_by_representative.len()
+            && self.representative_by_member.len() == self.members_by_representative.len()
+            && self
+                .members_by_representative
+                .iter()
+                .all(|(representative, members)| {
+                    members.len() == 1
+                        && members.first() == Some(representative)
+                        && self.representative_by_member.get(representative) == Some(representative)
+                });
+        if singleton {
+            self.members_by_representative.clear();
+            self.representative_by_member.clear();
+            self.singleton_compacted = true;
+        }
+    }
 }
 
 /// Stateless default deterministic compiler; it performs no model or network calls.
@@ -82,37 +113,102 @@ pub struct DeterministicCompiler;
 impl DeterministicCompiler {
     /// Runs the full deterministic compile path and seals protocol records.
     pub fn compile(&self, request: CompileRequest) -> Result<CompileOutput, CompilerError> {
+        let ranking_evidence = request.ranking_evidence.clone();
         let contract = normalize_contract(request.contract)?;
         validate_profile(&request.profile)?;
         validate_frozen(&contract, &request.profile, &request.frozen)?;
         let contract_digest = contract_digest(&contract)?;
         let mut candidates = canonical_candidates(request.candidates, contract.requirements.len())?;
+        validate_ranking_evidence(
+            &request.profile,
+            contract.requirements.len(),
+            &candidates,
+            ranking_evidence.as_ref(),
+        )?;
+        let ranking_priorities = ranking_evidence.as_ref().map(|evidence| {
+            evidence
+                .decisions
+                .iter()
+                .map(|decision| (decision.selected_version.clone(), decision.ordinal))
+                .collect::<BTreeMap<_, _>>()
+        });
         validate_dependencies(&candidates)?;
         let mut dispositions = initial_dispositions(&candidates)?;
         reconcile_logical_duplicates(&mut candidates, &mut dispositions);
         reconcile_claims(&mut candidates, &mut dispositions)?;
-        let equivalence = group_content_equivalent_candidates(&mut candidates, &mut dispositions)?;
-
-        let eligible: BTreeMap<_, _> = candidates
-            .iter()
-            .filter(|(version, _candidate)| !dispositions.contains_key(*version))
-            .map(|(version, candidate)| (version.clone(), candidate.clone()))
-            .collect();
-        let mut selected = BTreeMap::new();
-        let mandatory_roots = mandatory_roots(&contract, &eligible)?;
-        for version in mandatory_roots {
-            insert_with_closure(&version, &eligible, &request.profile, true, &mut selected)?;
+        let mut equivalence =
+            group_content_equivalent_candidates(&mut candidates, &mut dispositions)?;
+        let uses_v4_packer = request.profile.profile_id == "cigar.compiler-profile.balanced.v4";
+        let eligible = (!uses_v4_packer).then(|| {
+            candidates
+                .iter()
+                .filter(|(version, _candidate)| !dispositions.contains_key(*version))
+                .map(|(version, candidate)| (version.clone(), candidate.clone()))
+                .collect::<BTreeMap<_, _>>()
+        });
+        let (selected, packing_evidence) = if uses_v4_packer {
+            let packed = crate::packing_workspace::pack_v4(
+                &contract,
+                &request.frozen,
+                &request.profile,
+                &candidates,
+                &dispositions,
+                ranking_priorities.as_ref(),
+            )?;
+            (packed.selected, Some(packed.evidence))
+        } else {
+            let eligible = eligible
+                .as_ref()
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+            let mut selected = BTreeMap::new();
+            let mandatory_roots =
+                mandatory_roots(&contract, eligible, ranking_priorities.as_ref())?;
+            for version in mandatory_roots {
+                insert_with_closure(&version, eligible, &request.profile, true, &mut selected)?;
+            }
+            enforce_budget(&contract, &selected)?;
+            enforce_profile_item_limits(&request.profile, eligible, &selected, false)?;
+            satisfy_lane_minima(
+                &contract,
+                &request.profile,
+                eligible,
+                ranking_priorities.as_ref(),
+                &mut selected,
+            )?;
+            pack_optional(
+                &contract,
+                &request.profile,
+                eligible,
+                ranking_priorities.as_ref(),
+                &mut selected,
+            )?;
+            local_swaps(
+                &contract,
+                &request.profile,
+                eligible,
+                ranking_priorities.as_ref(),
+                &mut selected,
+            )?;
+            (selected, None)
+        };
+        enforce_budget(&contract, &selected)?;
+        if let Some(eligible) = eligible.as_ref() {
+            enforce_profile_item_limits(&request.profile, eligible, &selected, true)?;
+        } else {
+            enforce_v4_profile_item_limits(
+                &request.profile,
+                &candidates,
+                &dispositions,
+                &selected,
+            )?;
         }
-        enforce_budget(&contract, &selected)?;
-        enforce_profile_item_limits(&request.profile, &eligible, &selected, false)?;
-        satisfy_lane_minima(&contract, &request.profile, &eligible, &mut selected)?;
-        pack_optional(&contract, &request.profile, &eligible, &mut selected)?;
-        local_swaps(&contract, &request.profile, &eligible, &mut selected)?;
-        enforce_budget(&contract, &selected)?;
-        enforce_profile_item_limits(&request.profile, &eligible, &selected, true)?;
         ensure_blocking_requirements(&contract, &selected)?;
 
         finalize_dispositions(&candidates, &selected, &mut dispositions)?;
+        if uses_v4_packer {
+            equivalence.compact_singletons();
+            drop(candidates);
+        }
         seal(
             contract,
             contract_digest,
@@ -120,26 +216,68 @@ impl DeterministicCompiler {
             selected,
             dispositions,
             equivalence,
+            CompilationEvidence {
+                ranking: ranking_evidence,
+                packing: packing_evidence,
+            },
         )
     }
 }
 
 fn normalize_contract(mut contract: ContextContract) -> Result<ContextContract, CompilerError> {
-    contract.job_goal = normalize_space(&normalize_nfc(&contract.job_goal));
-    contract.purpose = normalize_space(&normalize_nfc(&contract.purpose)).to_lowercase();
-    contract.target.provider = normalize_space(&contract.target.provider).to_lowercase();
-    contract.target.model_family = normalize_space(&contract.target.model_family).to_lowercase();
+    normalize_semantic_text(&mut contract.job_goal, false);
+    normalize_semantic_text(&mut contract.purpose, true);
+    normalize_identifier(&mut contract.target.provider);
+    normalize_identifier(&mut contract.target.model_family);
     contract.project_ids.sort();
     contract.project_ids.dedup();
     for requirement in &mut contract.requirements {
         if let RequirementSelector::Query(query) = &mut requirement.selector {
-            *query = normalize_space(&normalize_nfc(query));
+            normalize_semantic_text(query, false);
         }
     }
     contract
         .validate()
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
     Ok(contract)
+}
+
+fn normalize_semantic_text(value: &mut String, lowercase: bool) {
+    if value.is_ascii() && has_normalized_ascii_space(value) {
+        if lowercase {
+            value.make_ascii_lowercase();
+        }
+        return;
+    }
+    let normalized = normalize_space(&normalize_nfc(value));
+    *value = if lowercase {
+        normalized.to_lowercase()
+    } else {
+        normalized
+    };
+}
+
+fn normalize_identifier(value: &mut String) {
+    if value.is_ascii() && has_normalized_ascii_space(value) {
+        value.make_ascii_lowercase();
+    } else {
+        *value = normalize_space(value).to_lowercase();
+    }
+}
+
+fn has_normalized_ascii_space(value: &str) -> bool {
+    let mut previous_space = false;
+    for (index, byte) in value.bytes().enumerate() {
+        if byte.is_ascii_whitespace() {
+            if byte != b' ' || index == 0 || previous_space {
+                return false;
+            }
+            previous_space = true;
+        } else {
+            previous_space = false;
+        }
+    }
+    !previous_space
 }
 
 fn normalize_space(value: &str) -> String {
@@ -149,6 +287,10 @@ fn normalize_space(value: &str) -> String {
 fn validate_profile(profile: &CompilerProfile) -> Result<(), CompilerError> {
     let v1 = profile.profile_id == "cigar.compiler-profile.balanced.v1";
     let v2 = profile.profile_id == "cigar.compiler-profile.balanced.v2-candidate.1";
+    let v2_requirement_aware =
+        profile.profile_id == "cigar.compiler-profile.balanced.v2-candidate.2";
+    let v3 = profile.profile_id == "cigar.compiler-profile.balanced.v3";
+    let v4 = profile.profile_id == "cigar.compiler-profile.balanced.v4";
     let experimental = [
         profile.marginal_requirement_weight,
         profile.marginal_entity_weight,
@@ -156,14 +298,24 @@ fn validate_profile(profile: &CompilerProfile) -> Result<(), CompilerError> {
         profile.diversity_weight,
         profile.redundancy_penalty,
     ];
-    if (!v1 && !v2)
+    if (!v1 && !v2 && !v2_requirement_aware && !v3 && !v4)
         || (v1 && profile.retrieval_profile != cigar_retrieval::RetrievalProfile::BalancedV1)
         || (v2
             && profile.retrieval_profile != cigar_retrieval::RetrievalProfile::BalancedV2Candidate)
+        || (v2_requirement_aware
+            && profile.retrieval_profile
+                != cigar_retrieval::RetrievalProfile::BalancedV2RequirementAwareCandidate)
+        || (v3
+            && profile.retrieval_profile
+                != cigar_retrieval::RetrievalProfile::BalancedV2RequirementAwareCandidate)
+        || (v4 && profile.retrieval_profile != cigar_retrieval::RetrievalProfile::BalancedV4)
         || (v1 && !profile.utility_density_ranking)
         || (v1 && profile.minimum_lexical_match != 0)
         || profile.minimum_lexical_match > cigar_retrieval::MAX_FEATURE_VALUE
         || (v1 && experimental.iter().any(|value| *value != 0))
+        || ((!v3 && profile.sufficient_items_per_requirement != 0)
+            || (v3 && !(1..=16).contains(&profile.sufficient_items_per_requirement)))
+        || (v4 && profile.local_swap_passes != 0)
         || experimental.iter().any(|value| *value < 0)
         || profile.local_swap_passes > crate::MAX_LOCAL_SWAP_PASSES
         || profile.local_swap_alternatives == 0
@@ -201,6 +353,68 @@ fn validate_frozen(
     }
 }
 
+fn validate_ranking_evidence(
+    profile: &CompilerProfile,
+    requirement_count: usize,
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+    evidence: Option<&RequirementRankingEvidence>,
+) -> Result<(), CompilerError> {
+    let requirement_aware = matches!(
+        profile.profile_id.as_str(),
+        "cigar.compiler-profile.balanced.v2-candidate.2"
+            | "cigar.compiler-profile.balanced.v3"
+            | "cigar.compiler-profile.balanced.v4"
+    );
+    if requirement_aware != evidence.is_some() {
+        return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
+    }
+    let Some(evidence) = evidence else {
+        return Ok(());
+    };
+    evidence
+        .validate()
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+    let profile_digest = profile
+        .retrieval_profile
+        .digest()
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+    let evidence_versions = evidence
+        .decisions
+        .iter()
+        .map(|decision| decision.selected_version.clone())
+        .collect::<BTreeSet<_>>();
+    let ranked_candidate_versions = candidates
+        .iter()
+        .filter_map(|(version, candidate)| {
+            (!candidate.requirement_indices.is_empty()).then_some(version.clone())
+        })
+        .collect::<BTreeSet<_>>();
+    let versions_valid = evidence.decisions.iter().all(|decision| {
+        candidates
+            .get(&decision.selected_version)
+            .and_then(|candidate| candidate.features.score(profile.retrieval_profile).ok())
+            == Some(decision.factors.base_score)
+            && decision
+                .next_best_version
+                .as_ref()
+                .is_none_or(|version| evidence_versions.contains(version))
+    });
+    if evidence.retrieval_profile_id != profile.retrieval_profile.identifier()
+        || evidence.retrieval_profile_digest != profile_digest
+        || evidence
+            .critical_requirements
+            .iter()
+            .any(|index| *index >= requirement_count)
+        || !evidence.uncovered_critical_requirements.is_empty()
+        || evidence_versions != ranked_candidate_versions
+        || !versions_valid
+    {
+        Err(CompilerError::new(CompilerErrorCode::InvalidInput))
+    } else {
+        Ok(())
+    }
+}
+
 fn canonical_candidates(
     candidates: Vec<CompilerCandidate>,
     requirement_count: usize,
@@ -223,18 +437,35 @@ fn canonical_candidates(
         {
             return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
         }
-        candidate.representations.sort_by(representation_order);
-        let mut identities = BTreeSet::new();
-        for representation in &candidate.representations {
+        if candidate.representations.len() == 1 {
+            let representation = candidate
+                .representations
+                .first()
+                .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
             let receipt_required = matches!(
                 representation.kind,
                 RepresentationKind::Extracted | RepresentationKind::Summarized
             );
             if representation.token_count == 0
                 || receipt_required != representation.transform_receipt.is_some()
-                || !identities.insert((representation.kind, representation.content_digest.clone()))
             {
                 return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
+            }
+        } else {
+            candidate.representations.sort_by(representation_order);
+            let mut identities = BTreeSet::new();
+            for representation in &candidate.representations {
+                let receipt_required = matches!(
+                    representation.kind,
+                    RepresentationKind::Extracted | RepresentationKind::Summarized
+                );
+                if representation.token_count == 0
+                    || receipt_required != representation.transform_receipt.is_some()
+                    || !identities
+                        .insert((representation.kind, representation.content_digest.clone()))
+                {
+                    return Err(CompilerError::new(CompilerErrorCode::InvalidInput));
+                }
             }
         }
         let version = candidate.version_id.clone();
@@ -294,6 +525,11 @@ fn reconcile_logical_duplicates(
     candidates: &mut BTreeMap<VersionId, CompilerCandidate>,
     dispositions: &mut BTreeMap<VersionId, DispositionRecord>,
 ) {
+    if candidates.iter().all(|(version, candidate)| {
+        dispositions.contains_key(version) || candidate.logical_id == *version
+    }) {
+        return;
+    }
     let mut groups: BTreeMap<VersionId, Vec<VersionId>> = BTreeMap::new();
     for (version, candidate) in candidates.iter() {
         if !dispositions.contains_key(version) {
@@ -381,6 +617,9 @@ fn group_content_equivalent_candidates(
     candidates: &mut BTreeMap<VersionId, CompilerCandidate>,
     dispositions: &mut BTreeMap<VersionId, DispositionRecord>,
 ) -> Result<ContentEquivalenceState, CompilerError> {
+    if let Some(state) = distinct_content_equivalence_state(candidates, dispositions) {
+        return Ok(state);
+    }
     let mut keyed = BTreeMap::<ContentEquivalenceKey, Vec<VersionId>>::new();
     let mut groups = Vec::<Vec<VersionId>>::new();
     for (version, candidate) in candidates.iter() {
@@ -395,6 +634,12 @@ fn group_content_equivalent_candidates(
     }
     groups.extend(keyed.into_values());
     canonicalize_content_groups(&mut groups, candidates);
+    if groups.iter().all(|group| group.len() == 1) {
+        // The overwhelmingly common case has no aliases to contract. Its singleton
+        // equivalence state is already final, so avoid cloning and revalidating the complete
+        // candidate graph solely to reproduce the input map.
+        return Ok(content_equivalence_state(&groups, candidates));
+    }
 
     // A class containing a direct member-to-member dependency would erase a charged dependency.
     // Keep that complete compatibility bucket separate instead of weakening dependency semantics.
@@ -465,6 +710,45 @@ fn group_content_equivalent_candidates(
         }
     }
     Ok(state)
+}
+
+fn distinct_content_equivalence_state(
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+    dispositions: &BTreeMap<VersionId, DispositionRecord>,
+) -> Option<ContentEquivalenceState> {
+    let mut seen_content = BTreeSet::new();
+    for (version, candidate) in candidates {
+        if dispositions.contains_key(version)
+            || candidate
+                .representations
+                .iter()
+                .any(|representation| representation.kind == RepresentationKind::Redacted)
+        {
+            continue;
+        }
+        let content_digest = &candidate.representations.first()?.content_digest;
+        if !seen_content.insert(content_digest) {
+            return None;
+        }
+    }
+
+    let mut state = ContentEquivalenceState::default();
+    for (version, candidate) in candidates {
+        if dispositions.contains_key(version) {
+            continue;
+        }
+        state
+            .representative_by_member
+            .insert(version.clone(), version.clone());
+        state
+            .members_by_representative
+            .insert(version.clone(), BTreeSet::from([version.clone()]));
+        state.provenance_by_representative.insert(
+            version.clone(),
+            BTreeSet::from([candidate.provenance_digest.clone()]),
+        );
+    }
+    Some(state)
 }
 
 fn content_equivalence_key(candidate: &CompilerCandidate) -> Option<ContentEquivalenceKey> {
@@ -624,6 +908,12 @@ fn claim_order(left: &CompilerCandidate, right: &CompilerCandidate) -> Ordering 
 fn validate_dependencies(
     candidates: &BTreeMap<VersionId, CompilerCandidate>,
 ) -> Result<(), CompilerError> {
+    if candidates
+        .values()
+        .all(|candidate| candidate.dependencies.is_empty())
+    {
+        return Ok(());
+    }
     let mut visiting = BTreeSet::new();
     let mut visited = BTreeSet::new();
     let mut visits = 0_usize;
@@ -672,6 +962,7 @@ fn visit_dependency(
 fn mandatory_roots(
     contract: &ContextContract,
     eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
 ) -> Result<BTreeSet<VersionId>, CompilerError> {
     let mut roots: BTreeSet<_> = eligible
         .iter()
@@ -685,7 +976,11 @@ fn mandatory_roots(
         let best = eligible
             .iter()
             .filter(|(_version, candidate)| candidate.requirement_indices.contains(&index))
-            .min_by(|(_left_version, left), (_right_version, right)| candidate_order(left, right))
+            .min_by(|(left_version, left), (right_version, right)| {
+                ranking_priority(left_version, ranking_priorities)
+                    .cmp(&ranking_priority(right_version, ranking_priorities))
+                    .then_with(|| candidate_order(left, right))
+            })
             .map(|(version, _candidate)| version.clone())
             .ok_or_else(|| CompilerError::new(CompilerErrorCode::RequiredMissing))?;
         roots.insert(best);
@@ -722,7 +1017,7 @@ fn insert_with_closure(
     Ok(())
 }
 
-fn choose_representation(
+pub(crate) fn choose_representation(
     candidate: &CompilerCandidate,
     profile: &CompilerProfile,
     lossless_required: bool,
@@ -746,7 +1041,7 @@ fn choose_representation(
         .ok_or_else(|| CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable))
 }
 
-fn candidate_utility(
+pub(crate) fn candidate_utility(
     candidate: &CompilerCandidate,
     representation: &RepresentationVariant,
     profile: &CompilerProfile,
@@ -788,6 +1083,7 @@ fn satisfy_lane_minima(
     contract: &ContextContract,
     profile: &CompilerProfile,
     eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
     selected: &mut BTreeMap<VersionId, Selection>,
 ) -> Result<(), CompilerError> {
     for (lane, minimum) in &profile.minimum_items {
@@ -800,10 +1096,11 @@ fn satisfy_lane_minima(
             .count()
             < usize::from(*minimum)
         {
-            let choice = ranked_unselected(eligible, selected, Some(*lane), profile)?
-                .into_iter()
-                .find(|version| closure_fits(version, contract, eligible, profile, selected))
-                .ok_or_else(|| CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable))?;
+            let choice =
+                ranked_unselected(eligible, selected, Some(*lane), profile, ranking_priorities)?
+                    .into_iter()
+                    .find(|version| closure_fits(version, contract, eligible, profile, selected))
+                    .ok_or_else(|| CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable))?;
             insert_with_closure(&choice, eligible, profile, false, selected)?;
         }
     }
@@ -814,11 +1111,22 @@ fn pack_optional(
     contract: &ContextContract,
     profile: &CompilerProfile,
     eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
     selected: &mut BTreeMap<VersionId, Selection>,
 ) -> Result<(), CompilerError> {
     let mut used = current_usage(selected)?;
-    for version in ranked_unselected(eligible, selected, None, profile)? {
+    let mut saturation = (profile.sufficient_items_per_requirement > 0)
+        .then(|| SelectionCoverage::from_selected(selected));
+    for version in ranked_unselected(eligible, selected, None, profile, ranking_priorities)? {
         if lane_at_cap(&eligible[&version], profile, selected) {
+            continue;
+        }
+        if saturation.as_ref().is_some_and(|coverage| {
+            !coverage.accepts(
+                &eligible[&version],
+                profile.sufficient_items_per_requirement,
+            )
+        }) {
             continue;
         }
         let representation = choose_representation(&eligible[&version], profile, false)?;
@@ -837,8 +1145,49 @@ fn pack_optional(
         }
         insert_with_closure(&version, eligible, profile, false, selected)?;
         used = proposed_usage;
+        if let Some(coverage) = saturation.as_mut() {
+            coverage.include_selected(selected);
+        }
     }
     Ok(())
+}
+
+#[derive(Default)]
+struct SelectionCoverage {
+    versions: BTreeSet<VersionId>,
+    requirement_counts: BTreeMap<usize, u16>,
+    entity_bits: u64,
+}
+
+impl SelectionCoverage {
+    fn from_selected(selected: &BTreeMap<VersionId, Selection>) -> Self {
+        let mut coverage = Self::default();
+        coverage.include_selected(selected);
+        coverage
+    }
+
+    fn include_selected(&mut self, selected: &BTreeMap<VersionId, Selection>) {
+        for (version, selection) in selected {
+            if !self.versions.insert(version.clone()) {
+                continue;
+            }
+            self.entity_bits |= selection.candidate.entity_coverage_bits;
+            for requirement in &selection.candidate.requirement_indices {
+                let count = self.requirement_counts.entry(*requirement).or_default();
+                *count = count.saturating_add(1);
+            }
+        }
+    }
+
+    fn accepts(&self, candidate: &CompilerCandidate, target: u16) -> bool {
+        candidate.requirement_indices.iter().any(|requirement| {
+            self.requirement_counts
+                .get(requirement)
+                .copied()
+                .unwrap_or_default()
+                < target
+        }) || candidate.entity_coverage_bits & !self.entity_bits != 0
+    }
 }
 
 fn ranked_unselected(
@@ -846,6 +1195,7 @@ fn ranked_unselected(
     selected: &BTreeMap<VersionId, Selection>,
     lane: Option<LaneKind>,
     profile: &CompilerProfile,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
 ) -> Result<Vec<VersionId>, CompilerError> {
     let mut values = Vec::new();
     for (version, candidate) in eligible {
@@ -860,14 +1210,27 @@ fn ranked_unselected(
         values.push((version.clone(), utility, representation.token_count));
     }
     values.sort_by(|left, right| {
-        (if profile.utility_density_ranking {
-            ratio_order(right.1, right.2, left.1, left.2)
-        } else {
-            right.1.cmp(&left.1).then_with(|| left.2.cmp(&right.2))
-        })
-        .then_with(|| candidate_order(&eligible[&left.0], &eligible[&right.0]))
+        ranking_priority(&left.0, ranking_priorities)
+            .cmp(&ranking_priority(&right.0, ranking_priorities))
+            .then_with(|| {
+                if profile.utility_density_ranking {
+                    ratio_order(right.1, right.2, left.1, left.2)
+                } else {
+                    right.1.cmp(&left.1).then_with(|| left.2.cmp(&right.2))
+                }
+            })
+            .then_with(|| candidate_order(&eligible[&left.0], &eligible[&right.0]))
     });
     Ok(values.into_iter().map(|value| value.0).collect())
+}
+
+fn ranking_priority(
+    version: &VersionId,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
+) -> usize {
+    ranking_priorities
+        .and_then(|priorities| priorities.get(version).copied())
+        .unwrap_or(usize::MAX)
 }
 
 fn marginal_utility(
@@ -937,7 +1300,7 @@ fn marginal_utility(
         })
 }
 
-fn ratio_order(
+pub(crate) fn ratio_order(
     left_utility: i64,
     left_tokens: u32,
     right_utility: i64,
@@ -1080,6 +1443,7 @@ fn local_swaps(
     contract: &ContextContract,
     profile: &CompilerProfile,
     eligible: &BTreeMap<VersionId, CompilerCandidate>,
+    ranking_priorities: Option<&BTreeMap<VersionId, usize>>,
     selected: &mut BTreeMap<VersionId, Selection>,
 ) -> Result<(), CompilerError> {
     if selected.len() == eligible.len() {
@@ -1109,6 +1473,7 @@ fn local_swaps(
                 selected,
                 Some(removed_selection.candidate.lane),
                 profile,
+                ranking_priorities,
             )?;
             alternatives.truncate(usize::from(profile.local_swap_alternatives));
             for added in &alternatives {
@@ -1218,6 +1583,28 @@ fn enforce_profile_item_limits(
     Ok(())
 }
 
+fn enforce_v4_profile_item_limits(
+    profile: &CompilerProfile,
+    candidates: &BTreeMap<VersionId, CompilerCandidate>,
+    dispositions: &BTreeMap<VersionId, DispositionRecord>,
+    selected: &BTreeMap<VersionId, Selection>,
+) -> Result<(), CompilerError> {
+    let mut selected_counts = BTreeMap::<LaneKind, usize>::new();
+    for selection in selected.values() {
+        *selected_counts.entry(selection.candidate.lane).or_default() += 1;
+    }
+    if profile.maximum_items.iter().any(|(lane, maximum)| {
+        selected_counts.get(lane).copied().unwrap_or_default() > usize::from(*maximum)
+    }) || profile.minimum_items.iter().any(|(lane, minimum)| {
+        candidates.iter().any(|(version, candidate)| {
+            !dispositions.contains_key(version) && candidate.lane == *lane
+        }) && selected_counts.get(lane).copied().unwrap_or_default() < usize::from(*minimum)
+    }) {
+        return Err(CompilerError::new(CompilerErrorCode::BudgetUnsatisfiable));
+    }
+    Ok(())
+}
+
 fn ensure_blocking_requirements(
     contract: &ContextContract,
     selected: &BTreeMap<VersionId, Selection>,
@@ -1288,7 +1675,7 @@ fn excluded(
     }
 }
 
-fn candidate_order(left: &CompilerCandidate, right: &CompilerCandidate) -> Ordering {
+pub(crate) fn candidate_order(left: &CompilerCandidate, right: &CompilerCandidate) -> Ordering {
     let left_score = left.features.balanced_score().unwrap_or(i64::MIN);
     let right_score = right.features.balanced_score().unwrap_or(i64::MIN);
     right_score
@@ -1306,6 +1693,205 @@ fn candidate_order(left: &CompilerCandidate, right: &CompilerCandidate) -> Order
         .then_with(|| left.version_id.cmp(&right.version_id))
 }
 
+fn manifest_extensions(
+    evidence: Option<&RequirementRankingEvidence>,
+    packing_evidence: Option<&PackingEvidence>,
+) -> Result<ExtensionMap, CompilerError> {
+    let integer = |value: usize| {
+        i64::try_from(value)
+            .map(CanonicalValue::Integer)
+            .map_err(|_error| CompilerError::new(CompilerErrorCode::LimitExceeded))
+    };
+    let mut values = BTreeMap::new();
+    if let Some(evidence) = evidence {
+        let digest_only_decisions =
+            evidence.retrieval_profile_id == "cigar.retrieval-profile.balanced.v4";
+        let mut evidence_summary = BTreeMap::from([
+            (
+                "critical_requirements".to_owned(),
+                CanonicalValue::Array(
+                    evidence
+                        .critical_requirements
+                        .iter()
+                        .map(|value| integer(*value))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            ),
+            (
+                "decision_count".to_owned(),
+                integer(evidence.decisions.len())?,
+            ),
+            (
+                "evidence_digest".to_owned(),
+                CanonicalValue::Text(evidence.evidence_digest.as_str().to_owned()),
+            ),
+            (
+                "plan_fingerprint".to_owned(),
+                CanonicalValue::Text(evidence.plan_fingerprint.as_str().to_owned()),
+            ),
+            (
+                "retrieval_profile_digest".to_owned(),
+                CanonicalValue::Text(evidence.retrieval_profile_digest.as_str().to_owned()),
+            ),
+            (
+                "retrieval_profile_id".to_owned(),
+                CanonicalValue::Text(evidence.retrieval_profile_id.clone()),
+            ),
+            (
+                "uncovered_critical_requirements".to_owned(),
+                CanonicalValue::Array(
+                    evidence
+                        .uncovered_critical_requirements
+                        .iter()
+                        .map(|value| integer(*value))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            ),
+        ]);
+        if digest_only_decisions {
+            // v4 returns the complete validated explanation on CompileOutput while the manifest
+            // binds it by digest. Avoid serializing the same large decision array into the
+            // manifest a second time; v1-v3 retain their byte-for-byte historical encoding.
+            evidence_summary.insert(
+                "decision_encoding".to_owned(),
+                CanonicalValue::Text("digest-bound-output".to_owned()),
+            );
+        }
+        values.insert(
+            ExtensionKey::new("cigar/ranking-evidence.v1")
+                .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?,
+            CanonicalValue::Object(evidence_summary),
+        );
+        for (chunk_index, chunk) in evidence
+            .decisions
+            .chunks(256)
+            .enumerate()
+            .take(usize::from(!digest_only_decisions))
+        {
+            let decisions = chunk
+                .iter()
+                .map(|decision| {
+                    let mut value = BTreeMap::from([
+                        (
+                            "adjusted_score".to_owned(),
+                            CanonicalValue::Integer(decision.factors.adjusted_score),
+                        ),
+                        (
+                            "base_score".to_owned(),
+                            CanonicalValue::Integer(decision.factors.base_score),
+                        ),
+                        (
+                            "basis".to_owned(),
+                            CanonicalValue::Text(
+                                match decision.basis {
+                                    CandidateSelectionBasis::Protected => "protected",
+                                    CandidateSelectionBasis::CriticalRequirement => {
+                                        "critical_requirement"
+                                    }
+                                    CandidateSelectionBasis::Requirement => "requirement",
+                                    CandidateSelectionBasis::Score => "score",
+                                }
+                                .to_owned(),
+                            ),
+                        ),
+                        (
+                            "concept_gain".to_owned(),
+                            CanonicalValue::Integer(decision.factors.concept_gain),
+                        ),
+                        (
+                            "critical_requirement_gain".to_owned(),
+                            CanonicalValue::Integer(decision.factors.critical_requirement_gain),
+                        ),
+                        (
+                            "diversity_gain".to_owned(),
+                            CanonicalValue::Integer(decision.factors.diversity_gain),
+                        ),
+                        (
+                            "generic_penalty".to_owned(),
+                            CanonicalValue::Integer(decision.factors.generic_penalty),
+                        ),
+                        (
+                            "kind_diversity".to_owned(),
+                            CanonicalValue::Boolean(decision.kind_diversity),
+                        ),
+                        (
+                            "newly_covered_concepts".to_owned(),
+                            CanonicalValue::Integer(i64::from(decision.newly_covered_concepts)),
+                        ),
+                        (
+                            "newly_covered_critical_requirements".to_owned(),
+                            integer(decision.newly_covered_critical_requirements)?,
+                        ),
+                        (
+                            "newly_covered_requirements".to_owned(),
+                            integer(decision.newly_covered_requirements)?,
+                        ),
+                        ("ordinal".to_owned(), integer(decision.ordinal)?),
+                        (
+                            "redundancy_penalty".to_owned(),
+                            CanonicalValue::Integer(decision.factors.redundancy_penalty),
+                        ),
+                        (
+                            "requirement_gain".to_owned(),
+                            CanonicalValue::Integer(decision.factors.requirement_gain),
+                        ),
+                        (
+                            "section_diversity".to_owned(),
+                            CanonicalValue::Boolean(decision.section_diversity),
+                        ),
+                        (
+                            "selected_version".to_owned(),
+                            CanonicalValue::Text(decision.selected_version.as_str().to_owned()),
+                        ),
+                        (
+                            "similarity_penalty".to_owned(),
+                            CanonicalValue::Integer(decision.factors.similarity_penalty),
+                        ),
+                        (
+                            "source_diversity".to_owned(),
+                            CanonicalValue::Boolean(decision.source_diversity),
+                        ),
+                        (
+                            "uncovered_critical_after".to_owned(),
+                            integer(decision.uncovered_critical_after)?,
+                        ),
+                    ]);
+                    if let Some(version) = &decision.next_best_version {
+                        value.insert(
+                            "next_best_version".to_owned(),
+                            CanonicalValue::Text(version.as_str().to_owned()),
+                        );
+                    }
+                    if let Some(score) = decision.next_best_adjusted_score {
+                        value.insert(
+                            "next_best_adjusted_score".to_owned(),
+                            CanonicalValue::Integer(score),
+                        );
+                    }
+                    Ok(CanonicalValue::Object(value))
+                })
+                .collect::<Result<Vec<_>, CompilerError>>()?;
+            values.insert(
+                ExtensionKey::new(format!("cigar/ranking-decisions.v1/{chunk_index:03}"))
+                    .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?,
+                CanonicalValue::Array(decisions),
+            );
+        }
+    }
+    if let Some(evidence) = packing_evidence {
+        values.insert(
+            ExtensionKey::new("cigar/packing-evidence.v1")
+                .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?,
+            CanonicalValue::Object(BTreeMap::from([(
+                "evidence_digest".to_owned(),
+                CanonicalValue::Text(evidence.evidence_digest.as_str().to_owned()),
+            )])),
+        );
+    }
+    ExtensionMap::new(values, &BTreeSet::new())
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))
+}
+
 fn seal(
     contract: ContextContract,
     contract_digest: ContentDigest,
@@ -1313,7 +1899,9 @@ fn seal(
     selected: BTreeMap<VersionId, Selection>,
     dispositions: BTreeMap<VersionId, DispositionRecord>,
     equivalence: ContentEquivalenceState,
+    evidence: CompilationEvidence,
 ) -> Result<CompileOutput, CompilerError> {
+    let digest_bound_v4 = evidence.packing.is_some();
     let lanes = contract
         .budget
         .lane_input_tokens
@@ -1360,13 +1948,16 @@ fn seal(
         manifest_id: placeholder.clone(),
         contract_digest: contract_digest.clone(),
         entries: manifest_entries(&dispositions),
-        extensions: ExtensionMap::default(),
+        extensions: manifest_extensions(evidence.ranking.as_ref(), evidence.packing.as_ref())?,
     };
-    manifest.manifest_id = VersionId::new(
+    let manifest_id = if digest_bound_v4 {
+        trusted_semantic_multihash(SemanticEnvelopeProfile::Manifest, &manifest)?
+    } else {
         semantic_multihash_v1(SemanticEnvelopeProfile::Manifest, &manifest)
-            .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?,
-    )
-    .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
+            .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?
+    };
+    manifest.manifest_id = VersionId::new(manifest_id)
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
     manifest
         .validate()
         .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
@@ -1408,11 +1999,14 @@ fn seal(
         total_tokens,
         extensions: ExtensionMap::default(),
     };
-    bundle.bundle_id = VersionId::new(
+    let bundle_id = if digest_bound_v4 {
+        trusted_semantic_multihash(SemanticEnvelopeProfile::Bundle, &bundle)?
+    } else {
         semantic_multihash_v1(SemanticEnvelopeProfile::Bundle, &bundle)
-            .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?,
-    )
-    .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
+            .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?
+    };
+    bundle.bundle_id = VersionId::new(bundle_id)
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
     bundle
         .validate()
         .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
@@ -1428,20 +2022,35 @@ fn seal(
         retrieval_plan_digest: frozen.retrieval_plan_digest,
         compiler_profile_digest: frozen.compiler_profile_digest,
     };
-    let content_equivalence = equivalence
-        .members_by_representative
-        .iter()
-        .map(|(representative, members)| ContentEquivalenceDiagnostic {
-            representative_version: representative.clone(),
-            member_versions: members.clone(),
-            provenance_digests: equivalence
-                .provenance_by_representative
-                .get(representative)
-                .cloned()
-                .unwrap_or_default(),
-            selected_block_id: selected_block_ids.get(representative).cloned(),
-        })
-        .collect();
+    let content_equivalence = if equivalence.singleton_compacted {
+        equivalence
+            .provenance_by_representative
+            .iter()
+            .map(
+                |(representative, provenance)| ContentEquivalenceDiagnostic {
+                    representative_version: representative.clone(),
+                    member_versions: BTreeSet::from([representative.clone()]),
+                    provenance_digests: provenance.clone(),
+                    selected_block_id: selected_block_ids.get(representative).cloned(),
+                },
+            )
+            .collect()
+    } else {
+        equivalence
+            .members_by_representative
+            .iter()
+            .map(|(representative, members)| ContentEquivalenceDiagnostic {
+                representative_version: representative.clone(),
+                member_versions: members.clone(),
+                provenance_digests: equivalence
+                    .provenance_by_representative
+                    .get(representative)
+                    .cloned()
+                    .unwrap_or_default(),
+                selected_block_id: selected_block_ids.get(representative).cloned(),
+            })
+            .collect()
+    };
     Ok(CompileOutput {
         normalized_contract: contract,
         plan,
@@ -1449,6 +2058,8 @@ fn seal(
         bundle,
         invalidation,
         content_equivalence,
+        ranking_evidence: evidence.ranking,
+        packing_evidence: evidence.packing,
     })
 }
 
@@ -1497,10 +2108,9 @@ fn block_id(selection: &Selection, provenance: &[VersionId]) -> Result<VersionId
 }
 
 fn contract_digest(contract: &ContextContract) -> Result<ContentDigest, CompilerError> {
-    let json = serde_json::to_vec(contract)
+    let value = serde_json::to_value(contract)
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
-    let node = parse_strict_json(&json)
-        .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
+    let node = trusted_canonical_node(value, 1, CompilerErrorCode::InvalidInput)?;
     let cbor = to_deterministic_cbor(&node)
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))?;
     let mut hasher = Sha256::new();
@@ -1510,7 +2120,112 @@ fn contract_digest(contract: &ContextContract) -> Result<ContentDigest, Compiler
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))
 }
 
+/// Converts a validated in-memory protocol record without the JSON byte round trip used at
+/// untrusted boundaries. `serde_json::Value` has already enforced unique object keys; the same
+/// canonical depth/cardinality and scalar restrictions remain explicit here.
+fn trusted_canonical_node(
+    value: serde_json::Value,
+    depth: usize,
+    error_code: CompilerErrorCode,
+) -> Result<CanonicalNode, CompilerError> {
+    if depth > MAX_CANONICAL_DEPTH {
+        return Err(CompilerError::new(error_code));
+    }
+    match value {
+        serde_json::Value::Null => Err(CompilerError::new(error_code)),
+        serde_json::Value::Bool(value) => Ok(CanonicalNode::Boolean(value)),
+        serde_json::Value::Number(value) => {
+            if let Some(value) = value.as_u64() {
+                Ok(CanonicalNode::Unsigned(value))
+            } else if let Some(value) = value.as_i64()
+                && value < 0
+            {
+                Ok(CanonicalNode::Negative(value))
+            } else {
+                Err(CompilerError::new(error_code))
+            }
+        }
+        serde_json::Value::String(value) => Ok(CanonicalNode::Text(value)),
+        serde_json::Value::Array(values) => {
+            if values.len() > MAX_CANONICAL_ARRAY_ITEMS {
+                return Err(CompilerError::new(error_code));
+            }
+            values
+                .into_iter()
+                .map(|value| trusted_canonical_node(value, depth.saturating_add(1), error_code))
+                .collect::<Result<Vec<_>, _>>()
+                .map(CanonicalNode::Array)
+        }
+        serde_json::Value::Object(values) => {
+            if values.len() > MAX_CANONICAL_MAP_ENTRIES {
+                return Err(CompilerError::new(error_code));
+            }
+            values
+                .into_iter()
+                .map(|(key, value)| {
+                    trusted_canonical_node(value, depth.saturating_add(1), error_code)
+                        .map(|value| (key, value))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()
+                .map(CanonicalNode::Map)
+        }
+    }
+}
+
+fn trusted_semantic_multihash<T: Serialize>(
+    profile: SemanticEnvelopeProfile,
+    record: &T,
+) -> Result<String, CompilerError> {
+    let value = serde_json::to_value(record)
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
+    let CanonicalNode::Map(mut fields) =
+        trusted_canonical_node(value, 1, CompilerErrorCode::SealFailed)?
+    else {
+        return Err(CompilerError::new(CompilerErrorCode::SealFailed));
+    };
+    for field in profile.excluded_fields() {
+        fields.remove(*field);
+    }
+    let envelope = CanonicalNode::Array(vec![
+        CanonicalNode::Unsigned(profile as u64),
+        CanonicalNode::Map(fields),
+    ]);
+    let cbor = to_deterministic_cbor(&envelope)
+        .map_err(|_error| CompilerError::new(CompilerErrorCode::SealFailed))?;
+    Ok(multihash_v1(profile.digest_domain(), &cbor))
+}
+
 fn profile_digest(profile: &CompilerProfile) -> Result<ContentDigest, CompilerError> {
+    static BALANCED_V4_DIGEST: OnceLock<Result<ContentDigest, CompilerError>> = OnceLock::new();
+    if is_default_balanced_v4(profile) {
+        return BALANCED_V4_DIGEST
+            .get_or_init(|| compute_profile_digest(profile))
+            .clone();
+    }
+    compute_profile_digest(profile)
+}
+
+fn is_default_balanced_v4(profile: &CompilerProfile) -> bool {
+    profile.profile_id == "cigar.compiler-profile.balanced.v4"
+        && profile.retrieval_profile == cigar_retrieval::RetrievalProfile::BalancedV4
+        && profile.minimum_items.is_empty()
+        && profile.maximum_items.is_empty()
+        && profile.local_swap_passes == 0
+        && profile.local_swap_alternatives == 32
+        && profile.requirement_coverage_weight == 50_000
+        && profile.entity_coverage_weight == 20_000
+        && profile.loss_penalty == 50_000
+        && !profile.utility_density_ranking
+        && profile.minimum_lexical_match == 8_000
+        && profile.marginal_requirement_weight == 300_000
+        && profile.marginal_entity_weight == 120_000
+        && profile.dependency_cost_penalty == 40_000
+        && profile.diversity_weight == 75_000
+        && profile.redundancy_penalty == 90_000
+        && profile.sufficient_items_per_requirement == 0
+}
+
+fn compute_profile_digest(profile: &CompilerProfile) -> Result<ContentDigest, CompilerError> {
     let mut hasher = Sha256::new();
     // v2 binds the Honey 0.9.2 content-equivalence stage so pre-0.9.1 artifacts cannot be reused
     // under the same numeric tuning values.
@@ -1538,6 +2253,11 @@ fn profile_digest(profile: &CompilerProfile) -> Result<ContentDigest, CompilerEr
         hasher.update(profile.dependency_cost_penalty.to_be_bytes());
         hasher.update(profile.diversity_weight.to_be_bytes());
         hasher.update(profile.redundancy_penalty.to_be_bytes());
+        if profile.profile_id == "cigar.compiler-profile.balanced.v3" {
+            hasher.update(profile.sufficient_items_per_requirement.to_be_bytes());
+        } else if profile.profile_id == "cigar.compiler-profile.balanced.v4" {
+            crate::packing_workspace::update_profile_digest(&mut hasher);
+        }
     }
     ContentDigest::new(multihash(hasher))
         .map_err(|_error| CompilerError::new(CompilerErrorCode::InvalidInput))
@@ -1549,12 +2269,21 @@ pub fn compiler_profile_digest(profile: &CompilerProfile) -> Result<ContentDiges
 }
 
 fn multihash(hasher: Sha256) -> String {
-    let mut value = String::from("1220");
-    use std::fmt::Write as _;
+    let mut value = String::with_capacity(68);
+    value.push_str("1220");
     for byte in hasher.finalize() {
-        let _ = write!(&mut value, "{byte:02x}");
+        value.push(hex_digit(byte >> 4));
+        value.push(hex_digit(byte & 0x0f));
     }
     value
+}
+
+fn hex_digit(nibble: u8) -> char {
+    char::from(if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + nibble - 10
+    })
 }
 
 fn deterministic_record_id(parts: &[&[u8]]) -> Result<cigar_protocol::RecordId, CompilerError> {

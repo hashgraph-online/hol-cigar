@@ -279,12 +279,14 @@ def _execute_selftest(repository: Path) -> dict[str, Any]:
         artifact_binding = (
             canonical_json_bytes([artifact_record]).decode("utf-8").rstrip("\n")
         )
+        component_scope = "repository-locked-dependency-union"
         write_json(
             dist / "sbom-artifacts.json",
             {
                 "schema_version": "cigar.sbom-artifacts.v1",
                 "artifacts": [artifact_record],
                 "component_count": 1,
+                "component_scope": component_scope,
             },
         )
         write_json(
@@ -331,7 +333,11 @@ def _execute_selftest(repository: Path) -> dict[str, Any]:
                         "annotationDate": "2023-11-14T22:13:20Z",
                         "annotationType": "OTHER",
                         "annotator": "Tool: cigar-release-sbom-v1",
-                        "comment": f"CIGAR artifact binding: {artifact_binding}",
+                        "comment": (
+                            f"CIGAR component scope: {component_scope}; this is not "
+                            "per-artifact reachability evidence. "
+                            f"CIGAR artifact binding: {artifact_binding}"
+                        ),
                     }
                 ],
             },
@@ -350,7 +356,11 @@ def _execute_selftest(repository: Path) -> dict[str, Any]:
                         "name": "cigar",
                         "version": "0.1.0",
                         "properties": [
-                            {"name": "cigar:artifacts", "value": artifact_binding}
+                            {"name": "cigar:artifacts", "value": artifact_binding},
+                            {
+                                "name": "cigar:component-scope",
+                                "value": component_scope,
+                            },
                         ],
                     },
                 },

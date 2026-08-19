@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -62,6 +63,40 @@ class LocalQualificationEvidenceTests(unittest.TestCase):
                 arguments,
                 repository_root=self.repository,
             )
+
+    def initialized_git_repository(self) -> Path:
+        repository = self.base / "git-repository"
+        repository.mkdir(mode=0o700)
+        subprocess.run(
+            ["git", "init", "--quiet"], cwd=repository, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "qualification@example.invalid"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Qualification Fixture"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+        tracked = repository / "tracked.txt"
+        tracked.write_text("stable\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "tracked.txt"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "--quiet", "-m", "fixture"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+        return repository
 
     def test_selected_workspace_publishes_canonical_owner_only_create_new_report(
         self,
@@ -202,6 +237,59 @@ class LocalQualificationEvidenceTests(unittest.TestCase):
         self.assertNotIn("CIGAR_EVIDENCE_DIR", environment)
         self.assertEqual(environment["SOURCE_DATE_EPOCH"], "1700000000")
         self.assertEqual(environment["TZ"], "UTC")
+
+    def test_clean_source_snapshot_rejects_tracked_and_untracked_changes(self) -> None:
+        repository = self.initialized_git_repository()
+        revision, tree = run_local_qualification._clean_source_snapshot(repository)
+        self.assertRegex(revision, r"^[0-9a-f]{40,64}$")
+        self.assertRegex(tree, r"^[0-9a-f]{40,64}$")
+
+        (repository / "tracked.txt").write_text("changed\n", encoding="utf-8")
+        with self.assertRaisesRegex(ReleaseError, "clean committed source"):
+            run_local_qualification._clean_source_snapshot(repository)
+        subprocess.run(
+            ["git", "restore", "tracked.txt"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+
+        (repository / "untracked.txt").write_text("new\n", encoding="utf-8")
+        with self.assertRaisesRegex(ReleaseError, "clean committed source"):
+            run_local_qualification._clean_source_snapshot(repository)
+
+    def test_child_command_must_preserve_clean_source_identity(self) -> None:
+        repository = self.initialized_git_repository()
+        result = run_local_qualification._run(
+            repository,
+            [sys.executable, "-c", "print('bounded')"],
+        )
+        self.assertEqual(result.stdout.strip(), "bounded")
+
+        mutation = "from pathlib import Path; Path('tracked.txt').write_text('changed\\n')"
+        with self.assertRaisesRegex(ReleaseError, "left the qualification source"):
+            run_local_qualification._run(
+                repository,
+                [sys.executable, "-c", mutation],
+            )
+        subprocess.run(
+            ["git", "restore", "tracked.txt"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+        )
+
+        replacement = (
+            "from pathlib import Path; import subprocess; "
+            "Path('tracked.txt').write_text('replacement\\n'); "
+            "subprocess.run(['git', 'add', 'tracked.txt'], check=True); "
+            "subprocess.run(['git', 'commit', '--quiet', '-m', 'replacement'], check=True)"
+        )
+        with self.assertRaisesRegex(ReleaseError, "changed the qualification source"):
+            run_local_qualification._run(
+                repository,
+                [sys.executable, "-c", replacement],
+            )
 
     def test_installation_matrix_routes_receipt_to_selected_external_workspace(
         self,

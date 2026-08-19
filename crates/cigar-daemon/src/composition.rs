@@ -733,10 +733,18 @@ mod tests {
     }
 
     #[test]
-    fn capability_profiles_report_only_balanced_v1() {
+    fn capability_profiles_report_selected_intelligence_profile() {
         assert_eq!(
             capability_profiles("local", false, IntelligenceProfile::BalancedV1),
             ["effects-disabled", "intelligence-balanced-v1", "local"]
+        );
+        assert_eq!(
+            capability_profiles("local", false, IntelligenceProfile::BalancedV3),
+            ["effects-disabled", "intelligence-balanced-v3", "local"]
+        );
+        assert_eq!(
+            capability_profiles("local", false, IntelligenceProfile::BalancedV4),
+            ["effects-disabled", "intelligence-balanced-v4", "local"]
         );
     }
 }

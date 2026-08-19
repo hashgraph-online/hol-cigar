@@ -33,6 +33,12 @@ const COMPILE_PHASE_COUNT: usize = 7;
 const COMPILE_CANDIDATE_STAGE_COUNT: usize = 5;
 const COMPILE_RESULT_COUNT: usize = 7;
 const CACHE_OBSERVATION_COUNT: usize = 32;
+const WORKFLOW_CONTEXT_OUTCOME_COUNT: usize = 3;
+const WORKFLOW_CONTEXT_SELECTION_COUNT: usize = 3;
+const WORKFLOW_DELTA_BLOCK_COUNT: usize = 2;
+const WORKFLOW_RECOVERY_BOUNDARY_COUNT: usize = 4;
+const WORKFLOW_REPLAY_STATUS_COUNT: usize = 2;
+const WORKFLOW_REPLAY_VERIFICATION_COUNT: usize = 3;
 const REPOSITORY_COMMIT_KIND_COUNT: usize = 3;
 const REPOSITORY_COMMIT_OUTCOME_COUNT: usize = 2;
 const REPOSITORY_COMMIT_PHASE_COUNT: usize = 11;
@@ -743,6 +749,126 @@ impl StreamBackpressureEvent {
     }
 }
 
+/// Closed durable outcome for one workflow context cycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowContextCycleOutcome {
+    /// One complete cycle reached its durable checkpoint.
+    Checkpointed,
+    /// Authority loss or invalidation quarantined the active cycle.
+    Quarantined,
+    /// A finished workflow accepted an exact replay transcript.
+    ReplayVerified,
+}
+
+impl WorkflowContextCycleOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Checkpointed => 0,
+            Self::Quarantined => 1,
+            Self::ReplayVerified => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Checkpointed => "checkpointed",
+            Self::Quarantined => "quarantined",
+            Self::ReplayVerified => "replay_verified",
+        }
+    }
+}
+
+/// Closed context selection path for a completed workflow cycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowContextSelectionKind {
+    /// The selected context reused or established a full semantic root.
+    Full,
+    /// The selected context applied a verified delta.
+    Delta,
+    /// The delta bound forced a verified new full root.
+    ForcedFull,
+}
+
+impl WorkflowContextSelectionKind {
+    const fn index(self) -> usize {
+        match self {
+            Self::Full => 0,
+            Self::Delta => 1,
+            Self::ForcedFull => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Delta => "delta",
+            Self::ForcedFull => "forced_full",
+        }
+    }
+}
+
+/// Closed restart boundary; never carries workflow or provider identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowRecoveryBoundary {
+    /// Planning, bundle, delta, materialization, or checkpoint recovery.
+    Context,
+    /// Pre-call or post-result provider recovery.
+    Provider,
+    /// Prepared, authorized, dispatching, or reconciliation recovery.
+    Effect,
+    /// Finished or replay-verification recovery.
+    Replay,
+}
+
+impl WorkflowRecoveryBoundary {
+    const fn index(self) -> usize {
+        match self {
+            Self::Context => 0,
+            Self::Provider => 1,
+            Self::Effect => 2,
+            Self::Replay => 3,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Context => "context",
+            Self::Provider => "provider",
+            Self::Effect => "effect",
+            Self::Replay => "replay",
+        }
+    }
+}
+
+/// Closed terminal result of one exact workflow replay verification attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowReplayVerificationOutcome {
+    /// All five exact identity dimensions matched.
+    Verified,
+    /// At least one valid exact identity dimension differed.
+    Mismatched,
+    /// The supplied replay transcript or claimed outcome was structurally invalid.
+    Invalid,
+}
+
+impl WorkflowReplayVerificationOutcome {
+    const fn index(self) -> usize {
+        match self {
+            Self::Verified => 0,
+            Self::Mismatched => 1,
+            Self::Invalid => 2,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Mismatched => "mismatched",
+            Self::Invalid => "invalid",
+        }
+    }
+}
+
 struct ProcessSampler {
     started: Instant,
     system: Mutex<System>,
@@ -825,6 +951,12 @@ pub struct DaemonTelemetry {
     cache_events: [AtomicU64; CACHE_OBSERVATION_COUNT],
     physical_tokens: AtomicU64,
     cache_tokens: [AtomicU64; 2],
+    workflow_context_outcomes: [AtomicU64; WORKFLOW_CONTEXT_OUTCOME_COUNT],
+    workflow_context_selections: [AtomicU64; WORKFLOW_CONTEXT_SELECTION_COUNT],
+    workflow_delta_blocks: [AtomicU64; WORKFLOW_DELTA_BLOCK_COUNT],
+    workflow_recoveries: [AtomicU64; WORKFLOW_RECOVERY_BOUNDARY_COUNT],
+    workflow_replay_dimensions: [AtomicU64; WORKFLOW_REPLAY_STATUS_COUNT],
+    workflow_replay_verifications: [AtomicU64; WORKFLOW_REPLAY_VERIFICATION_COUNT],
     handoff_acceptance: [AtomicU64; 3],
     handoff_merge_conflicts: AtomicU64,
     effect_states: [AtomicU64; EFFECT_STATE_COUNT],
@@ -889,6 +1021,12 @@ impl DaemonTelemetry {
             cache_events: std::array::from_fn(|_index| AtomicU64::new(0)),
             physical_tokens: AtomicU64::new(0),
             cache_tokens: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_context_outcomes: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_context_selections: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_delta_blocks: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_recoveries: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_replay_dimensions: std::array::from_fn(|_index| AtomicU64::new(0)),
+            workflow_replay_verifications: std::array::from_fn(|_index| AtomicU64::new(0)),
             handoff_acceptance: std::array::from_fn(|_index| AtomicU64::new(0)),
             handoff_merge_conflicts: AtomicU64::new(0),
             effect_states: std::array::from_fn(|_index| AtomicU64::new(0)),
@@ -1197,6 +1335,112 @@ impl DaemonTelemetry {
                 Some(("kind", label)),
             );
         }
+    }
+
+    /// Records one durable workflow cycle outcome without workflow or tenant identity.
+    pub fn record_workflow_context_outcome(&self, outcome: WorkflowContextCycleOutcome) {
+        self.record_closed_counter(
+            &self.workflow_context_outcomes,
+            outcome.index(),
+            "cigar_workflow_context_cycles_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
+    }
+
+    /// Records one closed bundle/delta selection and its exact content-free block counts.
+    pub fn record_workflow_context_selection(
+        &self,
+        selection: WorkflowContextSelectionKind,
+        reused_blocks: u64,
+        changed_blocks: u64,
+    ) {
+        self.record_closed_counter(
+            &self.workflow_context_selections,
+            selection.index(),
+            "cigar_workflow_context_selections_total",
+            1,
+            Some(("kind", selection.as_str())),
+        );
+        for ((local, count), label) in self
+            .workflow_delta_blocks
+            .iter()
+            .zip([reused_blocks, changed_blocks])
+            .zip(["reused", "changed"])
+        {
+            self.record_counter(
+                local,
+                "cigar_workflow_context_delta_blocks_total",
+                count,
+                Some(("kind", label)),
+            );
+        }
+    }
+
+    /// Records one recovery using only its four-way boundary class.
+    pub fn record_workflow_recovery(&self, boundary: WorkflowRecoveryBoundary) {
+        self.record_closed_counter(
+            &self.workflow_recoveries,
+            boundary.index(),
+            "cigar_workflow_context_recoveries_total",
+            1,
+            Some(("boundary", boundary.as_str())),
+        );
+    }
+
+    /// Records five fixed exact replay dimensions and one consistent closed terminal outcome.
+    pub fn record_workflow_replay_comparison(
+        &self,
+        equal_dimensions: u8,
+        claimed_outcome: WorkflowReplayVerificationOutcome,
+    ) {
+        const DIMENSIONS: u8 = 5;
+        if equal_dimensions > DIMENSIONS {
+            self.record_closed_counter(
+                &self.workflow_replay_verifications,
+                WorkflowReplayVerificationOutcome::Invalid.index(),
+                "cigar_workflow_context_replay_verifications_total",
+                1,
+                Some((
+                    "outcome",
+                    WorkflowReplayVerificationOutcome::Invalid.as_str(),
+                )),
+            );
+            return;
+        }
+        let equal = u64::from(equal_dimensions);
+        let different = u64::from(DIMENSIONS.saturating_sub(equal_dimensions));
+        for ((local, count), label) in self
+            .workflow_replay_dimensions
+            .iter()
+            .zip([equal, different])
+            .zip(["equal", "different"])
+        {
+            self.record_counter(
+                local,
+                "cigar_workflow_context_replay_dimensions_total",
+                count,
+                Some(("status", label)),
+            );
+        }
+        let consistent = matches!(
+            (claimed_outcome, equal_dimensions == DIMENSIONS),
+            (WorkflowReplayVerificationOutcome::Verified, true)
+                | (WorkflowReplayVerificationOutcome::Mismatched, false)
+                | (WorkflowReplayVerificationOutcome::Invalid, _)
+        );
+        let outcome = if consistent {
+            claimed_outcome
+        } else {
+            WorkflowReplayVerificationOutcome::Invalid
+        };
+        self.record_closed_counter(
+            &self.workflow_replay_verifications,
+            outcome.index(),
+            "cigar_workflow_context_replay_verifications_total",
+            1,
+            Some(("outcome", outcome.as_str())),
+        );
     }
 
     /// Records one closed handoff acceptance outcome.
@@ -1697,6 +1941,14 @@ impl DaemonTelemetry {
             rejected_requests: self.rejected_requests.load(Ordering::Relaxed),
             listener_failures: self.listener_failures.load(Ordering::Relaxed),
             graceful_shutdowns: self.graceful_shutdowns.load(Ordering::Relaxed),
+            workflow_context_outcomes: atomic_array_snapshot(&self.workflow_context_outcomes),
+            workflow_context_selections: atomic_array_snapshot(&self.workflow_context_selections),
+            workflow_delta_blocks: atomic_array_snapshot(&self.workflow_delta_blocks),
+            workflow_recoveries: atomic_array_snapshot(&self.workflow_recoveries),
+            workflow_replay_dimensions: atomic_array_snapshot(&self.workflow_replay_dimensions),
+            workflow_replay_verifications: atomic_array_snapshot(
+                &self.workflow_replay_verifications,
+            ),
         }
     }
 
@@ -1840,6 +2092,36 @@ impl DaemonTelemetry {
             "cigar_context_cache_tokens_total" => {
                 indexed_value(&self.cache_tokens, label, &["read", "write"])
             }
+            "cigar_workflow_context_cycles_total" => indexed_value(
+                &self.workflow_context_outcomes,
+                label,
+                cigar_observe::WORKFLOW_CONTEXT_OUTCOME_VALUES,
+            ),
+            "cigar_workflow_context_selections_total" => indexed_value(
+                &self.workflow_context_selections,
+                label,
+                cigar_observe::WORKFLOW_CONTEXT_SELECTION_VALUES,
+            ),
+            "cigar_workflow_context_delta_blocks_total" => indexed_value(
+                &self.workflow_delta_blocks,
+                label,
+                cigar_observe::WORKFLOW_DELTA_BLOCK_VALUES,
+            ),
+            "cigar_workflow_context_recoveries_total" => indexed_value(
+                &self.workflow_recoveries,
+                label,
+                cigar_observe::WORKFLOW_RECOVERY_BOUNDARY_VALUES,
+            ),
+            "cigar_workflow_context_replay_dimensions_total" => indexed_value(
+                &self.workflow_replay_dimensions,
+                label,
+                cigar_observe::WORKFLOW_REPLAY_DIMENSION_STATUS_VALUES,
+            ),
+            "cigar_workflow_context_replay_verifications_total" => indexed_value(
+                &self.workflow_replay_verifications,
+                label,
+                cigar_observe::WORKFLOW_REPLAY_VERIFICATION_VALUES,
+            ),
             "cigar_handoff_acceptance_total" => indexed_value(
                 &self.handoff_acceptance,
                 label,
@@ -2048,6 +2330,18 @@ pub struct TelemetrySnapshot {
     pub listener_failures: u64,
     /// Completed bounded graceful shutdowns.
     pub graceful_shutdowns: u64,
+    /// Workflow cycle outcomes ordered as checkpointed, quarantined, replay verified.
+    pub workflow_context_outcomes: [u64; WORKFLOW_CONTEXT_OUTCOME_COUNT],
+    /// Workflow selections ordered as full, delta, forced full.
+    pub workflow_context_selections: [u64; WORKFLOW_CONTEXT_SELECTION_COUNT],
+    /// Delta block counts ordered as reused, changed.
+    pub workflow_delta_blocks: [u64; WORKFLOW_DELTA_BLOCK_COUNT],
+    /// Recovery counts ordered as context, provider, effect, replay.
+    pub workflow_recoveries: [u64; WORKFLOW_RECOVERY_BOUNDARY_COUNT],
+    /// Replay dimensions ordered as equal, different.
+    pub workflow_replay_dimensions: [u64; WORKFLOW_REPLAY_STATUS_COUNT],
+    /// Replay outcomes ordered as verified, mismatched, invalid.
+    pub workflow_replay_verifications: [u64; WORKFLOW_REPLAY_VERIFICATION_COUNT],
 }
 
 fn render_sample(output: &mut String, name: &str, label: Option<(&str, &str)>, value: u64) {
@@ -2115,6 +2409,14 @@ fn atomic_saturating_add(target: &AtomicU64, value: u64) {
             Err(observed) => current = observed,
         }
     }
+}
+
+fn atomic_array_snapshot<const N: usize>(values: &[AtomicU64; N]) -> [u64; N] {
+    let mut snapshot = [0; N];
+    for (target, source) in snapshot.iter_mut().zip(values) {
+        *target = source.load(Ordering::Relaxed);
+    }
+    snapshot
 }
 
 fn duration_nanoseconds(duration: Duration) -> u64 {
@@ -2229,7 +2531,9 @@ mod tests {
     use super::{
         BlobIntegrityOutcome, CacheLayer, CacheReason, CompileCandidateStage, CompilePhase,
         CompileResultCounts, DaemonTelemetry, HandoffAcceptanceOutcome, OtlpConfig, ParserStage,
-        ReconciliationOutcome, TelemetryError, atomic_saturating_add, strip_ambient_otlp_metadata,
+        ReconciliationOutcome, TelemetryError, WorkflowContextCycleOutcome,
+        WorkflowContextSelectionKind, WorkflowRecoveryBoundary, WorkflowReplayVerificationOutcome,
+        atomic_saturating_add, strip_ambient_otlp_metadata,
     };
     use crate::{BlockingPoolMetrics, OverflowPolicy, QueueMetricsSnapshot, WorkerKind};
     use cigar_api::{TransportMetricEvent, TransportMetricsObserver};
@@ -2325,6 +2629,11 @@ mod tests {
         telemetry.record_compile_stale(37);
         telemetry.record_cache_observation(CacheLayer::Materialization, CacheReason::Hit);
         telemetry.record_materialization_tokens(41, 43, 47);
+        telemetry.record_workflow_context_outcome(WorkflowContextCycleOutcome::Checkpointed);
+        telemetry.record_workflow_context_selection(WorkflowContextSelectionKind::Delta, 61, 67);
+        telemetry.record_workflow_recovery(WorkflowRecoveryBoundary::Provider);
+        telemetry
+            .record_workflow_replay_comparison(3, WorkflowReplayVerificationOutcome::Mismatched);
         telemetry.record_handoff_acceptance(HandoffAcceptanceOutcome::Expired);
         telemetry.record_handoff_merge_conflicts(53);
         telemetry.observe_unknown_effect_age(59);
@@ -2440,6 +2749,14 @@ mod tests {
             "cigar_context_candidate_stage_total{stage=\"after_content_grouping\"} 67",
             "cigar_context_compile_results_total{kind=\"budget_displaced\"} 44",
             "cigar_materialization_cache_events_total{reason=\"hit\"} 1",
+            "cigar_workflow_context_cycles_total{outcome=\"checkpointed\"} 1",
+            "cigar_workflow_context_selections_total{kind=\"delta\"} 1",
+            "cigar_workflow_context_delta_blocks_total{kind=\"reused\"} 61",
+            "cigar_workflow_context_delta_blocks_total{kind=\"changed\"} 67",
+            "cigar_workflow_context_recoveries_total{boundary=\"provider\"} 1",
+            "cigar_workflow_context_replay_dimensions_total{status=\"equal\"} 3",
+            "cigar_workflow_context_replay_dimensions_total{status=\"different\"} 2",
+            "cigar_workflow_context_replay_verifications_total{outcome=\"mismatched\"} 1",
             "cigar_handoff_acceptance_total{outcome=\"expired\"} 1",
             "cigar_api_requests_total{outcome=\"failed\"} 1",
             "cigar_api_stream_backpressure_total{event=\"opened\"} 1",
@@ -2572,13 +2889,16 @@ mod tests {
     #[test]
     fn telemetry_surfaces_drop_ambient_metadata_and_never_accept_content_canaries()
     -> Result<(), Box<dyn std::error::Error>> {
-        const CANARIES: [&str; 7] = [
+        const CANARIES: [&str; 10] = [
             "SOURCE-CONTENT-CANARY",
             "PROMPT-CANARY",
             "SECRET-CANARY",
             "/private/path/canary",
             "user-identity-canary@example.invalid",
             "effect-argument-canary",
+            "tool-argument-canary",
+            "model-output-canary",
+            "tool-result-canary",
             "attacker-high-cardinality-7f9d4c21",
         ];
 
@@ -2597,6 +2917,10 @@ mod tests {
         telemetry.record_rejected_request();
         telemetry.record_listener_failure();
         telemetry.record_graceful_shutdown();
+        telemetry.record_workflow_context_outcome(WorkflowContextCycleOutcome::ReplayVerified);
+        telemetry.record_workflow_context_selection(WorkflowContextSelectionKind::ForcedFull, 7, 3);
+        telemetry.record_workflow_recovery(WorkflowRecoveryBoundary::Effect);
+        telemetry.record_workflow_replay_comparison(5, WorkflowReplayVerificationOutcome::Verified);
         telemetry.record_startup_stage(RepositoryStartupMetrics {
             stage: RepositoryStartupStage::ChecksumVerification,
             outcome: RepositoryStartupOutcome::Failed,
@@ -2644,6 +2968,13 @@ mod tests {
         for worker in WorkerKind::ALL {
             assert!(surfaces.contains(worker.as_str()));
         }
+        let snapshot = telemetry.snapshot();
+        assert_eq!(snapshot.workflow_context_outcomes, [0, 0, 1]);
+        assert_eq!(snapshot.workflow_context_selections, [0, 0, 1]);
+        assert_eq!(snapshot.workflow_delta_blocks, [7, 3]);
+        assert_eq!(snapshot.workflow_recoveries, [0, 0, 1, 0]);
+        assert_eq!(snapshot.workflow_replay_dimensions, [5, 0]);
+        assert_eq!(snapshot.workflow_replay_verifications, [1, 0, 0]);
         assert!(!surfaces.contains("tenant"));
         assert!(!surfaces.contains("principal"));
         assert!(!surfaces.contains("record_id"));

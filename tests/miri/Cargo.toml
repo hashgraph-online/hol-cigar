@@ -10,6 +10,13 @@ members = ["."]
 [dependencies]
 cigar-canon = { path = "../../crates/cigar-canon" }
 cigar-protocol = { path = "../../crates/cigar-protocol" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150" }
+
+[features]
+default = ["qualification-miri-isolated"]
+fuzzing = []
+qualification-miri-isolated = []
 
 [[test]]
 name = "memory_model"

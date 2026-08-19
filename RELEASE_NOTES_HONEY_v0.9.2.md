@@ -1,4 +1,4 @@
-# CIGAR Honey v0.9.2 release-candidate notes
+# CIGAR Honey v0.9.2 private candidate release notes
 
 CIGAR is an alpha project from [HOL.org](https://hol.org).
 
@@ -7,7 +7,7 @@ Channel: `honey`
 State: alpha developer preview
 Context ABI: `cigar.context.v1`
 
-Honey 0.9.2 is the balanced release-candidate line for the persistence, restart, retrieval,
+Honey 0.9.2 is the private corrected-champion line for the persistence, restart, retrieval,
 duplicate-content, and correlation-related efficiency issues observed during the 100-with/100-without
 CIGAR security-platform evaluation. It descends from the published `hol-cigar==0.9.1` PyPI build at
 `ee9b52b69f4245c27b46da6ef2fc4a070430caed`. The candidate remains unpublished until explicit release-owner
@@ -110,7 +110,7 @@ post-verification. `VACUUM`, manual row deletion, and a larger capacity ceiling 
 
 ## Qualification and compatibility
 
-The 0.9.2 release-candidate gate binds one clean source commit/tree, the exact release manifest, package
+The private 0.9.2 alpha gate binds one clean source commit/tree, the exact release manifest, package
 contracts, strict metadata checks, and installed Python SDK smoke tests. It establishes artifact
 integrity and SDK installability, not full-product efficiency or production qualification. Only
 `balanced_v1` is eligible for release qualification. The separate internal efficiency/reliability

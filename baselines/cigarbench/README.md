@@ -36,3 +36,25 @@ attestation, distinct event/report evidence, one seed, one environment and
 manifest set, and identical pins. A manifest entry alone is not a runnable
 baseline and is never treated as evidence. The repository currently contains no
 release matrix, so this gate remains unqualified.
+
+## Honey 0.9.4 comparator freeze
+
+`honey-0.9.4-three-way.v1.json` preserves the immutable 0.9.2 and 0.9.3 inputs
+for the 0.9.4 three-way experiment. Each treatment binds a full relevant-source
+inventory, exact Git commit/tree, Cargo.lock, selection and retrieval profile,
+compiler/retrieval goldens, release-mode build artifacts, installed executable
+identities, and the independently executed five-workflow Hiero cohort.
+
+The structural check is repository-local:
+
+```sh
+python3 baselines/cigarbench/verify_honey_094_baselines.py check
+```
+
+Exact reproduction additionally supplies both detached source roots, both
+installed roots, and the external Hiero raw/report evidence. The verifier
+recomputes the complete manifest and rejects dirty or moving sources, incomplete
+artifact identities, profile drift, duplicate treatments, or candidate reuse of
+a comparator commit/tree. The JSON Schema fixes the closed record shapes and
+profile/source constants; the reference verifier enforces cross-record digest
+and source-distinctness relations that JSON Schema cannot express.

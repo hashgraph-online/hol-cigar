@@ -24,7 +24,7 @@ func TestReleaseMetadataAndDescriptorBindContextABI(t *testing.T) {
 	}
 	if release.SchemaVersion != "cigar.sdk-release.v1" ||
 		release.Name != "github.com/CIGAR/cigar/sdk/go" ||
-		release.Version != "0.9.2" ||
+		release.Version != "0.9.4" ||
 		release.ContextABI != ContextABI ||
 		string(contextv1.File_context_abi_proto.Package()) != ContextABI {
 		t.Fatalf("release binding differs: %+v descriptor=%q", release, contextv1.File_context_abi_proto.Package())

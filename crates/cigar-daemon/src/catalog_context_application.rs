@@ -1605,6 +1605,7 @@ where
             candidates.push(CompilerCandidate {
                 version_id: version_id.clone(),
                 logical_id: version_id.clone(),
+                lineage_id: atom.lineage_id.clone(),
                 canonical_uri: atom.source.uri.clone(),
                 lane: lane_for_kind(atom.kind),
                 mandatory: false,
@@ -1674,6 +1675,7 @@ where
                 frozen,
                 profile,
                 candidates,
+                ranking_evidence: bounded_retrieval.ranking_evidence.clone(),
             })
             .map_err(map_compiler_error)?;
         self.record_compile_phase(CompilePhase::Pack, phase_started.elapsed());
@@ -2202,10 +2204,30 @@ where
     ) -> Result<ContextDeltaResponse, cigar_protocol::ErrorCode> {
         let phase_started = Instant::now();
         let state = self.begin_request(context, cancellation, monotonic_deadline)?;
-        let base = self.retained_bundle(&state, &request.base_bundle_id)?;
+        let base = self
+            .retained_bundle(&state, &request.base_bundle_id)
+            .map_err(|error| match error {
+                cigar_protocol::ErrorCode::InvalidArgument => {
+                    cigar_protocol::ErrorCode::DeltaBaseMismatch
+                }
+                other => other,
+            })?;
         let target = self.retained_plan(&state, &request.target_plan_id)?;
         let base_authorization = self.authorize_retained(&state, &base.value)?;
         let target_authorization = self.authorize_retained(&state, &target.value)?;
+        let current_profile_digest =
+            compiler_profile_digest(&self.compiler_profile).map_err(map_compiler_error)?;
+        validate_delta_root_compatibility(&base.value, &target.value, &current_profile_digest)?;
+        let base_revalidation =
+            self.revalidation_reasons(&state, &base.value, &base_authorization)?;
+        let target_revalidation =
+            self.revalidation_reasons(&state, &target.value, &target_authorization)?;
+        if !base_revalidation.is_empty() || !target_revalidation.is_empty() {
+            if let Some(telemetry) = &self.telemetry {
+                telemetry.record_compile_stale(1);
+            }
+            return Err(cigar_protocol::ErrorCode::BundleInvalidated);
+        }
         let base_bundle = self.stored_bundle(&state, &base.value, &base_authorization)?;
         let target_bundle = self.stored_bundle(&state, &target.value, &target_authorization)?;
         let sealed = generate_delta(&base_bundle, &target_bundle).map_err(map_delta_error)?;
@@ -2740,6 +2762,27 @@ where
             .map_err(map_store_error)?;
         catalog_revision(&read)
     }
+}
+
+fn validate_delta_root_compatibility(
+    base: &RetainedCompileRecord,
+    target: &RetainedCompileRecord,
+    current_profile_digest: &ContentDigest,
+) -> Result<(), cigar_protocol::ErrorCode> {
+    if base.tenant_id != target.tenant_id
+        || base.authorized_projects != target.authorized_projects
+        || base.normalized_contract.purpose != target.normalized_contract.purpose
+        || base.processor != target.processor
+        || base.policy_digest != target.policy_digest
+        || base.compiler_profile_digest != target.compiler_profile_digest
+        || base.normalized_contract.target != target.normalized_contract.target
+    {
+        return Err(cigar_protocol::ErrorCode::DeltaBaseMismatch);
+    }
+    if base.compiler_profile_digest != *current_profile_digest {
+        return Err(cigar_protocol::ErrorCode::BundleInvalidated);
+    }
+    Ok(())
 }
 
 struct ApplicationRequest {
@@ -4286,21 +4329,22 @@ mod tests {
     };
     use cigar_api::{
         AuthenticatedIdentity, BundleIdRequest, CancellationToken, CompileContextBundleOperation,
-        CompileContextBundleRequest, CreateContextPlanOperation, CreateContextPlanRequest,
-        DiscoverSourcesOperation, DiscoverSourcesRequest, FacadeErrorFactory,
-        GetSourceStatusOperation, IngestCatalogOperation, IngestCatalogRequest,
-        MAX_OPERATION_PAYLOAD_BYTES, MaterializationProfile, MaterializeContextBundleOperation,
-        MaterializeContextBundleRequest, OperationId, PathParameter, PrincipalId, RequestContext,
-        RequestEnvelope, RevalidateContextBundleOperation, SourceIdRequest, TenantId, TraceId,
-        TypedUnaryAdapter, UnaryOperationHandler, decode_operation_payload,
-        encode_operation_payload,
+        CompileContextBundleRequest, CompileContextDeltaOperation, CompileContextDeltaRequest,
+        CreateContextPlanOperation, CreateContextPlanRequest, DiscoverSourcesOperation,
+        DiscoverSourcesRequest, FacadeErrorFactory, GetSourceStatusOperation,
+        IngestCatalogOperation, IngestCatalogRequest, MAX_OPERATION_PAYLOAD_BYTES,
+        MaterializationProfile, MaterializeContextBundleOperation, MaterializeContextBundleRequest,
+        OperationId, PathParameter, PrincipalId, RequestContext, RequestEnvelope,
+        RevalidateContextBundleOperation, SourceIdRequest, TenantId, TraceId, TypedUnaryAdapter,
+        UnaryOperationHandler, decode_operation_payload, encode_operation_payload,
     };
     use cigar_catalog::{
         Atomizer, FILESYSTEM_CONNECTOR_ID, LocalFilesystemConnector, atomizer_registry_digest,
     };
     use cigar_code_intel::{AtomizationProfile, BuiltinAtomizer, BuiltinAtomizerKind};
     use cigar_compiler::{
-        ExactTokenizer, MaterializationError, ReferenceTokenizer, ReferenceTokenizerProfile,
+        CompilerProfile, ExactTokenizer, MaterializationError, ReferenceTokenizer,
+        ReferenceTokenizerProfile,
     };
     use cigar_policy::{
         CapabilityContext, CompiledPolicyEngine, PolicyProfile, PolicyRequest, PolicyResource,
@@ -4352,6 +4396,33 @@ mod tests {
         fn count_exact(&self, bytes: &[u8]) -> Result<u32, MaterializationError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             u32::try_from(bytes.len()).map_err(|_error| MaterializationError::LimitExceeded)
+        }
+    }
+
+    struct ControlledTokenizer {
+        fingerprint: ContentDigest,
+        mode: Arc<AtomicUsize>,
+    }
+
+    impl ExactTokenizer for ControlledTokenizer {
+        fn fingerprint(&self) -> &ContentDigest {
+            &self.fingerprint
+        }
+
+        fn count_exact(&self, bytes: &[u8]) -> Result<u32, MaterializationError> {
+            match self.mode.load(Ordering::SeqCst) {
+                0 => {
+                    u32::try_from(bytes.len()).map_err(|_error| MaterializationError::LimitExceeded)
+                }
+                1 => Err(MaterializationError::InvalidInput),
+                2 => panic!("controlled tokenizer crash"),
+                3 => {
+                    std::thread::sleep(Duration::from_millis(100));
+                    u32::try_from(bytes.len()).map_err(|_error| MaterializationError::LimitExceeded)
+                }
+                4 => Ok(u32::MAX),
+                _ => Err(MaterializationError::InvalidInput),
+            }
         }
     }
 
@@ -4894,9 +4965,17 @@ mod tests {
         operation: &str,
         now: UtcTimestamp,
     ) -> Result<RequestContext, Box<dyn std::error::Error>> {
+        request_context_with_timeout(operation, now, 60_000_000_000)
+    }
+
+    fn request_context_with_timeout(
+        operation: &str,
+        now: UtcTimestamp,
+        timeout_nanoseconds: i128,
+    ) -> Result<RequestContext, Box<dyn std::error::Error>> {
         let deadline = UtcTimestamp::from_unix_nanos(
             now.unix_nanos()
-                .checked_add(60_000_000_000)
+                .checked_add(timeout_nanoseconds)
                 .ok_or("deadline overflow")?,
         )?;
         Ok(RequestContext::new(
@@ -4910,6 +4989,84 @@ mod tests {
             CancellationToken::new(),
             now,
         )?)
+    }
+
+    async fn create_fixture_plan(
+        fixture: &Fixture,
+        idempotency_key: &str,
+    ) -> Result<cigar_api::ContextPlanResponse, Box<dyn std::error::Error>> {
+        let adapter = TypedUnaryAdapter::<CreateContextPlanOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let request = RequestEnvelope::new(
+            "createContextPlan",
+            encode_operation_payload(
+                &CreateContextPlanRequest {
+                    contract: fixture.contract.clone(),
+                },
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?,
+            Some(idempotency_key.to_owned()),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )?;
+        let response = adapter
+            .call(
+                request_context("createContextPlan", fixture.clock.0)?,
+                request,
+            )
+            .await?;
+        Ok(decode_operation_payload(
+            response.payload_cbor(),
+            MAX_OPERATION_PAYLOAD_BYTES,
+        )?)
+    }
+
+    async fn materialize_fixture_plan(
+        fixture: &Fixture,
+        bundle_id: &VersionId,
+        idempotency_key: &str,
+        timeout_nanoseconds: i128,
+    ) -> Result<cigar_api::MaterializationResponse, cigar_api::ApiError> {
+        let adapter = TypedUnaryAdapter::<MaterializeContextBundleOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let payload = MaterializeContextBundleRequest {
+            bundle_id: bundle_id.clone(),
+            profile: MaterializationProfile::CanonicalJson,
+        };
+        let request = RequestEnvelope::new(
+            "materializeContextBundle",
+            encode_operation_payload(&payload, MAX_OPERATION_PAYLOAD_BYTES)
+                .expect("bounded materialization request must encode"),
+            Some(idempotency_key.to_owned()),
+            None,
+            None,
+            None,
+            vec![
+                PathParameter::new("bundle_id", bundle_id.as_str())
+                    .expect("valid bundle path parameter"),
+            ],
+        )
+        .expect("bounded materialization envelope must validate");
+        let context = request_context_with_timeout(
+            "materializeContextBundle",
+            fixture.clock.0,
+            timeout_nanoseconds,
+        )
+        .expect("bounded request context must validate");
+        let response = adapter.call(context, request).await?;
+        decode_operation_payload(response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES).map_err(
+            |_error| {
+                fixture
+                    .errors
+                    .public_error(cigar_protocol::ErrorCode::IntegrityFailure)
+            },
+        )
     }
 
     struct Fixture {
@@ -5000,6 +5157,243 @@ mod tests {
             tenant_id,
             principal_id,
         })
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn delta_requires_exact_live_authorized_roots_and_matching_profiles() -> TestResult {
+        let fixture = fixture()?;
+        let create = TypedUnaryAdapter::<CreateContextPlanOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let base_contract = fixture.contract.clone();
+        let mut target_contract = fixture.contract.clone();
+        target_contract.job_goal = "updated workflow turn".to_owned();
+        let target_requirement = target_contract
+            .requirements
+            .first_mut()
+            .ok_or("target requirement missing")?;
+        target_requirement.minimum_authority = target_requirement
+            .minimum_authority
+            .checked_add(1)
+            .ok_or("target requirement authority overflow")?;
+        let mut mismatched_target_contract = target_contract.clone();
+        mismatched_target_contract.target.materializer_fingerprint =
+            digest_bytes(b"different-materializer-profile")?;
+        let mut plans = Vec::new();
+        for (key, contract) in [
+            ("delta-base-plan", base_contract),
+            ("delta-target-plan", target_contract),
+            ("delta-mismatched-target-plan", mismatched_target_contract),
+        ] {
+            let request = RequestEnvelope::new(
+                "createContextPlan",
+                encode_operation_payload(
+                    &CreateContextPlanRequest { contract },
+                    MAX_OPERATION_PAYLOAD_BYTES,
+                )?,
+                Some(key.to_owned()),
+                None,
+                None,
+                None,
+                Vec::new(),
+            )?;
+            let response = create
+                .call(
+                    request_context("createContextPlan", fixture.clock.0)?,
+                    request,
+                )
+                .await?;
+            plans.push(decode_operation_payload::<cigar_api::ContextPlanResponse>(
+                response.payload_cbor(),
+                MAX_OPERATION_PAYLOAD_BYTES,
+            )?);
+        }
+        let base = plans.first().ok_or("missing base plan")?;
+        let target = plans.get(1).ok_or("missing target plan")?;
+        let mismatched_target = plans.get(2).ok_or("missing mismatched target plan")?;
+        assert_ne!(base.bundle_id, target.bundle_id);
+        assert_ne!(base.plan.contract_digest, target.plan.contract_digest);
+
+        let delta = TypedUnaryAdapter::<CompileContextDeltaOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let request = |base_bundle_id: VersionId,
+                       target_plan_id: RecordId,
+                       key: &str|
+         -> Result<RequestEnvelope, Box<dyn std::error::Error>> {
+            Ok(RequestEnvelope::new(
+                "compileContextDelta",
+                encode_operation_payload(
+                    &CompileContextDeltaRequest {
+                        base_bundle_id,
+                        target_plan_id,
+                    },
+                    MAX_OPERATION_PAYLOAD_BYTES,
+                )?,
+                Some(key.to_owned()),
+                None,
+                None,
+                None,
+                Vec::new(),
+            )?)
+        };
+        let response = delta
+            .call(
+                request_context("compileContextDelta", fixture.clock.0)?,
+                request(
+                    base.bundle_id.clone(),
+                    target.plan.plan_id.clone(),
+                    "exact-delta",
+                )?,
+            )
+            .await?;
+        let response: cigar_api::ContextDeltaResponse =
+            decode_operation_payload(response.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
+        assert_eq!(response.delta.base_bundle_id, base.bundle_id);
+        assert_eq!(response.delta.target_bundle_id, target.bundle_id);
+        assert!(response.delta.added_blocks.is_empty());
+        assert!(response.delta.removed_block_ids.is_empty());
+        assert!(response.delta.resulting_tokens <= fixture.contract.budget.total_input_tokens);
+
+        let materialize = TypedUnaryAdapter::<MaterializeContextBundleOperation, _>::new(
+            Arc::clone(&fixture.application),
+            Arc::clone(&fixture.errors),
+        );
+        let materialized = materialize
+            .call(
+                request_context("materializeContextBundle", fixture.clock.0)?,
+                RequestEnvelope::new(
+                    "materializeContextBundle",
+                    encode_operation_payload(
+                        &MaterializeContextBundleRequest {
+                            bundle_id: target.bundle_id.clone(),
+                            profile: MaterializationProfile::CanonicalJson,
+                        },
+                        MAX_OPERATION_PAYLOAD_BYTES,
+                    )?,
+                    Some("materialize-delta-target".to_owned()),
+                    None,
+                    None,
+                    None,
+                    vec![PathParameter::new("bundle_id", target.bundle_id.as_str())?],
+                )?,
+            )
+            .await?;
+        let materialized: cigar_api::MaterializationResponse =
+            decode_operation_payload(materialized.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
+        assert_eq!(materialized.context.bundle_id, target.bundle_id);
+        assert_eq!(
+            materialized.physical_input_tokens,
+            materialized.context.token_count
+        );
+
+        let missing = delta
+            .call(
+                request_context("compileContextDelta", fixture.clock.0)?,
+                request(
+                    version(999_999)?,
+                    target.plan.plan_id.clone(),
+                    "missing-delta-base",
+                )?,
+            )
+            .await
+            .err()
+            .ok_or("missing delta base unexpectedly compiled")?;
+        assert_eq!(missing.code(), cigar_protocol::ErrorCode::DeltaBaseMismatch);
+
+        let target_mismatch = delta
+            .call(
+                request_context("compileContextDelta", fixture.clock.0)?,
+                request(
+                    base.bundle_id.clone(),
+                    mismatched_target.plan.plan_id.clone(),
+                    "target-profile-mismatch",
+                )?,
+            )
+            .await
+            .err()
+            .ok_or("target profile mismatch unexpectedly compiled")?;
+        assert_eq!(
+            target_mismatch.code(),
+            cigar_protocol::ErrorCode::DeltaBaseMismatch
+        );
+
+        let stale_application = Arc::new(
+            CatalogContextApplication::new(
+                Arc::clone(&fixture.store),
+                fixture.identities.clone(),
+                fixture.authorizer.clone(),
+                fixture.retriever.clone(),
+                fixture.tokenizer_registry.clone() as Arc<dyn ContextTokenizerRegistry>,
+                Arc::new(BlockingPool::new(2, 2)?),
+                fixture.clock.clone(),
+                Arc::clone(&fixture.errors),
+            )
+            .with_benchmark_compiler_profile(CompilerProfile::balanced_v4()),
+        );
+        let stale = TypedUnaryAdapter::<CompileContextDeltaOperation, _>::new(
+            stale_application,
+            Arc::clone(&fixture.errors),
+        )
+        .call(
+            request_context("compileContextDelta", fixture.clock.0)?,
+            request(
+                base.bundle_id.clone(),
+                target.plan.plan_id.clone(),
+                "stale-profile-base",
+            )?,
+        )
+        .await
+        .err()
+        .ok_or("stale compiler profile unexpectedly accepted the base")?;
+        assert_eq!(stale.code(), cigar_protocol::ErrorCode::BundleInvalidated);
+
+        let source_version = match &fixture
+            .contract
+            .requirements
+            .first()
+            .ok_or("fixture requirement missing")?
+            .selector
+        {
+            RequirementSelector::Exact(version_id) => version_id.clone(),
+            RequirementSelector::Query(_) => return Err("fixture selector changed".into()),
+        };
+        let selected = fixture
+            .store
+            .begin_read(
+                AccessContext::new(fixture.tenant_id.clone(), "coding")?,
+                SnapshotSelection::Latest,
+                StoreCancellationToken::default(),
+            )?
+            .get_atom(&source_version)?
+            .ok_or("fixture atom missing")?;
+        fixture.authorizer._policy.revoke_resource(
+            selected.content_digest,
+            UtcTimestamp::from_unix_nanos(
+                fixture
+                    .clock
+                    .0
+                    .unix_nanos()
+                    .checked_add(1_000_000_000)
+                    .ok_or("revocation time overflow")?,
+            )?,
+        )?;
+        let unauthorized = delta
+            .call(
+                request_context("compileContextDelta", fixture.clock.0)?,
+                request(
+                    base.bundle_id.clone(),
+                    target.plan.plan_id.clone(),
+                    "revoked-delta-base",
+                )?,
+            )
+            .await
+            .err()
+            .ok_or("revoked delta base unexpectedly compiled")?;
+        assert_eq!(unauthorized.code(), cigar_protocol::ErrorCode::PolicyDenied);
+        Ok(())
     }
 
     #[test]
@@ -5499,6 +5893,84 @@ mod tests {
             decode_operation_payload(revalidated.payload_cbor(), MAX_OPERATION_PAYLOAD_BYTES)?;
         assert!(revalidated.valid, "reasons: {:?}", revalidated.reasons);
         assert!(revalidated.reasons.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn tokenizer_and_materialization_dependency_faults_fail_closed() -> TestResult {
+        for (label, mode, expected) in [
+            ("crash", 2, cigar_protocol::ErrorCode::DependencyUnavailable),
+            ("timeout", 3, cigar_protocol::ErrorCode::DeadlineExceeded),
+            (
+                "oversized",
+                4,
+                cigar_protocol::ErrorCode::BudgetUnsatisfiable,
+            ),
+        ] {
+            let mut fixture = fixture()?;
+            let fingerprint = digest_bytes(format!("controlled-tokenizer-{label}").as_bytes())?;
+            let mode_control = Arc::new(AtomicUsize::new(0));
+            fixture.tokenizer_registry.register_for_target(
+                "local",
+                "byte-metered",
+                Arc::new(ControlledTokenizer {
+                    fingerprint: fingerprint.clone(),
+                    mode: Arc::clone(&mode_control),
+                }),
+            )?;
+            fixture.contract.target.tokenizer_fingerprint = fingerprint;
+            if mode == 4 {
+                fixture.contract.target.max_context_tokens = 256;
+            }
+            let plan = create_fixture_plan(&fixture, &format!("dependency-{label}-plan")).await?;
+            mode_control.store(mode, Ordering::SeqCst);
+            let timeout = if mode == 3 { 1_000_000 } else { 60_000_000_000 };
+            let error = materialize_fixture_plan(
+                &fixture,
+                &plan.bundle_id,
+                &format!("dependency-{label}-materialize"),
+                timeout,
+            )
+            .await
+            .err()
+            .ok_or("faulting materialization dependency unexpectedly succeeded")?;
+            assert_eq!(error.code(), expected, "fault mode {label}");
+
+            if mode != 4 {
+                mode_control.store(0, Ordering::SeqCst);
+                let recovered = materialize_fixture_plan(
+                    &fixture,
+                    &plan.bundle_id,
+                    &format!("dependency-{label}-recovered"),
+                    60_000_000_000,
+                )
+                .await?;
+                assert_eq!(recovered.context.bundle_id, plan.bundle_id);
+                assert_eq!(
+                    recovered.physical_input_tokens,
+                    recovered.context.token_count
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn wrong_materializer_digest_is_rejected_after_exact_render() -> TestResult {
+        let mut fixture = fixture()?;
+        fixture.contract.target.materializer_fingerprint =
+            digest_bytes(b"unavailable-or-wrong-materializer")?;
+        let plan = create_fixture_plan(&fixture, "wrong-materializer-plan").await?;
+        let error = materialize_fixture_plan(
+            &fixture,
+            &plan.bundle_id,
+            "wrong-materializer-materialize",
+            60_000_000_000,
+        )
+        .await
+        .err()
+        .ok_or("wrong materializer digest unexpectedly materialized")?;
+        assert_eq!(error.code(), cigar_protocol::ErrorCode::BundleInvalidated);
         Ok(())
     }
 

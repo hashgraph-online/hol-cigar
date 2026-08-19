@@ -1,0 +1,43 @@
+{
+  "schema_version": "cigar.h094-packing-allocation-configuration.v1",
+  "candidate_counts": [128, 512],
+  "warmups_per_treatment_per_count": 40,
+  "measured_pairs_per_count": 200,
+  "treatment_order": "pair-parity-alternating-v1",
+  "measurement_method": "system-allocator-peak-live-above-precompiled-request-baseline-v1",
+  "bootstrap": {
+    "algorithm": "paired-sha256-counter-bootstrap-v1",
+    "resamples": 10000,
+    "confidence_level_millionths": 950000,
+    "seed_sha256": "4a8f31c4e2ec498a2133b62bd534b360fd12487e3954fab88fa2a8e4b342cfd1"
+  },
+  "profiles": {
+    "balanced_v3": {
+      "compiler_id": "cigar.compiler-profile.balanced.v3",
+      "compiler_digest": "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7"
+    },
+    "balanced_v4": {
+      "compiler_id": "cigar.compiler-profile.balanced.v4",
+      "compiler_digest": "1220d28b42286c3db066f73b70b670ee32b13311319fd512d682e9f843864749bcf2"
+    }
+  },
+  "thresholds": {
+    "minimum_peak_live_reduction_millionths": 400000,
+    "maximum_balanced_v4_peak_live_bytes": {
+      "128": 4194304,
+      "512": 16777216
+    },
+    "maximum_balanced_v4_allocated_bytes_ratio_millionths": 1000000,
+    "maximum_balanced_v4_allocation_count_ratio_millionths": 1000000
+  },
+  "fixture": {
+    "lane": "evidence",
+    "token_count_per_candidate": 1,
+    "requirement_count": 0,
+    "entity_cycle": 64,
+    "mandatory_candidates": 0,
+    "dependencies": 0,
+    "policy_outcome": "allow"
+  },
+  "content_free": true
+}

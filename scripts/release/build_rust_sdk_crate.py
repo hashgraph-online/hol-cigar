@@ -119,6 +119,7 @@ SDK_SOURCE_PATHS = frozenset(
         "src/semantic_reuse.rs",
         "src/transport.rs",
         "src/verify.rs",
+        "src/workflow_session.rs",
     }
 )
 
@@ -749,7 +750,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9.2",
+        "marketing_name": "CIGAR Honey v0.9.4",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,

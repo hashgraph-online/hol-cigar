@@ -15,12 +15,14 @@ cigar-canon = { path = "../crates/cigar-canon" }
 cigar-catalog = { path = "../crates/cigar-catalog" }
 cigar-code-intel = { path = "../crates/cigar-code-intel" }
 cigar-compiler = { path = "../crates/cigar-compiler" }
+cigar-daemon = { path = "../crates/cigar-daemon", features = ["fuzzing"] }
 cigar-effects = { path = "../crates/cigar-effects" }
 cigar-extension-host = { path = "../crates/cigar-extension-host" }
 cigar-mcp = { path = "../crates/cigar-mcp" }
 cigar-policy = { path = "../crates/cigar-policy" }
 cigar-protocol = { path = "../crates/cigar-protocol" }
 cigar-replay = { path = "../crates/cigar-replay" }
+cigar-retrieval = { path = "../crates/cigar-retrieval" }
 cigar-store = { path = "../crates/cigar-store" }
 libfuzzer-sys = "=0.4.13"
 serde = { version = "=1.0.228", features = ["derive"] }
@@ -121,6 +123,41 @@ bench = false
 [[bin]]
 name = "builtin_source_parsers"
 path = "fuzz_targets/builtin_source_parsers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "retrieval_plan_result_reduction"
+path = "fuzz_targets/retrieval_plan_result_reduction.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ranking_evidence_decode_validate"
+path = "fuzz_targets/ranking_evidence_decode_validate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compiler_candidate_packing"
+path = "fuzz_targets/compiler_candidate_packing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dependency_closure"
+path = "fuzz_targets/dependency_closure.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "workflow_session_records"
+path = "fuzz_targets/workflow_session_records.rs"
 test = false
 doc = false
 bench = false

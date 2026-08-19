@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/common-v1.schema.json",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "multihash": {
+      "type": "string",
+      "minLength": 68,
+      "maxLength": 68,
+      "pattern": "^1220[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObject": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "format": "safe-relative-path"
+    },
+    "shortText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "longText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576
+    },
+    "evidenceClass": {
+      "enum": ["diagnostic", "development", "shadow", "promotion", "release"]
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "tree"],
+      "properties": {
+        "revision": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"}
+      }
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "sha256", "bytes"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/identifier"},
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 0, "maximum": 68719476736}
+      }
+    },
+    "nullableMultihash": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/multihash"}
+      ]
+    },
+    "nullableShortText": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/shortText"}
+      ]
+    }
+  }
+}

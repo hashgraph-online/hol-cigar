@@ -41,6 +41,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const PACKAGE_BYTES: &[u8] = b"signed-extension-package";
 const DEFAULT_IMPLEMENTATION: &[u8] = b"signed-extension-implementation";
+#[cfg(unix)]
+static SUBPROCESS_TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 // Compile the published WIT on every package test run so documentation and the dynamic scalar
 // linker cannot silently drift to an invalid Component Model contract.
@@ -1807,6 +1809,9 @@ fn two_memory_component_wat(response_frame: &[u8]) -> String {
 #[test]
 fn isolated_subprocess_sanitizes_environment_and_requires_clean_exit()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let placeholder = signed_fixture(
         ExtensionRuntimeKind::IsolatedSubprocess,
@@ -1901,6 +1906,9 @@ fn isolated_subprocess_sanitizes_environment_and_requires_clean_exit()
 #[test]
 fn isolated_subprocess_executes_the_verified_snapshot_after_package_substitution()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let placeholder = signed_fixture(
         ExtensionRuntimeKind::IsolatedSubprocess,
@@ -1967,6 +1975,9 @@ fn isolated_subprocess_executes_the_verified_snapshot_after_package_substitution
 #[test]
 fn macos_native_backend_restarts_from_the_verified_snapshot()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let placeholder = signed_fixture(
         ExtensionRuntimeKind::IsolatedSubprocess,
@@ -2096,6 +2107,9 @@ int main(void) {{
 #[test]
 fn macos_native_backend_kills_resident_memory_exhaustion() -> Result<(), Box<dyn std::error::Error>>
 {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let source = directory.path().join("memory-probe.c");
     let executable = directory.path().join("memory-probe");
@@ -2167,6 +2181,9 @@ int main(void) {
 #[test]
 fn isolated_subprocess_kills_infinite_loop_and_rejects_output_flood()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let (_path, loop_script) = executable_script(directory.path(), "while :; do :; done")?;
     let fixture = signed_fixture(
@@ -2241,6 +2258,9 @@ fn isolated_subprocess_kills_infinite_loop_and_rejects_output_flood()
 #[test]
 fn isolated_subprocess_broker_loop_reads_blob_and_rejects_forged_handle()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _subprocess_test_guard = SUBPROCESS_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let directory = tempfile::tempdir()?;
     let capabilities = vec![ExtensionHostCapability::BlobRead];
     let placeholder = signed_fixture(

@@ -40,6 +40,14 @@ digests, paths, counts, conditions, and reasons.
 
 ## Capabilities and redaction
 
+Anonymous capability discovery is the typed `getCapabilities` operation at
+`GET /v1/capabilities`. Its response reports the API/protocol versions, payload/event bounds, and a
+sorted closed profile set derived from the validated runtime composition. Exactly one selected
+intelligence profile is advertised: `intelligence-balanced-v1`, `intelligence-balanced-v3`, or
+`intelligence-balanced-v4`. During 0.9.4 qualification `balanced_v3` remains the default and v4 is
+explicitly opt-in. Callers must negotiate from this response and must not infer a profile from a
+binary filename, local configuration file, or free-form diagnostic.
+
 Signed grants bind canonical grant bytes to tenant, issuer, signature purpose, key reference,
 signature time, and exclusive expiry. Verification also checks the authenticated subject, current
 revocation, grant validity, and parent signature. A child must structurally subset capabilities,

@@ -1,0 +1,157 @@
+{
+  "schema_version": "cigar.workflow-efficacy.configuration.v1",
+  "configuration_id": "hiero-honey-0.9.4-three-way-v1",
+  "scenario": "hiero-fixture-v1",
+  "treatments": [
+    {
+      "id": "honey-0.9.2-balanced-v1",
+      "product_version": "0.9.2",
+      "retrieval_profile": "cigar.retrieval-profile.balanced.v1",
+      "compiler_profile": "cigar.compiler-profile.balanced.v1",
+      "runner_feature": null
+    },
+    {
+      "id": "honey-0.9.3-balanced-v3",
+      "product_version": "0.9.3",
+      "retrieval_profile": "cigar.retrieval-profile.balanced.v2-candidate.2",
+      "compiler_profile": "cigar.compiler-profile.balanced.v3",
+      "runner_feature": "candidate-v3"
+    },
+    {
+      "id": "honey-0.9.4-balanced-v4",
+      "product_version": "0.9.4",
+      "retrieval_profile": "cigar.retrieval-profile.balanced.v4",
+      "compiler_profile": "cigar.compiler-profile.balanced.v4",
+      "runner_feature": "candidate-v4"
+    }
+  ],
+  "workflows": [
+    "solo",
+    "consensus-node",
+    "blocknode-tss",
+    "json-rpc",
+    "evm-tx-liveness"
+  ],
+  "cohorts": {
+    "historical": {
+      "measured_trials_per_workflow": 20,
+      "warmups_per_workflow": 5,
+      "randomize_block_order": false
+    },
+    "rc": {
+      "measured_trials_per_workflow": 50,
+      "warmups_per_workflow": 10,
+      "randomize_block_order": true
+    }
+  },
+  "ordering": {
+    "algorithm": "balanced-cyclic-latin-square-v1",
+    "randomization_algorithm": "sha256-counter-fisher-yates-v1",
+    "latin_square": [
+      [
+        "honey-0.9.2-balanced-v1",
+        "honey-0.9.3-balanced-v3",
+        "honey-0.9.4-balanced-v4"
+      ],
+      [
+        "honey-0.9.3-balanced-v3",
+        "honey-0.9.4-balanced-v4",
+        "honey-0.9.2-balanced-v1"
+      ],
+      [
+        "honey-0.9.4-balanced-v4",
+        "honey-0.9.2-balanced-v1",
+        "honey-0.9.3-balanced-v3"
+      ]
+    ],
+    "historical_row_rule": "(workflow_ordinal + trial) mod 3",
+    "rc_row_rule": "sha256(seed_commitment, workflow, trial, turn) mod 3"
+  },
+  "metrics": {
+    "completed": "higher",
+    "blocking_requirement_coverage": "higher",
+    "gold_source_coverage": "higher",
+    "citation_resolvability_rate": "higher",
+    "selected_items": "diagnostic",
+    "selected_gold_items": "diagnostic",
+    "selected_generic_items": "diagnostic",
+    "selected_redundant_items": "lower",
+    "useful_selection_precision": "higher",
+    "semantic_duplicate_rate": "lower",
+    "estimated_tokens": "diagnostic",
+    "exact_tokens": "lower",
+    "materialized_tokens": "diagnostic",
+    "context_cycles": "diagnostic",
+    "delta_count": "higher",
+    "delta_reuse_rate": "higher",
+    "materialization_count": "diagnostic",
+    "revalidation_count": "higher",
+    "effect_count": "diagnostic",
+    "checkpoint_count": "higher",
+    "replay_verified": "higher",
+    "negative_cases_passed": "higher",
+    "fail_closed": "higher",
+    "embedded_mode_exercised": "diagnostic",
+    "sidecar_mode_exercised": "diagnostic",
+    "cigar_supplied_tokens": "lower",
+    "provider_input_tokens": "diagnostic",
+    "provider_output_tokens": "diagnostic",
+    "cigar_pipeline_latency_ns": "lower",
+    "provider_latency_ns": "diagnostic",
+    "wall_time_ns": "lower",
+    "planner_latency_ns": "lower",
+    "reducer_latency_ns": "lower",
+    "compiler_latency_ns": "lower",
+    "materializer_latency_ns": "lower",
+    "total_latency_ns": "lower",
+    "planner_allocations.allocation_count": "lower",
+    "planner_allocations.allocated_bytes": "lower",
+    "planner_allocations.peak_live_bytes": "lower",
+    "planner_allocations.largest_allocation_bytes": "lower",
+    "reducer_allocations.allocation_count": "lower",
+    "reducer_allocations.allocated_bytes": "lower",
+    "reducer_allocations.peak_live_bytes": "lower",
+    "reducer_allocations.largest_allocation_bytes": "lower",
+    "compiler_allocations.allocation_count": "lower",
+    "compiler_allocations.allocated_bytes": "lower",
+    "compiler_allocations.peak_live_bytes": "lower",
+    "compiler_allocations.largest_allocation_bytes": "lower",
+    "materializer_allocations.allocation_count": "lower",
+    "materializer_allocations.allocated_bytes": "lower",
+    "materializer_allocations.peak_live_bytes": "lower",
+    "materializer_allocations.largest_allocation_bytes": "lower"
+  },
+  "bootstrap": {
+    "algorithm": "paired-sha256-counter-bootstrap-v1",
+    "resamples": 10000,
+    "confidence_level": 0.95,
+    "metrics": [
+      "completed",
+      "blocking_requirement_coverage",
+      "exact_tokens",
+      "useful_selection_precision",
+      "reducer_latency_ns",
+      "total_latency_ns"
+    ]
+  },
+  "environment_tolerance": {
+    "historical_directional_latency_percent": 15.0,
+    "historical_token_delta_percent": 0.1
+  },
+  "content_policy": {
+    "raw_evidence_location": "external-owner-only",
+    "repository_evidence": "content-free-digests-only",
+    "forbidden_observation_fields": [
+      "source_uri",
+      "path",
+      "query",
+      "prompt",
+      "generated_text",
+      "tool_arguments",
+      "credentials",
+      "tenant_name",
+      "project_name",
+      "atom_content"
+    ]
+  }
+}

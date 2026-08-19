@@ -22,8 +22,8 @@ from release_lib import (
 )
 
 
-VERSION = "0.9.2"
-PYTHON_VERSION = "0.9.2"
+VERSION = "0.9.4"
+PYTHON_VERSION = "0.9.4"
 PROFILE_ID = "cigar.honey.local-developer-preview.macos-arm64.v1"
 CONTEXT_ABI = "cigar.context.v1"
 TARGET = "aarch64-apple-darwin"
@@ -35,7 +35,7 @@ OWNERSHIP_PATH = "packaging/honey/capability-ownership.v1.json"
 ARCHIVES_PATH = "packaging/honey/local-archives.v1.json"
 EVIDENCE_SCHEMA_PATH = "packaging/honey/schemas/honey-evidence.v1.schema.json"
 EVIDENCE_SCHEMA_SHA256 = (
-    "dd886735fe47b77e07e77a284efd455f66c72a2e15def4e07a6b2ebf010aced4"
+    "ed75fc0427913378805f78787772f142a9323ccf3ec7db7f7306dfd6e288db4a"
 )
 
 OPERATION_SOURCE = "spec/api/operations-v1.json"
@@ -411,7 +411,7 @@ def expected_artifact_matrix() -> dict[str, Any]:
             11,
             "release-notes",
             "release-notes",
-            "RELEASE_NOTES_HONEY_v0.9.2.md",
+            "RELEASE_NOTES_HONEY_v0.9.4.md",
             None,
             ["python3", "scripts/release/assemble_honey_release.py"],
             "source-metadata",
@@ -523,7 +523,7 @@ def expected_capability_profile(root: Path) -> dict[str, Any]:
         "schema_version": "cigar.honey.capability-profile.v1",
         "profile_id": PROFILE_ID,
         "identity": {
-            "marketing_name": "CIGAR Honey v0.9.2",
+            "marketing_name": "CIGAR Honey v0.9.4",
             "product_version": VERSION,
             "python_distribution_version": PYTHON_VERSION,
             "tag": f"v{VERSION}",
@@ -932,7 +932,7 @@ def expected_archives() -> dict[str, Any]:
         "IMPLEMENTATION_STATUS.md",
         "README.md",
         "README_HONEY.md",
-        "RELEASE_NOTES_HONEY_v0.9.2.md",
+        "RELEASE_NOTES_HONEY_v0.9.4.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
@@ -988,7 +988,7 @@ def expected_archives() -> dict[str, Any]:
                 "include": [
                     "README.md",
                     "README_HONEY.md",
-                    "RELEASE_NOTES_HONEY_v0.9.2.md",
+                    "RELEASE_NOTES_HONEY_v0.9.4.md",
                     "LICENSE",
                     "NOTICE",
                     "docs/**",
@@ -1074,6 +1074,11 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                     "findings": ["private-key"],
                 },
                 {
+                    "pattern": "tools/refinement/tests/test_r11_loop.py",
+                    "reason": "audited synthetic private-key rejection fixture",
+                    "findings": ["private-key"],
+                },
+                {
                     "pattern": "scripts/release/release_lib.py",
                     "reason": "the scanner contains its own detection signatures",
                 },
@@ -1096,7 +1101,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "IMPLEMENTATION_STATUS.md",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.2.md",
+                "RELEASE_NOTES_HONEY_v0.9.4.md",
                 "LICENSE",
                 "NOTICE",
                 "SECURITY.md",
@@ -1140,7 +1145,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "Cargo.lock",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.2.md",
+                "RELEASE_NOTES_HONEY_v0.9.4.md",
                 "LICENSE",
                 "NOTICE",
                 "SECURITY.md",
@@ -1212,7 +1217,7 @@ def expected_contracts() -> dict[str, dict[str, Any]]:
                 "RELEASE-METADATA.json",
                 "README.md",
                 "README_HONEY.md",
-                "RELEASE_NOTES_HONEY_v0.9.2.md",
+                "RELEASE_NOTES_HONEY_v0.9.4.md",
                 "LICENSE",
                 "NOTICE",
                 "docs/**",
@@ -1432,7 +1437,7 @@ def generate(root: Path) -> None:
     product_version.check(root)
     manifest = product_version.load_manifest(root)
     if manifest.get("version") != VERSION or manifest.get("context_abi") != CONTEXT_ABI:
-        raise HoneyProfileError("product-version authority is not exact Honey v0.9.2")
+        raise HoneyProfileError("product-version authority is not exact Honey v0.9.4")
     _validate_protocol(root)
     _validate_static_authority(root)
     for relative, document in expected_documents(root).items():
@@ -1448,7 +1453,7 @@ def check(root: Path) -> None:
         "schema_version": "cigar.product-version.v1",
         "product": "cigar",
         "version": VERSION,
-        "target_release_version": "0.9.2",
+        "target_release_version": "0.9.4",
         "context_abi": CONTEXT_ABI,
         "release_state": "developer-preview",
         "channel": "honey",

@@ -87,14 +87,21 @@ pub enum DeploymentMode {
 
 /// Versioned context-selection behavior used by the local CIGAR runtime.
 ///
-/// `balanced_v1` is the only Honey `0.9.2` release profile and preserves the
-/// published Honey context-selection behavior.
+/// `balanced_v3` remains the default while `balanced_v4` is qualified for CIGAR `0.9.4`.
+/// `balanced_v1` remains available for exact replay of Honey `0.9.2` and earlier
+/// context-selection behavior.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum IntelligenceProfile {
     /// Frozen Honey `0.9.1`-compatible retrieval and compiler behavior.
-    #[default]
     #[serde(rename = "balanced_v1")]
     BalancedV1,
+    /// Requirement-aware ranking with coverage-saturating token packing.
+    #[default]
+    #[serde(rename = "balanced_v3")]
+    BalancedV3,
+    /// Opt-in CIGAR `0.9.4` risk-reserved value-of-information behavior.
+    #[serde(rename = "balanced_v4")]
+    BalancedV4,
 }
 
 impl IntelligenceProfile {
@@ -103,24 +110,36 @@ impl IntelligenceProfile {
     pub const fn capability_identifier(self) -> &'static str {
         match self {
             Self::BalancedV1 => "intelligence-balanced-v1",
+            Self::BalancedV3 => "intelligence-balanced-v3",
+            Self::BalancedV4 => "intelligence-balanced-v4",
         }
     }
 
     pub(crate) const fn retrieval_profile(self) -> cigar_retrieval::RetrievalProfile {
         match self {
             Self::BalancedV1 => cigar_retrieval::RetrievalProfile::BalancedV1,
+            Self::BalancedV3 => {
+                cigar_retrieval::RetrievalProfile::BalancedV2RequirementAwareCandidate
+            }
+            Self::BalancedV4 => cigar_retrieval::RetrievalProfile::BalancedV4,
         }
     }
 
     pub(crate) fn compiler_profile(self) -> cigar_compiler::CompilerProfile {
         match self {
             Self::BalancedV1 => cigar_compiler::CompilerProfile::default(),
+            Self::BalancedV3 => cigar_compiler::CompilerProfile::balanced_v3(),
+            Self::BalancedV4 => cigar_compiler::CompilerProfile::balanced_v4(),
         }
     }
 
     pub(crate) fn query_planner_profile(self) -> cigar_retrieval::QueryPlannerProfile {
         match self {
             Self::BalancedV1 => cigar_retrieval::QueryPlannerProfile::default(),
+            Self::BalancedV3 => {
+                cigar_retrieval::QueryPlannerProfile::balanced_v2_requirement_aware_candidate()
+            }
+            Self::BalancedV4 => cigar_retrieval::QueryPlannerProfile::balanced_v4(),
         }
     }
 }
@@ -1080,12 +1099,12 @@ max_token_bytes = 4096
     }
 
     #[test]
-    fn local_unix_profile_defaults_to_balanced_v1() -> Result<(), Box<dyn std::error::Error>> {
+    fn local_unix_profile_defaults_to_balanced_v3() -> Result<(), Box<dyn std::error::Error>> {
         let config = DaemonConfig::from_toml(&local_config(""))?;
         assert_eq!(config.workers.outbox, 8);
         assert_eq!(config.request_deadline().as_secs(), 30);
         assert!(!config.local_vector.enabled);
-        assert_eq!(config.intelligence_profile, IntelligenceProfile::BalancedV1);
+        assert_eq!(config.intelligence_profile, IntelligenceProfile::BalancedV3);
         assert_eq!(
             config.local_sqlite_capacity_profile,
             cigar_store::SqliteCapacityProfile::Standard
@@ -1094,13 +1113,66 @@ max_token_bytes = 4096
     }
 
     #[test]
-    fn balanced_v1_is_the_only_accepted_release_profile() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn balanced_v3_is_default_v4_is_opt_in_and_balanced_v1_remains_replayable()
+    -> Result<(), Box<dyn std::error::Error>> {
         let explicit =
             DaemonConfig::from_toml(&local_config("intelligence_profile = \"balanced_v1\""))?;
         assert_eq!(
             explicit.intelligence_profile,
             IntelligenceProfile::BalancedV1
+        );
+        assert_eq!(
+            explicit.intelligence_profile.capability_identifier(),
+            "intelligence-balanced-v1"
+        );
+        assert_eq!(
+            explicit
+                .intelligence_profile
+                .retrieval_profile()
+                .identifier(),
+            "cigar.retrieval-profile.balanced.v1"
+        );
+        assert_eq!(
+            explicit.intelligence_profile.compiler_profile().profile_id,
+            "cigar.compiler-profile.balanced.v1"
+        );
+        let current =
+            DaemonConfig::from_toml(&local_config("intelligence_profile = \"balanced_v3\""))?;
+        assert_eq!(
+            current.intelligence_profile,
+            IntelligenceProfile::BalancedV3
+        );
+        assert_eq!(
+            current.intelligence_profile.capability_identifier(),
+            "intelligence-balanced-v3"
+        );
+        assert_eq!(
+            current
+                .intelligence_profile
+                .retrieval_profile()
+                .identifier(),
+            "cigar.retrieval-profile.balanced.v2-candidate.2"
+        );
+        assert_eq!(
+            current.intelligence_profile.compiler_profile().profile_id,
+            "cigar.compiler-profile.balanced.v3"
+        );
+        let candidate =
+            DaemonConfig::from_toml(&local_config("intelligence_profile = \"balanced_v4\""))?;
+        assert_eq!(
+            candidate.intelligence_profile,
+            IntelligenceProfile::BalancedV4
+        );
+        assert_eq!(
+            candidate
+                .intelligence_profile
+                .retrieval_profile()
+                .identifier(),
+            "cigar.retrieval-profile.balanced.v4"
+        );
+        assert_eq!(
+            candidate.intelligence_profile.compiler_profile().profile_id,
+            "cigar.compiler-profile.balanced.v4"
         );
         let rejected = DaemonConfig::from_toml(&local_config("intelligence_profile = \"h1\""))
             .err()

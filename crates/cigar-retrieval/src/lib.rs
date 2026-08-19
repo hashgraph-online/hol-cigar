@@ -9,12 +9,14 @@ mod index;
 mod local_vector;
 mod planner;
 mod profile;
+mod ranking_workspace;
 mod vector;
 mod worker;
 
 pub use bounded::{
-    BoundedCandidate, BoundedCandidateCounts, BoundedRetrievalResult,
-    RequirementAwareCandidateReducer,
+    BoundedCandidate, BoundedCandidateCounts, BoundedRetrievalResult, CandidateRankingDecision,
+    CandidateRankingFactors, CandidateSelectionBasis, RequirementAwareCandidateReducer,
+    RequirementRankingEvidence,
 };
 pub use contract::*;
 #[cfg(target_os = "macos")]
@@ -32,7 +34,9 @@ pub use local_vector::{
     LocalVectorQuantization, MAX_LOCAL_VECTOR_ENTRIES, MAX_LOCAL_VECTOR_IDENTIFIER_BYTES,
     SealedLocalVectorAdapter, configure_local_vector_adapter,
 };
-pub use planner::{PlannedStage, QueryPlan, QueryPlanner, QueryPlannerProfile};
+pub use planner::{
+    PlannedStage, QueryPlan, QueryPlanner, QueryPlannerProfile, RequirementRiskClass,
+};
 pub use profile::RetrievalProfile;
 pub use vector::{
     MAX_QUANTIZED_VECTOR_VALUE, MAX_VECTOR_DIMENSIONS, MIN_QUANTIZED_VECTOR_VALUE,

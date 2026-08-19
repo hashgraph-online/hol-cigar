@@ -1,17 +1,25 @@
 {
   "schema_version": "cigar.honey.compatibility-matrix.v1",
   "release": {
-    "name": "CIGAR Honey 0.9.2",
-    "version": "0.9.2",
-    "intelligence": "balanced_v1 only",
+    "name": "CIGAR Honey 0.9.4",
+    "version": "0.9.4",
+    "intelligence": "balanced_v3 default during qualification; balanced_v4 opt-in; balanced_v1 and balanced_v3 replay-compatible",
     "release_state": "developer-preview",
     "supported": false,
     "production_qualified": false
   },
-  "upgrade_from": {
-    "name": "CIGAR Honey 0.9.1",
-    "version": "0.9.1"
-  },
+  "upgrade_from": [
+    {
+      "name": "CIGAR Honey 0.9.2",
+      "version": "0.9.2",
+      "intelligence_profile": "balanced_v1"
+    },
+    {
+      "name": "CIGAR Honey 0.9.3",
+      "version": "0.9.3",
+      "intelligence_profile": "balanced_v3"
+    }
+  ],
   "compatibility": {
     "context_abi": {
       "before": "cigar.context.v1",
@@ -26,24 +34,24 @@
       "breaking": false
     },
     "python": {
-      "distribution_before": "hol-cigar==0.9.1",
-      "distribution_after": "hol-cigar==0.9.2",
+      "distribution_before": ["hol-cigar==0.9.2", "hol-cigar==0.9.3"],
+      "distribution_after": "hol-cigar==0.9.4",
       "import_before": "cigar_sdk",
       "import_after": "cigar_sdk",
       "breaking": false
     },
     "configuration": {
       "existing_configuration_valid": true,
-      "new_optional_field": "intelligence_profile",
-      "omitted_field_behavior": "balanced_v1",
-      "accepted_values": ["balanced_v1"],
+      "new_optional_value": "balanced_v4",
+      "omitted_field_behavior": "balanced_v3",
+      "accepted_values": ["balanced_v1", "balanced_v3", "balanced_v4"],
       "unsupported_values_rejected": true,
       "breaking": false
     },
     "local_sidecar": {
       "transport_shape_changed": false,
       "operation_shape_changed": false,
-      "capability_discovery_addition": "intelligence-balanced-v1",
+      "capability_discovery_addition": "intelligence-balanced-v4",
       "breaking": false
     },
     "state": {
@@ -54,8 +62,8 @@
     }
   },
   "rollback": {
-    "behavior_only": "remove intelligence_profile or set it to \"balanced_v1\", then restart the sidecar",
-    "binary_and_state": "stop the sidecar, activate a separately restored verified v4 backup, then select the prior versioned installation",
+    "behavior_only": "set intelligence_profile to \"balanced_v3\" or \"balanced_v1\", then restart the sidecar",
+    "binary_and_state": "stop the sidecar and effect dispatch, restore the verified pre-upgrade backup into a distinct empty target, select the compatible profile, then activate the prior versioned installation against only that restored state",
     "in_place_state_downgrade_allowed": false
   }
 }

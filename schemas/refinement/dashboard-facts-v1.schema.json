@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/dashboard-facts-v1.schema.json",
+  "$defs": {
+    "nullableId": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      ]
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_tokens", "output_tokens", "cost_microusd", "compute_milliseconds"],
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+        "output_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+        "cost_microusd": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+        "compute_milliseconds": {"type": "integer", "minimum": 0, "maximum": 604800000}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "direction", "value_ppm"],
+      "properties": {
+        "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "direction": {"enum": ["higher", "lower", "informational"]},
+        "value_ppm": {"type": "integer", "minimum": -1000000000000, "maximum": 1000000000000}
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_id", "iteration_id", "ledger_entry_id", "status", "family_id", "adapter", "provider_id", "failure_class", "comparison_id", "decision_id", "source_artifact_ids", "resources", "metrics"],
+      "properties": {
+        "fact_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "ledger_entry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "status": {"enum": ["promoted", "rejected", "failed", "stopped"]},
+        "family_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "adapter": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "provider_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "failure_class": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+        "comparison_id": {"$ref": "#/$defs/nullableId"},
+        "decision_id": {"$ref": "#/$defs/nullableId"},
+        "source_artifact_ids": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+        },
+        "resources": {"$ref": "#/$defs/resources"},
+        "metrics": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {"$ref": "#/$defs/metric"}
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "facts_id", "ledger_head", "facts"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-dashboard-facts.v1"},
+    "facts_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "ledger_head": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"},
+    "facts": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {"$ref": "#/$defs/fact"}
+    }
+  }
+}

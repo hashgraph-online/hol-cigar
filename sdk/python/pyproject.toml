@@ -1,6 +1,6 @@
 [project]
 name = "hol-cigar"
-version = "0.9.2"
+version = "0.9.4"
 description = "HOL.org CIGAR Python SDK alpha"
 readme = "README.md"
 license = "Apache-2.0"
@@ -17,8 +17,8 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://hol.org"
-Repository = "https://github.com/HGraphPunks/cigar"
-Issues = "https://github.com/HGraphPunks/cigar/issues"
+Repository = "https://github.com/hashgraph-online/hol-cigar"
+Issues = "https://github.com/hashgraph-online/hol-cigar/issues"
 
 [project.scripts]
 cigar-qualify-bundle = "cigar_sdk.qualify_bundle:main"

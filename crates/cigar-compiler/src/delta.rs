@@ -49,6 +49,7 @@ pub struct AppliedDelta {
     base_bundle_id: VersionId,
     target_bundle_id: VersionId,
     delta_digest: ContentDigest,
+    reuse: DeltaReuseEvidence,
 }
 
 impl fmt::Debug for AppliedDelta {
@@ -59,8 +60,22 @@ impl fmt::Debug for AppliedDelta {
             .field("base_bundle_id", &"[OPAQUE]")
             .field("target_bundle_id", &"[OPAQUE]")
             .field("delta_digest", &"[OPAQUE]")
+            .field("reuse", &self.reuse)
             .finish()
     }
+}
+
+/// Exact content-free accounting for semantic blocks omitted from a verified delta.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeltaReuseEvidence {
+    /// Exact target blocks reused byte-for-byte by semantic block identity.
+    pub reused_blocks: u32,
+    /// Exact logical target tokens carried by reused blocks.
+    pub reused_tokens: u32,
+    /// Exact complete blocks transmitted in the delta.
+    pub added_blocks: u32,
+    /// Exact base block identities removed by the delta.
+    pub removed_blocks: u32,
 }
 
 impl AppliedDelta {
@@ -86,6 +101,12 @@ impl AppliedDelta {
     #[must_use]
     pub const fn delta_digest(&self) -> &ContentDigest {
         &self.delta_digest
+    }
+
+    /// Exact verified semantic-reuse accounting.
+    #[must_use]
+    pub const fn reuse(&self) -> DeltaReuseEvidence {
+        self.reuse
     }
 }
 
@@ -287,11 +308,43 @@ pub fn apply_delta_verified(
     {
         return Err(DeltaError::TargetMismatch);
     }
+    let base_by_id: BTreeMap<_, _> = base
+        .blocks
+        .iter()
+        .map(|block| (&block.block_id, block))
+        .collect();
+    let reused: Vec<_> = expected_target
+        .blocks
+        .iter()
+        .filter(|block| {
+            base_by_id
+                .get(&block.block_id)
+                .is_some_and(|base_block| *base_block == *block)
+        })
+        .collect();
+    let reused_tokens = reused
+        .iter()
+        .try_fold(0_u32, |total, block| total.checked_add(block.token_count))
+        .ok_or(DeltaError::InvalidInput)?;
+    let reuse = DeltaReuseEvidence {
+        reused_blocks: u32::try_from(reused.len()).map_err(|_error| DeltaError::InvalidInput)?,
+        reused_tokens,
+        added_blocks: u32::try_from(sealed.delta.added_blocks.len())
+            .map_err(|_error| DeltaError::InvalidInput)?,
+        removed_blocks: u32::try_from(sealed.delta.removed_block_ids.len())
+            .map_err(|_error| DeltaError::InvalidInput)?,
+    };
+    if reuse.reused_blocks.checked_add(reuse.added_blocks)
+        != u32::try_from(expected_target.blocks.len()).ok()
+    {
+        return Err(DeltaError::TargetMismatch);
+    }
     Ok(AppliedDelta {
         bundle: expected_target.clone(),
         base_bundle_id: base.bundle_id.clone(),
         target_bundle_id: expected_target.bundle_id.clone(),
         delta_digest: sealed.delta_digest.clone(),
+        reuse,
     })
 }
 

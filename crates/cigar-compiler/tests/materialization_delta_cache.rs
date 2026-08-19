@@ -271,7 +271,45 @@ fn delta_round_trip_rejects_wrong_base_tamper_and_target_change()
     assert_eq!(applied.base_bundle_id(), &base.bundle_id);
     assert_eq!(applied.target_bundle_id(), &target.bundle_id);
     assert_eq!(applied.delta_digest(), &sealed.delta_digest);
+    assert_eq!(applied.reuse().reused_blocks, 1);
+    assert_eq!(applied.reuse().reused_tokens, 5);
+    assert_eq!(applied.reuse().added_blocks, 1);
+    assert_eq!(applied.reuse().removed_blocks, 1);
     assert!(!format!("{applied:?}").contains(target.bundle_id.as_str()));
+
+    let mut target_bodies = BlockBodies::new();
+    assert!(
+        target_bodies
+            .insert(version('a')?, b"first".to_vec())
+            .is_none()
+    );
+    assert!(
+        target_bodies
+            .insert(version('c')?, b"third".to_vec())
+            .is_none()
+    );
+    let tokenizer = ByteTokenizer::new(content('1')?);
+    let (materialized, accounting) = materialize(
+        MaterializerProfile::Json,
+        applied.bundle(),
+        &target_bodies,
+        &tokenizer,
+    )?;
+    assert_eq!(materialized.bundle_id, target.bundle_id);
+    assert_eq!(materialized.token_count, accounting.physical_input_tokens);
+
+    let mut changed_closure = target.clone();
+    let reused_id = version('a')?;
+    let reused = changed_closure
+        .blocks
+        .iter_mut()
+        .find(|block| block.block_id == reused_id)
+        .ok_or("missing reused block")?;
+    reused.provenance.push(version('f')?);
+    assert_eq!(
+        generate_delta(&base, &changed_closure),
+        Err(DeltaError::InvalidInput)
+    );
     let acknowledgement = acknowledge_delta("provider-session", content('6')?, &applied, 44)
         .ok_or("acknowledgement")?;
     assert_eq!(acknowledgement.target_bundle_id, target.bundle_id);

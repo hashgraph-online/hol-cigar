@@ -4,7 +4,7 @@
   "title": "CIGAR SBOM artifact binding",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "artifacts", "component_count"],
+  "required": ["schema_version", "artifacts", "component_count", "component_scope"],
   "properties": {
     "schema_version": {"const": "cigar.sbom-artifacts.v1"},
     "artifacts": {
@@ -19,6 +19,7 @@
         }
       }
     },
-    "component_count": {"type": "integer", "minimum": 1}
+    "component_count": {"type": "integer", "minimum": 1},
+    "component_scope": {"const": "repository-locked-dependency-union"}
   }
 }

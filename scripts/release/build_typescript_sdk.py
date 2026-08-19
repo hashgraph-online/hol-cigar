@@ -48,6 +48,7 @@ SDK_RELATIVE = "sdk/typescript"
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
 MAX_DEPENDENCY_FILE_BYTES = 64 * 1024 * 1024
 MAX_DEPENDENCY_TREE_BYTES = 128 * 1024 * 1024
+MAX_TOOL_BYTES = 128 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_MEMBER_BYTES = 16 * 1024 * 1024
 MAX_ARCHIVE_EXPANDED_BYTES = 64 * 1024 * 1024
@@ -100,9 +101,11 @@ SOURCE_TYPESCRIPT_PATHS = frozenset(
         "src/tests/digest.test.ts",
         "src/tests/hardening.test.ts",
         "src/tests/release-contract.test.ts",
+        "src/tests/workflow-session.test.ts",
         "src/types.ts",
         "src/verify-replay.ts",
         "src/verify-vectors.ts",
+        "src/workflow-session.ts",
     }
 )
 PACKAGED_MODULES = frozenset(
@@ -436,7 +439,7 @@ def _validate_honey_authority(
             "rust": version,
             "typescript": version,
         },
-        "marketing_name": "CIGAR Honey v0.9.2",
+        "marketing_name": "CIGAR Honey v0.9.4",
         "prerelease": True,
         "product_version": version,
         "production_qualified": False,
@@ -865,7 +868,7 @@ def _run(arguments: list[str], *, cwd: Path, env: dict[str, str], label: str) ->
 
 
 def _tool_record(path: Path, name: str, version: str) -> dict[str, object]:
-    payload = _read_stable_file(path, MAX_DEPENDENCY_FILE_BYTES, f"{name} executable")
+    payload = _read_stable_file(path, MAX_TOOL_BYTES, f"{name} executable")
     return {
         "name": name,
         "version": version,

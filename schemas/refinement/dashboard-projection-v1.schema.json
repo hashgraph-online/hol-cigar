@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/dashboard-projection-v1.schema.json",
+  "$defs": {
+    "nullableId": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      ]
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["iteration_id", "status", "family_id", "adapter", "provider_id", "ledger_entry_id", "failure_class", "comparison_id", "decision_id"],
+      "properties": {
+        "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "status": {"enum": ["promoted", "rejected", "failed", "stopped"]},
+        "family_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "adapter": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "provider_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+        "ledger_entry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "failure_class": {"$ref": "common-v1.schema.json#/$defs/nullableShortText"},
+        "comparison_id": {"$ref": "#/$defs/nullableId"},
+        "decision_id": {"$ref": "#/$defs/nullableId"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "projection_id", "ledger", "champion", "trials", "kpi_trends", "provider_costs", "failure_classes", "source_facts_id"],
+  "properties": {
+    "schema_version": {"const": "cigar.refinement-dashboard-projection.v1"},
+    "projection_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_count", "head"],
+      "properties": {
+        "entry_count": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "head": {"$ref": "common-v1.schema.json#/$defs/nullableMultihash"}
+      }
+    },
+    "champion": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["iteration_id", "revision", "tree", "ledger_entry_id", "comparison_id", "decision_id", "source_artifact_ids"],
+          "properties": {
+            "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+            "revision": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+            "tree": {"$ref": "common-v1.schema.json#/$defs/gitObject"},
+            "ledger_entry_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+            "comparison_id": {"$ref": "#/$defs/nullableId"},
+            "decision_id": {"$ref": "#/$defs/nullableId"},
+            "source_artifact_ids": {
+              "type": "array",
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+            }
+          }
+        }
+      ]
+    },
+    "trials": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {"$ref": "#/$defs/trial"}
+    },
+    "kpi_trends": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["iteration_id", "ledger_sequence", "name", "direction", "value_ppm"],
+        "properties": {
+          "iteration_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "ledger_sequence": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+          "name": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "direction": {"enum": ["higher", "lower", "informational"]},
+          "value_ppm": {"type": "integer", "minimum": -1000000000000, "maximum": 1000000000000}
+        }
+      }
+    },
+    "provider_costs": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider_id", "input_tokens", "output_tokens", "cost_microusd", "compute_milliseconds", "trials"],
+        "properties": {
+          "provider_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+          "input_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+          "output_tokens": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+          "cost_microusd": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+          "compute_milliseconds": {"type": "integer", "minimum": 0, "maximum": 604800000000},
+          "trials": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+        }
+      }
+    },
+    "failure_classes": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["failure_class", "count"],
+        "properties": {
+          "failure_class": {"$ref": "common-v1.schema.json#/$defs/shortText"},
+          "count": {"type": "integer", "minimum": 1, "maximum": 1000000000}
+        }
+      }
+    },
+    "source_facts_id": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+  }
+}

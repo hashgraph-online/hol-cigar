@@ -48,6 +48,13 @@ class InstallQualificationEvidenceTests(unittest.TestCase):
         self.driver.write_text("#!/bin/sh\n", encoding="utf-8")
         os.chmod(self.driver, 0o700)
 
+    def macos_system_tool_environment(self) -> dict[str, str]:
+        environment = {"PATH": "/usr/bin:/bin", "HOME": str(self.base)}
+        command_line_tools = Path("/Library/Developer/CommandLineTools")
+        if command_line_tools.is_dir():
+            environment["DEVELOPER_DIR"] = str(command_line_tools)
+        return environment
+
     def arguments(
         self,
         *,
@@ -1216,14 +1223,14 @@ raise SystemExit(4)
         qualify_install._run(
             ["/usr/bin/python3", "-c", signal_probe, str(helper.pid)],
             self.base,
-            {"PATH": "/usr/bin:/bin", "HOME": str(self.base)},
+            self.macos_system_tool_environment(),
         )
         self.assertIsNone(helper.poll())
         helper.terminate()
         helper.wait(timeout=5)
 
         domain = f"dev.cigar.qualifier.{os.getpid()}.{self.base.name}"
-        environment = {"PATH": "/usr/bin:/bin", "HOME": str(self.base)}
+        environment = self.macos_system_tool_environment()
         try:
             with self.assertRaises(ReleaseError):
                 qualify_install._run(
@@ -1252,6 +1259,7 @@ raise SystemExit(4)
     def test_fixed_macos_sandbox_denies_ip_and_allows_only_workspace_unix_ipc(
         self,
     ) -> None:
+        environment = self.macos_system_tool_environment()
         inside = self.base / "candidate.sock"
         outside = self.base.parent / f"{self.base.name}-outside.sock"
         self.addCleanup(outside.unlink, missing_ok=True)
@@ -1280,14 +1288,14 @@ raise SystemExit(6)
         result = qualify_install._run(
             ["/usr/bin/python3", "-c", probe, str(inside), str(outside)],
             self.base,
-            {"PATH": "/usr/bin:/bin", "HOME": str(self.base)},
+            environment,
         )
         self.assertEqual(result.returncode, 0)
 
         echo = qualify_install._run(
             ["/bin/echo", "bounded-stdout"],
             self.base,
-            {"PATH": "/usr/bin:/bin", "HOME": str(self.base)},
+            environment,
         )
         self.assertEqual(echo.stdout, b"bounded-stdout\n")
 
@@ -1295,13 +1303,14 @@ raise SystemExit(6)
             qualify_install._run(
                 ["/bin/sh", "-c", 'sleep 1 & child=$!; wait "$child"'],
                 self.base,
-                {"PATH": "/usr/bin:/bin", "HOME": str(self.base)},
+                environment,
             )
 
     @unittest.skipUnless(
         sys.platform == "darwin", "requires the macOS Seatbelt launcher"
     )
     def test_fixed_macos_sandbox_makes_candidate_tree_immutable(self) -> None:
+        environment = self.macos_system_tool_environment()
         protected = self.base / "candidate"
         protected.mkdir(mode=0o700)
         binary = protected / "cigar"
@@ -1337,7 +1346,7 @@ else:
                 str(outside),
             ],
             self.base,
-            {"PATH": "/usr/bin:/bin", "HOME": str(self.base)},
+            environment,
             protected_roots=(protected,),
         )
         self.assertEqual(binary.read_bytes(), b"candidate-bytes")

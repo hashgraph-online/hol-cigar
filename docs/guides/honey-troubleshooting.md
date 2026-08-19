@@ -13,7 +13,7 @@ cigar doctor --security --deep --output json
 cigar diagnostics bundle "$HOME/cigar-support/honey-diagnostics.tar" --yes
 ```
 
-Require version `0.9.2`, Context ABI `cigar.context.v1`, and the intended embedded/local
+Require version `0.9.3`, Context ABI `cigar.context.v1`, and the intended embedded/local
 target. `--explain-config` identifies the winning layer without printing authorization contents.
 
 ## Daemon unavailable

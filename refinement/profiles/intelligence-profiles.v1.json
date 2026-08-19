@@ -1,0 +1,41 @@
+{
+  "schema_version": "cigar.refinement-intelligence-profiles.v1",
+  "profiles": [
+    {
+      "profile_id": "balanced.v1",
+      "status": "release_default_compatible",
+      "selection_surface": "all",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v1",
+      "retrieval_digest": "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea",
+      "compiler_id": "cigar.compiler-profile.balanced.v1",
+      "compiler_digest": "122045f764c2c4b1a0ee6ecf6078050cfd939ff37c1b91edd8c4a38e8525e43cacb9"
+    },
+    {
+      "profile_id": "balanced.v2-candidate.1",
+      "status": "experimental_opt_in",
+      "selection_surface": "all",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.1",
+      "retrieval_digest": "12208f5c83267949db9ed969f9b5f153c2be125b7d54875e2d72acad556b9a28183c",
+      "compiler_id": "cigar.compiler-profile.balanced.v2-candidate.1",
+      "compiler_digest": "1220788e6159943dd2ddf35767d8935fdd8a7de5cb15c2242560ca7f551dc73437b2"
+    },
+    {
+      "profile_id": "balanced.v2-candidate.2",
+      "status": "experimental_opt_in",
+      "selection_surface": "cigarbench_consumer_only",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.2",
+      "retrieval_digest": "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a",
+      "compiler_id": "cigar.compiler-profile.balanced.v2-candidate.2",
+      "compiler_digest": "12204b4e01b01f305e7b00d7687965664a863b9ffa767f84272ee3826bc9ef57dbdb"
+    },
+    {
+      "profile_id": "balanced.v3",
+      "status": "release_default_compatible",
+      "selection_surface": "all",
+      "retrieval_id": "cigar.retrieval-profile.balanced.v2-candidate.2",
+      "retrieval_digest": "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a",
+      "compiler_id": "cigar.compiler-profile.balanced.v3",
+      "compiler_digest": "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7"
+    }
+  ]
+}

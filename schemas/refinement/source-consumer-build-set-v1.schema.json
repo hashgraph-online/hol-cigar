@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cigar.invalid/schemas/refinement/source-consumer-build-set-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "build_set_id", "plan_id", "profile_id", "harness_source", "build_profile", "toolchain", "builds"],
+  "properties": {
+    "schema_version": {"const": "cigar.source-consumer-build-set.v1"},
+    "build_set_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "plan_id": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+    "profile_id": {"$ref": "common-v1.schema.json#/$defs/identifier"},
+    "harness_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+    "build_profile": {"const": "release"},
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "architecture", "cargo_executable_sha256", "cargo_version_digest", "rustc_executable_sha256", "rustc_version_digest"],
+      "properties": {
+        "platform": {"enum": ["darwin", "linux", "windows"]},
+        "architecture": {"enum": ["aarch64", "x86_64"]},
+        "cargo_executable_sha256": {"$ref": "common-v1.schema.json#/$defs/sha256"},
+        "cargo_version_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+        "rustc_executable_sha256": {"$ref": "common-v1.schema.json#/$defs/sha256"},
+        "rustc_version_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"}
+      }
+    },
+    "builds": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_role", "product_source", "harness_source", "intelligence_profile", "adapter_manifest_digest", "cargo_lock_digest", "executable_digest", "executable_sha256", "executable_bytes", "executable_path", "source_clean_after_build", "status"],
+        "properties": {
+          "source_role": {"enum": ["published-honey", "champion", "candidate"]},
+          "product_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+          "harness_source": {"$ref": "common-v1.schema.json#/$defs/sourceIdentity"},
+          "intelligence_profile": {"enum": ["balanced.v1", "balanced.v2-candidate.1", "balanced.v2-candidate.2", "balanced.v3"]},
+          "adapter_manifest_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "cargo_lock_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "executable_digest": {"$ref": "common-v1.schema.json#/$defs/multihash"},
+          "executable_sha256": {"$ref": "common-v1.schema.json#/$defs/sha256"},
+          "executable_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+          "executable_path": {"$ref": "common-v1.schema.json#/$defs/path"},
+          "source_clean_after_build": {"const": true},
+          "status": {"const": "built"}
+        }
+      }
+    }
+  }
+}

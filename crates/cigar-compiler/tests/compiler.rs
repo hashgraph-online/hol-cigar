@@ -1,18 +1,23 @@
 //! WP08 deterministic compiler, packing, provenance, and budget acceptance matrix.
 
+use cigar_canon::{SemanticEnvelopeProfile, semantic_multihash_v1};
 use cigar_compiler::{
     CandidateClaim, CompileRequest, CompilerCandidate, CompilerErrorCode, CompilerProfile,
-    DeterministicCompiler, FrozenInputs, LossClass, RepresentationVariant, compiler_profile_digest,
+    DeterministicCompiler, FrozenInputs, LossClass, PackingDecisionBasis, PackingStopReason,
+    RepresentationVariant, compiler_profile_digest,
 };
 use cigar_policy::PolicyOutcome;
 use cigar_protocol::{
     AtomKind, Budget, CandidateDisposition, CanonicalValue, Classification, ConsistencyMode,
     ContentDigest, ContextContract, ContextRequirement, DispositionReason, ExtensionKey,
-    ExtensionMap, FixedPoint, InstructionAuthority, LaneKind, OperationClass, RecordId,
+    ExtensionMap, FixedPoint, InstructionAuthority, LaneKind, LineageId, OperationClass, RecordId,
     RepresentationKind, RequirementSelector, SchemaVersion, SourceUri, TargetProfile, UtcTimestamp,
     Validate, VersionId,
 };
-use cigar_retrieval::CandidateFeatures;
+use cigar_retrieval::{
+    CandidateFeatures, CandidateRankingDecision, CandidateRankingFactors, CandidateSelectionBasis,
+    QueryPlannerProfile, RequirementRankingEvidence, RetrievalProfile,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::process::Command;
@@ -39,6 +44,12 @@ fn version_u64(value: u64) -> Result<VersionId, Box<dyn Error>> {
 
 fn record(value: u16) -> Result<RecordId, Box<dyn Error>> {
     Ok(RecordId::new(format!(
+        "01890f47-8e7d-7b42-a1d2-3c4d5e6f{value:04x}"
+    ))?)
+}
+
+fn lineage(value: u16) -> Result<LineageId, Box<dyn Error>> {
+    Ok(LineageId::new(format!(
         "01890f47-8e7d-7b42-a1d2-3c4d5e6f{value:04x}"
     ))?)
 }
@@ -123,6 +134,7 @@ fn candidate(
     Ok(CompilerCandidate {
         version_id: version(value)?,
         logical_id: version(value)?,
+        lineage_id: lineage(u16::from(value))?,
         canonical_uri: SourceUri::new(format!("file:///fixture/{value:02x}.md"))?,
         lane,
         mandatory: false,
@@ -165,7 +177,87 @@ fn request(
         contract,
         profile,
         candidates,
+        ranking_evidence: None,
     })
+}
+
+fn v4_ranking_evidence(
+    candidates: &[CompilerCandidate],
+    critical_requirements: BTreeSet<usize>,
+) -> Result<RequirementRankingEvidence, Box<dyn Error>> {
+    let selection = QueryPlannerProfile::balanced_v4().candidate_selection;
+    let mut ranked = candidates
+        .iter()
+        .filter(|candidate| !candidate.requirement_indices.is_empty())
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| left.version_id.cmp(&right.version_id));
+    let mut remaining = critical_requirements.len();
+    let mut decisions = Vec::with_capacity(ranked.len());
+    for (index, candidate) in ranked.into_iter().enumerate() {
+        let newly_covered_critical_requirements = if index == 0 { remaining } else { 0 };
+        remaining = remaining
+            .checked_sub(newly_covered_critical_requirements)
+            .ok_or("critical requirement underflow")?;
+        let critical_requirement_gain = selection
+            .critical_requirement_gain
+            .checked_mul(i64::try_from(newly_covered_critical_requirements)?)
+            .ok_or("critical gain overflow")?;
+        let base_score = candidate.features.score(RetrievalProfile::BalancedV4)?;
+        let adjusted_score = base_score
+            .checked_add(critical_requirement_gain)
+            .ok_or("adjusted score overflow")?;
+        decisions.push(CandidateRankingDecision {
+            ordinal: index.checked_add(1).ok_or("ordinal overflow")?,
+            selected_version: candidate.version_id.clone(),
+            basis: if newly_covered_critical_requirements > 0 {
+                CandidateSelectionBasis::CriticalRequirement
+            } else {
+                CandidateSelectionBasis::Score
+            },
+            newly_covered_requirements: newly_covered_critical_requirements,
+            newly_covered_critical_requirements,
+            newly_covered_concepts: 0,
+            source_diversity: false,
+            section_diversity: false,
+            kind_diversity: false,
+            factors: CandidateRankingFactors {
+                base_score,
+                critical_requirement_gain,
+                requirement_gain: 0,
+                concept_gain: 0,
+                diversity_gain: 0,
+                generic_penalty: 0,
+                redundancy_penalty: 0,
+                similarity_penalty: 0,
+                adjusted_score,
+            },
+            next_best_version: None,
+            next_best_adjusted_score: None,
+            uncovered_critical_after: remaining,
+        });
+    }
+    Ok(RequirementRankingEvidence::new_v4(
+        digest(234)?,
+        critical_requirements,
+        BTreeSet::new(),
+        decisions,
+    )?)
+}
+
+fn v4_request(
+    contract: ContextContract,
+    candidates: Vec<CompilerCandidate>,
+) -> Result<CompileRequest, Box<dyn Error>> {
+    let critical_requirements = contract
+        .requirements
+        .iter()
+        .enumerate()
+        .filter_map(|(index, requirement)| requirement.blocking.then_some(index))
+        .collect();
+    let ranking_evidence = v4_ranking_evidence(&candidates, critical_requirements)?;
+    let mut request = request(contract, CompilerProfile::balanced_v4(), candidates)?;
+    request.ranking_evidence = Some(ranking_evidence);
+    Ok(request)
 }
 
 fn baseline_request() -> Result<CompileRequest, Box<dyn Error>> {
@@ -254,6 +346,30 @@ fn versioned_v2_profile_is_distinct_deterministic_and_ablatable() -> Result<(), 
         compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?.as_str(),
         "1220788e6159943dd2ddf35767d8935fdd8a7de5cb15c2242560ca7f551dc73437b2"
     );
+    let h2 = CompilerProfile::balanced_v2_requirement_aware_candidate();
+    let h1 = CompilerProfile::balanced_v2_candidate();
+    assert_eq!(h2.local_swap_passes, h1.local_swap_passes);
+    assert_eq!(h2.local_swap_alternatives, h1.local_swap_alternatives);
+    assert_eq!(
+        h2.requirement_coverage_weight,
+        h1.requirement_coverage_weight
+    );
+    assert_eq!(h2.entity_coverage_weight, h1.entity_coverage_weight);
+    assert_eq!(h2.loss_penalty, h1.loss_penalty);
+    assert_eq!(h2.utility_density_ranking, h1.utility_density_ranking);
+    assert_eq!(h2.minimum_lexical_match, h1.minimum_lexical_match);
+    assert_eq!(
+        h2.marginal_requirement_weight,
+        h1.marginal_requirement_weight
+    );
+    assert_eq!(h2.marginal_entity_weight, h1.marginal_entity_weight);
+    assert_eq!(h2.dependency_cost_penalty, h1.dependency_cost_penalty);
+    assert_eq!(h2.diversity_weight, h1.diversity_weight);
+    assert_eq!(h2.redundancy_penalty, h1.redundancy_penalty);
+    assert_eq!(
+        compiler_profile_digest(&h2)?.as_str(),
+        "12204b4e01b01f305e7b00d7687965664a863b9ffa767f84272ee3826bc9ef57dbdb"
+    );
 
     let mut ablation_ids = BTreeSet::new();
     for dimension in 0..8 {
@@ -274,6 +390,1051 @@ fn versioned_v2_profile_is_distinct_deterministic_and_ablatable() -> Result<(), 
     assert!(!ablation_ids.contains(&compiler_profile_digest(
         &CompilerProfile::balanced_v2_candidate()
     )?));
+    Ok(())
+}
+
+#[test]
+fn balanced_v3_stops_redundant_optional_packing_after_coverage_saturates()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?;
+    let mut candidates = Vec::new();
+    for value in 10..15_u8 {
+        let mut item = candidate(value, LaneKind::Evidence, 20, 9_000)?;
+        item.entity_coverage_bits = 1;
+        item.features.entity_coverage_bits = 1;
+        candidates.push(item);
+    }
+    let ranking = RequirementRankingEvidence::new(
+        digest(234)?,
+        BTreeSet::new(),
+        BTreeSet::new(),
+        Vec::new(),
+    )?;
+
+    let mut h2 = request(
+        governed_contract.clone(),
+        CompilerProfile::balanced_v2_requirement_aware_candidate(),
+        candidates.clone(),
+    )?;
+    h2.ranking_evidence = Some(ranking.clone());
+    let h2_output = DeterministicCompiler.compile(h2)?;
+
+    let v3_profile = CompilerProfile::balanced_v3();
+    let mut v3 = request(governed_contract, v3_profile.clone(), candidates)?;
+    v3.ranking_evidence = Some(ranking);
+    let v3_output = DeterministicCompiler.compile(v3)?;
+
+    assert_eq!(h2_output.bundle.total_tokens, 100);
+    assert_eq!(v3_output.bundle.total_tokens, 20);
+    assert_eq!(v3_output.bundle.blocks.len(), 1);
+    assert_ne!(
+        compiler_profile_digest(&v3_profile)?,
+        compiler_profile_digest(&CompilerProfile::balanced_v2_requirement_aware_candidate())?
+    );
+    assert_eq!(
+        compiler_profile_digest(&v3_profile)?.as_str(),
+        "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7"
+    );
+    Ok(())
+}
+
+#[test]
+fn frozen_legacy_profile_snapshot_is_replayable() -> Result<(), Box<dyn Error>> {
+    let v1_request = baseline_request()?;
+    let v1 = DeterministicCompiler.compile(v1_request.clone())?;
+    assert_eq!(DeterministicCompiler.compile(v1_request)?, v1);
+
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?;
+    let mut candidates = Vec::new();
+    for value in 10..15_u8 {
+        let mut item = candidate(value, LaneKind::Evidence, 20, 9_000)?;
+        item.entity_coverage_bits = 1;
+        item.features.entity_coverage_bits = 1;
+        candidates.push(item);
+    }
+    let ranking = RequirementRankingEvidence::new(
+        digest(234)?,
+        BTreeSet::new(),
+        BTreeSet::new(),
+        Vec::new(),
+    )?;
+    let mut v3_request = request(
+        governed_contract,
+        CompilerProfile::balanced_v3(),
+        candidates,
+    )?;
+    v3_request.ranking_evidence = Some(ranking);
+    let v3 = DeterministicCompiler.compile(v3_request.clone())?;
+    assert_eq!(DeterministicCompiler.compile(v3_request.clone())?, v3);
+
+    let mut invalid_v1 = baseline_request()?;
+    invalid_v1.profile.minimum_lexical_match = 1;
+    invalid_v1.frozen.compiler_profile_digest = compiler_profile_digest(&invalid_v1.profile)?;
+    assert_eq!(
+        DeterministicCompiler
+            .compile(invalid_v1)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+    let mut invalid_v3 = v3_request;
+    invalid_v3.profile.sufficient_items_per_requirement = 0;
+    invalid_v3.frozen.compiler_profile_digest = compiler_profile_digest(&invalid_v3.profile)?;
+    assert_eq!(
+        DeterministicCompiler
+            .compile(invalid_v3)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+    let mut pin_mismatch = baseline_request()?;
+    pin_mismatch.frozen.compiler_profile_digest = digest(229)?;
+    assert_eq!(
+        DeterministicCompiler
+            .compile(pin_mismatch)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::PinMismatch)
+    );
+    let missing_ranking = request(
+        contract(BTreeMap::from([(LaneKind::Evidence, 100)]), Vec::new())?,
+        CompilerProfile::balanced_v3(),
+        Vec::new(),
+    )?;
+    assert_eq!(
+        DeterministicCompiler
+            .compile(missing_ranking)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+    let mut unexpected_ranking = baseline_request()?;
+    unexpected_ranking.ranking_evidence = Some(RequirementRankingEvidence::new(
+        digest(234)?,
+        BTreeSet::new(),
+        BTreeSet::new(),
+        Vec::new(),
+    )?);
+    assert_eq!(
+        DeterministicCompiler
+            .compile(unexpected_ranking)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+
+    let selected = v3
+        .bundle
+        .blocks
+        .iter()
+        .map(|block| {
+            block
+                .provenance
+                .first()
+                .map(|version| version.as_str())
+                .ok_or("legacy block provenance is empty")
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(",");
+    assert_eq!(
+        (
+            RetrievalProfile::BalancedV1.identifier(),
+            RetrievalProfile::BalancedV1.digest()?.as_str(),
+            RetrievalProfile::BalancedV2RequirementAwareCandidate.identifier(),
+            RetrievalProfile::BalancedV2RequirementAwareCandidate
+                .digest()?
+                .as_str(),
+            compiler_profile_digest(&CompilerProfile::default())?.as_str(),
+            compiler_profile_digest(&CompilerProfile::balanced_v3())?.as_str(),
+        ),
+        (
+            "cigar.retrieval-profile.balanced.v1",
+            "1220c605f248bd6f9d7c476324630b0839fb4c7423009f47f3f13b8b1a62cfeb72ea",
+            "cigar.retrieval-profile.balanced.v2-candidate.2",
+            "12200a182e948a6f1db35e59b32a5ea9963807f26796303c65065385b84c33f1316a",
+            "122045f764c2c4b1a0ee6ecf6078050cfd939ff37c1b91edd8c4a38e8525e43cacb9",
+            "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7",
+        )
+    );
+    assert_eq!(
+        (
+            v1.plan.plan_id.as_str(),
+            v1.manifest.manifest_id.as_str(),
+            v1.bundle.bundle_id.as_str(),
+            v3.plan.plan_id.as_str(),
+            v3.manifest.manifest_id.as_str(),
+            v3.bundle.bundle_id.as_str(),
+            selected.as_str(),
+        ),
+        (
+            "89c22906-ee10-723b-9ce2-fa1b019c2f18",
+            "122078ff8edd59dc1df3ae28f591de9058b9eaab4562d92fcc7529213822d2bfdad8",
+            "12205febd5bb06ffbc44147cf0126543ded08d3b90c9169a16d992c3b14c59074e85",
+            "83eda732-c46f-7e8a-b3c6-520ea67aa4cb",
+            "12205569e9e015d51959c414f9ff47f91a763ccc727a84ef0ad4435cab70cef336df",
+            "1220bd714d1809e35c467a71b3f6a80f647a15f48707fd9bda80c2739b4f7e4f04cc",
+            "12200a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+        )
+    );
+    assert!(v1.packing_evidence.is_none());
+    assert!(v3.packing_evidence.is_none());
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_is_digest_bound_and_preserves_every_legacy_profile_digest()
+-> Result<(), Box<dyn Error>> {
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::default())?.as_str(),
+        "122045f764c2c4b1a0ee6ecf6078050cfd939ff37c1b91edd8c4a38e8525e43cacb9"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v2_candidate())?.as_str(),
+        "1220788e6159943dd2ddf35767d8935fdd8a7de5cb15c2242560ca7f551dc73437b2"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v2_requirement_aware_candidate())?
+            .as_str(),
+        "12204b4e01b01f305e7b00d7687965664a863b9ffa767f84272ee3826bc9ef57dbdb"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v3())?.as_str(),
+        "12201c2f4519471391ad623c662f7bcce02b8f2c82ef79db844c9d20905a0ca22cb7"
+    );
+    assert_eq!(
+        compiler_profile_digest(&CompilerProfile::balanced_v4())?.as_str(),
+        "1220d28b42286c3db066f73b70b670ee32b13311319fd512d682e9f843864749bcf2"
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_stops_cheap_low_quality_flood_and_seals_content_free_evidence()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 200)]), Vec::new())?;
+    let mut useful = candidate(10, LaneKind::Evidence, 20, 9_000)?;
+    useful.entity_coverage_bits = 1;
+    useful.features.entity_coverage_bits = 1;
+    let mut candidates = vec![useful.clone()];
+    for value in 11..61_u8 {
+        candidates.push(candidate(value, LaneKind::Evidence, 1, 8_000)?);
+    }
+    let output = DeterministicCompiler.compile(v4_request(governed_contract, candidates)?)?;
+    assert_eq!(output.bundle.total_tokens, 20);
+    assert_eq!(output.bundle.blocks.len(), 1);
+    assert_eq!(
+        output.bundle.blocks.first().ok_or("block")?.provenance,
+        vec![useful.version_id]
+    );
+    let evidence = output.packing_evidence.as_ref().ok_or("packing evidence")?;
+    evidence.validate()?;
+    assert_eq!(
+        evidence.stop_reason,
+        PackingStopReason::NonPositiveMarginalUtility
+    );
+    assert_eq!(evidence.decisions.len(), 1);
+    assert_eq!(
+        evidence.decisions.first().ok_or("decision")?.basis,
+        PackingDecisionBasis::MarginalUtility
+    );
+    let extensions = serde_json::to_value(&output.manifest.extensions)?;
+    let sealed = extensions
+        .get("cigar/packing-evidence.v1")
+        .ok_or("sealed packing evidence")?;
+    assert!(
+        sealed
+            .to_string()
+            .contains(evidence.evidence_digest.as_str())
+    );
+    let mut corrupted = evidence.clone();
+    corrupted
+        .decisions
+        .first_mut()
+        .ok_or("decision")?
+        .incremental_tokens ^= 1;
+    assert_eq!(
+        corrupted.validate().map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_independent_blocking_fast_path_matches_general_packer() -> Result<(), Box<dyn Error>>
+{
+    let governed_contract = contract(
+        BTreeMap::from([(LaneKind::Evidence, 400)]),
+        vec![
+            requirement(true, "first independent requirement")?,
+            requirement(true, "second independent requirement")?,
+        ],
+    )?;
+    let mut candidates = Vec::new();
+    for requirement_index in 0..2_usize {
+        for alternative in 0..4_u8 {
+            let value = 70_u8
+                .checked_add(u8::try_from(requirement_index)?.saturating_mul(4))
+                .and_then(|value| value.checked_add(alternative))
+                .ok_or("candidate value overflow")?;
+            let tokens = 20_u32
+                .checked_add(u32::from(alternative))
+                .ok_or("candidate token overflow")?;
+            let mut item = candidate(value, LaneKind::Evidence, tokens, 0)?;
+            item.requirement_indices.insert(requirement_index);
+            item.entity_coverage_bits = 1_u64
+                .checked_shl(u32::try_from(requirement_index)?)
+                .ok_or("entity bit overflow")?;
+            item.features = CandidateFeatures {
+                lexical_match: 8_000,
+                estimated_tokens: tokens,
+                requirement_coverage_bits: item.entity_coverage_bits,
+                entity_coverage_bits: item.entity_coverage_bits,
+                ..CandidateFeatures::default()
+            };
+            candidates.push(item);
+        }
+    }
+
+    let fast = DeterministicCompiler
+        .compile(v4_request(governed_contract.clone(), candidates.clone())?)?;
+    assert_eq!(
+        fast.ranking_evidence
+            .as_ref()
+            .ok_or("fast ranking evidence")?
+            .decisions
+            .len(),
+        8
+    );
+    let fast_extensions = serde_json::to_value(&fast.manifest.extensions)?;
+    assert!(
+        fast_extensions
+            .get("cigar/ranking-evidence.v1")
+            .ok_or("sealed ranking evidence")?
+            .to_string()
+            .contains("digest-bound-output")
+    );
+    assert!(
+        fast_extensions
+            .get("cigar/ranking-decisions.v1/000")
+            .is_none()
+    );
+    assert_eq!(
+        semantic_multihash_v1(SemanticEnvelopeProfile::Manifest, &fast.manifest)?,
+        fast.manifest.manifest_id.as_str()
+    );
+    assert_eq!(
+        semantic_multihash_v1(SemanticEnvelopeProfile::Bundle, &fast.bundle)?,
+        fast.bundle.bundle_id.as_str()
+    );
+    let mut fallback_profile = CompilerProfile::balanced_v4();
+    fallback_profile
+        .maximum_items
+        .insert(LaneKind::Evidence, u16::MAX);
+    let ranking_evidence = v4_ranking_evidence(&candidates, BTreeSet::from([0, 1]))?;
+    let mut fallback_request = request(governed_contract, fallback_profile, candidates)?;
+    fallback_request.ranking_evidence = Some(ranking_evidence);
+    let general = DeterministicCompiler.compile(fallback_request)?;
+
+    let fast_evidence = fast.packing_evidence.ok_or("fast packing evidence")?;
+    let general_evidence = general.packing_evidence.ok_or("general packing evidence")?;
+    assert_eq!(fast_evidence.decisions, general_evidence.decisions);
+    assert_eq!(
+        fast_evidence.dominance_decisions,
+        general_evidence.dominance_decisions
+    );
+    assert_eq!(fast_evidence.stop_reason, general_evidence.stop_reason);
+    assert_eq!(fast.content_equivalence, general.content_equivalence);
+    assert_eq!(
+        fast.bundle
+            .blocks
+            .iter()
+            .map(|block| (&block.provenance, block.token_count))
+            .collect::<Vec<_>>(),
+        general
+            .bundle
+            .blocks
+            .iter()
+            .map(|block| (&block.provenance, block.token_count))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_requirement_free_fast_path_matches_general_packer() -> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 96)]), Vec::new())?;
+    let mut candidates = Vec::new();
+    for index in 0..96_u8 {
+        let value = index.checked_add(100).ok_or("candidate value overflow")?;
+        let mut item = candidate(value, LaneKind::Evidence, 1, 8_000)?;
+        item.entity_coverage_bits = 1_u64
+            .checked_shl(u32::from(index % 64))
+            .ok_or("entity bit overflow")?;
+        item.features = features(8_000, 1);
+        item.features.entity_coverage_bits = item.entity_coverage_bits;
+        candidates.push(item);
+    }
+
+    let fast = DeterministicCompiler
+        .compile(v4_request(governed_contract.clone(), candidates.clone())?)?;
+    let mut fallback_profile = CompilerProfile::balanced_v4();
+    fallback_profile
+        .maximum_items
+        .insert(LaneKind::Evidence, u16::MAX);
+    let ranking_evidence = v4_ranking_evidence(&candidates, BTreeSet::new())?;
+    let mut fallback_request = request(governed_contract, fallback_profile, candidates)?;
+    fallback_request.ranking_evidence = Some(ranking_evidence);
+    let general = DeterministicCompiler.compile(fallback_request)?;
+
+    let fast_evidence = fast.packing_evidence.ok_or("fast packing evidence")?;
+    let general_evidence = general.packing_evidence.ok_or("general packing evidence")?;
+    assert!(!fast_evidence.decisions.is_empty());
+    assert_eq!(fast_evidence.decisions, general_evidence.decisions);
+    assert_eq!(
+        fast_evidence.dominance_decisions,
+        general_evidence.dominance_decisions
+    );
+    assert_eq!(fast_evidence.stop_reason, general_evidence.stop_reason);
+    assert_eq!(fast.content_equivalence, general.content_equivalence);
+    assert_eq!(
+        fast.bundle
+            .blocks
+            .iter()
+            .map(|block| (&block.provenance, block.token_count))
+            .collect::<Vec<_>>(),
+        general
+            .bundle
+            .blocks
+            .iter()
+            .map(|block| (&block.provenance, block.token_count))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_reserves_exactly_one_independent_effect_corroborator() -> Result<(), Box<dyn Error>>
+{
+    let mut governed_contract = contract(
+        BTreeMap::from([(LaneKind::Evidence, 100)]),
+        vec![requirement(true, "authorize effect")?],
+    )?;
+    governed_contract.operation_class = OperationClass::ExternalMutation;
+    let mut primary = candidate(20, LaneKind::Evidence, 20, 9_500)?;
+    primary.requirement_indices.insert(0);
+    let mut independent = candidate(21, LaneKind::Evidence, 20, 9_000)?;
+    independent.requirement_indices.insert(0);
+    let mut redundant = candidate(22, LaneKind::Evidence, 20, 8_500)?;
+    redundant.requirement_indices.insert(0);
+    redundant.canonical_uri = independent.canonical_uri.clone();
+    redundant.lineage_id = independent.lineage_id.clone();
+
+    let output = DeterministicCompiler.compile(v4_request(
+        governed_contract,
+        vec![primary.clone(), independent.clone(), redundant],
+    )?)?;
+    let selected = output
+        .plan
+        .lanes
+        .iter()
+        .flat_map(|lane| lane.candidate_versions.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        selected,
+        BTreeSet::from([primary.version_id, independent.version_id])
+    );
+    let evidence = output.packing_evidence.ok_or("packing evidence")?;
+    assert_eq!(evidence.decisions.len(), 2);
+    assert_eq!(
+        evidence.decisions.get(1).ok_or("corroboration")?.basis,
+        PackingDecisionBasis::IndependentCorroboration
+    );
+    assert_eq!(
+        evidence
+            .decisions
+            .get(1)
+            .ok_or("corroboration")?
+            .independently_corroborated_requirements,
+        1
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_caches_shared_closures_and_rejects_a_giant_dependency() -> Result<(), Box<dyn Error>>
+{
+    let governed_contract = contract(
+        BTreeMap::from([(LaneKind::Evidence, 30), (LaneKind::History, 15)]),
+        vec![
+            requirement(false, "first")?,
+            requirement(false, "second")?,
+            requirement(false, "giant")?,
+        ],
+    )?;
+    let shared = candidate(30, LaneKind::History, 10, 8_000)?;
+    let mut first = candidate(31, LaneKind::Evidence, 10, 9_000)?;
+    first.requirement_indices.insert(0);
+    first.dependencies.insert(shared.version_id.clone());
+    let mut second = candidate(32, LaneKind::Evidence, 10, 8_900)?;
+    second.requirement_indices.insert(1);
+    second.dependencies.insert(shared.version_id.clone());
+    let giant_dependency = candidate(33, LaneKind::History, 20, 9_500)?;
+    let mut giant = candidate(34, LaneKind::Evidence, 5, 9_500)?;
+    giant.requirement_indices.insert(2);
+    giant
+        .dependencies
+        .insert(giant_dependency.version_id.clone());
+
+    let output = DeterministicCompiler.compile(v4_request(
+        governed_contract,
+        vec![shared, first, second, giant_dependency, giant],
+    )?)?;
+    assert_eq!(output.bundle.total_tokens, 30);
+    assert_eq!(output.bundle.blocks.len(), 3);
+    assert_eq!(
+        output
+            .bundle
+            .blocks
+            .iter()
+            .filter(|block| block.lane == LaneKind::History)
+            .count(),
+        1
+    );
+    assert_eq!(
+        output
+            .packing_evidence
+            .ok_or("packing evidence")?
+            .stop_reason,
+        PackingStopReason::CapacitySaturated
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_dominance_and_permutation_are_semantically_metamorphic() -> Result<(), Box<dyn Error>>
+{
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 50)]), Vec::new())?;
+    let mut better = candidate(40, LaneKind::Evidence, 10, 9_500)?;
+    better.entity_coverage_bits = 1;
+    better.features.entity_coverage_bits = 1;
+    let mut dominated = candidate(41, LaneKind::Evidence, 10, 8_000)?;
+    dominated.entity_coverage_bits = 1;
+    dominated.features.entity_coverage_bits = 1;
+    dominated.canonical_uri = better.canonical_uri.clone();
+    dominated.lineage_id = better.lineage_id.clone();
+    dominated.provenance_digest = better.provenance_digest.clone();
+
+    let baseline = DeterministicCompiler
+        .compile(v4_request(governed_contract.clone(), vec![better.clone()])?)?;
+    let with_dominated = DeterministicCompiler.compile(v4_request(
+        governed_contract.clone(),
+        vec![better.clone(), dominated.clone()],
+    )?)?;
+    assert_eq!(baseline.bundle.blocks, with_dominated.bundle.blocks);
+    let dominance = with_dominated
+        .packing_evidence
+        .as_ref()
+        .ok_or("packing evidence")?
+        .dominance_decisions
+        .first()
+        .ok_or("dominance")?;
+    assert_eq!(dominance.dominated_version, dominated.version_id);
+    assert_eq!(
+        dominance.reason,
+        cigar_compiler::PackingDominanceReason::SameProvenanceNoWeakerValue
+    );
+
+    let mut permuted = v4_request(governed_contract, vec![dominated, better])?;
+    permuted.candidates.reverse();
+    let reordered = DeterministicCompiler.compile(permuted)?;
+    assert_eq!(with_dominated, reordered);
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_dominance_does_not_prune_distinct_governance_or_provenance()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 50)]), Vec::new())?;
+    let mut better = candidate(42, LaneKind::Evidence, 10, 9_500)?;
+    better.entity_coverage_bits = 1;
+    better.features.entity_coverage_bits = 1;
+    let mut distinct = candidate(43, LaneKind::Evidence, 10, 8_000)?;
+    distinct.entity_coverage_bits = 1;
+    distinct.features.entity_coverage_bits = 1;
+    distinct.canonical_uri = better.canonical_uri.clone();
+    distinct.lineage_id = better.lineage_id.clone();
+    distinct.provenance_digest = better.provenance_digest.clone();
+
+    let mut policy_better = better.clone();
+    let mut policy_distinct = distinct.clone();
+    let redacted = RepresentationVariant::redacted(digest(220)?, 10)?;
+    policy_better.representations = vec![redacted.clone()];
+    policy_distinct.representations = vec![redacted];
+    policy_better.policy_outcome = PolicyOutcome::Redact;
+
+    let mut classification_distinct = distinct.clone();
+    classification_distinct.classification = Classification::Confidential;
+
+    let mut authority_distinct = distinct.clone();
+    authority_distinct.instruction_authority = InstructionAuthority::Advisory;
+
+    let mut provenance_distinct = distinct;
+    provenance_distinct.provenance_digest = digest(221)?;
+
+    for candidates in [
+        vec![policy_better, policy_distinct],
+        vec![better.clone(), classification_distinct],
+        vec![better.clone(), authority_distinct],
+        vec![better, provenance_distinct],
+    ] {
+        let output =
+            DeterministicCompiler.compile(v4_request(governed_contract.clone(), candidates)?)?;
+        assert!(
+            output
+                .packing_evidence
+                .ok_or("packing evidence")?
+                .dominance_decisions
+                .is_empty()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_exact_counts_and_closure_cache_invalidate_on_tokenizer_or_candidate_change()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 40)]), Vec::new())?;
+    let mut exact = candidate(50, LaneKind::Evidence, 17, 9_000)?;
+    exact.entity_coverage_bits = 1;
+    exact.features.entity_coverage_bits = 1;
+    let first = DeterministicCompiler
+        .compile(v4_request(governed_contract.clone(), vec![exact.clone()])?)?;
+    assert_eq!(first.bundle.total_tokens, 17);
+
+    let mut changed_tokens = exact.clone();
+    changed_tokens
+        .representations
+        .first_mut()
+        .ok_or("representation")?
+        .token_count = 18;
+    let second = DeterministicCompiler
+        .compile(v4_request(governed_contract.clone(), vec![changed_tokens])?)?;
+    assert_eq!(second.bundle.total_tokens, 18);
+    assert_ne!(
+        first
+            .packing_evidence
+            .as_ref()
+            .ok_or("first evidence")?
+            .workspace_fingerprint,
+        second
+            .packing_evidence
+            .as_ref()
+            .ok_or("second evidence")?
+            .workspace_fingerprint
+    );
+
+    let mut changed_tokenizer = governed_contract;
+    changed_tokenizer.target.tokenizer_fingerprint = digest(77)?;
+    let third = DeterministicCompiler.compile(v4_request(changed_tokenizer, vec![exact])?)?;
+    assert_ne!(
+        first
+            .packing_evidence
+            .ok_or("first evidence")?
+            .workspace_fingerprint,
+        third
+            .packing_evidence
+            .ok_or("third evidence")?
+            .workspace_fingerprint
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_retains_all_mandatory_items_and_reports_exact_unsatisfiable_bound()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Rules, 40)]), Vec::new())?;
+    let mut mandatory = Vec::new();
+    for value in 60..64_u8 {
+        let mut item = candidate(value, LaneKind::Rules, 10, 8_000)?;
+        item.mandatory = true;
+        mandatory.push(item);
+    }
+    let output =
+        DeterministicCompiler.compile(v4_request(governed_contract.clone(), mandatory.clone())?)?;
+    assert_eq!(output.bundle.blocks.len(), 4);
+    assert!(
+        output
+            .packing_evidence
+            .ok_or("packing evidence")?
+            .decisions
+            .iter()
+            .all(|decision| decision.basis == PackingDecisionBasis::Mandatory)
+    );
+
+    let mut overflow = mandatory;
+    let mut fifth = candidate(64, LaneKind::Rules, 10, 8_000)?;
+    fifth.mandatory = true;
+    overflow.push(fifth);
+    let Err(error) = DeterministicCompiler.compile(v4_request(governed_contract, overflow)?) else {
+        return Err("mandatory overflow unexpectedly compiled".into());
+    };
+    assert_eq!(error.code(), CompilerErrorCode::BudgetUnsatisfiable);
+    assert_eq!(error.minimum_required_tokens(), Some(50));
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_lane_bounds_budget_growth_and_denied_removal_preserve_authorized_selection()
+-> Result<(), Box<dyn Error>> {
+    let small_contract = contract(BTreeMap::from([(LaneKind::Evidence, 20)]), Vec::new())?;
+    let mut mandatory = candidate(70, LaneKind::Evidence, 10, 8_000)?;
+    mandatory.mandatory = true;
+    let mut useful = candidate(71, LaneKind::Evidence, 10, 9_000)?;
+    useful.entity_coverage_bits = 1;
+    useful.features.entity_coverage_bits = 1;
+    let mut denied = candidate(72, LaneKind::Evidence, 1, 10_000)?;
+    denied.policy_outcome = PolicyOutcome::Deny;
+
+    let mut bounded = v4_request(
+        small_contract.clone(),
+        vec![mandatory.clone(), useful.clone(), denied.clone()],
+    )?;
+    bounded.profile.minimum_items.insert(LaneKind::Evidence, 2);
+    bounded.profile.maximum_items.insert(LaneKind::Evidence, 2);
+    bounded.frozen.compiler_profile_digest = compiler_profile_digest(&bounded.profile)?;
+    let with_denied = DeterministicCompiler.compile(bounded)?;
+    assert_eq!(with_denied.bundle.blocks.len(), 2);
+
+    let mut without_denied = v4_request(small_contract, vec![mandatory.clone(), useful.clone()])?;
+    without_denied
+        .profile
+        .minimum_items
+        .insert(LaneKind::Evidence, 2);
+    without_denied
+        .profile
+        .maximum_items
+        .insert(LaneKind::Evidence, 2);
+    without_denied.frozen.compiler_profile_digest =
+        compiler_profile_digest(&without_denied.profile)?;
+    let authorized_only = DeterministicCompiler.compile(without_denied)?;
+    assert_eq!(with_denied.bundle.blocks, authorized_only.bundle.blocks);
+
+    let larger_contract = contract(BTreeMap::from([(LaneKind::Evidence, 40)]), Vec::new())?;
+    let larger = DeterministicCompiler.compile(v4_request(
+        larger_contract,
+        vec![mandatory.clone(), useful],
+    )?)?;
+    assert!(
+        larger
+            .bundle
+            .blocks
+            .iter()
+            .any(|block| { block.provenance.first() == Some(&mandatory.version_id) })
+    );
+    Ok(())
+}
+
+#[test]
+fn balanced_v4_preserves_alias_conflict_and_dependency_safety_before_packing()
+-> Result<(), Box<dyn Error>> {
+    let governed_contract = contract(BTreeMap::from([(LaneKind::Evidence, 40)]), Vec::new())?;
+    let mut alias_a = candidate(80, LaneKind::Evidence, 10, 9_000)?;
+    alias_a.entity_coverage_bits = 1;
+    alias_a.features.entity_coverage_bits = 1;
+    let mut alias_b = candidate(81, LaneKind::Evidence, 10, 8_500)?;
+    alias_b.entity_coverage_bits = 1;
+    alias_b.features.entity_coverage_bits = 1;
+    alias_b.representations = alias_a.representations.clone();
+    let aliased = DeterministicCompiler.compile(v4_request(
+        governed_contract.clone(),
+        vec![alias_a.clone(), alias_b.clone()],
+    )?)?;
+    assert_eq!(aliased.bundle.blocks.len(), 1);
+    assert!(aliased.content_equivalence.iter().any(|class| {
+        class.member_versions
+            == BTreeSet::from([alias_a.version_id.clone(), alias_b.version_id.clone()])
+    }));
+
+    let mut older = candidate(82, LaneKind::Evidence, 10, 8_500)?;
+    older.entity_coverage_bits = 1;
+    older.features.entity_coverage_bits = 1;
+    older.claim = Some(CandidateClaim {
+        key: "network.mode".to_owned(),
+        value_digest: digest(90)?,
+        valid_at: time("2026-08-16T00:00:00Z")?,
+        observed_at: time("2026-08-16T00:00:00Z")?,
+        authority: 5,
+        verified: true,
+    });
+    let mut newer = candidate(83, LaneKind::Evidence, 10, 8_500)?;
+    newer.entity_coverage_bits = 1;
+    newer.features.entity_coverage_bits = 1;
+    newer.claim = Some(CandidateClaim {
+        key: "network.mode".to_owned(),
+        value_digest: digest(91)?,
+        valid_at: time("2026-08-17T00:00:00Z")?,
+        observed_at: time("2026-08-17T00:00:00Z")?,
+        authority: 5,
+        verified: true,
+    });
+    let reconciled = DeterministicCompiler.compile(v4_request(
+        governed_contract.clone(),
+        vec![older.clone(), newer.clone()],
+    )?)?;
+    let selected = reconciled
+        .plan
+        .lanes
+        .iter()
+        .flat_map(|lane| lane.candidate_versions.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert!(selected.contains(&newer.version_id));
+    assert!(!selected.contains(&older.version_id));
+
+    let mut cycle_a = candidate(84, LaneKind::Evidence, 10, 9_000)?;
+    let mut cycle_b = candidate(85, LaneKind::Evidence, 10, 9_000)?;
+    cycle_a.dependencies.insert(cycle_b.version_id.clone());
+    cycle_b.dependencies.insert(cycle_a.version_id.clone());
+    let Err(error) =
+        DeterministicCompiler.compile(v4_request(governed_contract, vec![cycle_a, cycle_b])?)
+    else {
+        return Err("dependency cycle unexpectedly compiled".into());
+    };
+    assert_eq!(error.code(), CompilerErrorCode::InvalidDependency);
+    Ok(())
+}
+
+#[test]
+#[ignore = "explicit H094-300 compiler p95 diagnostic"]
+fn benchmark_balanced_v4_packing_against_frozen_v3_path() -> Result<(), Box<dyn Error>> {
+    for size in [128_usize, 512] {
+        let governed_contract = contract(
+            BTreeMap::from([(LaneKind::Evidence, u32::try_from(size)?)]),
+            Vec::new(),
+        )?;
+        let mut candidates = Vec::with_capacity(size);
+        for index in 0..size {
+            let value = u64::try_from(index)?
+                .checked_add(1)
+                .ok_or("value overflow")?;
+            let entity_bit = u32::try_from(index % 64)?;
+            candidates.push(CompilerCandidate {
+                version_id: version_u64(value)?,
+                logical_id: version_u64(value)?,
+                lineage_id: lineage(u16::try_from(value)?)?,
+                canonical_uri: SourceUri::new(format!("file:///packing/{index:08x}.md"))?,
+                lane: LaneKind::Evidence,
+                mandatory: false,
+                requirement_indices: BTreeSet::new(),
+                entity_coverage_bits: 1_u64.checked_shl(entity_bit).ok_or("entity shift")?,
+                features: features(8_000, 1),
+                policy_outcome: PolicyOutcome::Allow,
+                pre_exclusion_reason: None,
+                classification: Classification::Internal,
+                instruction_authority: InstructionAuthority::Data,
+                dependencies: BTreeSet::new(),
+                representations: vec![RepresentationVariant::exact(
+                    digest_u64(value.checked_add(10_000).ok_or("digest overflow")?)?,
+                    1,
+                )?],
+                claim: None,
+                provenance_digest: digest_u64(
+                    value.checked_add(20_000).ok_or("provenance overflow")?,
+                )?,
+            });
+        }
+        let mut v3 = request(
+            governed_contract.clone(),
+            CompilerProfile::balanced_v3(),
+            candidates.clone(),
+        )?;
+        v3.ranking_evidence = Some(RequirementRankingEvidence::new(
+            digest(234)?,
+            BTreeSet::new(),
+            BTreeSet::new(),
+            Vec::new(),
+        )?);
+        let v4 = v4_request(governed_contract, candidates)?;
+        let _v3_warm = DeterministicCompiler.compile(v3.clone())?;
+        let _v4_warm = DeterministicCompiler.compile(v4.clone())?;
+        let mut v3_samples = Vec::new();
+        let mut v4_samples = Vec::new();
+        for _sample in 0..40 {
+            let started = std::time::Instant::now();
+            let _output = DeterministicCompiler.compile(v3.clone())?;
+            v3_samples.push(started.elapsed());
+            let started = std::time::Instant::now();
+            let _output = DeterministicCompiler.compile(v4.clone())?;
+            v4_samples.push(started.elapsed());
+        }
+        v3_samples.sort();
+        v4_samples.sort();
+        let v3_p95 = *v3_samples.get(37).ok_or("v3 p95")?;
+        let v4_p95 = *v4_samples.get(37).ok_or("v4 p95")?;
+        println!(
+            "H094_300_PACKING size={size} v3_p95_us={} v4_p95_us={} ratio_millionths={}",
+            v3_p95.as_micros(),
+            v4_p95.as_micros(),
+            v4_p95
+                .as_nanos()
+                .checked_mul(1_000_000)
+                .and_then(|value| value.checked_div(v3_p95.as_nanos().max(1)))
+                .ok_or("ratio overflow")?
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn h2_ranking_evidence_is_required_validated_and_sealed_into_the_manifest()
+-> Result<(), Box<dyn Error>> {
+    let contract = contract(
+        BTreeMap::from([(LaneKind::Evidence, 200)]),
+        vec![requirement(true, "critical implementation")?],
+    )?;
+    let mut useful = candidate(42, LaneKind::Evidence, 200, 8_000)?;
+    useful.requirement_indices.insert(0);
+    useful.entity_coverage_bits = 0b111;
+    useful.features.entity_coverage_bits = 0b111;
+    let mut generic = candidate(43, LaneKind::Evidence, 200, 9_500)?;
+    generic.requirement_indices.insert(0);
+    generic.entity_coverage_bits = 0b001;
+    generic.features.entity_coverage_bits = 0b001;
+    let retrieval_profile = RetrievalProfile::BalancedV2RequirementAwareCandidate;
+    let useful_base_score = useful.features.score(retrieval_profile)?;
+    let generic_base_score = generic.features.score(retrieval_profile)?;
+    assert!(generic_base_score > useful_base_score);
+    let selection =
+        QueryPlannerProfile::balanced_v2_requirement_aware_candidate().candidate_selection;
+    let critical_requirement_gain = selection.critical_requirement_gain;
+    let useful_concept_gain = selection
+        .concept_gain
+        .checked_mul(3)
+        .ok_or("concept gain overflow")?;
+    let diversity_gain = selection
+        .source_diversity_gain
+        .checked_add(selection.section_diversity_gain)
+        .and_then(|value| value.checked_add(selection.kind_diversity_gain))
+        .ok_or("diversity gain overflow")?;
+    let useful_adjusted_score = useful_base_score
+        .checked_add(critical_requirement_gain)
+        .and_then(|value| value.checked_add(useful_concept_gain))
+        .and_then(|value| value.checked_add(diversity_gain))
+        .ok_or("ranking score overflow")?;
+    let generic_initial_score = generic_base_score
+        .checked_add(critical_requirement_gain)
+        .and_then(|value| value.checked_add(selection.concept_gain))
+        .and_then(|value| value.checked_add(diversity_gain))
+        .and_then(|value| value.checked_sub(selection.generic_match_penalty))
+        .ok_or("generic initial score overflow")?;
+    assert!(useful_adjusted_score > generic_initial_score);
+    let generic_diversity_gain = selection
+        .source_diversity_gain
+        .checked_add(selection.section_diversity_gain)
+        .ok_or("generic diversity gain overflow")?;
+    let generic_redundancy_penalty = selection
+        .redundant_requirement_penalty
+        .checked_add(selection.redundant_concept_penalty)
+        .ok_or("generic redundancy penalty overflow")?;
+    let generic_adjusted_score = generic_base_score
+        .checked_add(generic_diversity_gain)
+        .and_then(|value| value.checked_sub(selection.generic_match_penalty))
+        .and_then(|value| value.checked_sub(generic_redundancy_penalty))
+        .and_then(|value| value.checked_sub(selection.same_kind_penalty))
+        .ok_or("generic adjusted score overflow")?;
+    let evidence = RequirementRankingEvidence::new(
+        digest(234)?,
+        BTreeSet::from([0]),
+        BTreeSet::new(),
+        vec![
+            CandidateRankingDecision {
+                ordinal: 1,
+                selected_version: useful.version_id.clone(),
+                basis: CandidateSelectionBasis::CriticalRequirement,
+                newly_covered_requirements: 1,
+                newly_covered_critical_requirements: 1,
+                newly_covered_concepts: 3,
+                source_diversity: true,
+                section_diversity: true,
+                kind_diversity: true,
+                factors: CandidateRankingFactors {
+                    base_score: useful_base_score,
+                    critical_requirement_gain,
+                    requirement_gain: 0,
+                    concept_gain: useful_concept_gain,
+                    diversity_gain,
+                    generic_penalty: 0,
+                    redundancy_penalty: 0,
+                    similarity_penalty: 0,
+                    adjusted_score: useful_adjusted_score,
+                },
+                next_best_version: Some(generic.version_id.clone()),
+                next_best_adjusted_score: Some(generic_initial_score),
+                uncovered_critical_after: 0,
+            },
+            CandidateRankingDecision {
+                ordinal: 2,
+                selected_version: generic.version_id.clone(),
+                basis: CandidateSelectionBasis::Protected,
+                newly_covered_requirements: 0,
+                newly_covered_critical_requirements: 0,
+                newly_covered_concepts: 0,
+                source_diversity: true,
+                section_diversity: true,
+                kind_diversity: false,
+                factors: CandidateRankingFactors {
+                    base_score: generic_base_score,
+                    critical_requirement_gain: 0,
+                    requirement_gain: 0,
+                    concept_gain: 0,
+                    diversity_gain: generic_diversity_gain,
+                    generic_penalty: selection.generic_match_penalty,
+                    redundancy_penalty: generic_redundancy_penalty,
+                    similarity_penalty: selection.same_kind_penalty,
+                    adjusted_score: generic_adjusted_score,
+                },
+                next_best_version: None,
+                next_best_adjusted_score: None,
+                uncovered_critical_after: 0,
+            },
+        ],
+    )?;
+    let profile = CompilerProfile::balanced_v2_requirement_aware_candidate();
+    let mut missing = request(
+        contract.clone(),
+        profile.clone(),
+        vec![useful.clone(), generic],
+    )?;
+    assert_eq!(
+        DeterministicCompiler
+            .compile(missing.clone())
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
+
+    missing.ranking_evidence = Some(evidence.clone());
+    let output = DeterministicCompiler.compile(missing.clone())?;
+    assert_eq!(output.ranking_evidence, Some(evidence.clone()));
+    let selected = output
+        .bundle
+        .blocks
+        .first()
+        .ok_or("missing selected block")?;
+    assert_eq!(selected.provenance, vec![useful.version_id]);
+    let extensions = serde_json::to_value(&output.manifest.extensions)?;
+    assert!(extensions.get("cigar/ranking-evidence.v1").is_some());
+    assert!(extensions.get("cigar/ranking-decisions.v1/000").is_some());
+
+    let mut corrupted = evidence;
+    corrupted
+        .decisions
+        .first_mut()
+        .ok_or("missing decision to corrupt")?
+        .factors
+        .adjusted_score ^= 1;
+    missing.ranking_evidence = Some(corrupted);
+    assert_eq!(
+        DeterministicCompiler
+            .compile(missing)
+            .map_err(|error| error.code()),
+        Err(CompilerErrorCode::InvalidInput)
+    );
     Ok(())
 }
 
@@ -1203,6 +2364,7 @@ fn projected_one_million_catalog_compile_latency_meets_local_targets() -> Result
         candidates.push(CompilerCandidate {
             version_id: version_u64(index + 1)?,
             logical_id: version_u64(index + 1)?,
+            lineage_id: lineage(u16::try_from(index + 1)?)?,
             canonical_uri: SourceUri::new(format!("file:///scale/{index:08x}.md"))?,
             lane: LaneKind::Evidence,
             mandatory: false,

@@ -60,6 +60,8 @@ class OperationSurfaceParityTests(unittest.TestCase):
         self.assertEqual(
             first["surfaces"]["metrics"]["mode"], "aggregate-no-operation-label"
         )
+        self.assertEqual(first["surfaces"]["metrics"]["family_count"], 71)
+        self.assertEqual(first["surfaces"]["metrics"]["maximum_series"], 273)
         self.assertEqual(
             first["surfaces"]["errors"],
             {

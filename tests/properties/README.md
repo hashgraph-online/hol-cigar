@@ -13,7 +13,7 @@ CARGO_NET_OFFLINE=true cargo nextest run --locked \
   --user-config-file none -P macos-qualification --no-tests fail --all-targets
 ```
 
-The gate runs seven production-linked bounded Loom models, three model-governance tests, seven
+The gate runs seven production-linked bounded Loom models, three model-governance tests, nine
 semantic properties at 512 cases each, and one ordinary memory-model smoke test. The model
 executions call the real compiler cache, MVCC store, context-space publication, durable worker
 claim, event-page, dependency-invalidation, and daemon queue-admission state machines. The
@@ -31,7 +31,11 @@ drift, duplicate IDs/branches/mutants, and foreign platform execution; the diver
 one deliberately invalid trace is rejected for every model.
 
 The semantic families use the reviewed fixed seed `0x00c16a1900070512`, a 16,384-iteration shrink
-bound, and direct failure persistence. Proptest persists every shrunk failure beneath
+bound, and direct failure persistence. Every generated crash seed is evaluated against all 24
+stable effect-transition rows; a dedicated two-worker property requires exactly one connector
+call, logical remote mutation, and accepted receipt; and randomized shared-token histories require
+cancellation to remain sticky and reject both read and write transaction entry without advancing
+the store revision. Proptest persists every shrunk failure beneath
 `tests/properties/regressions/`; a new file in that directory is a required checked-in regression,
 never an ignored or quarantined case. Changing the seed, case count, shrink bound, persistence
 path, model bounds, production bindings, branch inventory, or expected schedule counts is a
