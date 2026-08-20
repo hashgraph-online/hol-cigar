@@ -1,0 +1,161 @@
+name: npm-sdk-readiness
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/npm-sdk-readiness.yml"
+      - ".github/workflows/publish-cigar-sdk-npm.yml"
+      - "packaging/npm/**"
+      - "scripts/release/qualify_npm_consumers.mjs"
+      - "scripts/release/verify_npm_sdk.py"
+      - "scripts/release/tests/test_verify_npm_sdk.py"
+      - "sdk/typescript/**"
+      - "sdk/capabilities-v1.json"
+      - "sdk/generate_clients.py"
+      - "schemas/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/npm-sdk-readiness.yml"
+      - ".github/workflows/publish-cigar-sdk-npm.yml"
+      - "packaging/npm/**"
+      - "scripts/release/qualify_npm_consumers.mjs"
+      - "scripts/release/verify_npm_sdk.py"
+      - "scripts/release/tests/test_verify_npm_sdk.py"
+      - "sdk/typescript/**"
+      - "sdk/capabilities-v1.json"
+      - "sdk/generate_clients.py"
+      - "schemas/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: npm-sdk-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: source, pack, consumers, and dry-run / Node 24.10.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.10.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          cache: false
+          check-latest: false
+          go-version: "1.26.6"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14.6"
+          check-latest: false
+
+      - name: Install exact package tools and frozen dependencies
+        run: |
+          corepack enable
+          corepack install --global pnpm@10.34.5
+          npm install --global --ignore-scripts npm@11.6.0
+          test "$(node --version)" = "v24.10.0"
+          test "$(pnpm --version)" = "10.34.5"
+          test "$(npm --version)" = "11.6.0"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Run API parity, strict type, runtime, and verifier tests
+        run: |
+          pnpm --dir sdk/typescript run generate:check
+          python3 tools/quality/operation_surface_parity.py --quiet
+          pnpm --dir sdk/typescript run typecheck
+          pnpm --dir sdk/typescript test
+          python3 -m unittest scripts/release/tests/test_verify_npm_sdk.py
+
+      - name: Pack twice and require byte reproducibility
+        run: |
+          first="${RUNNER_TEMP}/cigar-npm-pack-first"
+          second="${RUNNER_TEMP}/cigar-npm-pack-second"
+          test ! -e "${first}"
+          test ! -e "${second}"
+          mkdir -m 0700 "${first}" "${second}"
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${first}" ./sdk/typescript
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${second}" ./sdk/typescript
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          first_archive="${first}/cigar-sdk-${package_version}.tgz"
+          second_archive="${second}/cigar-sdk-${package_version}.tgz"
+          cmp "${first_archive}" "${second_archive}"
+          sha256sum "${first_archive}" "${second_archive}"
+          printf 'CIGAR_NPM_ARCHIVE=%s\n' "${first_archive}" >>"${GITHUB_ENV}"
+
+      - name: Assess metadata, inventory, paths, maps, secrets, ABI, and operations
+        run: |
+          assessment_dir="${RUNNER_TEMP}/cigar-npm-assessment"
+          test ! -e "${assessment_dir}"
+          mkdir -m 0700 "${assessment_dir}"
+          report="${assessment_dir}/assessment.json"
+          python3 scripts/release/verify_npm_sdk.py \
+            "${CIGAR_NPM_ARCHIVE}" \
+            --report "${report}"
+          REPORT="${report}" python3 -c \
+            'import json,os; r=json.load(open(os.environ["REPORT"])); assert r["status"] in {"blocked","publishable"}; assert len(r["inventory"]) == 78'
+          if python3 -c \
+            'import json; raise SystemExit(0 if json.load(open("packaging/npm/release-profile.v1.json"))["release_decision"]["publishable"] else 1)'; then
+            python3 scripts/release/verify_npm_sdk.py \
+              "${CIGAR_NPM_ARCHIVE}" \
+              --require-canonical-bytes \
+              --require-publishable >/dev/null
+          else
+            REPORT="${report}" python3 -c \
+              'import json,os; r=json.load(open(os.environ["REPORT"])); assert r["status"] == "blocked"; assert {k for k,v in r["checks"].items() if not v} == {"repository","homepage","bugs"}; assert r["canonical_asset_checks"]["semantic_tree_sha256"]'
+          fi
+
+      - name: Qualify materialized ESM, NodeNext, Bundler, and refusal consumers
+        run: |
+          node scripts/release/qualify_npm_consumers.mjs \
+            --archive "${CIGAR_NPM_ARCHIVE}" \
+            --expected-version "$(node -p 'require("./sdk/typescript/package.json").version')" \
+            --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
+            --tsc "$(pwd -P)/node_modules/typescript/bin/tsc"
+
+      - name: Run production dependency audit and npm publish dry-run only
+        run: |
+          pnpm audit --prod --audit-level high
+          dry_run="${RUNNER_TEMP}/cigar-npm-publish-dry-run.json"
+          npm publish \
+            --dry-run \
+            --json \
+            --ignore-scripts \
+            --access public \
+            --tag alpha \
+            "${CIGAR_NPM_ARCHIVE}" >"${dry_run}"
+          expected_id="@cigar/sdk@$(node -p 'require("./sdk/typescript/package.json").version')"
+          DRY_RUN="${dry_run}" EXPECTED_ID="${expected_id}" python3 -c \
+            'import json,os; r=json.load(open(os.environ["DRY_RUN"])); assert r["id"] == os.environ["EXPECTED_ID"]'
+
+      - name: Require a clean source tree
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

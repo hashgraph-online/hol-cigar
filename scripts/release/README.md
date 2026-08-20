@@ -1,5 +1,9 @@
 # Release qualification tools
 
+The npm-specific TypeScript SDK assessment, immutable-0.9.4 blockers, packed-consumer matrix, OIDC
+workflow contract, and version-next runbook are documented in `packaging/npm/README.md`. The npm
+profile is currently fail-closed and must not be interpreted as publication authorization.
+
 These scripts are deliberately network-free unless an environment-owned platform driver performs an
 explicit external release operation. They accept paths and key files explicitly, reject duplicate
 JSON keys and unsafe relative paths, and write canonical JSON.

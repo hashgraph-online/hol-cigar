@@ -1,0 +1,210 @@
+name: publish-cigar-sdk-npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "publish @cigar/sdk with alpha dist-tag"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: publish-cigar-sdk-npm
+  cancel-in-progress: false
+
+jobs:
+  verify-and-stage:
+    name: verify tagged source and stage one npm tarball
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.10.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          cache: false
+          check-latest: false
+          go-version: "1.26.6"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14.6"
+          check-latest: false
+
+      - name: Require an exact tagged dispatch and explicit approval phrase
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          test "${CONFIRM}" = "publish @cigar/sdk with alpha dist-tag"
+          [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          test "${GITHUB_REF_NAME}" = "v${package_version}"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 -c \
+            'import json; p=json.load(open("packaging/npm/release-profile.v1.json")); assert p["release_decision"] == {"publishable": True, "status": "approved", "blockers": []}'
+
+      - name: Require the matching GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_state="$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq '[.isDraft,.isPrerelease,.tagName] | @tsv')"
+          test "${release_state}" = $'false\ttrue\t'"${GITHUB_REF_NAME}"
+
+      - name: Install exact tools and frozen dependencies
+        run: |
+          corepack enable
+          corepack install --global pnpm@10.34.5
+          npm install --global --ignore-scripts npm@11.6.0
+          test "$(node --version)" = "v24.10.0"
+          test "$(pnpm --version)" = "10.34.5"
+          test "$(npm --version)" = "11.6.0"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test, pack twice, verify, qualify consumers, and dry-run
+        run: |
+          pnpm --dir sdk/typescript run generate:check
+          python3 tools/quality/operation_surface_parity.py --quiet
+          pnpm --dir sdk/typescript run typecheck
+          pnpm --dir sdk/typescript test
+          python3 -m unittest scripts/release/tests/test_verify_npm_sdk.py
+          first="${RUNNER_TEMP}/cigar-npm-publish-first"
+          second="${RUNNER_TEMP}/cigar-npm-publish-second"
+          stage="$(pwd -P)/npm-publish-stage"
+          test ! -e "${first}"
+          test ! -e "${second}"
+          test ! -e "${stage}"
+          mkdir -m 0700 "${first}" "${second}" "${stage}"
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${first}" ./sdk/typescript
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${second}" ./sdk/typescript
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="cigar-sdk-${package_version}.tgz"
+          cmp "${first}/${filename}" "${second}/${filename}"
+          install -m 0400 "${first}/${filename}" "${stage}/${filename}"
+          python3 scripts/release/verify_npm_sdk.py \
+            "${stage}/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable \
+            --report "${stage}/npm-sdk-assessment.json"
+          node scripts/release/qualify_npm_consumers.mjs \
+            --archive "${stage}/${filename}" \
+            --expected-version "${package_version}" \
+            --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
+            --tsc "$(pwd -P)/node_modules/typescript/bin/tsc"
+          npm publish \
+            --dry-run \
+            --json \
+            --ignore-scripts \
+            --access public \
+            --tag alpha \
+            "${stage}/${filename}" >"${stage}/npm-publish-dry-run.json"
+          pushd "${stage}" >/dev/null
+          sha256sum "${filename}" >SHA256SUMS
+          popd >/dev/null
+          chmod 0400 "${stage}/npm-publish-dry-run.json" "${stage}/SHA256SUMS"
+          test "$(find "${stage}" -type f | wc -l | tr -d ' ')" = "4"
+
+      - name: Stage only the verified npm payload and receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cigar-sdk-npm-publish-candidate
+          path: npm-publish-stage/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+
+  publish:
+    name: publish approved alpha through npm OIDC
+    needs: verify-and-stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@cigar/sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.10.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14.6"
+          check-latest: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: cigar-sdk-npm-publish-candidate
+          path: npm-publish-stage/
+
+      - name: Reverify staged identity and reject an occupied version
+        run: |
+          npm install --global --ignore-scripts npm@11.6.0
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="cigar-sdk-${package_version}.tgz"
+          cd npm-publish-stage
+          sha256sum --check --strict SHA256SUMS
+          cd ..
+          python3 scripts/release/verify_npm_sdk.py \
+            "npm-publish-stage/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable >/dev/null
+          registry_result="${RUNNER_TEMP}/npm-view-result"
+          if npm view "@cigar/sdk@${package_version}" version --json >"${registry_result}" 2>&1; then
+            echo "@cigar/sdk@${package_version} already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          grep -q 'E404' "${registry_result}"
+          printf 'CIGAR_NPM_VERSION=%s\n' "${package_version}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_NPM_ARCHIVE=%s\n' "$(pwd -P)/npm-publish-stage/${filename}" >>"${GITHUB_ENV}"
+
+      - name: Publish with protected npm Trusted Publishing and automatic provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npm publish --ignore-scripts --access public --tag alpha "${CIGAR_NPM_ARCHIVE}"
+
+      - name: Verify registry integrity, alpha dist-tag, and attestations
+        run: |
+          expected_integrity="$(python3 -c 'import base64,hashlib,os; b=open(os.environ["CIGAR_NPM_ARCHIVE"],"rb").read(); print("sha512-"+base64.b64encode(hashlib.sha512(b).digest()).decode())')"
+          observed_integrity="$(npm view "@cigar/sdk@${CIGAR_NPM_VERSION}" dist.integrity)"
+          observed_alpha="$(npm view @cigar/sdk dist-tags.alpha)"
+          attestations="$(npm view "@cigar/sdk@${CIGAR_NPM_VERSION}" dist.attestations --json)"
+          test "${observed_integrity}" = "${expected_integrity}"
+          test "${observed_alpha}" = "${CIGAR_NPM_VERSION}"
+          ATTESTATIONS="${attestations}" python3 -c \
+            'import json,os; value=json.loads(os.environ["ATTESTATIONS"]); assert isinstance(value,dict) and isinstance(value.get("url"),str) and value["url"].startswith("https://")'
