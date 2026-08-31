@@ -1,4 +1,14 @@
-# `@cigar/sdk`
+# `@hol-org/cigar`
+
+Developer preview for Node.js 24 ESM applications:
+
+```text
+npm install @hol-org/cigar@alpha
+```
+
+The 0.9.4 developer preview is intended for the `alpha` channel. The package intentionally does
+not claim CommonJS or browser-runtime support, and consumers should pin an exact version for
+reproducible workflow execution.
 
 The CIGAR v1 ESM client supports all 45 frozen HTTP operations, resumable SSE streams,
 bounded deadlines, abort signals, typed problems, pagination, idempotency-bound retries,
@@ -6,7 +16,7 @@ and local bundle/delta verification. It has no install script and downloads no b
 The exported `CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
 
 ```ts
-import { CigarClient, createIdempotencyKey } from "@cigar/sdk";
+import { CigarClient, createIdempotencyKey } from "@hol-org/cigar";
 
 const client = new CigarClient({
   baseUrl: "https://cigar.example",

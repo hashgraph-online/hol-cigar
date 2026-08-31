@@ -191,7 +191,7 @@ UV_LOCK_BINDINGS = {
 
 SDK_RELEASE_RECORDS = {
     "sdk/rust/release.json": "cigar-sdk",
-    "sdk/typescript/release.json": "@cigar/sdk",
+    "sdk/typescript/release.json": "@hol-org/cigar",
     "sdk/python/src/cigar_sdk/release.json": "hol-cigar",
     "sdk/go/release.json": "github.com/CIGAR/cigar/sdk/go",
 }
@@ -220,7 +220,7 @@ CRATE_RELEASE_RECORDS = {
 RELEASE_RECORDS = {**SDK_RELEASE_RECORDS, **CRATE_RELEASE_RECORDS}
 
 JSON_VERSION_FIELDS = {
-    "sdk/typescript/package.json": ("@cigar/sdk", "name"),
+    "sdk/typescript/package.json": ("@hol-org/cigar", "name"),
     "adapters/claude-code/.claude-plugin/plugin.json": ("cigar", "name"),
 }
 TOML_PACKAGE_VERSIONS = {

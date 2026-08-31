@@ -22,7 +22,7 @@
     "cargo xtask test unit",
     "cargo xtask docs",
     "protoc --descriptor_set_out=.tmp/context-abi.pb --proto_path=schemas/proto schemas/proto/context_abi.proto",
-    "corepack pnpm --filter @cigar/sdk typecheck",
+    "corepack pnpm --filter @hol-org/cigar typecheck",
     "uv run --project sdk/python python -c 'from cigar_sdk.generated import context_abi_pb2'",
     "go test ./... (working directory sdk/go)",
     "cargo llvm-cov --workspace --all-targets --lcov --output-path reports/wp01-lcov.info"

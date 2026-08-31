@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/npm-sdk-readiness.yml"
-      - ".github/workflows/publish-cigar-sdk-npm.yml"
+      - ".github/workflows/stage-hol-cigar-npm.yml"
       - "packaging/npm/**"
       - "scripts/release/qualify_npm_consumers.mjs"
       - "scripts/release/verify_npm_sdk.py"
@@ -21,7 +21,7 @@ on:
       - main
     paths:
       - ".github/workflows/npm-sdk-readiness.yml"
-      - ".github/workflows/publish-cigar-sdk-npm.yml"
+      - ".github/workflows/stage-hol-cigar-npm.yml"
       - "packaging/npm/**"
       - "scripts/release/qualify_npm_consumers.mjs"
       - "scripts/release/verify_npm_sdk.py"
@@ -96,6 +96,7 @@ jobs:
 
       - name: Pack twice and require byte reproducibility
         run: |
+          umask 022
           first="${RUNNER_TEMP}/cigar-npm-pack-first"
           second="${RUNNER_TEMP}/cigar-npm-pack-second"
           test ! -e "${first}"
@@ -106,8 +107,8 @@ jobs:
           pnpm --dir sdk/typescript run prepack
           npm pack --ignore-scripts --pack-destination "${second}" ./sdk/typescript
           package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          first_archive="${first}/cigar-sdk-${package_version}.tgz"
-          second_archive="${second}/cigar-sdk-${package_version}.tgz"
+          first_archive="${first}/hol-org-cigar-${package_version}.tgz"
+          second_archive="${second}/hol-org-cigar-${package_version}.tgz"
           cmp "${first_archive}" "${second_archive}"
           sha256sum "${first_archive}" "${second_archive}"
           printf 'CIGAR_NPM_ARCHIVE=%s\n' "${first_archive}" >>"${GITHUB_ENV}"
@@ -131,7 +132,7 @@ jobs:
               --require-publishable >/dev/null
           else
             REPORT="${report}" python3 -c \
-              'import json,os; r=json.load(open(os.environ["REPORT"])); assert r["status"] == "blocked"; assert {k for k,v in r["checks"].items() if not v} == {"repository","homepage","bugs"}; assert r["canonical_asset_checks"]["semantic_tree_sha256"]'
+              'import json,os; r=json.load(open(os.environ["REPORT"])); assert r["status"] == "blocked"; assert all(r["checks"].values()); assert all(r["canonical_asset_checks"].values())'
           fi
 
       - name: Qualify materialized ESM, NodeNext, Bundler, and refusal consumers
@@ -140,22 +141,36 @@ jobs:
             --archive "${CIGAR_NPM_ARCHIVE}" \
             --expected-version "$(node -p 'require("./sdk/typescript/package.json").version')" \
             --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
-            --tsc "$(pwd -P)/node_modules/typescript/bin/tsc"
+            --tsc "$(pwd -P)/sdk/typescript/node_modules/typescript/bin/tsc"
 
-      - name: Run production dependency audit and npm publish dry-run only
+      - name: Run production dependency audit
         run: |
           pnpm audit --prod --audit-level high
-          dry_run="${RUNNER_TEMP}/cigar-npm-publish-dry-run.json"
-          npm publish \
+
+      - name: Select the staging CLI runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Run npm stage dry-run only
+        run: |
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "12.0.2"
+          dry_run="${RUNNER_TEMP}/cigar-npm-stage-dry-run.json"
+          npm stage publish \
             --dry-run \
             --json \
             --ignore-scripts \
             --access public \
             --tag alpha \
             "${CIGAR_NPM_ARCHIVE}" >"${dry_run}"
-          expected_id="@cigar/sdk@$(node -p 'require("./sdk/typescript/package.json").version')"
-          DRY_RUN="${dry_run}" EXPECTED_ID="${expected_id}" python3 -c \
-            'import json,os; r=json.load(open(os.environ["DRY_RUN"])); assert r["id"] == os.environ["EXPECTED_ID"]'
+          python3 scripts/release/verify_npm_sdk.py \
+            "${CIGAR_NPM_ARCHIVE}" \
+            --require-canonical-bytes \
+            --stage-dry-run "${dry_run}" >/dev/null
 
       - name: Require a clean source tree
         run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

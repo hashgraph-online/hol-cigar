@@ -39,17 +39,16 @@ class NpmSdkVerifierTests(unittest.TestCase):
             "blockers": [],
         }
 
-    def test_committed_profile_is_explicitly_fail_closed_for_immutable_094(self) -> None:
+    def test_committed_profile_is_explicitly_fail_closed_before_first_stage(self) -> None:
         profile = verifier._load_profile(verifier.DEFAULT_PROFILE)
         self.assertFalse(profile["release_decision"]["publishable"])
         self.assertEqual(profile["release_decision"]["status"], "blocked")
         self.assertEqual(
             {item["id"] for item in profile["release_decision"]["blockers"]},
             {
-                "immutable-package-repository-mismatch",
-                "npm-scope-ownership-unverified",
-                "trusted-publisher-bootstrap-required",
-                "v0.9.4-tag-lacks-npm-workflow",
+                "npm-packaging-change-not-yet-reviewed",
+                "first-publication-staged-approval-required",
+                "trusted-publisher-post-bootstrap-required",
             },
         )
         self.assertEqual(profile["source"]["revision"], "6e518ad95a018a80a04db295c0f91ec928a0ba0c")
@@ -58,7 +57,7 @@ class NpmSdkVerifierTests(unittest.TestCase):
     def entries(self, *, repository: str | None = None) -> dict[str, bytes]:
         source = self.profile["source"]
         package = {
-            "name": "@cigar/sdk",
+            "name": "@hol-org/cigar",
             "version": "0.9.4",
             "description": "CIGAR v1 TypeScript SDK",
             "license": "Apache-2.0",
@@ -69,7 +68,11 @@ class NpmSdkVerifierTests(unittest.TestCase):
             },
             "homepage": f"{source['repository']}#readme",
             "bugs": {"url": f"{source['repository']}/issues"},
-            "publishConfig": {"access": "public"},
+            "publishConfig": {
+                "access": "public",
+                "registry": "https://registry.npmjs.org/",
+                "tag": "alpha",
+            },
             "type": "module",
             "packageManager": "pnpm@10.34.5",
             "engines": {"node": ">=24.10.0 <25"},
@@ -84,7 +87,7 @@ class NpmSdkVerifierTests(unittest.TestCase):
         }
         release = {
             "schema_version": "cigar.sdk-release.v1",
-            "name": "@cigar/sdk",
+            "name": "@hol-org/cigar",
             "version": "0.9.4",
             "context_abi": "cigar.context.v1",
         }
@@ -179,6 +182,41 @@ class NpmSdkVerifierTests(unittest.TestCase):
         self.assertEqual(destination.stat().st_mode & 0o777, 0o400)
         with self.assertRaises(FileExistsError):
             verifier._write_report(destination, report)
+
+    def test_stage_dry_run_must_exactly_bind_the_assessed_archive(self) -> None:
+        archive = self.archive(self.entries())
+        report = verifier.assess(archive, self.profile_path(archive))
+        package = report["package"]
+        assessed_archive = report["archive"]
+        files = [
+            {
+                "path": item["path"].removeprefix("package/"),
+                "size": item["bytes"],
+                "mode": int(item["mode"], 8),
+            }
+            for item in report["inventory"]
+        ]
+        entry = {
+            "id": f'{package["name"]}@{package["version"]}',
+            "name": package["name"],
+            "version": package["version"],
+            "size": assessed_archive["bytes"],
+            "unpackedSize": sum(item["size"] for item in files),
+            "shasum": assessed_archive["sha1"],
+            "integrity": assessed_archive["npm_integrity"],
+            "filename": assessed_archive["path"],
+            "files": files,
+            "entryCount": assessed_archive["file_count"],
+            "bundled": [],
+        }
+        stage_report = self.root / "stage-dry-run.json"
+        stage_report.write_bytes(canonical({package["name"]: entry}))
+        verifier._verify_stage_dry_run(stage_report, report)
+
+        entry["integrity"] = "sha512-tampered"
+        stage_report.write_bytes(canonical({package["name"]: entry}))
+        with self.assertRaisesRegex(verifier.VerificationError, "assessed archive"):
+            verifier._verify_stage_dry_run(stage_report, report)
 
 
 if __name__ == "__main__":

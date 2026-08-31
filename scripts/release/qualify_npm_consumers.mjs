@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Qualify materialized consumers that resolve @cigar/sdk only from an npm tarball. */
+/** Qualify materialized consumers that resolve @hol-org/cigar only from an npm tarball. */
 
 import { execFileSync } from "node:child_process";
 import {
@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-const EXPECTED_NODE = "24.10.0";
+const EXPECTED_NPM = "11.6.0";
 const EXPECTED_TYPESCRIPT = "7.0.2";
 const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 
@@ -74,14 +74,15 @@ const arguments_ = parseArguments(process.argv.slice(2));
 requireRegular(arguments_.archive, "SDK archive", MAX_ARCHIVE_BYTES);
 requireRegular(arguments_["npm-cli"], "npm CLI", MAX_ARCHIVE_BYTES);
 requireRegular(arguments_.tsc, "TypeScript compiler", MAX_ARCHIVE_BYTES);
-if (process.versions.node !== EXPECTED_NODE) {
-  fail(`qualification requires Node ${EXPECTED_NODE}; observed ${process.versions.node}`);
+const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
+if (nodeMajor !== 24 || !Number.isInteger(nodeMinor) || nodeMinor < 10) {
+  fail(`qualification requires supported Node >=24.10.0 <25; observed ${process.versions.node}`);
 }
 
 const npmVersion = run(process.execPath, [arguments_["npm-cli"], "--version"]);
 const typescriptVersion = run(process.execPath, [arguments_.tsc, "--version"]);
-if (!/^11\.(?:[5-9]|[1-9][0-9])\./u.test(npmVersion)) {
-  fail(`npm ${npmVersion} is too old for the reviewed npm 11 consumer path`);
+if (npmVersion !== EXPECTED_NPM) {
+  fail(`npm ${npmVersion} differs from the reviewed ${EXPECTED_NPM} consumer path`);
 }
 if (typescriptVersion !== `Version ${EXPECTED_TYPESCRIPT}`) {
   fail(`TypeScript ${typescriptVersion} differs from ${EXPECTED_TYPESCRIPT}`);
@@ -122,7 +123,7 @@ try {
   ], { cwd: temporary, env: installEnvironment });
 
   const modules = realpathSync(join(temporary, "node_modules"));
-  const installed = join(modules, "@cigar", "sdk");
+  const installed = join(modules, "@hol-org", "cigar");
   const metadata = lstatSync(installed);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     fail("installed SDK is not a materialized package directory");
@@ -132,7 +133,7 @@ try {
     fail("installed SDK escaped the clean node_modules tree");
   }
   const manifest = JSON.parse(readFileSync(join(installedReal, "package.json"), "utf8"));
-  if (manifest.name !== "@cigar/sdk" || manifest.version !== arguments_["expected-version"]) {
+  if (manifest.name !== "@hol-org/cigar" || manifest.version !== arguments_["expected-version"]) {
     fail("installed SDK identity differs from the reviewed consumer profile");
   }
 
@@ -144,7 +145,7 @@ try {
     no_proxy: "*",
   };
   writeFileSync(join(temporary, "runtime.mjs"), [
-    "import { CigarClient, CONTEXT_ABI, OPERATION_COUNT, OPERATIONS } from '@cigar/sdk';",
+    "import { CigarClient, CONTEXT_ABI, OPERATION_COUNT, OPERATIONS } from '@hol-org/cigar';",
     "if (CONTEXT_ABI !== 'cigar.context.v1') throw new Error('ABI drift');",
     "if (OPERATION_COUNT !== 45 || Object.keys(OPERATIONS).length !== 45) throw new Error('operation drift');",
     "const client = new CigarClient({baseUrl:'http://localhost',allowInsecureLoopback:true});",
@@ -158,7 +159,7 @@ try {
   }));
 
   writeFileSync(join(temporary, "consumer.ts"), [
-    "import { CigarClient, CONTEXT_ABI, type CompileContextBundleRequest, type TypedOperationResponse, type ContextBundle } from '@cigar/sdk';",
+    "import { CigarClient, CONTEXT_ABI, type CompileContextBundleRequest, type TypedOperationResponse, type ContextBundle } from '@hol-org/cigar';",
     "const request: CompileContextBundleRequest = { plan_id: '01900000-0000-7000-8000-000000000001' };",
     "const client = new CigarClient({baseUrl:'http://localhost',allowInsecureLoopback:true});",
     "const invoke = async (): Promise<TypedOperationResponse<ContextBundle>> => client.compileContextBundle({payload: request, idempotencyKey: 'compile-1'});",
@@ -204,7 +205,7 @@ try {
 
   writeFileSync(join(temporary, "unsupported.cjs"), [
     "try {",
-    "  require('@cigar/sdk');",
+    "  require('@hol-org/cigar');",
     "  throw new Error('CommonJS unexpectedly resolved');",
     "} catch (error) {",
     "  if (!['ERR_PACKAGE_PATH_NOT_EXPORTED', 'ERR_REQUIRE_ESM'].includes(error.code)) throw error;",
@@ -217,7 +218,7 @@ try {
   });
   run(process.execPath, ["--input-type=module", "--eval", [
     "try {",
-    "  await import('@cigar/sdk/dist/client.js');",
+    "  await import('@hol-org/cigar/dist/client.js');",
     "  throw new Error('private subpath unexpectedly resolved');",
     "} catch (error) {",
     "  if (error.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') throw error;",

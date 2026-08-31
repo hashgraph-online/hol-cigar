@@ -1,10 +1,10 @@
-name: publish-cigar-sdk-npm
+name: stage-hol-cigar-npm
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type "publish @cigar/sdk with alpha dist-tag"
+        description: Type "stage @hol-org/cigar with alpha dist-tag"
         required: true
         type: string
 
@@ -16,7 +16,7 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 concurrency:
-  group: publish-cigar-sdk-npm
+  group: stage-hol-cigar-npm
   cancel-in-progress: false
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
         env:
           CONFIRM: ${{ inputs.confirm }}
         run: |
-          test "${CONFIRM}" = "publish @cigar/sdk with alpha dist-tag"
+          test "${CONFIRM}" = "stage @hol-org/cigar with alpha dist-tag"
           [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]
           package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
           test "${GITHUB_REF_NAME}" = "v${package_version}"
@@ -82,8 +82,9 @@ jobs:
           test "$(go version | awk '{print $3}')" = "go1.26.6"
           pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Test, pack twice, verify, qualify consumers, and dry-run
+      - name: Test, pack twice, verify, and qualify consumers
         run: |
+          umask 022
           pnpm --dir sdk/typescript run generate:check
           python3 tools/quality/operation_surface_parity.py --quiet
           pnpm --dir sdk/typescript run typecheck
@@ -101,7 +102,7 @@ jobs:
           pnpm --dir sdk/typescript run prepack
           npm pack --ignore-scripts --pack-destination "${second}" ./sdk/typescript
           package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          filename="cigar-sdk-${package_version}.tgz"
+          filename="hol-org-cigar-${package_version}.tgz"
           cmp "${first}/${filename}" "${second}/${filename}"
           install -m 0400 "${first}/${filename}" "${stage}/${filename}"
           python3 scripts/release/verify_npm_sdk.py \
@@ -113,38 +114,60 @@ jobs:
             --archive "${stage}/${filename}" \
             --expected-version "${package_version}" \
             --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
-            --tsc "$(pwd -P)/node_modules/typescript/bin/tsc"
-          npm publish \
+            --tsc "$(pwd -P)/sdk/typescript/node_modules/typescript/bin/tsc"
+          pushd "${stage}" >/dev/null
+          sha256sum "${filename}" >SHA256SUMS
+          popd >/dev/null
+          chmod 0400 "${stage}/SHA256SUMS"
+          test "$(find "${stage}" -type f | wc -l | tr -d ' ')" = "3"
+
+      - name: Select the staging CLI runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Require an exact npm 12 stage dry-run
+        run: |
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "12.0.2"
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="hol-org-cigar-${package_version}.tgz"
+          npm stage publish \
             --dry-run \
             --json \
             --ignore-scripts \
             --access public \
             --tag alpha \
-            "${stage}/${filename}" >"${stage}/npm-publish-dry-run.json"
-          pushd "${stage}" >/dev/null
-          sha256sum "${filename}" >SHA256SUMS
-          popd >/dev/null
-          chmod 0400 "${stage}/npm-publish-dry-run.json" "${stage}/SHA256SUMS"
-          test "$(find "${stage}" -type f | wc -l | tr -d ' ')" = "4"
+            "npm-publish-stage/${filename}" >npm-publish-stage/npm-stage-dry-run.json
+          python3 scripts/release/verify_npm_sdk.py \
+            "npm-publish-stage/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable \
+            --stage-dry-run npm-publish-stage/npm-stage-dry-run.json >/dev/null
+          chmod 0400 npm-publish-stage/npm-stage-dry-run.json
+          test "$(find npm-publish-stage -type f | wc -l | tr -d ' ')" = "4"
 
       - name: Stage only the verified npm payload and receipts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: cigar-sdk-npm-publish-candidate
+          name: hol-cigar-npm-stage-candidate
           path: npm-publish-stage/
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
           include-hidden-files: false
 
-  publish:
-    name: publish approved alpha through npm OIDC
+  stage:
+    name: stage approved alpha through npm OIDC
     needs: verify-and-stage
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@cigar/sdk
+      url: https://www.npmjs.com/package/@hol-org/cigar
     permissions:
       contents: read
       id-token: write
@@ -158,7 +181,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24.10.0"
+          node-version: "24.19.0"
           check-latest: false
           registry-url: https://registry.npmjs.org
 
@@ -169,14 +192,16 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: cigar-sdk-npm-publish-candidate
+          name: hol-cigar-npm-stage-candidate
           path: npm-publish-stage/
 
       - name: Reverify staged identity and reject an occupied version
         run: |
-          npm install --global --ignore-scripts npm@11.6.0
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "12.0.2"
           package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          filename="cigar-sdk-${package_version}.tgz"
+          filename="hol-org-cigar-${package_version}.tgz"
           cd npm-publish-stage
           sha256sum --check --strict SHA256SUMS
           cd ..
@@ -185,26 +210,27 @@ jobs:
             --require-canonical-bytes \
             --require-publishable >/dev/null
           registry_result="${RUNNER_TEMP}/npm-view-result"
-          if npm view "@cigar/sdk@${package_version}" version --json >"${registry_result}" 2>&1; then
-            echo "@cigar/sdk@${package_version} already exists; refusing overwrite" >&2
+          if npm view "@hol-org/cigar@${package_version}" version --json >"${registry_result}" 2>&1; then
+            echo "@hol-org/cigar@${package_version} already exists; refusing duplicate staging" >&2
             exit 1
           fi
           grep -q 'E404' "${registry_result}"
           printf 'CIGAR_NPM_VERSION=%s\n' "${package_version}" >>"${GITHUB_ENV}"
           printf 'CIGAR_NPM_ARCHIVE=%s\n' "$(pwd -P)/npm-publish-stage/${filename}" >>"${GITHUB_ENV}"
 
-      - name: Publish with protected npm Trusted Publishing and automatic provenance
+      - name: Stage with protected npm Trusted Publishing and automatic provenance
         env:
           NPM_CONFIG_PROVENANCE: "true"
-        run: npm publish --ignore-scripts --access public --tag alpha "${CIGAR_NPM_ARCHIVE}"
+        run: npm stage publish --ignore-scripts --access public --tag alpha "${CIGAR_NPM_ARCHIVE}"
 
-      - name: Verify registry integrity, alpha dist-tag, and attestations
+      - name: Record the required human approval step
         run: |
-          expected_integrity="$(python3 -c 'import base64,hashlib,os; b=open(os.environ["CIGAR_NPM_ARCHIVE"],"rb").read(); print("sha512-"+base64.b64encode(hashlib.sha512(b).digest()).decode())')"
-          observed_integrity="$(npm view "@cigar/sdk@${CIGAR_NPM_VERSION}" dist.integrity)"
-          observed_alpha="$(npm view @cigar/sdk dist-tags.alpha)"
-          attestations="$(npm view "@cigar/sdk@${CIGAR_NPM_VERSION}" dist.attestations --json)"
-          test "${observed_integrity}" = "${expected_integrity}"
-          test "${observed_alpha}" = "${CIGAR_NPM_VERSION}"
-          ATTESTATIONS="${attestations}" python3 -c \
-            'import json,os; value=json.loads(os.environ["ATTESTATIONS"]); assert isinstance(value,dict) and isinstance(value.get("url"),str) and value["url"].startswith("https://")'
+          {
+            echo '### npm staged package awaiting proof-of-presence approval'
+            echo
+            echo "Package: \`@hol-org/cigar@${CIGAR_NPM_VERSION}\`"
+            echo "Channel: \`alpha\`"
+            echo
+            echo 'An authorized npm maintainer must inspect and approve this candidate in npmjs.com → Staged Packages with 2FA.'
+            echo 'Do not approve if the displayed name, version, public visibility, or alpha tag differs.'
+          } >>"${GITHUB_STEP_SUMMARY}"

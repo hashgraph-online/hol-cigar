@@ -1,8 +1,8 @@
 # Release qualification tools
 
-The npm-specific TypeScript SDK assessment, immutable-0.9.4 blockers, packed-consumer matrix, OIDC
-workflow contract, and version-next runbook are documented in `packaging/npm/README.md`. The npm
-profile is currently fail-closed and must not be interpreted as publication authorization.
+The npm-specific `@hol-org/cigar` assessment, first-publication controls, packed-consumer matrix,
+OIDC stage workflow, and version-next runbook are documented in `packaging/npm/README.md`. The npm
+profile remains fail-closed until public review and explicit staged-package approval are complete.
 
 These scripts are deliberately network-free unless an environment-owned platform driver performs an
 explicit external release operation. They accept paths and key files explicitly, reject duplicate

@@ -89,7 +89,7 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
                 canonical_json_bytes(
                     {
                         "schema_version": "cigar.sdk-release.v1",
-                        "name": "@cigar/sdk",
+                        "name": "@hol-org/cigar",
                         "version": "9.9.9",
                         "context_abi": configuration.context_abi,
                     }
@@ -174,7 +174,7 @@ class TypeScriptSdkBuilderTests(unittest.TestCase):
                 "offline": True,
                 "scripts": False,
                 "dependency_mode": "local-reviewed-package-archive",
-                "package": f"@cigar/sdk@{configuration.version}",
+                "package": f"@hol-org/cigar@{configuration.version}",
                 "package_payload_tree_sha256": builder._payload_tree(entries),
                 "dependency": {
                     "name": "@bufbuild/protobuf",

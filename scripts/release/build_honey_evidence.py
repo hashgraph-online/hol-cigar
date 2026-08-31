@@ -927,7 +927,7 @@ def _validate_typescript(
         or clean.get("offline") is not True
         or clean.get("scripts") is not False
         or clean.get("dependency_mode") != "local-reviewed-package-archive"
-        or clean.get("package") != f"@cigar/sdk@{EXPECTED_VERSION}"
+        or clean.get("package") != f"@hol-org/cigar@{EXPECTED_VERSION}"
         or not _sha256(clean.get("package_payload_tree_sha256"))
         or clean.get("semantic_bundle_identity") != QUICKSTART_IDENTITY
         or clean.get("checks")

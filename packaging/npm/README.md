@@ -1,147 +1,163 @@
-# npm release profile for `@cigar/sdk`
+# npm release profile for `@hol-org/cigar`
 
 ## Current decision
 
-Do **not** publish `@cigar/sdk@0.9.4` to npm from this branch or from the existing
-`v0.9.4` release asset. The immutable archive is technically functional, but it is not a
-truthful provenance-bearing npm candidate:
+`@hol-org/cigar@0.9.4` is a technically qualified first-publication candidate for the public
+`alpha` channel. It is not yet authorized for external staging: the public packaging change must
+first be reviewed and merged, and the exact staged package must then receive human 2FA approval.
+The fail-closed state is recorded in `release-profile.v1.json`.
 
-- the public registry returned `E404` for `@cigar/sdk` on 2026-08-20, so no public 0.9.4
-  collision was observed;
-- `cigar-sdk-0.9.4.tgz` is 325,334 bytes, contains 78 regular mode-0644 files, and has
-  SHA-256 `8160193eea7c51f58b13b3a69123e485d0b5aacb6f25687af98dc4a16423379f`;
-- that archive declares `git+https://github.com/CIGAR/cigar.git`, which returns 404, rather
-  than the public source repository `git+https://github.com/hashgraph-online/hol-cigar.git`;
-- the archive omits `homepage` and `bugs` metadata for the actual public repository;
-- the `v0.9.4` tag does not contain the npm Trusted Publishing workflow, so a workflow added
-  after the tag cannot truthfully make provenance claim that it was the tagged build recipe;
-- public absence does not prove that project maintainers control the `@cigar` npm scope; and
-- npm Trusted Publishing configuration requires an existing package, so the first publication
-  needs an explicitly approved bootstrap before tokenless OIDC can become authoritative.
+The npm registry returned `E404` for `@hol-org/cigar` on 2026-08-31. Authenticated npm identity
+`tmcc_patches` is a developer in the `hol-org` organization; `kantorcodes` is the organization
+owner. No package, version, dist-tag, trusted publisher, or staged package was created during
+readiness work.
 
-Changing the archive metadata changes its bytes. npm package versions are immutable, and the
-GitHub 0.9.4 release already names and hashes the current tarball. Rebuilding different bytes under
-the same `@cigar/sdk@0.9.4` identity would create two conflicting artifacts. The fail-closed
-authority in [`release-profile.v1.json`](release-profile.v1.json) therefore records
-`publishable: false`.
+## Package identity and source relationship
 
-## Verified compatibility surface
+The npm package is `@hol-org/cigar@0.9.4`, while the existing GitHub `v0.9.4` TypeScript asset is
+named `cigar-sdk-0.9.4.tgz` and identifies the earlier unpublished `@cigar/sdk` package. The npm
+candidate deliberately has different bytes because it corrects:
 
-The current tarball is a developer-preview ESM package for exact Node `>=24.10.0 <25`. It exports
-`cigar.context.v1`, all 45 frozen HTTP operations, 70 generated payload models, typed CIGAR
-problems, bounded deadlines, `AbortSignal`, safe retry/idempotency behavior, effect ambiguity,
-handoff, replay, context bundle/delta verification, and workflow recovery state.
+- the package and release-record identity to `@hol-org/cigar`;
+- repository metadata to `git+https://github.com/hashgraph-online/hol-cigar.git`;
+- homepage and issue URLs;
+- examples and generated capability records that name the TypeScript module; and
+- public-registry and `alpha` defaults in `publishConfig`.
 
-The packed-consumer qualifier validates these boundaries:
+The SDK implementation remains based on product tag `v0.9.4`, commit
+`6e518ad95a018a80a04db295c0f91ec928a0ba0c`, tree
+`eb0926ccb63b9a5a0ad1777334a04b3539b03d8b`. Do not move `v0.9.4`, replace its GitHub assets, or
+represent the new npm tarball as byte-identical to the historical asset.
 
-| Consumer | Result and claim |
-| --- | --- |
-| Node ESM 24.10.0 | Supported; public root export resolves from the installed tarball. |
-| TypeScript 7.0.2 NodeNext | Supported with `ES2024`, DOM, and `ESNext.Disposable` libraries. |
-| TypeScript 7.0.2 Bundler resolution | Type resolution supported with the same libraries; this is not a browser runtime claim. |
-| CommonJS `require()` | Intentionally refused by package exports. |
-| Private `dist/*` subpaths | Intentionally refused by package exports. |
-| Browser runtime | Not claimed or qualified. |
+## Supported package surface
 
-`AsyncDisposable` is part of the public stream type. Consumers that do not obtain it from their
-Node ambient types must include `"ESNext.Disposable"` in `compilerOptions.lib`. Changing that
-public declaration belongs in a version-next compatibility decision.
+This developer preview supports ESM on Node `>=24.10.0 <25`, HTTP transport, strict TypeScript
+NodeNext resolution, and type-only Bundler resolution. It exports the `cigar.context.v1` ABI, all
+45 frozen HTTP operations, 70 generated payload models, bounded deadlines, abort signals,
+idempotency-safe retries, effect-ambiguity handling, workflow recovery state, bundle/delta
+verification, handoff, and replay.
+
+CommonJS, private `dist/*` imports, and browser runtime execution are intentionally unsupported.
+The public `AsyncDisposable` stream contract requires `ESNext.Disposable` when ambient Node types
+do not provide it.
 
 ## Local non-publishing qualification
 
-Use only exact pinned tools. The commands below inspect and exercise an archive; they do not log
-in, change npm access, create a release, push, tag, or publish.
+Qualification uses exact Node 24.10.0, npm 11.6.0, pnpm 10.34.5, and TypeScript 7.0.2. Staging
+uses exact Node 24.19.0 and npm 12.0.2 because npm 11 does not provide `npm stage`, while npm
+12.0.2 requires Node `^24.15.0`. These commands build and inspect a local candidate only:
 
 ```text
+# Canonical package members are mode 0644; keep archive output directories mode 0700.
+umask 022
+pnpm --dir sdk/typescript run generate:check
+python3 tools/quality/operation_surface_parity.py --quiet
+pnpm --dir sdk/typescript run typecheck
+pnpm --dir sdk/typescript test
+python3 -m unittest scripts/release/tests/test_verify_npm_sdk.py
+
+pnpm --dir sdk/typescript run prepack
+npm pack --ignore-scripts --pack-destination /absolute/owner-only/output ./sdk/typescript
+
 python3 scripts/release/verify_npm_sdk.py \
-  /absolute/path/cigar-sdk-0.9.4.tgz \
+  /absolute/owner-only/output/hol-org-cigar-0.9.4.tgz \
   --require-canonical-bytes
 
 node scripts/release/qualify_npm_consumers.mjs \
-  --archive /absolute/path/cigar-sdk-0.9.4.tgz \
+  --archive /absolute/owner-only/output/hol-org-cigar-0.9.4.tgz \
   --expected-version 0.9.4 \
   --npm-cli /absolute/path/to/npm-11.6.0/bin/npm-cli.js \
-  --tsc /absolute/path/to/typescript-7.0.2/bin/tsc
+  --tsc /absolute/repository/sdk/typescript/node_modules/typescript/bin/tsc
 
-npm publish \
-  --dry-run \
-  --json \
-  --ignore-scripts \
-  --access public \
-  --tag alpha \
-  /absolute/path/cigar-sdk-0.9.4.tgz
+# Run this command with the separate Node 24.19.0/npm 12.0.2 staging toolchain.
+npm stage publish --dry-run --json --ignore-scripts --access public --tag alpha \
+  /absolute/owner-only/output/hol-org-cigar-0.9.4.tgz \
+  >/absolute/owner-only/output/stage-dry-run.json
+
+python3 scripts/release/verify_npm_sdk.py \
+  /absolute/owner-only/output/hol-org-cigar-0.9.4.tgz \
+  --require-canonical-bytes \
+  --stage-dry-run /absolute/owner-only/output/stage-dry-run.json
 ```
 
-The verifier bounds compressed and expanded sizes, rejects links and path collisions, requires
-canonical ownership/modes, checks the exact package/release identity, scans secret-shaped values
-and private paths, validates inline source maps, counts operations, records SHA-1/SHA-256/npm
-SHA-512 integrity, calculates a semantic payload-tree digest, and emits the complete file
-inventory. `--require-publishable` is the release gate and intentionally fails today.
+The verifier reads without extraction, bounds compressed and expanded sizes, rejects links and
+path collisions, requires canonical ownership and modes, scans secret-shaped values and private
+paths, validates inline source maps, confirms package/release/ABI/operation identity, and binds the
+complete inventory to the candidate hashes. It also binds every npm stage-dry-run identity,
+integrity, size, file, and mode field back to that inventory. `--require-publishable`
+intentionally fails until the reviewed profile changes to
+`{"publishable":true,"status":"approved","blockers":[]}`.
 
-The consumer qualifier materializes only the SDK tarball as the SDK source, disables lifecycle
-scripts, verifies that the installation is not a workspace link, disables registry access after
-dependency installation, then tests ESM runtime, NodeNext types, Bundler types, and unsupported
-resolution refusal. A passing Bundler typecheck does not add a browser support claim.
+## First-publication bootstrap for 0.9.4
 
-## Truthful version-next path
+The package must exist before npm can bind a Trusted Publisher. The first release therefore uses
+npm staged publishing with an authenticated human session; it does not use or store a long-lived
+CI token.
 
-The recommended corrective release is a new product prerelease such as `0.9.5-alpha.1`; the exact
-identifier is a maintainer decision. Do not weaken the generator's product-wide cross-SDK version
-invariant merely to reuse 0.9.4 for npm.
+1. Merge the public packaging PR only after required CI and review pass.
+2. From the exact clean merge commit, build twice with the pinned qualification tools and require
+   byte equality.
+3. Require the resulting archive to match every value in `canonical_release_asset` and run the
+   packed-consumer matrix.
+4. Reconfirm that `npm view @hol-org/cigar@0.9.4 version` returns `E404` and that no pending staged
+   0.9.4 package exists.
+5. With Node 24.19.0, npm 12.0.2, and an authenticated `hol-org` developer session, stage only the
+   exact reviewed archive:
 
-1. Confirm, through an authenticated npm owner session, whether the project controls `@cigar`.
-   If it does not, approve a new unoccupied package identity and update every generated capability
-   and release authority consistently.
-2. Create a normal version-next PR from current public `main`. Update the product version authority,
-   SDK manifests/release records, generated capability bindings, lockfile, release matrices, and
-   tests together.
-3. Set the TypeScript manifest repository to
-   `git+https://github.com/hashgraph-online/hol-cigar.git`, directory `sdk/typescript`, homepage to
-   `https://github.com/hashgraph-online/hol-cigar#readme`, and bugs URL to
-   `https://github.com/hashgraph-online/hol-cigar/issues`.
-4. Update this profile to the new prerelease, `alpha` dist-tag, new deterministic tarball hashes,
-   and `release_decision: {"publishable":true,"status":"approved","blockers":[]}` only after
-   independent review proves every blocker is resolved.
-5. Require `fast-ci`, `security`, and `npm-sdk-readiness`. The combined gates cover frozen install,
-   full client generation drift, formatting/linting, strict types, runtime tests, pack
-   reproducibility, inventory/security, dependency audit, packed consumers, and publish dry-run.
-6. Merge the reviewed workflow before creating the prerelease tag. Create the tag from the exact
-   merge commit, then publish a GitHub prerelease for that tag. Never reuse or move `v0.9.4`.
-7. Bootstrap the first npm package only through a separately approved, tag-bound GitHub Actions
-   run using a short-lived granular publish credential and npm provenance. Do not add a token
-   fallback to the permanent OIDC workflow. Immediately configure the package's Trusted Publisher
-   for organization `hashgraph-online`, repository `hol-cigar`, workflow
-   `publish-cigar-sdk-npm.yml`, environment `npm`, and publish-only permission; then revoke the
-   bootstrap credential.
-8. Configure the protected `npm` GitHub environment with required independent reviewers. Dispatch
-   `publish-cigar-sdk-npm.yml` **from the exact prerelease tag** and enter its confirmation phrase.
-   The workflow refuses branch refs, final-version tags, occupied versions, non-alpha tags,
-   unapproved profiles, failed dry-runs, and non-reproducible tarballs.
-9. Verify exact registry integrity and `dist-tags.alpha`, require npm provenance/attestations, and
-   install the exact version in a clean smoke consumer. Do not assign `latest` to this
-   developer-preview build.
+   ```text
+   npm stage publish --ignore-scripts --access public --tag alpha \
+     /absolute/path/hol-org-cigar-0.9.4.tgz
+   ```
 
-If a bad package reaches npm, stop further releases, remove the `alpha` dist-tag from the affected
-version or move it only to a separately verified replacement, and deprecate the bad exact version
-with a concise migration message. Do not attempt to overwrite it and do not rely on unpublish as a
-normal rollback mechanism.
+6. In npmjs.com → Staged Packages, inspect the name, exact version, public visibility, `alpha`
+   tag, file inventory, README, and integrity. Reject the stage if any field differs.
+7. Approve the staged package with 2FA. Never assign `latest` to this developer preview.
+8. Verify the live package's SHA-512 integrity against the local archive, confirm
+   `dist-tags.alpha` is `0.9.4`, confirm `latest` is absent, and install the exact version into a
+   clean consumer with lifecycle scripts disabled.
+9. Log the registry URL, integrity, dist-tags, approval time, source commit, and clean-consumer
+   result in the release report. End the bootstrap session with `npm logout`.
 
-## Permanent workflow authority
+A name/version pair is immutable after approval. If any check fails before approval, reject the
+stage and investigate; do not work around a gate or attempt a second artifact with the same
+identity.
 
-`.github/workflows/publish-cigar-sdk-npm.yml` is intentionally unusable for 0.9.4. For an approved
-version-next prerelease it requires an exact prerelease tag, matching package version, matching
-GitHub prerelease, profile approval, frozen tests, two byte-identical packs, packed-consumer
-qualification, a dry-run, and an unoccupied registry version. Its publish job receives only
-`contents: read` and `id-token: write`, uses the protected `npm` environment, consumes the staged
-verified tarball, publishes with `alpha`, and checks integrity, dist-tag, and attestations.
+## Trusted Publisher for 0.9.5-alpha.1 and later
 
-Trusted Publishing and npm provenance require the manifest's public repository URL to match the
-GitHub repository exactly. A post-0.9.4 workflow cannot repair the provenance of the already tagged
-0.9.4 bytes; the workflow must be present in the later tag that is dispatched.
+After 0.9.4 exists, configure a single stage-only Trusted Publisher for:
+
+- GitHub organization: `hashgraph-online`
+- Repository: `hol-cigar`
+- Workflow filename: `stage-hol-cigar-npm.yml`
+- Environment: `npm`
+- Allowed action: `npm stage publish` only
+
+Equivalent npm 12 command:
+
+```text
+npm trust github @hol-org/cigar \
+  --repo hashgraph-online/hol-cigar \
+  --file stage-hol-cigar-npm.yml \
+  --env npm \
+  --allow-stage-publish
+```
+
+Protect the GitHub `npm` environment with independent required reviewers. In npm package settings,
+select “Require two-factor authentication and disallow tokens.” Future releases must merge the
+workflow before tagging, use an exact prerelease tag such as `v0.9.5-alpha.1`, publish a matching
+GitHub prerelease, dispatch the stage workflow from that tag, and receive a separate 2FA approval
+on npm. Trusted Publishing then supplies short-lived OIDC credentials and automatic provenance.
+
+## Recovery
+
+Before approval, reject a bad staged package. After publication, never attempt to overwrite a
+version. Remove or move only the `alpha` dist-tag to a separately verified replacement and
+deprecate the bad exact version with a concise migration message. Unpublish is not the normal
+rollback mechanism.
 
 Authoritative npm references:
 
-- [Trusted publishing for npm packages](https://docs.npmjs.com/trusted-publishers/)
-- [Generating provenance statements](https://docs.npmjs.com/generating-provenance-statements/)
-- [Creating and publishing scoped public packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
-- [Package scope, access level, and visibility](https://docs.npmjs.com/package-scope-access-level-and-visibility/)
+- https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/
+- https://docs.npmjs.com/cli/v11/commands/npm-stage/
+- https://docs.npmjs.com/trusted-publishers/
+- https://docs.npmjs.com/cli/v11/commands/npm-trust/

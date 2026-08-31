@@ -964,7 +964,7 @@ def _validate_sdks(
         "go": ["http", "grpc"],
     }
     expected_modules = {
-        "typescript": "@cigar/sdk",
+        "typescript": "@hol-org/cigar",
         "python": "cigar_sdk",
         "go": "github.com/CIGAR/cigar/sdk/go",
     }

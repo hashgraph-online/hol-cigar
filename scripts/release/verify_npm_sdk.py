@@ -26,6 +26,7 @@ MAX_MEMBER_BYTES = 16 * 1024 * 1024
 MAX_EXPANDED_BYTES = 64 * 1024 * 1024
 MAX_MEMBERS = 256
 MAX_PROFILE_BYTES = 1024 * 1024
+MAX_STAGE_REPORT_BYTES = 8 * 1024 * 1024
 REQUIRED_PATHS = frozenset(
     {
         "package/package.json",
@@ -292,7 +293,12 @@ def _metadata_checks(
         "repository": repository == expected_repository,
         "homepage": package.get("homepage") == f"{source.get('repository')}#readme",
         "bugs": package.get("bugs") == {"url": f"{source.get('repository')}/issues"},
-        "public_access": package.get("publishConfig") == {"access": "public"},
+        "public_alpha_channel": package.get("publishConfig")
+        == {
+            "access": "public",
+            "registry": "https://registry.npmjs.org/",
+            "tag": "alpha",
+        },
         "esm_only": package.get("type") == "module"
         and root_export == {"types": "./dist/index.d.ts", "import": "./dist/index.js"},
         "types": package.get("types") == "./dist/index.d.ts",
@@ -345,7 +351,7 @@ def assess(
         "semantic_tree_sha256": semantic_tree == asset.get("semantic_tree_sha256"),
     }
     if require_canonical_bytes and not all(canonical_checks.values()):
-        raise VerificationError("archive bytes differ from the immutable v0.9.4 asset")
+        raise VerificationError("archive bytes differ from the reviewed npm candidate")
     decision = _require_dict(profile["release_decision"], "release decision")
     metadata_ready = all(checks.values())
     publishable = metadata_ready and decision.get("publishable") is True
@@ -373,6 +379,62 @@ def assess(
         "blockers": decision.get("blockers", []),
         "inventory": _inventory(entries),
     }
+
+
+def _verify_stage_dry_run(path: Path, assessment: dict[str, Any]) -> None:
+    report = _load_json_bytes(
+        _read_stable_file(path, MAX_STAGE_REPORT_BYTES, "npm stage dry-run report"),
+        "npm stage dry-run report",
+    )
+    package = _require_dict(assessment["package"], "assessed package")
+    archive = _require_dict(assessment["archive"], "assessed archive")
+    name = package.get("name")
+    version = package.get("version")
+    if not isinstance(name, str) or not isinstance(version, str):
+        raise VerificationError("assessed npm package identity is invalid")
+    inventory = assessment.get("inventory")
+    if not isinstance(inventory, list):
+        raise VerificationError("assessed npm inventory is invalid")
+    files: list[dict[str, Any]] = []
+    for item in inventory:
+        if not isinstance(item, dict):
+            raise VerificationError("assessed npm inventory entry is invalid")
+        member_path = item.get("path")
+        member_bytes = item.get("bytes")
+        member_mode = item.get("mode")
+        if (
+            not isinstance(member_path, str)
+            or not member_path.startswith("package/")
+            or not isinstance(member_bytes, int)
+            or not isinstance(member_mode, str)
+        ):
+            raise VerificationError("assessed npm inventory entry is invalid")
+        files.append(
+            {
+                "path": member_path.removeprefix("package/"),
+                "size": member_bytes,
+                "mode": int(member_mode, 8),
+            }
+        )
+    expected = {
+        name: {
+            "id": f"{name}@{version}",
+            "name": name,
+            "version": version,
+            "size": archive.get("bytes"),
+            "unpackedSize": sum(item["size"] for item in files),
+            "shasum": archive.get("sha1"),
+            "integrity": archive.get("npm_integrity"),
+            "filename": archive.get("path"),
+            "files": files,
+            "entryCount": archive.get("file_count"),
+            "bundled": [],
+        }
+    }
+    if report != expected:
+        raise VerificationError(
+            "npm stage dry-run report differs from the assessed archive"
+        )
 
 
 def _write_report(path: Path, report: dict[str, Any]) -> None:
@@ -410,7 +472,17 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help="owner-only root for a relative --report path",
+    )
     parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--stage-dry-run",
+        type=Path,
+        help="exact npm 12 stage --dry-run JSON report to bind to the archive",
+    )
     parser.add_argument("--require-canonical-bytes", action="store_true")
     parser.add_argument("--require-publishable", action="store_true")
     return parser.parse_args()
@@ -419,13 +491,30 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
+        report_path = arguments.report
+        if arguments.evidence_dir is not None:
+            if report_path is None or report_path.is_absolute():
+                raise VerificationError(
+                    "--evidence-dir requires a relative --report path"
+                )
+            evidence_root = Path(os.path.abspath(arguments.evidence_dir))
+            if (
+                evidence_root.is_symlink()
+                or evidence_root.resolve(strict=True) != evidence_root
+            ):
+                raise VerificationError("evidence root must be a canonical directory")
+            report_path = evidence_root / report_path
         report = assess(
             Path(os.path.abspath(arguments.archive)),
             Path(os.path.abspath(arguments.profile)),
             require_canonical_bytes=arguments.require_canonical_bytes,
         )
-        if arguments.report is not None:
-            _write_report(arguments.report, report)
+        if arguments.stage_dry_run is not None:
+            _verify_stage_dry_run(
+                Path(os.path.abspath(arguments.stage_dry_run)), report
+            )
+        if report_path is not None:
+            _write_report(Path(os.path.abspath(report_path)), report)
         else:
             print(json.dumps(report, sort_keys=True, separators=(",", ":")))
         if arguments.require_publishable and report["status"] != "publishable":

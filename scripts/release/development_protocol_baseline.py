@@ -26,7 +26,7 @@ BASELINE_ID = "cigar.development.protocol-baseline.v1"
 BASELINE_PATH = "packaging/development/protocol-baseline.v1.json"
 SCHEMA_PATH = "packaging/development/schemas/protocol-baseline.v1.schema.json"
 SCHEMA_SHA256 = "35f9bc9eb346fec90e75be1a626d1d0d62cba29440e25ad2c713cb295018a945"
-BASELINE_SHA256 = "5e15aff189c6e7860079fb404c2b84a6b8c4e37c4967be37b9e13b15886b54ee"
+BASELINE_SHA256 = "6f79a334b2548e20823de477860a848ec75ac8901dcde834364a538f0ea083c5"
 
 CONTEXT_ABI = "cigar.context.v1"
 PROTOCOL_MIN = "1.0"
