@@ -340,7 +340,9 @@ def assess(
     checks, package = _metadata_checks(entries, profile)
     asset = _require_dict(profile["canonical_release_asset"], "canonical asset")
     sha256 = hashlib.sha256(archive_payload).hexdigest()
-    sha1 = hashlib.sha1(archive_payload).hexdigest()
+    # npm exposes the registry's legacy SHA-1 shasum alongside SRI. It is compared
+    # for metadata parity only; SHA-256 and SRI remain the security boundaries.
+    sha1 = hashlib.sha1(archive_payload, usedforsecurity=False).hexdigest()  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
     semantic_tree = _semantic_tree(entries)
     canonical_checks = {
         "filename": archive_path.name == asset.get("filename"),
