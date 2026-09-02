@@ -98,7 +98,9 @@ reported no advisories and zero info, low, moderate, high, or critical vulnerabi
 
 The final tarball was installed as the only SDK source into an owner-only clean consumer. Install
 scripts were disabled, the installed SDK was required to be a materialized directory rather than
-a workspace link, and registry access was disabled after installation.
+a workspace link, and registry access was disabled after installation. CI snapshots the pinned
+TypeScript package and locked native platform package into an owner-controlled temporary graph so
+the strict tool validator does not accept package-store hard links.
 
 | Consumer | Result |
 | --- | --- |

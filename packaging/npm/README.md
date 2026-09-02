@@ -67,7 +67,7 @@ node scripts/release/qualify_npm_consumers.mjs \
   --archive /absolute/owner-only/output/hol-org-cigar-0.9.4.tgz \
   --expected-version 0.9.4 \
   --npm-cli /absolute/path/to/npm-11.6.0/bin/npm-cli.js \
-  --tsc /absolute/repository/sdk/typescript/node_modules/typescript/bin/tsc
+  --tsc /absolute/owner-controlled/typescript-7.0.2/bin/tsc
 
 # Run this command with the separate Node 24.19.0/npm 12.0.2 staging toolchain.
 npm stage publish --dry-run --json --ignore-scripts --access public --tag alpha \
@@ -87,6 +87,11 @@ complete inventory to the candidate hashes. It also binds every npm stage-dry-ru
 integrity, size, file, and mode field back to that inventory. `--require-publishable`
 intentionally fails until the reviewed profile changes to
 `{"publishable":true,"status":"approved","blockers":[]}`.
+
+The consumer qualifier rejects multi-linked tool inputs. Because pnpm may hard-link TypeScript
+from its content-addressed store, CI copies the pinned TypeScript package and its locked native
+platform package into an owner-controlled temporary dependency graph and requires every copied
+file, including `bin/tsc`, to have exactly one link before use.
 
 ## First-publication bootstrap for 0.9.4
 

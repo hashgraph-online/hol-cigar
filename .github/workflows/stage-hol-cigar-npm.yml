@@ -110,11 +110,20 @@ jobs:
             --require-canonical-bytes \
             --require-publishable \
             --report "${stage}/npm-sdk-assessment.json"
+          typescript_snapshot="${RUNNER_TEMP}/cigar-typescript-7.0.2"
+          test ! -e "${typescript_snapshot}"
+          mkdir -m 0700 "${typescript_snapshot}" "${typescript_snapshot}/node_modules"
+          typescript_package="$(dirname "$(dirname "$(realpath sdk/typescript/node_modules/typescript/bin/tsc)")")"
+          typescript_graph="$(dirname "${typescript_package}")"
+          cp -R -L "${typescript_graph}/." "${typescript_snapshot}/node_modules/"
+          chmod -R go-w "${typescript_snapshot}"
+          test "$(stat -c '%h' "${typescript_snapshot}/node_modules/typescript/bin/tsc")" = "1"
+          test -z "$(find "${typescript_snapshot}" -type f -links +1 -print -quit)"
           node scripts/release/qualify_npm_consumers.mjs \
             --archive "${stage}/${filename}" \
             --expected-version "${package_version}" \
             --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
-            --tsc "$(pwd -P)/sdk/typescript/node_modules/typescript/bin/tsc"
+            --tsc "${typescript_snapshot}/node_modules/typescript/bin/tsc"
           pushd "${stage}" >/dev/null
           sha256sum "${filename}" >SHA256SUMS
           popd >/dev/null
