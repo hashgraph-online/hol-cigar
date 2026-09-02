@@ -1,0 +1,72 @@
+{
+  "schema_version": "cigar.npm-release-profile.v1",
+  "package": {
+    "name": "@hol-org/cigar",
+    "requested_version": "0.9.4",
+    "context_abi": "cigar.context.v1",
+    "operation_count": 45,
+    "runtime_dependency": {
+      "name": "@bufbuild/protobuf",
+      "version": "2.12.1"
+    },
+    "supported_module_modes": [
+      "node-esm"
+    ],
+    "supported_transport_modes": [
+      "http"
+    ]
+  },
+  "source": {
+    "repository": "https://github.com/hashgraph-online/hol-cigar",
+    "repository_manifest_url": "git+https://github.com/hashgraph-online/hol-cigar.git",
+    "repository_directory": "sdk/typescript",
+    "tag": "v0.9.4",
+    "revision": "6e518ad95a018a80a04db295c0f91ec928a0ba0c",
+    "tree": "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b"
+  },
+  "canonical_release_asset": {
+    "filename": "hol-org-cigar-0.9.4.tgz",
+    "sha256": "73eb45b5a096639653350a2ab6436f75d3de32a1e3692d1808e8b2cfe32a77f8",
+    "sha1": "ac08dbcad3dfacc0fa2f9d88dbaf5b28e5ac4e53",
+    "bytes": 340971,
+    "file_count": 78,
+    "semantic_tree_sha256": "dd2c0bc2b48d04ba0187fe017071edad4ad9d1ad3f7cf0203cffe975e43c2baa"
+  },
+  "registry": {
+    "url": "https://registry.npmjs.org",
+    "access": "public",
+    "dist_tag": "alpha",
+    "package_observed_publicly_absent_at": "2026-08-31T15:14:38Z"
+  },
+  "workflow": {
+    "filename": "stage-hol-cigar-npm.yml",
+    "environment": "npm",
+    "runner": "ubuntu-24.04",
+    "qualification_node": "24.10.0",
+    "pack_npm": "11.6.0",
+    "stage_node": "24.19.0",
+    "stage_npm": "12.0.2",
+    "permissions": [
+      "contents:read",
+      "id-token:write"
+    ]
+  },
+  "release_decision": {
+    "publishable": false,
+    "status": "blocked",
+    "blockers": [
+      {
+        "id": "npm-packaging-change-not-yet-reviewed",
+        "resolution": "Merge a public PR containing the @hol-org/cigar identity, deterministic candidate hashes, and passing required checks before staging the first package."
+      },
+      {
+        "id": "first-publication-staged-approval-required",
+        "resolution": "After merge, stage the exact reviewed @hol-org/cigar@0.9.4 archive with public access and the alpha dist-tag, then require an authorized npm maintainer to inspect and approve it with 2FA."
+      },
+      {
+        "id": "trusted-publisher-post-bootstrap-required",
+        "resolution": "After 0.9.4 exists, bind hashgraph-online/hol-cigar, stage-hol-cigar-npm.yml, and the npm environment as a stage-only trusted publisher before 0.9.5-alpha.1."
+      }
+    ]
+  }
+}

@@ -1,0 +1,245 @@
+name: stage-hol-cigar-npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "stage @hol-org/cigar with alpha dist-tag"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: stage-hol-cigar-npm
+  cancel-in-progress: false
+
+jobs:
+  verify-and-stage:
+    name: verify tagged source and stage one npm tarball
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.10.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          cache: false
+          check-latest: false
+          go-version: "1.26.6"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14.6"
+          check-latest: false
+
+      - name: Require an exact tagged dispatch and explicit approval phrase
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          test "${CONFIRM}" = "stage @hol-org/cigar with alpha dist-tag"
+          [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          test "${GITHUB_REF_NAME}" = "v${package_version}"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 -c \
+            'import json; p=json.load(open("packaging/npm/release-profile.v1.json")); assert p["release_decision"] == {"publishable": True, "status": "approved", "blockers": []}'
+
+      - name: Require the matching GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_state="$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq '[.isDraft,.isPrerelease,.tagName] | @tsv')"
+          test "${release_state}" = $'false\ttrue\t'"${GITHUB_REF_NAME}"
+
+      - name: Install exact tools and frozen dependencies
+        run: |
+          corepack enable
+          corepack install --global pnpm@10.34.5
+          npm install --global --ignore-scripts npm@11.6.0
+          test "$(node --version)" = "v24.10.0"
+          test "$(pnpm --version)" = "10.34.5"
+          test "$(npm --version)" = "11.6.0"
+          test "$(go version | awk '{print $3}')" = "go1.26.6"
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test, pack twice, verify, and qualify consumers
+        run: |
+          umask 022
+          pnpm --dir sdk/typescript run generate:check
+          python3 tools/quality/operation_surface_parity.py --quiet
+          pnpm --dir sdk/typescript run typecheck
+          pnpm --dir sdk/typescript test
+          python3 -m unittest scripts/release/tests/test_verify_npm_sdk.py
+          first="${RUNNER_TEMP}/cigar-npm-publish-first"
+          second="${RUNNER_TEMP}/cigar-npm-publish-second"
+          stage="$(pwd -P)/npm-publish-stage"
+          test ! -e "${first}"
+          test ! -e "${second}"
+          test ! -e "${stage}"
+          mkdir -m 0700 "${first}" "${second}" "${stage}"
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${first}" ./sdk/typescript
+          pnpm --dir sdk/typescript run prepack
+          npm pack --ignore-scripts --pack-destination "${second}" ./sdk/typescript
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="hol-org-cigar-${package_version}.tgz"
+          cmp "${first}/${filename}" "${second}/${filename}"
+          install -m 0400 "${first}/${filename}" "${stage}/${filename}"
+          python3 scripts/release/verify_npm_sdk.py \
+            "${stage}/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable \
+            --report "${stage}/npm-sdk-assessment.json"
+          typescript_snapshot="${RUNNER_TEMP}/cigar-typescript-7.0.2"
+          test ! -e "${typescript_snapshot}"
+          mkdir -m 0700 "${typescript_snapshot}" "${typescript_snapshot}/node_modules"
+          typescript_package="$(dirname "$(dirname "$(realpath sdk/typescript/node_modules/typescript/bin/tsc)")")"
+          typescript_graph="$(dirname "${typescript_package}")"
+          cp -R -L "${typescript_graph}/." "${typescript_snapshot}/node_modules/"
+          chmod -R go-w "${typescript_snapshot}"
+          test "$(stat -c '%h' "${typescript_snapshot}/node_modules/typescript/bin/tsc")" = "1"
+          test -z "$(find "${typescript_snapshot}" -type f -links +1 -print -quit)"
+          node scripts/release/qualify_npm_consumers.mjs \
+            --archive "${stage}/${filename}" \
+            --expected-version "${package_version}" \
+            --npm-cli "$(npm root --global)/npm/bin/npm-cli.js" \
+            --tsc "${typescript_snapshot}/node_modules/typescript/bin/tsc"
+          pushd "${stage}" >/dev/null
+          sha256sum "${filename}" >SHA256SUMS
+          popd >/dev/null
+          chmod 0400 "${stage}/SHA256SUMS"
+          test "$(find "${stage}" -type f | wc -l | tr -d ' ')" = "3"
+
+      - name: Select the staging CLI runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Require an exact npm 12 stage dry-run
+        run: |
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "12.0.2"
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="hol-org-cigar-${package_version}.tgz"
+          npm stage publish \
+            --dry-run \
+            --json \
+            --ignore-scripts \
+            --access public \
+            --tag alpha \
+            "npm-publish-stage/${filename}" >npm-publish-stage/npm-stage-dry-run.json
+          python3 scripts/release/verify_npm_sdk.py \
+            "npm-publish-stage/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable \
+            --stage-dry-run npm-publish-stage/npm-stage-dry-run.json >/dev/null
+          chmod 0400 npm-publish-stage/npm-stage-dry-run.json
+          test "$(find npm-publish-stage -type f | wc -l | tr -d ' ')" = "4"
+
+      - name: Stage only the verified npm payload and receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hol-cigar-npm-stage-candidate
+          path: npm-publish-stage/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+
+  stage:
+    name: stage approved alpha through npm OIDC
+    needs: verify-and-stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@hol-org/cigar
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+          check-latest: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14.6"
+          check-latest: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hol-cigar-npm-stage-candidate
+          path: npm-publish-stage/
+
+      - name: Reverify staged identity and reject an occupied version
+        run: |
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(node --version)" = "v24.19.0"
+          test "$(npm --version)" = "12.0.2"
+          package_version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          filename="hol-org-cigar-${package_version}.tgz"
+          cd npm-publish-stage
+          sha256sum --check --strict SHA256SUMS
+          cd ..
+          python3 scripts/release/verify_npm_sdk.py \
+            "npm-publish-stage/${filename}" \
+            --require-canonical-bytes \
+            --require-publishable >/dev/null
+          registry_result="${RUNNER_TEMP}/npm-view-result"
+          if npm view "@hol-org/cigar@${package_version}" version --json >"${registry_result}" 2>&1; then
+            echo "@hol-org/cigar@${package_version} already exists; refusing duplicate staging" >&2
+            exit 1
+          fi
+          grep -q 'E404' "${registry_result}"
+          printf 'CIGAR_NPM_VERSION=%s\n' "${package_version}" >>"${GITHUB_ENV}"
+          printf 'CIGAR_NPM_ARCHIVE=%s\n' "$(pwd -P)/npm-publish-stage/${filename}" >>"${GITHUB_ENV}"
+
+      - name: Stage with protected npm Trusted Publishing and automatic provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npm stage publish --ignore-scripts --access public --tag alpha "${CIGAR_NPM_ARCHIVE}"
+
+      - name: Record the required human approval step
+        run: |
+          {
+            echo '### npm staged package awaiting proof-of-presence approval'
+            echo
+            echo "Package: \`@hol-org/cigar@${CIGAR_NPM_VERSION}\`"
+            echo "Channel: \`alpha\`"
+            echo
+            echo 'An authorized npm maintainer must inspect and approve this candidate in npmjs.com → Staged Packages with 2FA.'
+            echo 'Do not approve if the displayed name, version, public visibility, or alpha tag differs.'
+          } >>"${GITHUB_STEP_SUMMARY}"

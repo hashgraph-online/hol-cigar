@@ -20,7 +20,7 @@ try {
   assert.equal(packageJson.scripts?.postinstall, undefined);
   execFileSync("npm", ["init", "-y"], { cwd: temporary, stdio: "ignore" });
   execFileSync("npm", ["install", archivePath], { cwd: temporary, stdio: "inherit" });
-  const installed = join(temporary, "node_modules", "@cigar", "sdk");
+  const installed = join(temporary, "node_modules", "@hol-org", "cigar");
   assert.equal(statSync(installed).isDirectory(), true);
   assert.ok(readFileSync(join(installed, "LICENSE"), "utf8").includes("Apache License"));
   assert.ok(readFileSync(join(installed, "NOTICE"), "utf8").includes("CIGAR"));
@@ -40,7 +40,7 @@ try {
   assert.equal(release.version, packageJson.version);
   assert.equal(release.context_abi, "cigar.context.v1");
   execFileSync("node", ["--input-type=module", "-e", [
-    "import {CigarClient,CONTEXT_ABI,bundleId,verifyBundle} from '@cigar/sdk';",
+    "import {CigarClient,CONTEXT_ABI,bundleId,verifyBundle} from '@hol-org/cigar';",
     "if(CONTEXT_ABI!=='cigar.context.v1') throw new Error('installed Context ABI differs');",
     "new CigarClient({baseUrl:'http://localhost',allowInsecureLoopback:true});",
     "const expected='1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84';",

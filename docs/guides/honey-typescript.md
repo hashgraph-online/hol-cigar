@@ -1,7 +1,8 @@
 # Honey TypeScript SDK
 
-Honey distributes `cigar-sdk-0.9.3.tgz` as a direct GitHub attachment. It is an ESM package
-and is not published to the public npm registry.
+The historical Honey GitHub TypeScript asset identifies the unpublished `@cigar/sdk` package.
+The separately qualified npm candidate is `@hol-org/cigar@0.9.4`. Until its staged publication is
+approved, install only the exact reviewed local `hol-org-cigar-0.9.4.tgz` candidate.
 
 ## Offline clean-project install
 
@@ -13,8 +14,8 @@ resolution disabled. Use the exact Node and package-manager cohort recorded by t
 mkdir honey-typescript-client
 cd honey-typescript-client
 pnpm init
-pnpm add --offline ../cigar-sdk-0.9.3.tgz
-node -e 'import("@cigar/sdk").then(m => console.log(m.PRODUCT_VERSION))'
+pnpm add --offline ../hol-org-cigar-0.9.4.tgz
+node -e 'import("@hol-org/cigar").then(m => console.log(m.PRODUCT_VERSION))'
 ```
 
 ## Typed client
@@ -24,7 +25,7 @@ pagination, and structured errors. A custom `fetch` is trusted only when the cal
 in; the built-in transport refuses insecure non-loopback endpoints.
 
 ```typescript
-import { CigarClient, bundleId, verifyBundle } from "@cigar/sdk";
+import { CigarClient, bundleId, verifyBundle } from "@hol-org/cigar";
 
 const client = new CigarClient({
   baseUrl: "http://127.0.0.1:8765",

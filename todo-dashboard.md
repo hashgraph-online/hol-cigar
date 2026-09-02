@@ -278,7 +278,7 @@ Output: `schemas/dashboard/*.schema.json`, `crates/cigar-dashboard/src/model.rs`
   | `GET /api/v1/evidence/{evidence_id}` | Sanitized receipt only; never arbitrary file serving |
 
 - [ ] Require strict JSON, unique keys, exact media types, maximum depth/node/string/item sizes, canonical run IDs, cursor MACs, and no unknown fields.
-- [ ] Generate TypeScript API models from the schemas. Prohibit handwritten frontend copies and prohibit importing Node-only `@cigar/sdk` transport code into the browser bundle.
+- [ ] Generate TypeScript API models from the schemas. Prohibit handwritten frontend copies and prohibit importing Node-only `@hol-org/cigar` transport code into the browser bundle.
 - [ ] Add schema fixtures for minimal, maximal, unknown-field, duplicate-key, boundary, overflow, and hostile Unicode cases.
 
 ### DASH-003 — Scaffold the optional packages and build graph

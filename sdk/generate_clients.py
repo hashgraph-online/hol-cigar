@@ -1068,7 +1068,7 @@ def generate_manifest(items: list[dict[str, Any]]) -> None:
             "typescript": {
                 **common,
                 "transport": ["http"],
-                "module": "@cigar/sdk",
+                "module": "@hol-org/cigar",
                 "features": [
                     "deadlines",
                     "pagination",
@@ -1290,7 +1290,7 @@ def assert_release_contracts() -> None:
 
     releases = {
         "rust": (SDK / "rust/release.json", "cigar-sdk"),
-        "typescript": (SDK / "typescript/release.json", "@cigar/sdk"),
+        "typescript": (SDK / "typescript/release.json", "@hol-org/cigar"),
         "python": (SDK / "python/src/cigar_sdk/release.json", "hol-cigar"),
         "go": (SDK / "go/release.json", "github.com/CIGAR/cigar/sdk/go"),
     }

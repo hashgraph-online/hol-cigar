@@ -89,7 +89,7 @@
         "engines": {
           "node": ">=24.10.0 <25"
         },
-        "name": "@cigar/sdk",
+        "name": "@hol-org/cigar",
         "packageManager": "pnpm@10.34.5"
       }
     },

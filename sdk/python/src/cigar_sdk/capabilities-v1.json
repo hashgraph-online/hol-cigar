@@ -636,7 +636,7 @@
       "transport": [
         "http"
       ],
-      "module": "@cigar/sdk",
+      "module": "@hol-org/cigar",
       "features": [
         "deadlines",
         "pagination",

@@ -1,15 +1,21 @@
 {
-  "name": "@cigar/sdk",
+  "name": "@hol-org/cigar",
   "version": "0.9.4",
   "description": "CIGAR v1 TypeScript SDK",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CIGAR/cigar.git",
+    "url": "git+https://github.com/hashgraph-online/hol-cigar.git",
     "directory": "sdk/typescript"
   },
+  "homepage": "https://github.com/hashgraph-online/hol-cigar#readme",
+  "bugs": {
+    "url": "https://github.com/hashgraph-online/hol-cigar/issues"
+  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "tag": "alpha"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",

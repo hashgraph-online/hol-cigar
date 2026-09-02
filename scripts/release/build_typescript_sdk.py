@@ -690,9 +690,25 @@ def _load_configuration(root: Path) -> BuildConfiguration:
     lifecycle_scripts = ("preinstall", "install", "postinstall", "prepare")
     if (
         not isinstance(package, dict)
-        or package.get("name") != "@cigar/sdk"
+        or package.get("name") != "@hol-org/cigar"
         or package.get("version") != version
         or package.get("license") != "Apache-2.0"
+        or package.get("repository")
+        != {
+            "type": "git",
+            "url": "git+https://github.com/hashgraph-online/hol-cigar.git",
+            "directory": "sdk/typescript",
+        }
+        or package.get("homepage")
+        != "https://github.com/hashgraph-online/hol-cigar#readme"
+        or package.get("bugs")
+        != {"url": "https://github.com/hashgraph-online/hol-cigar/issues"}
+        or package.get("publishConfig")
+        != {
+            "access": "public",
+            "registry": "https://registry.npmjs.org/",
+            "tag": "alpha",
+        }
         or package.get("type") != "module"
         or package.get("packageManager") != "pnpm@10.34.5"
         or package.get("engines") != {"node": ">=24.10.0 <25"}
@@ -710,7 +726,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         raise ReleaseError("TypeScript SDK package authority is stale or unsafe")
     if release != {
         "schema_version": "cigar.sdk-release.v1",
-        "name": "@cigar/sdk",
+        "name": "@hol-org/cigar",
         "version": version,
         "context_abi": context_abi,
     }:
@@ -1162,7 +1178,7 @@ def _qualify_clean_install(
         label="offline clean TypeScript SDK install",
     )
     installed_modules = (consumer / "node_modules").resolve(strict=True)
-    installed_sdk = consumer / "node_modules/@cigar/sdk"
+    installed_sdk = consumer / "node_modules/@hol-org/cigar"
     installed_dependency = consumer / "node_modules/@bufbuild/protobuf"
     for path, label in (
         (installed_sdk, "installed TypeScript SDK"),
@@ -1216,7 +1232,7 @@ def _qualify_clean_install(
             os.fspath(node),
             "--input-type=module",
             "--eval",
-            "import {CigarClient,CONTEXT_ABI} from '@cigar/sdk';"
+            "import {CigarClient,CONTEXT_ABI} from '@hol-org/cigar';"
             "if(CONTEXT_ABI!=='cigar.context.v1')throw new Error('ABI drift');"
             "new CigarClient({baseUrl:'http://localhost',allowInsecureLoopback:true});",
         ],
@@ -1230,7 +1246,7 @@ def _qualify_clean_install(
         "offline": True,
         "scripts": False,
         "dependency_mode": "local-reviewed-package-archive",
-        "package": f"@cigar/sdk@{configuration.version}",
+        "package": f"@hol-org/cigar@{configuration.version}",
         "package_payload_tree_sha256": _payload_tree(entries),
         "dependency": {
             "name": dependency.name,
@@ -1584,7 +1600,7 @@ def _validate_built_package(
         or clean_install.get("offline") is not True
         or clean_install.get("scripts") is not False
         or clean_install.get("dependency_mode") != "local-reviewed-package-archive"
-        or clean_install.get("package") != f"@cigar/sdk@{configuration.version}"
+        or clean_install.get("package") != f"@hol-org/cigar@{configuration.version}"
         or clean_install.get("package_payload_tree_sha256")
         != _payload_tree(package.entries)
         or not isinstance(dependency, dict)

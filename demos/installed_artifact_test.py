@@ -359,7 +359,7 @@ def qualify_typescript(
         "version": "1.0.0",
         "private": True,
         "type": "module",
-        "dependencies": {"@cigar/sdk": f"file:{archive.resolve()}"},
+        "dependencies": {"@hol-org/cigar": f"file:{archive.resolve()}"},
     }
     (project / "package.json").write_bytes(canonical(package) + b"\n")
     run(
@@ -378,8 +378,8 @@ def qualify_typescript(
     quickstart = (
         project
         / "node_modules"
-        / "@cigar"
-        / "sdk"
+        / "@hol-org"
+        / "cigar"
         / "dist"
         / "examples"
         / "quickstart.js"
