@@ -13,6 +13,7 @@ members = [
   "crates/cigar-code-intel",
   "crates/cigar-retrieval",
   "crates/cigar-compiler",
+  "crates/cigar-context",
   "crates/cigar-space",
   "crates/cigar-effects",
   "crates/cigar-replay",

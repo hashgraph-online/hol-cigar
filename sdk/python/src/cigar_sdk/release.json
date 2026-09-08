@@ -1,6 +1,9 @@
 {
   "schema_version": "cigar.sdk-release.v1",
   "name": "hol-cigar",
-  "version": "0.9.4",
-  "context_abi": "cigar.context.v1"
+  "version": "0.10.0rc1",
+  "context_abi": "cigar.context.v1",
+  "channel": "rc",
+  "local_context_core_version": "0.10.0",
+  "local_context_protocol": "cigar.context-worker.v1"
 }

@@ -1,7 +1,7 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.9.4",
-  "description": "CIGAR v1 TypeScript SDK",
+  "version": "0.10.0-rc.1",
+  "description": "CIGAR local Rust context graphs and compatible v1 TypeScript client (release candidate)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "alpha"
+    "tag": "rc"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",
@@ -26,12 +26,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./context": {
+      "types": "./dist/context-api.d.ts",
+      "import": "./dist/context-api.js"
     }
   },
   "types": "./dist/index.d.ts",
   "files": [
     "dist/",
     "fixtures/",
+    "native/",
     "README.md",
     "LICENSE",
     "NOTICE"

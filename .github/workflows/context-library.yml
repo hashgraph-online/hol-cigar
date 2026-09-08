@@ -1,0 +1,46 @@
+name: context-library-development
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  context:
+    name: standalone context / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
+      - name: Check source quality, CLI, optional BPE, and core-only consumer
+        run: python scripts/dev.py context
+      - name: Verify the standalone package
+        run: cargo package --locked -p cigar-context --features bpe
+      - name: Build public API documentation with warnings denied
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --locked -p cigar-context --all-features --no-deps
+
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
+      - run: python scripts/dev.py compiler
+
+# Source diagnostics only. The separate Honey authority-backed qualification and publication
+# workflows remain intact; passing these jobs does not produce a release receipt.

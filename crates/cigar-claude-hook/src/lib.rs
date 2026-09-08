@@ -1302,7 +1302,7 @@ async fn call_cli_backend(request: BackendRequest) -> Result<BackendReply, HookE
             let binary =
                 std::env::var_os("CIGAR_CLI_BINARY").unwrap_or_else(|| OsString::from("cigar"));
             create_and_accept_recipient_handoff(
-                &binary,
+                CliProgram::direct(&binary),
                 &session_id,
                 &recipient,
                 &base_bundle.ok_or(HookError::BackendUnavailable)?,
@@ -1365,8 +1365,23 @@ impl HandoffRecipient {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CliProgram<'a> {
+    binary: &'a OsStr,
+    prefix: &'a [&'a OsStr],
+}
+
+impl<'a> CliProgram<'a> {
+    fn direct(binary: &'a OsStr) -> Self {
+        Self {
+            binary,
+            prefix: &[],
+        }
+    }
+}
+
 async fn create_and_accept_recipient_handoff(
-    binary: &OsStr,
+    program: CliProgram<'_>,
     session_id: &str,
     recipient_label: &str,
     parent_bundle: &str,
@@ -1406,8 +1421,8 @@ async fn create_and_accept_recipient_handoff(
         "ttl_seconds": HANDOFF_TTL_SECONDS,
         "reusable": false
     });
-    let created = invoke_cli_with_binary_deadline(
-        binary,
+    let created = invoke_cli_program_deadline(
+        program,
         &["handoff", "create"],
         Some(&create_request),
         &["--yes", "--output", "json", "--deadline", "100ms"],
@@ -1447,8 +1462,8 @@ async fn create_and_accept_recipient_handoff(
         "handoff_id": handoff_id,
         "target_plan_id": configuration.target_plan_id
     });
-    let accepted = invoke_cli_with_binary_deadline(
-        binary,
+    let accepted = invoke_cli_program_deadline(
+        program,
         &["handoff", "accept", &handoff_id],
         Some(&accept_request),
         &[
@@ -1656,6 +1671,23 @@ async fn invoke_cli_with_binary_deadline(
     trailing: &[&str],
     deadline: Duration,
 ) -> Result<Value, HookError> {
+    invoke_cli_program_deadline(
+        CliProgram::direct(binary),
+        command,
+        request,
+        trailing,
+        deadline,
+    )
+    .await
+}
+
+async fn invoke_cli_program_deadline(
+    program: CliProgram<'_>,
+    command: &[&str],
+    request: Option<&Value>,
+    trailing: &[&str],
+    deadline: Duration,
+) -> Result<Value, HookError> {
     let temporary = if let Some(request) = request {
         let root = std::env::temp_dir();
         let path = root.join(format!(
@@ -1668,7 +1700,8 @@ async fn invoke_cli_with_binary_deadline(
     } else {
         None
     };
-    let mut child = tokio::process::Command::new(binary);
+    let mut child = tokio::process::Command::new(program.binary);
+    child.args(program.prefix);
     child.args(command);
     if let Some(path) = &temporary {
         child.arg("--input").arg(path);
@@ -1685,22 +1718,29 @@ async fn invoke_cli_with_binary_deadline(
             .map_err(|_error| HookError::BackendUnavailable)?;
         let stdout = child.stdout.take().ok_or(HookError::BackendUnavailable)?;
         let stderr = child.stderr.take().ok_or(HookError::BackendUnavailable)?;
-        let stdout_task = tokio::spawn(read_bounded_async(stdout));
-        let stderr_task = tokio::spawn(read_bounded_async(stderr));
-        let status = match tokio::time::timeout(deadline, child.wait()).await {
-            Ok(status) => status.map_err(|_error| HookError::BackendUnavailable)?,
-            Err(_elapsed) => {
+        // Bound the whole exchange, not just the immediate child's exit. A descendant may keep
+        // inherited output pipes open after that exit. Borrowed read futures are cancelled here
+        // on timeout/error instead of leaving detached reader tasks alive indefinitely.
+        let exchange = async {
+            tokio::try_join!(
+                async {
+                    child
+                        .wait()
+                        .await
+                        .map_err(|_| HookError::BackendUnavailable)
+                },
+                read_bounded_async(stdout),
+                read_bounded_async(stderr),
+            )
+        };
+        let (status, stdout, _stderr) = match tokio::time::timeout(deadline, exchange).await {
+            Ok(Ok(values)) => values,
+            Ok(Err(_)) | Err(_) => {
                 let _ignored = child.kill().await;
                 let _ignored = child.wait().await;
                 return Err(HookError::BackendUnavailable);
             }
         };
-        let stdout = stdout_task
-            .await
-            .map_err(|_join| HookError::BackendUnavailable)??;
-        let _stderr = stderr_task
-            .await
-            .map_err(|_join| HookError::BackendUnavailable)??;
         if !status.success() {
             return Err(HookError::BackendUnavailable);
         }
@@ -2161,18 +2201,20 @@ for argument in "$@"; do
   previous=$argument
 done
 test -n "$request"
+request_json=
+IFS= read -r request_json < "$request" || test -n "$request_json"
 case "$1:$2" in
   handoff:create)
-    grep -F '"type":"role"' "$request" >/dev/null
-    grep -F '"value":"researcher"' "$request" >/dev/null
-    grep -F '"bundle_id":"{parent}"' "$request" >/dev/null
+    case "$request_json" in *'"type":"role"'*) ;; *) exit 1 ;; esac
+    case "$request_json" in *'"value":"researcher"'*) ;; *) exit 1 ;; esac
+    case "$request_json" in *'"bundle_id":"{parent}"'*) ;; *) exit 1 ;; esac
     printf '%s\n' create >> "{}"
     printf '%s\n' '{}'
     ;;
   handoff:accept)
     test "$3" = "{handoff_id}"
-    grep -F '"handoff_id":"{handoff_id}"' "$request" >/dev/null
-    grep -F '"target_plan_id":"{target_plan_id}"' "$request" >/dev/null
+    case "$request_json" in *'"handoff_id":"{handoff_id}"'*) ;; *) exit 1 ;; esac
+    case "$request_json" in *'"target_plan_id":"{target_plan_id}"'*) ;; *) exit 1 ;; esac
     printf '%s\n' accept >> "{}"
     printf '%s\n' '{}'
     ;;
@@ -2193,7 +2235,12 @@ esac
             audience: "local-runtime-v1".to_owned(),
         };
         let reply = create_and_accept_recipient_handoff(
-            binary.as_os_str(),
+            // Launch the existing system interpreter, not a freshly-created unsigned executable.
+            // The same fixture, requests, two real child processes and deadline are exercised.
+            CliProgram {
+                binary: OsStr::new("/bin/sh"),
+                prefix: &[binary.as_os_str()],
+            },
             "parent-session",
             "Explore:child-agent",
             &parent,
@@ -2212,6 +2259,62 @@ esac
         );
         assert!(!reply.content.contains(&parent));
         assert_eq!(std::fs::read_to_string(log)?, "create\naccept\n");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn backend_deadline_includes_inherited_output_pipes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // The shell exits immediately; its short-lived descendant still owns both output pipes.
+        let result = tokio::time::timeout(
+            Duration::from_millis(800),
+            invoke_cli_with_binary_deadline(
+                OsStr::new("/bin/sh"),
+                &["-c", "sleep 2 & printf '%s' '{\"ok\":true}'"],
+                None,
+                &[],
+                Duration::from_millis(100),
+            ),
+        )
+        .await?;
+        assert_eq!(result, Err(HookError::BackendUnavailable));
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn backend_rejects_oversized_and_malformed_output()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for script in [
+            "printf '%s' '{\"ok\":true,\"ok\":true}'",
+            "printf '%s' '{\"ok\":true}'; exit 1",
+            "printf '%s' '{\"ok\":false}'",
+            "i=0; while [ \"$i\" -lt 8193 ]; do printf '12345678'; i=$((i+1)); done",
+        ] {
+            assert_eq!(
+                invoke_cli_with_binary_deadline(
+                    OsStr::new("/bin/sh"),
+                    &["-c", script],
+                    None,
+                    &[],
+                    Duration::from_secs(2)
+                )
+                .await,
+                Err(HookError::BackendUnavailable)
+            );
+        }
+        assert_eq!(
+            invoke_cli_with_binary_deadline(
+                OsStr::new("/bin/sh"),
+                &["-c", "printf '%s' '{\"ok\":true}'"],
+                None,
+                &[],
+                Duration::from_secs(2)
+            )
+            .await?,
+            json!({"ok":true})
+        );
         Ok(())
     }
 
