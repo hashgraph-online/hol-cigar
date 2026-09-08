@@ -1,0 +1,1410 @@
+{
+  "schema": "cigar.context-sdk-rc.v1",
+  "python": "0.10.0rc1",
+  "npm": "0.10.0-rc.1",
+  "published": false,
+  "source_binding": {
+    "schema": "cigar.context-sdk-source-binding.v1",
+    "commit": "6019e9e2bc87d44609d839b2e6a30daddc8e16cc",
+    "clean": true,
+    "source_date_epoch": 1788843823,
+    "files": {
+      ".github/workflows/context-sdk-rc.yml": "3b9cf1d95323c20a5dc5adef785c95ce572ed113973efb01822de1212f16e5be",
+      ".github/workflows/fast-ci.yml": "00e12db221c4cc17ccb1e2ae61fed02b5d3904363eee9b588320ec31c5d19df7",
+      ".github/workflows/npm-sdk-readiness.yml": "d279dedee4a390ceec0ad50fde799469b2840bfbcf95736656dd0fccdf90f370",
+      "Cargo.lock": "4383f2331a0315e61a89de34fd4813e5b8e30335770f0c6d190419b1a66887af",
+      "Cargo.toml": "de14e31a323ec35a1e2581986a7bcf0e5ba9d6cf27bb8fce720c332112726259",
+      "crates/cigar-context/CHANGELOG.md": "3bb657d667f025c3431adcde5090053a208c9f1f5560fec7abf33493666ced2a",
+      "crates/cigar-context/Cargo.toml": "119cd43d9f918d9bb3f9ef8eeea9eb9708dca4da915e286b9764a58467a10ef4",
+      "crates/cigar-context/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+      "crates/cigar-context/README.md": "89265157c974bfd1cb87af4cd58ab0db83717df14cd148efb3483fd1ee908ae0",
+      "crates/cigar-context/examples/compare.rs": "b194eeebfb4b560546f767ac7012d109de35dc3f267820649f2608aebdea811a",
+      "crates/cigar-context/examples/source_compare.rs": "27acbd8d1a97dbe9403145af49b5e033e128438abd8ace829327ebe959c9c36d",
+      "crates/cigar-context/examples/support/mod.rs": "1b8aecd618b9079622094bb8592c33b1f45dbed521154f1ddd10dd830ad736b8",
+      "crates/cigar-context/fixtures/quality.json": "d77c31034a9d8d79e00cd321eea5a3f2f0ea54f4d90c58e7cbbc6bfabb837319",
+      "crates/cigar-context/src/graph.rs": "9e5675a318199171e71e772df3b774e2c9897b6b7fd739c3e54744dbcff2672f",
+      "crates/cigar-context/src/lib.rs": "51af48424de62e3770b173ea24ef0985f51645e0f731b00e064c4ae00db0a6ae",
+      "crates/cigar-context/src/main.rs": "f69944c2ce16637215ddf24dd72b57143708747d72e662cee5cae71abe399271",
+      "crates/cigar-context/src/select.rs": "69116bd6021e139e6f02d35b1c2ce36ad7aa99bcecc917dfa99b63199280b356",
+      "crates/cigar-context/src/snapshot.rs": "b7ba03295eed1238237fcd1ad4dc2a5c72ec71e59baa58bdf64bdc4b21da06d0",
+      "crates/cigar-context/src/tokenizer.rs": "2d9ffab532e4bba233756390982fb38b309150589b6e0ad711b7c023aa01c228",
+      "crates/cigar-context/src/worker.rs": "7b0de9b5e698c75acbdcf0f1d36eff54a8da9b287f5fba50006f5ae5c8f92db6",
+      "crates/cigar-context/tests/cli.rs": "6d43580bbcf5d82e660433439943157efc49b1a9035046b7ed766b65ae9aa6f2",
+      "crates/cigar-context/tests/context.rs": "c68b1a270fe58feae1668032b357c9e7e6166d1c0e964d8e992bcced5426ccd1",
+      "crates/cigar-context/tests/incremental.rs": "18ea12413c7cea4d71a6713845d771fc1093e61065b1b146b0c62115f07d2d47",
+      "pnpm-lock.yaml": "e042e84f7a3943fdb51ae6621ac44e812da176ee072911b071de3a74df9aef5a",
+      "scripts/release/context-sdk-consumer.mjs": "25bf714bf3569b9fc331ca5fb3060e737376d4c568842ac99ae02ba0bb664881",
+      "scripts/release/context_sdk_consumer.py": "102dd3cb4fee4f3e590246f4b8a47d6564eb2f49de10987dddd3f921a73782d2",
+      "scripts/release/context_sdk_inputs.py": "9ed51462d293ee7a594dd7d760b48e510329c63e3e3eedba28a3a3e46a021e44",
+      "scripts/release/evidence_workspace.py": "efe6c3dcc0e396f8fccfd9b09d9f45bf10974894b25c7df53fcccadd53fa65da",
+      "scripts/release/finalize_context_sdk_rc.py": "e2ee4e43b31e219ab51753cb1c9fe98f6c9ccb9c4d18eec719c97c0ed77252d1",
+      "scripts/release/prepare_context_sdk_rc.py": "cf59e905cd14b889a7a2e2728088a515a53a18eed4cce7b65319950d11bae1fb",
+      "scripts/release/qualify_context_sdk_rc.py": "25817cbd5f226e3925f64c5209af91799cd604cba675da8f636fa4f87c6c9cd3",
+      "scripts/release/release_lib.py": "f477110e70ea6a073938112ae6830c93e6108898376f46aa33eaca2e401a1631",
+      "sdk/capabilities-v1.json": "539b48916798fe1566aec766ebf7259ebbee902f1328e7c96c16b2048be9a890",
+      "sdk/fixtures/stalled-worker.rs": "cd0ca70a4c6f4536e37b1c0078e17e754a6803f90ad39a0ee026436230cb5615",
+      "sdk/generate_clients.py": "eaa04421c2645cf892bb57849fb0682aea685b9f3dfddc46444d0de74ab7198d",
+      "sdk/local-context-release.v1.json": "f7061f1e030de85d59eeafa3fac19d7f87e754280ae2926e2d6dfdef50ae8562",
+      "sdk/python/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+      "sdk/python/NOTICE": "edac256f71273d1a4b8a831599bcac20ac18591003143ed71662a784d63d5b1b",
+      "sdk/python/README.md": "90a2dc579b10f22b438cde55e9b654d8a46badf4c9726358cb4f12c9f92b7502",
+      "sdk/python/examples/quickstart.py": "30cdab4bd93cc4aab7056a21c382e3e16607d6fbb882e0220a5a7babe61ed76f",
+      "sdk/python/hatch_build.py": "0d5012a53f236af15728589b30505478ebab64534a35875f2c1546de73eaf579",
+      "sdk/python/pyproject.toml": "5c325add3148e90935090b8729b5e2905fbe4706d0ee43484d4e6a012013ac06",
+      "sdk/python/src/cigar_sdk/__init__.py": "066f5f1150ee1e09bd5dcaffc10f6bea6a77bd82d4a42008a0e397015149b5e6",
+      "sdk/python/src/cigar_sdk/capabilities-v1.json": "539b48916798fe1566aec766ebf7259ebbee902f1328e7c96c16b2048be9a890",
+      "sdk/python/src/cigar_sdk/client.py": "94f3b7b7cb656e564163f64921a381886b2906a93cb324e8afb092eb8fc5ddb4",
+      "sdk/python/src/cigar_sdk/context.py": "0b4cfaa774e20b3b1b313a6f5b894a261ba5244999cbf28cefbedfa7372bc0a1",
+      "sdk/python/src/cigar_sdk/context_types.py": "52aced496355ddc7619cd0e81147f5306df583d133411c703a9b121ef3fdff7f",
+      "sdk/python/src/cigar_sdk/digest.py": "d69c4d142c0735f36216a82ff497a17e9d990c4d08f870a26011a9b59904bcc7",
+      "sdk/python/src/cigar_sdk/errors.py": "b0fb5cde69632bd33b265922987e740be8ed0a8dfbf3901a3ba82e1a5e6ab70e",
+      "sdk/python/src/cigar_sdk/examples/__init__.py": "8748c23fdb6103ab5d32ead3503af9f7d38b357b4dc34746fa8bd76e7c212d6d",
+      "sdk/python/src/cigar_sdk/examples/agent_b_handoff.py": "46642bb11dc8594fd72099edc6cc3f683ae3ccc5d7da923f4c06089278caa1d2",
+      "sdk/python/src/cigar_sdk/fixtures/__init__.py": "b523ba81f79e9fc598d8c91cf39b1b518efbdc7630b27957e153fe5bc92c141b",
+      "sdk/python/src/cigar_sdk/fixtures/problem-index-unavailable-v1.json": "d5849e21db8400c75dc2f89ae0de96d5e55f0f9898b3312b0b24bc85dabf8e18",
+      "sdk/python/src/cigar_sdk/fixtures/semantic-bundle-v1.json": "263f8dd46c4e7946e185d825e4fc485ba76b68c5ba2e15530ba42c11dca02cd2",
+      "sdk/python/src/cigar_sdk/generated/__init__.py": "21df01f66914b0d9f76658e1824c37a0ac16c6d40b0016a7cf3927ee548fb6b3",
+      "sdk/python/src/cigar_sdk/generated/cigar_service_pb2.py": "cc18d672426de8bf12cae7cbf981e0bb5502e637438e8c1537a96304e8389f44",
+      "sdk/python/src/cigar_sdk/generated/context_abi_pb2.py": "e01ad783ee12bcd1c3a34f33a49410b38a85cc01df36a32ff59b3786ee33eabe",
+      "sdk/python/src/cigar_sdk/generated/errors.py": "d65597cd0933e55083c67a79655145fe4dc68bd1afe2dce708800c09e933676e",
+      "sdk/python/src/cigar_sdk/generated/generated/__init__.py": "11c5cee3ea3cfd2fc08b5b9a6a6c556868dba3e9b16da86a27d3e13f8a8858ea",
+      "sdk/python/src/cigar_sdk/generated/generated/error_codes_pb2.py": "08b8af8ee426f9fa4399915811ab921ba2e17540b9b556c0ce689a040f411753",
+      "sdk/python/src/cigar_sdk/generated/models.py": "ee0dff7e3030e74303d38c6e1f78833dc6fdcb432a575c64b447f9adb00fec88",
+      "sdk/python/src/cigar_sdk/generated/operations.py": "433e11403b690848c9ad9c14f5a845f51e875fe3444164aed424032997518234",
+      "sdk/python/src/cigar_sdk/idempotency.py": "cb4aa7fe9b0c248511ccf6bf7e1c76dd3e5838d022cc634a891c5113c8f9ffef",
+      "sdk/python/src/cigar_sdk/models_runtime.py": "5573d62b73c59a476e9fad3990ab379a1b83cca1fc5198f4b0b6e3761bd7d219",
+      "sdk/python/src/cigar_sdk/py.typed": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sdk/python/src/cigar_sdk/qualify_bundle.py": "feecf3071de18904e995b579187ab01e402f5a4249cc7307ad183bfd1e29a407",
+      "sdk/python/src/cigar_sdk/release.json": "688704b5c3ac33f50518d8f0f4d6036a529f0d232d14146bf4bb108544d05d41",
+      "sdk/python/src/cigar_sdk/transport.py": "9c26e518d5c469b7a1c5c52e662f1233a72a647a2a1f1a509a2ea34030815431",
+      "sdk/python/src/cigar_sdk/types.py": "a53ab4696c99a28cbf0d1a2291bd21428fc839353ce080c2d8c72b8d7ee4521d",
+      "sdk/python/src/cigar_sdk/verify_replay.py": "9c3e1bfb3463ee8b4e5e9c6961141bb0e9b0d271383ed7ae18868a5517fb45e7",
+      "sdk/python/src/cigar_sdk/verify_vectors.py": "a6ce9ac87ea7c176768923cb9640a23a69a96eab9f4d5762e6ada3fe2e6c6121",
+      "sdk/python/src/cigar_sdk/workflow-context-session.v1.json": "b5b4ad5b1e88ce6de4c18f92d6b09c6e02f0cbda74edbb04bb582e6a38662455",
+      "sdk/python/src/cigar_sdk/workflow_session.py": "bc22c753b9e4d0e33d2d36b0d6551c9e0f2d02c50a075303f73eb3f26f36643e",
+      "sdk/python/tests/test_agent_b_example.py": "0f9ef0a2e8b295733b1d714087ba222fdba9343cb4138b0974d16e99dbc8aa29",
+      "sdk/python/tests/test_client.py": "61e3bac121fb4a56a48c3e77937d08502d4294b70cd8bd7695862c49d179bba6",
+      "sdk/python/tests/test_context.py": "b6384a0c65ee48ea4463b996171e1e11e3c0f46da24eb3663b41db50a87e1d4e",
+      "sdk/python/tests/test_digest.py": "3cc9a89bdcda25212c437b3b750c0eb0f7159ea91e9be358c4680ef307228841",
+      "sdk/python/tests/test_hardening.py": "197e19bda4fc4f2ab0187de1fb98d855beb0e25c443985d2b3e87494dcc6c900",
+      "sdk/python/tests/test_release_contract.py": "d1c51ad3901b3f719e5741961e2bb5054b603a87b22ae346ef2e3babf1701495",
+      "sdk/python/tests/test_workflow_session.py": "65192764dfac66756320aabd43444dc472e128daf9ceeec29d10c4ac9f880725",
+      "sdk/python/uv.lock": "3cf76c0d33aa66f4a780d0950ea3429529b80be233c76ca7ea296e646b058322",
+      "sdk/typescript/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+      "sdk/typescript/NOTICE": "edac256f71273d1a4b8a831599bcac20ac18591003143ed71662a784d63d5b1b",
+      "sdk/typescript/README.md": "50914870a5645622e9a3e26f8d207d2a2e4eb7e44f8950fd511d44150ff9c160",
+      "sdk/typescript/fixtures/semantic-bundle-v1.json": "263f8dd46c4e7946e185d825e4fc485ba76b68c5ba2e15530ba42c11dca02cd2",
+      "sdk/typescript/package.json": "52ede32549a133f726b2706af4dc8369ec5ceb877c622644783072c2f5166d18",
+      "sdk/typescript/release.json": "44a48f1af68632bf7c6efe03b4c38538c4f0cca5128e19c407065e62bdee10c4",
+      "sdk/typescript/src/client.ts": "9b405abafedf856a42b282ec479ef56f8349e70a3e6938e555b11da5c6302a28",
+      "sdk/typescript/src/context-api.ts": "fe9478bb3e5afbc0d6c1ca89c976366d5da64ce1fc213bd5269784de3eaaa7a1",
+      "sdk/typescript/src/context-types.ts": "59d8646c5b59b31508d95883ae64fd49450c5733f364e77fdd337f83e07f38cc",
+      "sdk/typescript/src/context.ts": "eebb1c1391588126222621705f13f67801205fb6e9c842d87a5851c5c1af3028",
+      "sdk/typescript/src/digest.ts": "b42c28c29ba0bf252ac1f529659c7e768fc185b09444e0e6e8f03e2b1b89955b",
+      "sdk/typescript/src/errors.ts": "20f5f6bdc59fd7a6f9278310588369e9bf18eab2082edc4822b797519704f8ef",
+      "sdk/typescript/src/examples/quickstart.ts": "b1c2950b385a185a0e121e1d3bf2c286f26daa6945498c8c2d692ad1ae0dbdda",
+      "sdk/typescript/src/examples/two-agent-observer.ts": "81b35bd705143a8407f1238afaa3536a61de555a93a0516b23a1a9ed9617ac3c",
+      "sdk/typescript/src/examples/verify-shared-bundle.ts": "749d79f34602a60a2f591355fbd1404054e3831c443eb9eabb9a7f3bff204226",
+      "sdk/typescript/src/generated/cigar_service_pb.ts": "1e07685e7cb6124994fa6e161b69ff8c1c376ecb8fbd357546d3f2931b953c1f",
+      "sdk/typescript/src/generated/context_abi_pb.ts": "b02e881efea4408de7bd75db7d85dd08e3c99d4af75c68bdf6f7049e54ebe649",
+      "sdk/typescript/src/generated/errors.ts": "8b79c4d81a1b2caa23062b3cb6829e5f38891299c02d6d3b76c29fffbda6ad00",
+      "sdk/typescript/src/generated/generated/error_codes_pb.ts": "c96a2a3362c6c1e6294ad08ef8d095760f42c2e3c8b1f9ae9e9ecf6d8acddaa2",
+      "sdk/typescript/src/generated/models.ts": "19fdb530881ca0e5c50cbdb059cf628ce7c6e838339b9c335ff9468648cde616",
+      "sdk/typescript/src/generated/operations.ts": "a53ea575bf094d5f8b7cc3c64b1d70bb508a223a1fcb344a1ab8efe0ea4107ff",
+      "sdk/typescript/src/idempotency.ts": "9826c8bb19c78003a567cab4b894f6965fb462f43c4d648c00271b4ca33e7a8c",
+      "sdk/typescript/src/index.ts": "adb4b1b2ddcd1c5dfcfcc96f1206950ad6b2cc7b060f255faeef46a77facf50a",
+      "sdk/typescript/src/tests/client.test.ts": "1c0193423e0df979e2522c136ed8bcfec5cda1357f3d4fecdbf9d62c7b07d0a8",
+      "sdk/typescript/src/tests/context.test.ts": "1444032b4cf69a80d8c1a877920ed2ca52256fbd894eca72a3869411fc2b35d0",
+      "sdk/typescript/src/tests/digest.test.ts": "855c171ac2197362aaf2e5207ab0b16e9a490282b8414a14cbffe275ba67ef7c",
+      "sdk/typescript/src/tests/hardening.test.ts": "cba90545ea10f87a9b50fbcca66b486e9081305413aa86cc3f7af507f261e30c",
+      "sdk/typescript/src/tests/release-contract.test.ts": "2b13ffe68f859c1c782da7486b3e3bda9a622139105cef5ae67bcebe6f8de1ae",
+      "sdk/typescript/src/tests/workflow-session.test.ts": "fd25f39a73ebf582f9bd7cd671cc51ea64048fc0f4c9937e65d3192ffe73d23a",
+      "sdk/typescript/src/types.ts": "9f53e101b654317820be2f49ea2efbe7704e4e61da942a1735631369410ed033",
+      "sdk/typescript/src/verify-replay.ts": "c9d79a42b81c8bf62c4b3e1ae3f1982acd3bed1952e9376081d274c89bc9254b",
+      "sdk/typescript/src/verify-vectors.ts": "aa5b0cc946123a74432177fb07acb9b0f24052c446ff446035710c77682d01db",
+      "sdk/typescript/src/workflow-session.ts": "62c70c3a7170c4f71dfe2e9a62cd26a84dc8d09526058f9705ab614151f170fa",
+      "sdk/typescript/tests/install.mjs": "ab98d34d58821ad8490ec2149936e3a90862d364df1384d12d96fa4754b94650",
+      "sdk/typescript/tools/inline-sources.mjs": "2277cec16bfe7b41803ba395746d322bee51d6ce540eead58d03393207001d34",
+      "sdk/typescript/tsconfig.json": "e82ec8f8de04121be50766e326fc6414062fb18d9be4f950d5734a200e7781ab",
+      "sdk/workflow-context-session.v1.json": "b5b4ad5b1e88ce6de4c18f92d6b09c6e02f0cbda74edbb04bb582e6a38662455"
+    },
+    "sha256": "501ffa865329dcb34906a7d29ebb8052878a8e489ce29cb5d9898c57e597b6a1",
+    "limitation": "Source-byte binding only; not proof of hermetic or independent compilation."
+  },
+  "native_qualified_host": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "worker": {
+    "protocol": "cigar.context-worker.v1",
+    "core_version": "0.10.0",
+    "sdk_release": "0.10.0-rc.1",
+    "target": "aarch64-apple-darwin",
+    "sha256": "3c5d5960bc78dae1a059a86cb0a2df219eb4e818d554068a17c604f67339cd1b",
+    "source_archive_sha256": "510080c816e9fc969652d45329b9d72ea7a70ec7b058a4a5e3442d1911b9c120"
+  },
+  "byte_reproducible_sdk_archives": true,
+  "artifacts": [
+    {
+      "file": "cigar-context-0.10.0.crate",
+      "bytes": 44555,
+      "sha256": "510080c816e9fc969652d45329b9d72ea7a70ec7b058a4a5e3442d1911b9c120"
+    },
+    {
+      "file": "hol-org-cigar-0.10.0-rc.1.tgz",
+      "bytes": 3419951,
+      "sha256": "d5413ff0507031a5d8f11a46cfb77110c50b073ffac63cc41111e8c59c01485c"
+    },
+    {
+      "file": "hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl",
+      "bytes": 3130733,
+      "sha256": "ab6b7f0b0c3c7920ef01c7d6fbe7f4c4a11d78793373072c33d696b61884cbd1"
+    },
+    {
+      "file": "hol_cigar-0.10.0rc1.tar.gz",
+      "bytes": 99730,
+      "sha256": "90cf9d83d61ae7c2164b34a704f32540ece99b3120eee19ef1ce8bc21017f1af"
+    }
+  ],
+  "checks": [
+    {
+      "name": "rust-version",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "--version"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.010232792235910892,
+      "log_sha256": "eb24d517cda02ee331f0f23f3da8150456969a12bcd3f07b531c45a44f67d9aa"
+    },
+    {
+      "name": "node-version",
+      "argv": [
+        "node",
+        "--version"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.025147750042378902,
+      "log_sha256": "b7677d3ec37ee1897ba07dc2cfe8292fe421c9ac93396cca5bbece486d1a2a41"
+    },
+    {
+      "name": "python-version",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+        "--version"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.011914500035345554,
+      "log_sha256": "0366d77cc1f1ac88ea458231ba4f639323d5caf34de0d50b7618277fd4395f1f"
+    },
+    {
+      "name": "pnpm-version",
+      "argv": [
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/tools/node_modules/.bin/pnpm",
+        "--version"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.2029767083004117,
+      "log_sha256": "a82028df3ca327b7e19f23fbc0121aec7763353c7dc0c816422db7f52f6365bc"
+    },
+    {
+      "name": "rust-format",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 1.6032291250303388,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "rust-clippy",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "cigar-context",
+        "--all-targets",
+        "--features",
+        "bpe",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.20677320891991258,
+      "log_sha256": "ed9cc7ea072e19ee3cc5ccc9d4c3b4f4a2e28331bd22740f46d525819a43f005"
+    },
+    {
+      "name": "rust-tests",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "cigar-context",
+        "--features",
+        "bpe",
+        "--",
+        "--test-threads=1"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 6.279562749899924,
+      "log_sha256": "b5259773a32de4762a72b4a003ae99ad7b873c64975487d8f3dd6e84df4295e3"
+    },
+    {
+      "name": "rust-core-tests",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "cigar-context",
+        "--no-default-features",
+        "--",
+        "--test-threads=1"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 1.3263800838030875,
+      "log_sha256": "c58aa4d343ed396e2e089cc5a6d7ced15b21afe627dabc39a939b8eb495a74c8"
+    },
+    {
+      "name": "rust-package",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "package",
+        "--locked",
+        "-p",
+        "cigar-context",
+        "--no-verify"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 3.2785685840062797,
+      "log_sha256": "2ba9f7e16e74b4159d49b8878d31f7110dc490cfb107bd21e05d3298a3025e58"
+    },
+    {
+      "name": "native-build-from-package",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--features",
+        "bpe",
+        "--bins"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/native-source/cigar-context-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.04853466711938381,
+      "log_sha256": "222a02ed477d249a21359df8cae975864a62d848f4739cadc5b00b6190a963c6"
+    },
+    {
+      "name": "native-version",
+      "argv": [
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/rust-target/release/cigar-context-worker",
+        "--version"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.31260691676288843,
+      "log_sha256": "bd525a06d8770fbea2d08a3d0c030651f81d18723bfda36b7846a36ac86aebd6"
+    },
+    {
+      "name": "native-linkage",
+      "argv": [
+        "/usr/bin/otool",
+        "-L",
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/rust-target/release/cigar-context-worker"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.023907000198960304,
+      "log_sha256": "5d902adbdede7284aa72ab9b2b2ef61ee746f941ff6ce6f303278d8820161bc3"
+    },
+    {
+      "name": "native-deployment",
+      "argv": [
+        "/usr/bin/otool",
+        "-l",
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/rust-target/release/cigar-context-worker"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.02259612502530217,
+      "log_sha256": "4480dc2dc50b7df256d4512226752022b93d1e2ab8fd4e0da76939e4411ef87f"
+    },
+    {
+      "name": "native-dependencies",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/cargo",
+        "metadata",
+        "--locked",
+        "--format-version",
+        "1",
+        "--features",
+        "bpe"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/native-source/cigar-context-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.02460816688835621,
+      "log_sha256": "3bd44f1dd6fe0bf59a1e2e0f8b07788c2910a0553a2d20c331090793c966af6f"
+    },
+    {
+      "name": "transport-fixture-build",
+      "argv": [
+        "/Users/construct/.rustup/toolchains/1.92.0-aarch64-apple-darwin/bin/rustc",
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/fixtures/stalled-worker.rs",
+        "-o",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/stalled-worker"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.08948299987241626,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "python-source-tests",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+        "-m",
+        "pytest",
+        "sdk/python/tests",
+        "-q"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 6.812942957971245,
+      "log_sha256": "74d2725a561481f44c5b536a6355867af39b67f37e89d21d31c6f48db4f49b05"
+    },
+    {
+      "name": "python-types",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/mypy",
+        "src/cigar_sdk"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python",
+      "exit_code": 0,
+      "elapsed_seconds": 0.7858480419963598,
+      "log_sha256": "fc409d91e6c781eb25a1ec1310b7fcb0086b74ed3aa2c415bcd73f884f23f07a"
+    },
+    {
+      "name": "python-lint",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/ruff",
+        "check",
+        "."
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python",
+      "exit_code": 0,
+      "elapsed_seconds": 0.024461125023663044,
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "name": "typescript-tests",
+      "argv": [
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/tools/node_modules/.bin/pnpm",
+        "--dir",
+        "sdk/typescript",
+        "test"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 3.436483666766435,
+      "log_sha256": "ee078d19f4197ea16b4c817e262ea75366b02c84a682319213725553a1bee4a9"
+    },
+    {
+      "name": "typescript-types",
+      "argv": [
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/tools/node_modules/.bin/pnpm",
+        "--dir",
+        "sdk/typescript",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0",
+      "exit_code": 0,
+      "elapsed_seconds": 0.4201578749343753,
+      "log_sha256": "7795a54d9206371beb5a6366955d4ca1e1070cbfcfafdba8fc0c2834b99756ef"
+    },
+    {
+      "name": "python-pack-1",
+      "argv": [
+        "/opt/homebrew/bin/uv",
+        "build",
+        "--sdist",
+        "--wheel",
+        "--out-dir",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/pack-1"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/python",
+      "exit_code": 0,
+      "elapsed_seconds": 5.898954499978572,
+      "log_sha256": "ea5aa2963d2df24fbd731f733b415373daee0e71c830e2d7fd5814e17a6d46ea"
+    },
+    {
+      "name": "npm-pack-1",
+      "argv": [
+        "/usr/local/bin/npm",
+        "pack",
+        "--ignore-scripts",
+        "--pack-destination",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/pack-1"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/typescript",
+      "exit_code": 0,
+      "elapsed_seconds": 0.8310273340903223,
+      "log_sha256": "69668659479397dcd36d207e704818d432128c9ef4004b6a4a8be60fbf61adba"
+    },
+    {
+      "name": "python-pack-2",
+      "argv": [
+        "/opt/homebrew/bin/uv",
+        "build",
+        "--sdist",
+        "--wheel",
+        "--out-dir",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/pack-2"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/python",
+      "exit_code": 0,
+      "elapsed_seconds": 0.8939997092820704,
+      "log_sha256": "1b51e83afb40d750b01d32c82ea87cd0dd40925e52cf8106a6dcfd003ae96b13"
+    },
+    {
+      "name": "npm-pack-2",
+      "argv": [
+        "/usr/local/bin/npm",
+        "pack",
+        "--ignore-scripts",
+        "--pack-destination",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/pack-2"
+      ],
+      "cwd": "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/typescript",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6163424998521805,
+      "log_sha256": "69668659479397dcd36d207e704818d432128c9ef4004b6a4a8be60fbf61adba"
+    }
+  ],
+  "status": "locally qualified release candidate; not published",
+  "qualification": {
+    "schema": "cigar.context-sdk-qualification.v1",
+    "status": "passed locally; not published",
+    "cases": 172,
+    "rust_successes": 155,
+    "expected_errors": 17,
+    "total_result_comparisons": 516,
+    "complete_snapshot_comparisons": 465,
+    "expected_error_comparisons": 51,
+    "python_export_count": 43,
+    "typescript_export_count": 104,
+    "all_legacy_exports_retained": true,
+    "all_rendered_outputs_equal": true,
+    "checks": [
+      {
+        "name": "node-version",
+        "argv": [
+          "node",
+          "--version"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.014486874919384718
+      },
+      {
+        "name": "python-version",
+        "argv": [
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+          "--version"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.009987291414290667
+      },
+      {
+        "name": "wheel-venv",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "venv",
+          "--python",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.04272287478670478
+      },
+      {
+        "name": "wheel-install",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/artifacts/hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.307473124936223
+      },
+      {
+        "name": "wheel-test-tools",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv/bin/python",
+          "pytest==9.0.3"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.3875722093507648
+      },
+      {
+        "name": "wheel-tests",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv/bin/python",
+          "-m",
+          "pytest",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/tests",
+          "-q"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 12.240775584243238
+      },
+      {
+        "name": "wheel-oracle",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv/bin/python",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/scripts/release/context_sdk_consumer.py",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/cases.json"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 10.95772041613236
+      },
+      {
+        "name": "wheel-entrypoint",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/wheel-venv/bin/cigar-qualify-bundle"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.47890879213809967
+      },
+      {
+        "name": "sdist-venv",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "venv",
+          "--python",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.010161958634853363
+      },
+      {
+        "name": "sdist-install",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/artifacts/hol_cigar-0.10.0rc1.tar.gz"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.30977629218250513
+      },
+      {
+        "name": "sdist-test-tools",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv/bin/python",
+          "pytest==9.0.3"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.02307533286511898
+      },
+      {
+        "name": "sdist-tests",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv/bin/python",
+          "-m",
+          "pytest",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/tests",
+          "-q"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 7.185366583056748
+      },
+      {
+        "name": "sdist-oracle",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv/bin/python",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/scripts/release/context_sdk_consumer.py",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/cases.json",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/native/darwin-arm64/cigar-context-worker"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 10.336734415963292
+      },
+      {
+        "name": "sdist-entrypoint",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/sdist-venv/bin/cigar-qualify-bundle"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.30884529184550047
+      },
+      {
+        "name": "npm-install",
+        "argv": [
+          "/private/tmp/cigar-010-sdk-rc.Vs5xnv/node-v24.10.0-darwin-arm64/bin/npm",
+          "install",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/artifacts/hol-org-cigar-0.10.0-rc.1.tgz"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.5585035411641
+      },
+      {
+        "name": "npm-oracle",
+        "argv": [
+          "node",
+          "consumer.mjs",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/cases.json"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 11.540933458134532
+      },
+      {
+        "name": "npm-installed-tests",
+        "argv": [
+          "node",
+          "--test",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/client.test.js",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/context.test.js",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/digest.test.js",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/hardening.test.js",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/release-contract.test.js",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/npm-installed-tests/dist/tests/workflow-session.test.js"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.699968332890421
+      },
+      {
+        "name": "baseline-python-venv",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "venv",
+          "--python",
+          "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline-venv"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.010428792331367731
+      },
+      {
+        "name": "baseline-python-install",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline-venv/bin/python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline/python"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.2899497919715941
+      },
+      {
+        "name": "baseline-python-test-tools",
+        "argv": [
+          "/opt/homebrew/bin/uv",
+          "pip",
+          "install",
+          "--python",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline-venv/bin/python",
+          "pytest==9.0.3"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.028728832956403494
+      },
+      {
+        "name": "baseline-python-tests",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline-venv/bin/python",
+          "-m",
+          "pytest",
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline/python/tests",
+          "-q"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.6385501245968044
+      },
+      {
+        "name": "baseline-python-exports",
+        "argv": [
+          "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-qualification/baseline-venv/bin/python",
+          "-c",
+          "import json,cigar_sdk;print(json.dumps(cigar_sdk.__all__))"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.10068179201334715
+      },
+      {
+        "name": "baseline-typescript-tests",
+        "argv": [
+          "/private/tmp/cigar-010-sdk-rc.Vs5xnv/tools/node_modules/.bin/pnpm",
+          "test"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.7571632922627032
+      },
+      {
+        "name": "baseline-typescript-exports",
+        "argv": [
+          "node",
+          "--input-type=module",
+          "-e",
+          "console.log(JSON.stringify(Object.keys(await import('./dist/index.js'))))"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.045525583904236555
+      }
+    ]
+  },
+  "additional_checks": [
+    {
+      "name": "generated-sdk-check",
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+        "sdk/generate_clients.py",
+        "--check"
+      ]
+    },
+    {
+      "name": "operation-surface-parity",
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+        "tools/quality/operation_surface_parity.py",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "release-contract-tests",
+      "exit_code": 0,
+      "sha256": "a86a150651d34bd22d6f7ab8b6ef734452b614e943f335c3fb44eb4b33c2d5c9",
+      "argv": [
+        "/Users/construct/Documents/projects/cigar-project/CIGAR/hol-cigar-0.10.0/sdk/python/.venv/bin/python",
+        "-m",
+        "unittest",
+        "scripts.release.tests.test_balanced_compatibility",
+        "tools.quality.tests.test_pypi_honey_workflow",
+        "scripts.release.tests.test_verify_npm_sdk"
+      ]
+    },
+    {
+      "name": "workflow-static-validation",
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "/private/tmp/cigar-010-sdk-rc.Vs5xnv/tools/bin/actionlint",
+        "-shellcheck=",
+        "-pyflakes=",
+        ".github/workflows/context-sdk-rc.yml",
+        ".github/workflows/npm-sdk-readiness.yml",
+        ".github/workflows/fast-ci.yml"
+      ]
+    },
+    {
+      "name": "twine-strict",
+      "exit_code": 0,
+      "sha256": "6f6ffa76e4160eeaf499ad7ad524ba95458e06a3ba471b4c4cf871b863b697a7",
+      "argv": [
+        "/opt/homebrew/bin/uv",
+        "tool",
+        "run",
+        "--from",
+        "twine==6.2.0",
+        "twine",
+        "check",
+        "--strict",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/artifacts/hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl",
+        "/private/tmp/cigar-010-signed-beta.3Ms2mh/clean-build/artifacts/hol_cigar-0.10.0rc1.tar.gz"
+      ]
+    },
+    {
+      "name": "diff-whitespace",
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ]
+    }
+  ],
+  "advisory_packages_checked": 36,
+  "known_advisories_returned": 0,
+  "source_sha256": {
+    ".github/workflows/context-sdk-rc.yml": "3b9cf1d95323c20a5dc5adef785c95ce572ed113973efb01822de1212f16e5be",
+    ".github/workflows/fast-ci.yml": "00e12db221c4cc17ccb1e2ae61fed02b5d3904363eee9b588320ec31c5d19df7",
+    ".github/workflows/npm-sdk-readiness.yml": "d279dedee4a390ceec0ad50fde799469b2840bfbcf95736656dd0fccdf90f370",
+    "Cargo.lock": "4383f2331a0315e61a89de34fd4813e5b8e30335770f0c6d190419b1a66887af",
+    "Cargo.toml": "de14e31a323ec35a1e2581986a7bcf0e5ba9d6cf27bb8fce720c332112726259",
+    "crates/cigar-context/CHANGELOG.md": "3bb657d667f025c3431adcde5090053a208c9f1f5560fec7abf33493666ced2a",
+    "crates/cigar-context/Cargo.toml": "119cd43d9f918d9bb3f9ef8eeea9eb9708dca4da915e286b9764a58467a10ef4",
+    "crates/cigar-context/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+    "crates/cigar-context/README.md": "89265157c974bfd1cb87af4cd58ab0db83717df14cd148efb3483fd1ee908ae0",
+    "crates/cigar-context/examples/compare.rs": "b194eeebfb4b560546f767ac7012d109de35dc3f267820649f2608aebdea811a",
+    "crates/cigar-context/examples/source_compare.rs": "27acbd8d1a97dbe9403145af49b5e033e128438abd8ace829327ebe959c9c36d",
+    "crates/cigar-context/examples/support/mod.rs": "1b8aecd618b9079622094bb8592c33b1f45dbed521154f1ddd10dd830ad736b8",
+    "crates/cigar-context/fixtures/quality.json": "d77c31034a9d8d79e00cd321eea5a3f2f0ea54f4d90c58e7cbbc6bfabb837319",
+    "crates/cigar-context/src/graph.rs": "9e5675a318199171e71e772df3b774e2c9897b6b7fd739c3e54744dbcff2672f",
+    "crates/cigar-context/src/lib.rs": "51af48424de62e3770b173ea24ef0985f51645e0f731b00e064c4ae00db0a6ae",
+    "crates/cigar-context/src/main.rs": "f69944c2ce16637215ddf24dd72b57143708747d72e662cee5cae71abe399271",
+    "crates/cigar-context/src/select.rs": "69116bd6021e139e6f02d35b1c2ce36ad7aa99bcecc917dfa99b63199280b356",
+    "crates/cigar-context/src/snapshot.rs": "b7ba03295eed1238237fcd1ad4dc2a5c72ec71e59baa58bdf64bdc4b21da06d0",
+    "crates/cigar-context/src/tokenizer.rs": "2d9ffab532e4bba233756390982fb38b309150589b6e0ad711b7c023aa01c228",
+    "crates/cigar-context/src/worker.rs": "7b0de9b5e698c75acbdcf0f1d36eff54a8da9b287f5fba50006f5ae5c8f92db6",
+    "crates/cigar-context/tests/cli.rs": "6d43580bbcf5d82e660433439943157efc49b1a9035046b7ed766b65ae9aa6f2",
+    "crates/cigar-context/tests/context.rs": "c68b1a270fe58feae1668032b357c9e7e6166d1c0e964d8e992bcced5426ccd1",
+    "crates/cigar-context/tests/incremental.rs": "18ea12413c7cea4d71a6713845d771fc1093e61065b1b146b0c62115f07d2d47",
+    "pnpm-lock.yaml": "e042e84f7a3943fdb51ae6621ac44e812da176ee072911b071de3a74df9aef5a",
+    "scripts/release/context-sdk-consumer.mjs": "25bf714bf3569b9fc331ca5fb3060e737376d4c568842ac99ae02ba0bb664881",
+    "scripts/release/context_sdk_consumer.py": "102dd3cb4fee4f3e590246f4b8a47d6564eb2f49de10987dddd3f921a73782d2",
+    "scripts/release/context_sdk_handoff.py": "9e2fdd3af0beafda10145bc3c70cee49513ec92b9df2f4a7b56d10480af1c9cd",
+    "scripts/release/context_sdk_inputs.py": "9ed51462d293ee7a594dd7d760b48e510329c63e3e3eedba28a3a3e46a021e44",
+    "scripts/release/finalize_context_sdk_rc.py": "e2ee4e43b31e219ab51753cb1c9fe98f6c9ccb9c4d18eec719c97c0ed77252d1",
+    "scripts/release/prepare_context_sdk_rc.py": "cf59e905cd14b889a7a2e2728088a515a53a18eed4cce7b65319950d11bae1fb",
+    "scripts/release/qualify_context_sdk_rc.py": "25817cbd5f226e3925f64c5209af91799cd604cba675da8f636fa4f87c6c9cd3",
+    "sdk/capabilities-v1.json": "539b48916798fe1566aec766ebf7259ebbee902f1328e7c96c16b2048be9a890",
+    "sdk/fixtures/stalled-worker.rs": "cd0ca70a4c6f4536e37b1c0078e17e754a6803f90ad39a0ee026436230cb5615",
+    "sdk/generate_clients.py": "eaa04421c2645cf892bb57849fb0682aea685b9f3dfddc46444d0de74ab7198d",
+    "sdk/local-context-release.v1.json": "f7061f1e030de85d59eeafa3fac19d7f87e754280ae2926e2d6dfdef50ae8562",
+    "sdk/python/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+    "sdk/python/NOTICE": "edac256f71273d1a4b8a831599bcac20ac18591003143ed71662a784d63d5b1b",
+    "sdk/python/README.md": "90a2dc579b10f22b438cde55e9b654d8a46badf4c9726358cb4f12c9f92b7502",
+    "sdk/python/examples/quickstart.py": "30cdab4bd93cc4aab7056a21c382e3e16607d6fbb882e0220a5a7babe61ed76f",
+    "sdk/python/hatch_build.py": "0d5012a53f236af15728589b30505478ebab64534a35875f2c1546de73eaf579",
+    "sdk/python/pyproject.toml": "5c325add3148e90935090b8729b5e2905fbe4706d0ee43484d4e6a012013ac06",
+    "sdk/python/src/cigar_sdk/__init__.py": "066f5f1150ee1e09bd5dcaffc10f6bea6a77bd82d4a42008a0e397015149b5e6",
+    "sdk/python/src/cigar_sdk/capabilities-v1.json": "539b48916798fe1566aec766ebf7259ebbee902f1328e7c96c16b2048be9a890",
+    "sdk/python/src/cigar_sdk/client.py": "94f3b7b7cb656e564163f64921a381886b2906a93cb324e8afb092eb8fc5ddb4",
+    "sdk/python/src/cigar_sdk/context.py": "0b4cfaa774e20b3b1b313a6f5b894a261ba5244999cbf28cefbedfa7372bc0a1",
+    "sdk/python/src/cigar_sdk/context_types.py": "52aced496355ddc7619cd0e81147f5306df583d133411c703a9b121ef3fdff7f",
+    "sdk/python/src/cigar_sdk/digest.py": "d69c4d142c0735f36216a82ff497a17e9d990c4d08f870a26011a9b59904bcc7",
+    "sdk/python/src/cigar_sdk/errors.py": "b0fb5cde69632bd33b265922987e740be8ed0a8dfbf3901a3ba82e1a5e6ab70e",
+    "sdk/python/src/cigar_sdk/examples/__init__.py": "8748c23fdb6103ab5d32ead3503af9f7d38b357b4dc34746fa8bd76e7c212d6d",
+    "sdk/python/src/cigar_sdk/examples/agent_b_handoff.py": "46642bb11dc8594fd72099edc6cc3f683ae3ccc5d7da923f4c06089278caa1d2",
+    "sdk/python/src/cigar_sdk/fixtures/__init__.py": "b523ba81f79e9fc598d8c91cf39b1b518efbdc7630b27957e153fe5bc92c141b",
+    "sdk/python/src/cigar_sdk/fixtures/problem-index-unavailable-v1.json": "d5849e21db8400c75dc2f89ae0de96d5e55f0f9898b3312b0b24bc85dabf8e18",
+    "sdk/python/src/cigar_sdk/fixtures/semantic-bundle-v1.json": "263f8dd46c4e7946e185d825e4fc485ba76b68c5ba2e15530ba42c11dca02cd2",
+    "sdk/python/src/cigar_sdk/generated/__init__.py": "21df01f66914b0d9f76658e1824c37a0ac16c6d40b0016a7cf3927ee548fb6b3",
+    "sdk/python/src/cigar_sdk/generated/cigar_service_pb2.py": "cc18d672426de8bf12cae7cbf981e0bb5502e637438e8c1537a96304e8389f44",
+    "sdk/python/src/cigar_sdk/generated/context_abi_pb2.py": "e01ad783ee12bcd1c3a34f33a49410b38a85cc01df36a32ff59b3786ee33eabe",
+    "sdk/python/src/cigar_sdk/generated/errors.py": "d65597cd0933e55083c67a79655145fe4dc68bd1afe2dce708800c09e933676e",
+    "sdk/python/src/cigar_sdk/generated/generated/__init__.py": "11c5cee3ea3cfd2fc08b5b9a6a6c556868dba3e9b16da86a27d3e13f8a8858ea",
+    "sdk/python/src/cigar_sdk/generated/generated/error_codes_pb2.py": "08b8af8ee426f9fa4399915811ab921ba2e17540b9b556c0ce689a040f411753",
+    "sdk/python/src/cigar_sdk/generated/models.py": "ee0dff7e3030e74303d38c6e1f78833dc6fdcb432a575c64b447f9adb00fec88",
+    "sdk/python/src/cigar_sdk/generated/operations.py": "433e11403b690848c9ad9c14f5a845f51e875fe3444164aed424032997518234",
+    "sdk/python/src/cigar_sdk/idempotency.py": "cb4aa7fe9b0c248511ccf6bf7e1c76dd3e5838d022cc634a891c5113c8f9ffef",
+    "sdk/python/src/cigar_sdk/models_runtime.py": "5573d62b73c59a476e9fad3990ab379a1b83cca1fc5198f4b0b6e3761bd7d219",
+    "sdk/python/src/cigar_sdk/py.typed": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "sdk/python/src/cigar_sdk/qualify_bundle.py": "feecf3071de18904e995b579187ab01e402f5a4249cc7307ad183bfd1e29a407",
+    "sdk/python/src/cigar_sdk/release.json": "688704b5c3ac33f50518d8f0f4d6036a529f0d232d14146bf4bb108544d05d41",
+    "sdk/python/src/cigar_sdk/transport.py": "9c26e518d5c469b7a1c5c52e662f1233a72a647a2a1f1a509a2ea34030815431",
+    "sdk/python/src/cigar_sdk/types.py": "a53ab4696c99a28cbf0d1a2291bd21428fc839353ce080c2d8c72b8d7ee4521d",
+    "sdk/python/src/cigar_sdk/verify_replay.py": "9c3e1bfb3463ee8b4e5e9c6961141bb0e9b0d271383ed7ae18868a5517fb45e7",
+    "sdk/python/src/cigar_sdk/verify_vectors.py": "a6ce9ac87ea7c176768923cb9640a23a69a96eab9f4d5762e6ada3fe2e6c6121",
+    "sdk/python/src/cigar_sdk/workflow-context-session.v1.json": "b5b4ad5b1e88ce6de4c18f92d6b09c6e02f0cbda74edbb04bb582e6a38662455",
+    "sdk/python/src/cigar_sdk/workflow_session.py": "bc22c753b9e4d0e33d2d36b0d6551c9e0f2d02c50a075303f73eb3f26f36643e",
+    "sdk/python/tests/test_agent_b_example.py": "0f9ef0a2e8b295733b1d714087ba222fdba9343cb4138b0974d16e99dbc8aa29",
+    "sdk/python/tests/test_client.py": "61e3bac121fb4a56a48c3e77937d08502d4294b70cd8bd7695862c49d179bba6",
+    "sdk/python/tests/test_context.py": "b6384a0c65ee48ea4463b996171e1e11e3c0f46da24eb3663b41db50a87e1d4e",
+    "sdk/python/tests/test_digest.py": "3cc9a89bdcda25212c437b3b750c0eb0f7159ea91e9be358c4680ef307228841",
+    "sdk/python/tests/test_hardening.py": "197e19bda4fc4f2ab0187de1fb98d855beb0e25c443985d2b3e87494dcc6c900",
+    "sdk/python/tests/test_release_contract.py": "d1c51ad3901b3f719e5741961e2bb5054b603a87b22ae346ef2e3babf1701495",
+    "sdk/python/tests/test_workflow_session.py": "65192764dfac66756320aabd43444dc472e128daf9ceeec29d10c4ac9f880725",
+    "sdk/python/uv.lock": "3cf76c0d33aa66f4a780d0950ea3429529b80be233c76ca7ea296e646b058322",
+    "sdk/typescript/LICENSE": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf",
+    "sdk/typescript/NOTICE": "edac256f71273d1a4b8a831599bcac20ac18591003143ed71662a784d63d5b1b",
+    "sdk/typescript/README.md": "50914870a5645622e9a3e26f8d207d2a2e4eb7e44f8950fd511d44150ff9c160",
+    "sdk/typescript/fixtures/semantic-bundle-v1.json": "263f8dd46c4e7946e185d825e4fc485ba76b68c5ba2e15530ba42c11dca02cd2",
+    "sdk/typescript/package.json": "52ede32549a133f726b2706af4dc8369ec5ceb877c622644783072c2f5166d18",
+    "sdk/typescript/release.json": "44a48f1af68632bf7c6efe03b4c38538c4f0cca5128e19c407065e62bdee10c4",
+    "sdk/typescript/src/client.ts": "9b405abafedf856a42b282ec479ef56f8349e70a3e6938e555b11da5c6302a28",
+    "sdk/typescript/src/context-api.ts": "fe9478bb3e5afbc0d6c1ca89c976366d5da64ce1fc213bd5269784de3eaaa7a1",
+    "sdk/typescript/src/context-types.ts": "59d8646c5b59b31508d95883ae64fd49450c5733f364e77fdd337f83e07f38cc",
+    "sdk/typescript/src/context.ts": "eebb1c1391588126222621705f13f67801205fb6e9c842d87a5851c5c1af3028",
+    "sdk/typescript/src/digest.ts": "b42c28c29ba0bf252ac1f529659c7e768fc185b09444e0e6e8f03e2b1b89955b",
+    "sdk/typescript/src/errors.ts": "20f5f6bdc59fd7a6f9278310588369e9bf18eab2082edc4822b797519704f8ef",
+    "sdk/typescript/src/examples/quickstart.ts": "b1c2950b385a185a0e121e1d3bf2c286f26daa6945498c8c2d692ad1ae0dbdda",
+    "sdk/typescript/src/examples/two-agent-observer.ts": "81b35bd705143a8407f1238afaa3536a61de555a93a0516b23a1a9ed9617ac3c",
+    "sdk/typescript/src/examples/verify-shared-bundle.ts": "749d79f34602a60a2f591355fbd1404054e3831c443eb9eabb9a7f3bff204226",
+    "sdk/typescript/src/generated/cigar_service_pb.ts": "1e07685e7cb6124994fa6e161b69ff8c1c376ecb8fbd357546d3f2931b953c1f",
+    "sdk/typescript/src/generated/context_abi_pb.ts": "b02e881efea4408de7bd75db7d85dd08e3c99d4af75c68bdf6f7049e54ebe649",
+    "sdk/typescript/src/generated/errors.ts": "8b79c4d81a1b2caa23062b3cb6829e5f38891299c02d6d3b76c29fffbda6ad00",
+    "sdk/typescript/src/generated/generated/error_codes_pb.ts": "c96a2a3362c6c1e6294ad08ef8d095760f42c2e3c8b1f9ae9e9ecf6d8acddaa2",
+    "sdk/typescript/src/generated/models.ts": "19fdb530881ca0e5c50cbdb059cf628ce7c6e838339b9c335ff9468648cde616",
+    "sdk/typescript/src/generated/operations.ts": "a53ea575bf094d5f8b7cc3c64b1d70bb508a223a1fcb344a1ab8efe0ea4107ff",
+    "sdk/typescript/src/idempotency.ts": "9826c8bb19c78003a567cab4b894f6965fb462f43c4d648c00271b4ca33e7a8c",
+    "sdk/typescript/src/index.ts": "adb4b1b2ddcd1c5dfcfcc96f1206950ad6b2cc7b060f255faeef46a77facf50a",
+    "sdk/typescript/src/tests/client.test.ts": "1c0193423e0df979e2522c136ed8bcfec5cda1357f3d4fecdbf9d62c7b07d0a8",
+    "sdk/typescript/src/tests/context.test.ts": "1444032b4cf69a80d8c1a877920ed2ca52256fbd894eca72a3869411fc2b35d0",
+    "sdk/typescript/src/tests/digest.test.ts": "855c171ac2197362aaf2e5207ab0b16e9a490282b8414a14cbffe275ba67ef7c",
+    "sdk/typescript/src/tests/hardening.test.ts": "cba90545ea10f87a9b50fbcca66b486e9081305413aa86cc3f7af507f261e30c",
+    "sdk/typescript/src/tests/release-contract.test.ts": "2b13ffe68f859c1c782da7486b3e3bda9a622139105cef5ae67bcebe6f8de1ae",
+    "sdk/typescript/src/tests/workflow-session.test.ts": "fd25f39a73ebf582f9bd7cd671cc51ea64048fc0f4c9937e65d3192ffe73d23a",
+    "sdk/typescript/src/types.ts": "9f53e101b654317820be2f49ea2efbe7704e4e61da942a1735631369410ed033",
+    "sdk/typescript/src/verify-replay.ts": "c9d79a42b81c8bf62c4b3e1ae3f1982acd3bed1952e9376081d274c89bc9254b",
+    "sdk/typescript/src/verify-vectors.ts": "aa5b0cc946123a74432177fb07acb9b0f24052c446ff446035710c77682d01db",
+    "sdk/typescript/src/workflow-session.ts": "62c70c3a7170c4f71dfe2e9a62cd26a84dc8d09526058f9705ab614151f170fa",
+    "sdk/typescript/tests/install.mjs": "ab98d34d58821ad8490ec2149936e3a90862d364df1384d12d96fa4754b94650",
+    "sdk/typescript/tools/inline-sources.mjs": "2277cec16bfe7b41803ba395746d322bee51d6ce540eead58d03393207001d34",
+    "sdk/typescript/tsconfig.json": "e82ec8f8de04121be50766e326fc6414062fb18d9be4f950d5734a200e7781ab",
+    "sdk/workflow-context-session.v1.json": "b5b4ad5b1e88ce6de4c18f92d6b09c6e02f0cbda74edbb04bb582e6a38662455"
+  },
+  "evidence": [
+    {
+      "file": "build-native-build-from-package.log.gz",
+      "sha256": "7af7d070f27ebe27a24dade1a6ed00df697867bd683adbb8193761267e95d71a",
+      "bytes": 82
+    },
+    {
+      "file": "build-native-dependencies.log.gz",
+      "sha256": "907b89f397ee2e51ff20b0f4d562811f10f453896441556240b5c2a0603bab15",
+      "bytes": 13672
+    },
+    {
+      "file": "build-native-deployment.log.gz",
+      "sha256": "7697333be251512e519d2bd6aabe46a1dec647fb22aec0a1c76c6ee5d57f9e82",
+      "bytes": 1579
+    },
+    {
+      "file": "build-native-linkage.log.gz",
+      "sha256": "6a7007a61b5def5cd8ed8aa905253ce34b417d0b3ef7e87ff7c0217c2a2b790d",
+      "bytes": 168
+    },
+    {
+      "file": "build-native-version.log.gz",
+      "sha256": "4b751bd170d059e16ec67cae6170626f1475df41ccb4f83c179c11be63049ae0",
+      "bytes": 58
+    },
+    {
+      "file": "build-node-version.log.gz",
+      "sha256": "480b80a5f8c6102f4b2083ca6261a5a4c4045cffd28a10f546269141e8d7cecd",
+      "bytes": 29
+    },
+    {
+      "file": "build-npm-pack-1.log.gz",
+      "sha256": "7e4408a49e88e596263f61b00d3fb5bb92b59b1a915c379c8a100e813dc20036",
+      "bytes": 1093
+    },
+    {
+      "file": "build-npm-pack-2.log.gz",
+      "sha256": "7e4408a49e88e596263f61b00d3fb5bb92b59b1a915c379c8a100e813dc20036",
+      "bytes": 1093
+    },
+    {
+      "file": "build-pnpm-version.log.gz",
+      "sha256": "e031cce3564314b4a123861210dc2f1ade9f7d324d10507b19dda5fddf79439e",
+      "bytes": 28
+    },
+    {
+      "file": "build-python-lint.log.gz",
+      "sha256": "f3af4d142827f5aad2eb0c72d556d325488a57fb6219aac10afeb51085667d53",
+      "bytes": 39
+    },
+    {
+      "file": "build-python-pack-1.log.gz",
+      "sha256": "0bd4f740c4933b343730558999ac36ca12f2046b98ce25a9ff6f0754d0f0b8f1",
+      "bytes": 170
+    },
+    {
+      "file": "build-python-pack-2.log.gz",
+      "sha256": "01a752c2f22bec0438bb500b939337e11053b9b4157179f2ac94a30daec37162",
+      "bytes": 171
+    },
+    {
+      "file": "build-python-source-tests.log.gz",
+      "sha256": "00c2b39cd9114d7f032c0714db4189b50ad1bbd158a5d9c93014820024585abc",
+      "bytes": 52
+    },
+    {
+      "file": "build-python-types.log.gz",
+      "sha256": "fcdb9add6ddad87e90e17ba3103bc7dfdb873d8336acad7aef9dfef90297aaeb",
+      "bytes": 64
+    },
+    {
+      "file": "build-python-version.log.gz",
+      "sha256": "4fb47082e5cc927edfb727508814dbbb3af8bcb782131144cf0d32d3bf95712e",
+      "bytes": 34
+    },
+    {
+      "file": "build-rust-clippy.log.gz",
+      "sha256": "f096efd87bb01a9f0c24cce434d2db4905a390778df9ced3980823ffc784c0f5",
+      "bytes": 103
+    },
+    {
+      "file": "build-rust-core-tests.log.gz",
+      "sha256": "fff2f67ff1f9421dc57c192016fced3bc91754cec9c65a9c6c368f856da82fea",
+      "bytes": 1221
+    },
+    {
+      "file": "build-rust-format.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "build-rust-package.log.gz",
+      "sha256": "304739a2132634665646dc7d2202ed850884fcf56e4fb19dd40d68aeb25f71c7",
+      "bytes": 192
+    },
+    {
+      "file": "build-rust-tests.log.gz",
+      "sha256": "b7b16c94b02211e91c8afb9da9e7f9425fac1d92579012c70c33d4344c3006d8",
+      "bytes": 1496
+    },
+    {
+      "file": "build-rust-version.log.gz",
+      "sha256": "fa3fd3df520f07fa1cee713329e8e363fed56f20f83a20a4b90dd5b1b09b75d5",
+      "bytes": 56
+    },
+    {
+      "file": "build-transport-fixture-build.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "build-typescript-tests.log.gz",
+      "sha256": "3dc1ea2c28a81f44cc2e0024ff48793793fa6c2b6989e86e4d1434d23325b4b7",
+      "bytes": 1629
+    },
+    {
+      "file": "build-typescript-types.log.gz",
+      "sha256": "b44e9a03eb8aea8e0b8b47bb0ab2e3619a62f183234599bffd16ccb19d1b0c29",
+      "bytes": 136
+    },
+    {
+      "file": "installed-baseline-python-exports.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-python-exports.stdout.gz",
+      "sha256": "3c185fee2016426a5bd7bb6e5335aacf5742e8fe2e5fab90f6809cf25a1418d2",
+      "bytes": 430
+    },
+    {
+      "file": "installed-baseline-python-install.stderr.gz",
+      "sha256": "5b95c56c7e6a3388999d8a69fe5e1e376ea7d47be398e938d18ab02c7ad0fbbe",
+      "bytes": 238
+    },
+    {
+      "file": "installed-baseline-python-install.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-python-test-tools.stderr.gz",
+      "sha256": "44736fc7d85ad2f81733390f085ed1fda6d06b485703665b492990b8630e3982",
+      "bytes": 162
+    },
+    {
+      "file": "installed-baseline-python-test-tools.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-python-tests.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-python-tests.stdout.gz",
+      "sha256": "bf9926d1703fd894bdbea106546ba068f4983dc8f20166cb286047d7380851f4",
+      "bytes": 52
+    },
+    {
+      "file": "installed-baseline-python-venv.stderr.gz",
+      "sha256": "2ce5d47718e8e8e13b0b2f50a64874893efa5f9c95122a868643cf91e303a0b0",
+      "bytes": 184
+    },
+    {
+      "file": "installed-baseline-python-venv.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-typescript-exports.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-typescript-exports.stdout.gz",
+      "sha256": "2cee68b58e85ba8b9b7fd4e4a456fe06d41e3059281315ef3c19635afbe28921",
+      "bytes": 833
+    },
+    {
+      "file": "installed-baseline-typescript-tests.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-baseline-typescript-tests.stdout.gz",
+      "sha256": "b69d716e51527666a5267570e14f8f8920eac058516420a965683b1b68e16879",
+      "bytes": 1372
+    },
+    {
+      "file": "installed-node-version.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-node-version.stdout.gz",
+      "sha256": "833503aa529e84ea0d69f50dddc43386640656cc93cab1f3f72e438831a4aeb1",
+      "bytes": 29
+    },
+    {
+      "file": "installed-npm-install.stderr.gz",
+      "sha256": "47c989ca6727f8fc517f4aecb5f5efadbad056b805622451ee63c1e957e385e4",
+      "bytes": 158
+    },
+    {
+      "file": "installed-npm-install.stdout.gz",
+      "sha256": "7505da9978d57d3a3c25275b18bcfc41e76d0b1535f5753c712428c025bb400d",
+      "bytes": 44
+    },
+    {
+      "file": "installed-npm-installed-tests.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-npm-installed-tests.stdout.gz",
+      "sha256": "35e1d7b5174c44545aa6f38c12b807ec5ce62250662c8b064a7ba27849fa5fd3",
+      "bytes": 1400
+    },
+    {
+      "file": "installed-npm-oracle.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-npm-oracle.stdout.gz",
+      "sha256": "c6cf990a2574b25e6d5eb025348887bad31dc9c653370314c781e24dc266b982",
+      "bytes": 16813
+    },
+    {
+      "file": "installed-python-version.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-python-version.stdout.gz",
+      "sha256": "4fb47082e5cc927edfb727508814dbbb3af8bcb782131144cf0d32d3bf95712e",
+      "bytes": 34
+    },
+    {
+      "file": "installed-sdist-entrypoint.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-sdist-entrypoint.stdout.gz",
+      "sha256": "5d465d173082e66dc0fd269b8485877b207dc90b832d9b1ba4714cd2b58af92f",
+      "bytes": 74
+    },
+    {
+      "file": "installed-sdist-install.stderr.gz",
+      "sha256": "b27755904eab802a2c1a79cc6b1f7b3fcf6e37136baefa5dc4fe0c7e36170d0b",
+      "bytes": 247
+    },
+    {
+      "file": "installed-sdist-install.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-sdist-oracle.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-sdist-oracle.stdout.gz",
+      "sha256": "276944b11713bcab696bbe038ea51802b6150b9c268fab7a1a43bed985d68d74",
+      "bytes": 16619
+    },
+    {
+      "file": "installed-sdist-test-tools.stderr.gz",
+      "sha256": "fb376512ca89955c69d10206a64e4239a3bb1d6fef2c30b2d2179eacab489fca",
+      "bytes": 160
+    },
+    {
+      "file": "installed-sdist-test-tools.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-sdist-tests.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-sdist-tests.stdout.gz",
+      "sha256": "de1b37c5adccc38be24572fcb580fa6255f346cf1eab310c0178ac1f8ec5ed50",
+      "bytes": 52
+    },
+    {
+      "file": "installed-sdist-venv.stderr.gz",
+      "sha256": "b6f93fb593698189717853990999249fa0e31c2b9b5c372d17d34634eb6759b0",
+      "bytes": 182
+    },
+    {
+      "file": "installed-sdist-venv.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-entrypoint.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-entrypoint.stdout.gz",
+      "sha256": "5d465d173082e66dc0fd269b8485877b207dc90b832d9b1ba4714cd2b58af92f",
+      "bytes": 74
+    },
+    {
+      "file": "installed-wheel-install.stderr.gz",
+      "sha256": "83a798982c592411236e60d4ad4813bd8fc7aade6d1f86b5fca3fc0456125603",
+      "bytes": 240
+    },
+    {
+      "file": "installed-wheel-install.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-oracle.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-oracle.stdout.gz",
+      "sha256": "cb8237c9f507e5debdc767b8300363dde93bd4476286b014107562b54846c319",
+      "bytes": 16620
+    },
+    {
+      "file": "installed-wheel-test-tools.stderr.gz",
+      "sha256": "0dedd93d392596c52d3add734d080677096fd16eeed4330e0a675b098e560381",
+      "bytes": 162
+    },
+    {
+      "file": "installed-wheel-test-tools.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-tests.stderr.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "installed-wheel-tests.stdout.gz",
+      "sha256": "6b043a2153173062a33242a7e1e62613a74c82bcbb21362803e7f7beaf0c7ef7",
+      "bytes": 53
+    },
+    {
+      "file": "installed-wheel-venv.stderr.gz",
+      "sha256": "6513e1eeb938981b7c7d29fbdfacb1e36a1c260b50837fd1cac5e93aa0e7b905",
+      "bytes": 183
+    },
+    {
+      "file": "installed-wheel-venv.stdout.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "final-advisories.json.gz",
+      "sha256": "7477b00005455eac2062938dae0891277835b9808782f4f63a6ab4dcfdbece50",
+      "bytes": 679
+    },
+    {
+      "file": "final-diff-whitespace.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "final-generated-sdk-check.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "final-operation-surface-parity.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "final-release-contract-tests.log.gz",
+      "sha256": "ca9246948613ea62d06687ba834c255419cd5879fe9ccba4acc6954a5a043506",
+      "bytes": 55
+    },
+    {
+      "file": "final-twine-strict.log.gz",
+      "sha256": "3699e085b19a9032cd22aff16176cff5c95a894acdcf9689b3e0c3691788f225",
+      "bytes": 154
+    },
+    {
+      "file": "final-workflow-static-validation.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20
+    },
+    {
+      "file": "cases.json.gz",
+      "sha256": "e771f611ef6e9385a08582f96fe8e917a5972d480bc3d8a796fa992aca7ac243",
+      "bytes": 7996
+    },
+    {
+      "file": "rust-oracle.json.gz",
+      "sha256": "77a96e6240f3a1ab13d1535b319c235664021666e7ee30401d4b1d9261402d8d",
+      "bytes": 14331
+    },
+    {
+      "file": "qualification.json.gz",
+      "sha256": "4f113c57ecd650cda039b91204b154642d2562fca257ccd650d65fcf75dff6ba",
+      "bytes": 1474
+    },
+    {
+      "file": "build-release.json.gz",
+      "sha256": "9149fbd1ac5bccce7391b6684bde3bc2d43d0986e37b7a06998e77b0a74d4c82",
+      "bytes": 8558
+    }
+  ],
+  "qualified_platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "limitations": [
+    "No native Linux/Windows qualification or hosted CI run in this session.",
+    "Platform binary has macOS 11 deployment floor, not a test result on macOS 11.",
+    "Python 3.14.7 and Node 24.10.0/24.19.0 tested; Python 3.14.0 not tested.",
+    "Source distribution requires an explicit local worker for local context APIs.",
+    "IPC adds startup, serialization and process memory versus in-process Rust.",
+    "No new model answer-quality or token-reduction claim is made by SDK packaging.",
+    "Unsigned, unpublished candidate; source_binding records clean/dirty state when available. Honey 0.9.4 publication remains separate."
+  ]
+}

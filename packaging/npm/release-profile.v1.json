@@ -22,7 +22,9 @@
     "repository_directory": "sdk/typescript",
     "tag": "v0.9.4",
     "revision": "6e518ad95a018a80a04db295c0f91ec928a0ba0c",
-    "tree": "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b"
+    "tree": "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b",
+    "published_from_revision": "7866bab567c29fecc19d34d9071dccd90d30bd7c",
+    "published_from_tree": "71cc42969ec0636efa918cd57709352e627a5482"
   },
   "canonical_release_asset": {
     "filename": "hol-org-cigar-0.9.4.tgz",
@@ -36,7 +38,22 @@
     "url": "https://registry.npmjs.org",
     "access": "public",
     "dist_tag": "alpha",
-    "package_observed_publicly_absent_at": "2026-08-31T15:14:38Z"
+    "package_observed_publicly_absent_at": "2026-08-31T15:14:38Z",
+    "published_at": "2026-09-02T23:08:48.217Z",
+    "tarball_url": "https://registry.npmjs.org/@hol-org/cigar/-/cigar-0.9.4.tgz",
+    "sha1": "ac08dbcad3dfacc0fa2f9d88dbaf5b28e5ac4e53",
+    "integrity": "sha512-+XfQU9iD1RtUw5V1uGeABuMkbC2I2u6rbSJqp83nc4n9DOB/p0AacFyUqyOSFKbWVVKpSPK7WaetcgzHpUs6VA==",
+    "file_count": 78,
+    "dist_tags": {
+      "alpha": "0.9.4",
+      "latest": "0.9.4"
+    },
+    "latest_policy": {
+      "expected": "absent",
+      "observed": "0.9.4",
+      "removal_attempt": "npm dist-tag rm @hol-org/cigar latest",
+      "removal_result": "E400 Bad Request"
+    }
   },
   "workflow": {
     "filename": "stage-hol-cigar-npm.yml",
@@ -53,19 +70,11 @@
   },
   "release_decision": {
     "publishable": false,
-    "status": "blocked",
+    "status": "published-with-tag-policy-exception",
     "blockers": [
       {
-        "id": "npm-packaging-change-not-yet-reviewed",
-        "resolution": "Merge a public PR containing the @hol-org/cigar identity, deterministic candidate hashes, and passing required checks before staging the first package."
-      },
-      {
-        "id": "first-publication-staged-approval-required",
-        "resolution": "After merge, stage the exact reviewed @hol-org/cigar@0.9.4 archive with public access and the alpha dist-tag, then require an authorized npm maintainer to inspect and approve it with 2FA."
-      },
-      {
-        "id": "trusted-publisher-post-bootstrap-required",
-        "resolution": "After 0.9.4 exists, bind hashgraph-online/hol-cigar, stage-hol-cigar-npm.yml, and the npm environment as a stage-only trusted publisher before 0.9.5-alpha.1."
+        "id": "npm-latest-tag-removal-required",
+        "resolution": "Remove only the latest dist-tag through npm package settings or npm support, then read back dist-tags and require alpha=0.9.4 with latest absent. Do not unpublish or republish 0.9.4."
       }
     ]
   }

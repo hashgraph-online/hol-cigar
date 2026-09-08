@@ -1,0 +1,47 @@
+[package]
+name = "cigar-context"
+version = "0.10.0-beta.1"
+description = "Incremental, token-budgeted local context graphs with citations and verified deltas"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/hashgraph-online/hol-cigar"
+readme = "README.md"
+publish = ["crates-io"]
+keywords = ["context", "retrieval", "graph", "tokens", "rag"]
+categories = ["text-processing", "data-structures"]
+include = ["src/**", "tests/**", "examples/**", "fixtures/**", "README.md", "CHANGELOG.md", "LICENSE", "Cargo.toml"]
+
+[package.metadata.docs.rs]
+features = ["bpe"]
+
+[lints]
+workspace = true
+
+[features]
+default = []
+bpe = ["dep:tiktoken-rs"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tiktoken-rs = { version = "=0.12.0", optional = true }
+
+[[bin]]
+name = "cigar-context"
+path = "src/main.rs"
+required-features = ["bpe"]
+
+[[example]]
+name = "compare"
+required-features = ["bpe"]
+
+[[bin]]
+name = "cigar-context-worker"
+path = "src/worker.rs"
+required-features = ["bpe"]
+
+[[example]]
+name = "source_compare"
+required-features = ["bpe"]

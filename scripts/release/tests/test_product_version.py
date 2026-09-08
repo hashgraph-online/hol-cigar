@@ -256,9 +256,7 @@ class ProductVersionTests(unittest.TestCase):
             b'"product_version": "0.9.4-honey.2"',
             first["demos/honey-manifest.v1.json"],
         )
-        self.assertIn(
-            b'PRODUCT_VERSION = "0.9.4-honey.2"', first["demos/run_honey.py"]
-        )
+        self.assertIn(b'PRODUCT_VERSION = "0.9.4-honey.2"', first["demos/run_honey.py"])
         self.assertIn(
             hashlib.sha256(first["demos/agent-handoff/driver.py"]).hexdigest().encode(),
             first["demos/honey-two-agent/driver.py"],
@@ -289,7 +287,9 @@ class ProductVersionTests(unittest.TestCase):
     def test_check_rejects_managed_drift(self) -> None:
         path = self.fixture / "sdk/typescript/package.json"
         path.write_text(
-            path.read_text(encoding="utf-8").replace('"version": "0.9.4"', '"version": "9.9.9"'),
+            path.read_text(encoding="utf-8").replace(
+                '"version": "0.9.4"', '"version": "9.9.9"'
+            ),
             encoding="utf-8",
         )
         with self.assertRaisesRegex(product_version.VersionError, "version drift"):

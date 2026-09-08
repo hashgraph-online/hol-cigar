@@ -20,9 +20,7 @@ class Balanced094ReleaseContractTests(unittest.TestCase):
     def test_release_and_comparator_identities_are_exact(self) -> None:
         self.assertEqual(self.document["release"]["version"], "0.9.4")
         self.assertFalse(self.document["release"]["production_qualified"])
-        comparators = {
-            item["version"]: item for item in self.document["comparators"]
-        }
+        comparators = {item["version"]: item for item in self.document["comparators"]}
         self.assertEqual(set(comparators), {"0.9.2", "0.9.3"})
         self.assertEqual(
             comparators["0.9.2"]["commit"],
@@ -200,7 +198,9 @@ class Balanced094ReleaseContractTests(unittest.TestCase):
             ]
         )
 
-    def test_release_notes_keep_source_claims_bounded_by_retained_evidence(self) -> None:
+    def test_release_notes_keep_source_claims_bounded_by_retained_evidence(
+        self,
+    ) -> None:
         allocation = self.document["retained_results"][
             "packing_allocation_source_qualification"
         ]
@@ -208,14 +208,20 @@ class Balanced094ReleaseContractTests(unittest.TestCase):
             cell["peak_live_reduction_millionths"] / 10_000
             for cell in allocation["cells"]
         ]
-        self.assertIn(f"{reductions[0]:.3f}% and {reductions[1]:.3f}%", self.release_notes)
+        self.assertIn(
+            f"{reductions[0]:.3f}% and {reductions[1]:.3f}%", self.release_notes
+        )
         self.assertIn(
             "This is source qualification\nfor commit `1d7bf983`, not final installed-RC evidence",
             self.release_notes,
         )
         self.assertIn("unpublished and unsupported", self.release_notes)
         self.assertIn("24-hour soak remains deliberately last", self.release_notes)
-        for prohibited in ("production ready", "production-ready", "production qualified"):
+        for prohibited in (
+            "production ready",
+            "production-ready",
+            "production qualified",
+        ):
             self.assertNotIn(prohibited, self.release_notes.lower())
 
 

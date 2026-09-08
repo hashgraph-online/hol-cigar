@@ -351,11 +351,58 @@ pub(crate) fn pack_v4(
     workspace.finish()
 }
 
-/// Packs independently sourced, requirement-free candidates with a bounded linear winner scan.
+struct IndependentCandidate<'a> {
+    candidate: &'a CompilerCandidate,
+    representation: &'a RepresentationVariant,
+    utility: i64,
+    lane: usize,
+    ranking_priority: usize,
+    ordinal: usize,
+}
+
+impl IndependentCandidate<'_> {
+    fn evaluate(
+        &self,
+        entity_bits: u64,
+        lane_counts: &[u16; LANE_COUNT],
+    ) -> Result<Option<EvaluationHeapEntry>, CompilerError> {
+        let new_entities = self.candidate.entity_coverage_bits & !entity_bits;
+        if new_entities == 0 && self.candidate.features.conflict_risk == 0 {
+            return Ok(None);
+        }
+        let utility = marginal_utility_from_factors(MarginalFactors {
+            candidate_utility: self.utility,
+            tokens: self.representation.token_count,
+            new_requirements: 0,
+            independent_requirements: 0,
+            effect_gain: false,
+            new_entities: i64::from(new_entities.count_ones()),
+            authority_gain: 0,
+            freshness_gain: 0,
+            conflict_gain: self.candidate.features.conflict_risk > 0,
+            lane_diverse: get(lane_counts, self.lane)? == &0,
+            repeated_requirements: 0,
+            redundant_entities: i64::from(
+                (self.candidate.entity_coverage_bits & entity_bits).count_ones(),
+            ),
+            dependency_items: 0,
+        })?;
+        Ok((utility > 0).then_some(EvaluationHeapEntry {
+            utility,
+            tokens: self.representation.token_count,
+            ranking_priority: self.ranking_priority,
+            ordinal: self.ordinal,
+            generation: 0,
+        }))
+    }
+}
+
+/// Packs independently sourced, requirement-free candidates with a lazy upper-bound heap.
 ///
 /// The guards exclude every shape that needs closure, dominance, requirement, mandatory, or lane
-/// limit state. The scan applies the same marginal utility, capacity, and tie-breaking rules as the
-/// general heap path, but does not allocate its per-candidate closure workspace.
+/// limit state. Entity gains and lane-diversity gains can only decrease as selections accumulate,
+/// so stale entries are upper bounds. Reevaluate the top entry until it remains the winner. This
+/// preserves the exact scan's ties and decisions without rescoring every candidate per admission.
 fn try_pack_independent_requirement_free(
     contract: &ContextContract,
     frozen: &FrozenInputs,
@@ -398,74 +445,81 @@ fn try_pack_independent_requirement_free(
     let mut selected_bits = vec![false; versions.len()];
     let mut selected = BTreeMap::new();
     let mut decisions = Vec::new();
-    let stop_reason = loop {
-        let mut remaining = false;
-        let mut positive_infeasible = false;
-        let mut winner = None;
-        for (ordinal, version) in versions.iter().enumerate() {
-            if selected_bits.get(ordinal).copied().unwrap_or(true) {
-                continue;
-            }
+    let candidates = versions
+        .iter()
+        .enumerate()
+        .map(|(ordinal, version)| {
             let candidate = eligible
                 .get(version)
                 .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
-            if candidate.features.lexical_match < profile.minimum_lexical_match {
-                continue;
-            }
-            remaining = true;
             let representation = candidate
                 .representations
                 .first()
                 .ok_or_else(|| CompilerError::new(CompilerErrorCode::InvalidInput))?;
-            let new_entities = candidate.entity_coverage_bits & !entity_bits;
-            if new_entities == 0 && candidate.features.conflict_risk == 0 {
-                continue;
-            }
-            let redundant_entities = candidate.entity_coverage_bits & entity_bits;
-            let utility = candidate_utility(candidate, representation, profile)?;
-            let lane = lane_index(candidate.lane);
-            let marginal_utility = marginal_utility_from_factors(MarginalFactors {
-                candidate_utility: utility,
-                tokens: representation.token_count,
-                new_requirements: 0,
-                independent_requirements: 0,
-                effect_gain: false,
-                new_entities: i64::from(new_entities.count_ones()),
-                authority_gain: 0,
-                freshness_gain: 0,
-                conflict_gain: candidate.features.conflict_risk > 0,
-                lane_diverse: get(&lane_counts, lane)? == &0,
-                repeated_requirements: 0,
-                redundant_entities: i64::from(redundant_entities.count_ones()),
-                dependency_items: 0,
-            })?;
-            if marginal_utility <= 0 {
-                continue;
-            }
-            let lane_budget = *get(&lane_budgets, lane)?;
-            let fits = get(&lane_tokens, lane)?
-                .checked_add(representation.token_count)
-                .is_some_and(|tokens| tokens <= lane_budget);
-            if !fits {
-                positive_infeasible = true;
-                continue;
-            }
-            let entry = EvaluationHeapEntry {
-                utility: marginal_utility,
-                tokens: representation.token_count,
+            Ok(IndependentCandidate {
+                candidate,
+                representation,
+                utility: candidate_utility(candidate, representation, profile)?,
+                lane: lane_index(candidate.lane),
                 ranking_priority: ranking_priorities
                     .and_then(|priorities| priorities.get(version))
                     .copied()
                     .unwrap_or(usize::MAX),
                 ordinal,
-                generation: 0,
+            })
+        })
+        .collect::<Result<Vec<_>, CompilerError>>()?;
+    let mut heap = BinaryHeap::with_capacity(candidates.len());
+    for value in &candidates {
+        if value.candidate.features.lexical_match >= profile.minimum_lexical_match
+            && let Some(entry) = value.evaluate(entity_bits, &lane_counts)?
+        {
+            heap.push(entry);
+        }
+    }
+    let stop_reason = loop {
+        let mut winner = None;
+        while let Some(previous) = heap.pop() {
+            let value = get(&candidates, previous.ordinal)?;
+            let Some(entry) = value.evaluate(entity_bits, &lane_counts)? else {
+                continue;
             };
-            if winner.as_ref().is_none_or(|(best, _, _, _)| entry > *best) {
-                winner = Some((entry, utility, new_entities, lane));
+            let lane_budget = *get(&lane_budgets, value.lane)?;
+            let fits = get(&lane_tokens, value.lane)?
+                .checked_add(value.representation.token_count)
+                .is_some_and(|tokens| tokens <= lane_budget);
+            if !fits {
+                continue;
             }
+            if entry != previous {
+                heap.push(entry);
+                continue;
+            }
+            winner = Some((
+                entry,
+                value.utility,
+                value.candidate.entity_coverage_bits & !entity_bits,
+                value.lane,
+            ));
+            break;
         }
 
         let Some((winner, utility, new_entities, lane)) = winner else {
+            // Capacity-discarded upper bounds may since have become non-positive. Recompute
+            // the final classification once, exactly as the frozen scan did in its last pass.
+            let mut remaining = false;
+            let mut positive_infeasible = false;
+            for value in &candidates {
+                if selected_bits.get(value.ordinal).copied().unwrap_or(true)
+                    || value.candidate.features.lexical_match < profile.minimum_lexical_match
+                {
+                    continue;
+                }
+                remaining = true;
+                if value.evaluate(entity_bits, &lane_counts)?.is_some() {
+                    positive_infeasible = true;
+                }
+            }
             break if positive_infeasible {
                 PackingStopReason::CapacitySaturated
             } else if remaining {
@@ -789,22 +843,18 @@ fn try_pack_independent_blocking(
 }
 
 fn globally_independent(eligible: &EligibleCandidates<'_>) -> bool {
-    for (index, left) in eligible.values().enumerate() {
-        for right in eligible.values().skip(index.saturating_add(1)) {
-            let left_content = left
-                .representations
-                .first()
-                .map(|representation| &representation.content_digest);
-            let right_content = right
-                .representations
-                .first()
-                .map(|representation| &representation.content_digest);
-            if left.canonical_uri == right.canonical_uri
-                || left.lineage_id == right.lineage_id
-                || left_content == right_content
-            {
-                return false;
-            }
+    // Each identity must be unique independently. This is exactly the pairwise predicate,
+    // including None == None for absent representations, without its quadratic scan.
+    let mut sources = BTreeSet::new();
+    let mut lineages = BTreeSet::new();
+    let mut contents = BTreeSet::new();
+    for candidate in eligible.values() {
+        let content = candidate.representations.first().map(|r| &r.content_digest);
+        if !sources.insert(&candidate.canonical_uri)
+            || !lineages.insert(&candidate.lineage_id)
+            || !contents.insert(content)
+        {
+            return false;
         }
     }
     true

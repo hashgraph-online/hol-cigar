@@ -1248,7 +1248,7 @@ def assert_packaged_fixtures() -> None:
 
 
 def assert_release_contracts() -> None:
-    """Bind all installed SDK declarations to one version, ABI, license, and notice."""
+    """Bind SDKs to explicit release tracks and one unchanged remote ABI/license/notice."""
 
     package_match = re.search(
         r"^package\s+([a-z][a-z0-9.]*)\s*;\s*$",
@@ -1285,6 +1285,28 @@ def assert_release_contracts() -> None:
         "typescript": version,
         "python": python_version,
     }
+    # Local context SDKs have their own beta track; this does not promote the frozen
+    # Honey daemon, Rust/Go remote clients, or their 0.9.4 publication contracts.
+    local_release_path = SDK / "local-context-release.v1.json"
+    local_release = load_json(local_release_path) if local_release_path.exists() else None
+    if local_release is not None:
+        expected_local = {
+            "schema_version": "cigar.local-context-sdk-release.v1",
+            "remote_workspace_version": version,
+            "context_abi": context_abi,
+            "core_version": "0.10.0-beta.1",
+            "protocol": "cigar.context-worker.v1",
+            "channel": "beta",
+            "versions": {"python": "0.10.0b1", "typescript": "0.10.0-beta.1"},
+            "bundled_native_targets": ["aarch64-apple-darwin"],
+            "published": False,
+        }
+        if local_release != expected_local or version != "0.9.4":
+            raise AssertionError("local-context SDK release track drift")
+        core = tomllib.loads((ROOT / "crates/cigar-context/Cargo.toml").read_text())
+        if core["package"]["version"] != local_release["core_version"]:
+            raise AssertionError("local context core version drift")
+        expected_manifests.update(local_release["versions"])
     if manifests != expected_manifests:
         raise AssertionError(f"SDK package version drift: {manifests}")
 
@@ -1302,6 +1324,13 @@ def assert_release_contracts() -> None:
             "version": version,
             "context_abi": context_abi,
         }
+        if local_release is not None and language in local_release["versions"]:
+            expected.update({
+                "version": local_release["versions"][language],
+                "channel": local_release["channel"],
+                "local_context_core_version": local_release["core_version"],
+                "local_context_protocol": local_release["protocol"],
+            })
         if actual != expected:
             raise AssertionError(f"{language} release metadata drift")
 

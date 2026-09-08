@@ -1,0 +1,55 @@
+{
+  "schema": "cigar.context-sdk-release-readiness-validation.v1",
+  "implementation_commit": "6019e9e2bc87d44609d839b2e6a30daddc8e16cc",
+  "historical_baseline_commit": "107880a53046b0abf0d5f5f6d9f63598722823e2",
+  "published": false,
+  "production_signed": false,
+  "release_ready": false,
+  "runs": [
+    {
+      "file": "release-baseline.xml.gz",
+      "sha256": "97b26951b927b5737a135e8c74b8fc931e36d5d3342e6fb7a4fa0fcb762b2b34",
+      "bytes": 22488,
+      "test_functions": {"passed": 373, "failed": 35, "errors": 8, "skipped": 31},
+      "passing_subtests": 309,
+      "note": "Initial local run before hardening and before adding protoc to PATH."
+    },
+    {
+      "file": "release-094-baseline.xml.gz",
+      "sha256": "1b3f238f4381d1009e6ce4718ee22ce340a924486d98e829ba64281102fe9904",
+      "bytes": 15530,
+      "test_functions": {"passed": 398, "failed": 10, "errors": 8, "skipped": 31},
+      "passing_subtests": 312,
+      "note": "Original 0.9.4 checkout; interpreter ownership and missing installed Node dependencies constrain comparison."
+    },
+    {
+      "file": "release-final.xml.gz",
+      "sha256": "2906ca91b307c6c18652d433e6b314a74a49740407aa725d9d1e4e7ecf01b68f",
+      "bytes": 20453,
+      "test_functions": {"passed": 406, "failed": 30, "errors": 8, "skipped": 31},
+      "passing_subtests": 334,
+      "note": "Whole release suite at the clean implementation commit; not a successful release qualification."
+    },
+    {
+      "file": "context-release-gates-final.xml.gz",
+      "sha256": "f05d05beced98873ce1bfd97e28225ded9ac1e0dec84fcd9ef660efa8dce3e1d",
+      "bytes": 1656,
+      "test_functions": {"passed": 47, "failed": 0, "errors": 0, "skipped": 0},
+      "passing_subtests": 34,
+      "note": "Focused suite before the final source-timestamp binding addition; eight affected tests rerun afterward, then included in the final whole suite."
+    }
+  ],
+  "unsigned_handoff_manifest": {
+    "file": "release-manifest.json",
+    "sha256": "f1b3f0f777e73ca6646eae2162e21a4c092e23578746bc7681c21791c58b1f59",
+    "bytes": 13018,
+    "required_signatures": 7,
+    "actual_production_signatures": 0
+  },
+  "limitations": [
+    "JUnit totals include the separately counted subtests.",
+    "Real Ed25519 verification tests use disposable keys and synthetic archives only.",
+    "Hosted CI, independent builds, native Linux/Windows qualification and registry publication were not performed.",
+    "Actual archives remain 0.10.0 release candidates, not renamed beta archives."
+  ]
+}

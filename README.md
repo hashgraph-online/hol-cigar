@@ -55,7 +55,7 @@ Choose the path that matches what you are trying to do:
 | Goal | Start here |
 |---|---|
 | Use the published Python SDK baseline | Install `hol-cigar==0.9.1` from PyPI; the import package remains `cigar_sdk`. |
-| Review the TypeScript npm candidate | Inspect the [`@hol-org/cigar@0.9.4` readiness assessment](reports/npm-sdk-0.9.4-readiness.md); publication remains approval-gated. |
+| Use the TypeScript npm preview | Install `@hol-org/cigar@alpha`; inspect the [`@hol-org/cigar@0.9.4` release assessment](reports/npm-sdk-0.9.4-readiness.md) for its exact scope and verification evidence. |
 | Evaluate the private Honey 0.9.4 candidate | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
 | Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
 | Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
@@ -102,6 +102,27 @@ flowchart LR
 The public protocol currently defines seven services covering catalog, context, spaces, handoffs,
 effects, replay, and operations. See the [public API reference](docs/reference/public-api.md) for the
 operation-level contract.
+
+## 0.10.0 local context library beta
+
+This branch adds [`cigar-context` 0.10.0-beta.1](crates/cigar-context/README.md): an offline Rust library
+and JSON CLI for incremental context graphs, typed evidence dependencies and counterclaims,
+exact rendered-token budgets, source citations, optional semantic-retriever integration, and
+verified snapshot deltas. The second pass adds atomic source replacement and bounded exact-token
+caching, with substantially faster cold/warm queries and unchanged tested outputs. It has no
+daemon, database, or model-service requirement.
+
+Start with `python3 scripts/dev.py context` or the short Rust example in the library README.
+The [implementation plan](docs/proposals/cigar-0.10.0-plan.md) defines the scope and acceptance
+criteria. The [current measured differences report](reports/cigar-0.10.0-second-pass.md) includes raw evidence,
+limitations, and the remaining release gates. The existing compiler also receives a
+behavior-preserving packing optimization.
+The Python (`hol-cigar==0.10.0b1`) and TypeScript (`@hol-org/cigar@0.10.0-beta.1`) SDKs now
+add the same local graph through a persistent Rust worker while retaining their remote v1 APIs.
+See the [SDK RC report and local archives](reports/cigar-0.10.0-sdk-rc.md),
+[Python guide](sdk/python/README.md), and [TypeScript guide](sdk/typescript/README.md).
+Bundled native RC artifacts are qualified locally on macOS ARM64; they are not published.
+Frozen Honey 0.9.4 daemon publication contracts and historical artifacts below remain unchanged.
 
 ## CIGAR Honey 0.9.4 candidate
 
@@ -175,7 +196,7 @@ The checked-in product authority currently declares:
 | Marketing name | CIGAR Honey 0.9.4 candidate |
 | Version | `0.9.4` |
 | Python distribution | `hol-cigar==0.9.4` (import `cigar_sdk`) |
-| TypeScript npm distribution | `@hol-org/cigar@0.9.4` (`alpha` candidate; not yet published) |
+| TypeScript npm distribution | `@hol-org/cigar@0.9.4` (published developer preview; intended `alpha` channel) |
 | Context ABI | `cigar.context.v1` |
 | Release state | Alpha / `developer-preview` |
 | Target | `aarch64-apple-darwin` |
@@ -197,7 +218,8 @@ Machine-readable authorities take precedence over prose:
 - [`packaging/pypi/release-profile.v1.json`](packaging/pypi/release-profile.v1.json) — the separate
   `hol-cigar` 0.9.1 PyPI developer-preview identity and bounded qualification gates.
 - [`packaging/npm/release-profile.v1.json`](packaging/npm/release-profile.v1.json) — the separate
-  `@hol-org/cigar` npm identity, canonical candidate bytes, and staged-publication gates.
+  `@hol-org/cigar` npm identity, published canonical bytes, terminal 0.9.4 state, and future
+  staged-publication controls.
 
 Progress toward the broader CIGAR v1 design is tracked in
 [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) against [`prd.md`](prd.md). Those planning
@@ -215,7 +237,7 @@ readiness or a conclusive efficiency or efficacy claim.
 | Regression checks | Python SDK tests, lint, formatting, and strict typing; release-tool regression tests; documentation checks; Rust workspace tests and warnings-denied Clippy. |
 | Exact artifacts | The closed 13-file Honey inventory is rebuilt from the frozen commit; every contract and checksum passes; the public verifier returns `passed-artifact-integrity`. |
 | Python package | The `hol_cigar-0.9.4` wheel and sdist pass strict metadata checks and clean Python 3.14 installs in the non-admin qualification environment. Imports, the 45-operation surface, shared fixture, and both entry points must pass. |
-| TypeScript npm package | `@hol-org/cigar@0.9.4` passes exact metadata and archive checks, two-pack reproducibility, strict types, runtime tests, clean packed consumers, production audit, and a public-`alpha` stage dry-run. First publication still requires public review, staged inspection, and human 2FA approval. |
+| TypeScript npm package | `@hol-org/cigar@0.9.4` is published and matches the qualified archive byte-for-byte. Exact metadata and archive checks, two-pack reproducibility, strict types, runtime tests, clean packed consumers, live-registry install, and production audit passed. The registry unexpectedly also assigned `latest`; that tag-policy exception is recorded in the npm release assessment. |
 | Publication control | The tag resolves to the frozen commit; GitHub prerelease downloads match the manifest; PyPI uses the protected `pypi` environment, Trusted Publishing, attestations, and explicit owner approval. A clean post-publication install and published hashes must match. |
 
 Installed-artifact workflow qualification, upgrade and rollback rehearsal, final reproducibility,

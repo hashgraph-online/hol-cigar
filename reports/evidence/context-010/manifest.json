@@ -1,0 +1,157 @@
+{
+  "base_commit": "107880a53046b0abf0d5f5f6d9f63598722823e2",
+  "source_files": {
+    ".github/workflows/context-library.yml": "b4f9123311f0da54cac041196d2b5483fb5980eb2e76b47939ac2fe0d316461e",
+    "Cargo.lock": "4383f2331a0315e61a89de34fd4813e5b8e30335770f0c6d190419b1a66887af",
+    "Cargo.toml": "de14e31a323ec35a1e2581986a7bcf0e5ba9d6cf27bb8fce720c332112726259",
+    "benches/context-010/README.md": "32c62d9e3842e84feab50f54a8ff50180282e37c3de4c95150b8b668fb610bee",
+    "benches/context-010/consumer.rs": "a5fecae53b0a78cf74e13bc77ace5bc7b55646eb50379431552fd4550daaa748",
+    "benches/context-010/export.py": "65afd95144db74d7b66c8492a57f1be32ed0fbcda0784beb3263143d593e1e13",
+    "benches/context-010/legacy.rs": "c2e8cc1f492152fe2f4b652909816fd23360f6ef01d41a63ca52f90b1cb70c75",
+    "benches/context-010/qualify.py": "3e34542e774ed0b1fa53c36af43ef73fd9a0158e81a343b91e6d284c2e741426",
+    "benches/context-010/run.py": "00e8da46014e8c53ad347de7f9bc1a72855351db360fd173173b52b7927a9fad",
+    "crates/cigar-compiler/src/packing_workspace.rs": "f6f9be13246763cca84040c7552a5aada774056ef2baa6d04422aa68112c4efa",
+    "crates/cigar-context/Cargo.toml": "ab30ba297558ada81514b34dbe63275ce3658f0a50edd5baa0113077cf06693e",
+    "crates/cigar-context/README.md": "6192ede6c34494f01b181dda4d1ed1fa2c1b3037f12c9182d5902be08e1d619f",
+    "crates/cigar-context/examples/compare.rs": "b194eeebfb4b560546f767ac7012d109de35dc3f267820649f2608aebdea811a",
+    "crates/cigar-context/examples/source_compare.rs": "27acbd8d1a97dbe9403145af49b5e033e128438abd8ace829327ebe959c9c36d",
+    "crates/cigar-context/examples/support/mod.rs": "1b8aecd618b9079622094bb8592c33b1f45dbed521154f1ddd10dd830ad736b8",
+    "crates/cigar-context/fixtures/quality.json": "d77c31034a9d8d79e00cd321eea5a3f2f0ea54f4d90c58e7cbbc6bfabb837319",
+    "crates/cigar-context/src/graph.rs": "70ef9f7d50ffae84b0a410951e3da47b080ee32ac3daf66d37fbc80bf280fe79",
+    "crates/cigar-context/src/lib.rs": "57cc65a4ab3e865673df2d0faa71327a62f89907ad654396154a0c598e1f1771",
+    "crates/cigar-context/src/main.rs": "f69944c2ce16637215ddf24dd72b57143708747d72e662cee5cae71abe399271",
+    "crates/cigar-context/src/select.rs": "3c450b40ab10df02d3ae062df61edabcebc7b0e479ea7ff57c89dc7d0a8640e1",
+    "crates/cigar-context/src/snapshot.rs": "b7ba03295eed1238237fcd1ad4dc2a5c72ec71e59baa58bdf64bdc4b21da06d0",
+    "crates/cigar-context/src/tokenizer.rs": "96cd44efde92d0630d8ed48b697cd07d2fb59123a32d326ba1c90205a2666308",
+    "crates/cigar-context/tests/cli.rs": "6d43580bbcf5d82e660433439943157efc49b1a9035046b7ed766b65ae9aa6f2",
+    "crates/cigar-context/tests/context.rs": "c68b1a270fe58feae1668032b357c9e7e6166d1c0e964d8e992bcced5426ccd1",
+    "scripts/dev.py": "b10311fa13ec1886499d3aec076442ec48ddc8eef2bda77e47d910ad3ce8a2be"
+  },
+  "artifacts": {
+    "comparison.json.gz": {
+      "uncompressed_sha256": "22c88121cbb3e74b0b84649b9ce7eabe4dbfb166e791aa1d647720ed0f469440",
+      "uncompressed_bytes": 1327738
+    },
+    "graph-raw.json.gz": {
+      "uncompressed_sha256": "414df0c2a92b291c27352d1ae47e36f7b672bc47b0abe3931645ecee33b963d0",
+      "uncompressed_bytes": 866078
+    },
+    "source-comparison.json.gz": {
+      "uncompressed_sha256": "1e026788e8bab29ea12768519f65aba06e111e31bc1c3d0daea8d54150370eed",
+      "uncompressed_bytes": 167036
+    },
+    "initial-selector-source-comparison.json.gz": {
+      "uncompressed_sha256": "6a7e406e000c57f90979962bc254ab88e05db7227b464ad55548045eda7caeb9",
+      "uncompressed_bytes": 131676
+    },
+    "context-00-fmt.log.gz": {
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    },
+    "context-01-clippy.log.gz": {
+      "uncompressed_sha256": "dcb8f4b6bf4812307060526f116759ea3b98b77209e0d83d360397ec774fce77",
+      "uncompressed_bytes": 229
+    },
+    "context-02-test.log.gz": {
+      "uncompressed_sha256": "7c402a50c8434c1ef61c7c7b96db40928003492269f5c2c6795ea009f8dad71b",
+      "uncompressed_bytes": 3409
+    },
+    "context-03-test.log.gz": {
+      "uncompressed_sha256": "b29ba30791d5b1f6684148cb2d5683a120326ed9c4f70d6f43759b3ea10b15ea",
+      "uncompressed_bytes": 360
+    },
+    "context-04-test.log.gz": {
+      "uncompressed_sha256": "c1560a42899b128409ad2f5c92bf5ee24058d18457002fbb477ad6f40aaf51e7",
+      "uncompressed_bytes": 2688
+    },
+    "context-validation.json.gz": {
+      "uncompressed_sha256": "ce2095ec2acf1d04acb578f0e9c39592f0ec3ca63d15a9747ba1e40f35123d74",
+      "uncompressed_bytes": 1408
+    },
+    "workspace-00-fmt.log.gz": {
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    },
+    "workspace-01-clippy.log.gz": {
+      "uncompressed_sha256": "0751bb5c145b98c51f1e98f6512e0b6134579f111067541323acde1202a87584",
+      "uncompressed_bytes": 15624
+    },
+    "workspace-02-test.log.gz": {
+      "uncompressed_sha256": "568eb1f7e89b61908e3fb89d3d9973af40e7ac9006c2484a508de49b222a83ba",
+      "uncompressed_bytes": 132848
+    },
+    "workspace-03-test.log.gz": {
+      "uncompressed_sha256": "27dee30843b664d7c975fd30cfa4ec3733a6046439d5f243cd51f7cd1c111803",
+      "uncompressed_bytes": 8789
+    },
+    "workspace-validation.json.gz": {
+      "uncompressed_sha256": "b2d9b03c80c921728e17722a44f90679441167ab9417e97f062e032d2d4d019a",
+      "uncompressed_bytes": 1053
+    },
+    "package-Cargo.lock.gz": {
+      "uncompressed_sha256": "848d8c43cace97d237b306c2fd05b06f281442b833d4f70ed6be542bbb5d1b38",
+      "uncompressed_bytes": 7955
+    },
+    "package-bpe-tree.log.gz": {
+      "uncompressed_sha256": "183bae26b7162a5b2b02a285e3f3cbdf1b2c9d19d2da6e484359a081f4154e89",
+      "uncompressed_bytes": 1096
+    },
+    "package-bpe.log.gz": {
+      "uncompressed_sha256": "57348931f45921fee22319183a17d350701623b9ce2c96536b9d1535afc08a88",
+      "uncompressed_bytes": 559
+    },
+    "package-core-tree.log.gz": {
+      "uncompressed_sha256": "3005ac8f9b2d934638c010173651f089ccace2d7ed620e99bd12aead16ea369f",
+      "uncompressed_bytes": 691
+    },
+    "package-core.log.gz": {
+      "uncompressed_sha256": "1e7f0ad8f5d437999c483f59caff029b239e15e25e74db2f016feb56b666a733",
+      "uncompressed_bytes": 610
+    },
+    "package-lock.log.gz": {
+      "uncompressed_sha256": "4275d3e97cc247c7dbf1b0f77154ea37ffa208c3941b527965fc5625eb15f9e5",
+      "uncompressed_bytes": 67
+    },
+    "package-package.log.gz": {
+      "uncompressed_sha256": "730f8742a4956dba565a51606222753fd6b0a511f4dfe9a211f2079b6b9886eb",
+      "uncompressed_bytes": 2070
+    },
+    "package-packaged-tests.log.gz": {
+      "uncompressed_sha256": "2cbce475026437afc94b5318dfbe952dba88bb5e3bdbcb844adaa6313e1ddbe5",
+      "uncompressed_bytes": 3171
+    },
+    "package-qualification.json.gz": {
+      "uncompressed_sha256": "51138677192b41be00b5c1a8f5f211033d93e3d32ce8660d4c87f405e2bbefe2",
+      "uncompressed_bytes": 2051
+    },
+    "workspace-repeat-00-fmt.log.gz": {
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    },
+    "workspace-repeat-01-clippy.log.gz": {
+      "uncompressed_sha256": "e497262a6fa152bfe01a2ad228cc4484a2cfbc0f1bf4f85e4dd1287f61753535",
+      "uncompressed_bytes": 229
+    },
+    "workspace-repeat-02-test.log.gz": {
+      "uncompressed_sha256": "985abd44de10567f50767312ea4cf79eae0cc8376724f1107500fda7b2898c47",
+      "uncompressed_bytes": 133277
+    },
+    "workspace-repeat-validation.json.gz": {
+      "uncompressed_sha256": "6cea1aa0f7eb6b0e8f4d5452154e6fb8802c90323ce795deab241b8951d7a8e7",
+      "uncompressed_bytes": 821
+    },
+    "hook-baseline-and-candidate-rechecks.json.gz": {
+      "uncompressed_sha256": "66fcccf994861ac7d95dbfc9869b0f579adcc370e507227d8c04405fad0d1cef",
+      "uncompressed_bytes": 11922
+    },
+    "cigar-context-0.10.0.crate": {
+      "stored_sha256": "065e080c271a62d328bc7953b5f6e98f223023a039cd878c18c243cc76ca6d4e",
+      "stored_bytes": 31596
+    }
+  },
+  "status": "Local development diagnostics, not signed release qualification",
+  "benchmark_binaries": {
+    "release/examples/compare": "2810ce09e30bce8a2e10ef7268b7e33d2306e7ed8457b8c7066e49eb6a240a10",
+    "release/examples/source_compare": "5207db24c0e0854cff363be1e9750af9de7b829495887cdac1483b27ad61c083"
+  }
+}

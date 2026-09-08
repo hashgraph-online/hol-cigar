@@ -166,7 +166,7 @@ jobs:
         run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
   python-package:
-    name: Python 0.9.4 package / Ubuntu 24.04 x64
+    name: Python SDK portable package / Ubuntu 24.04 x64
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -199,43 +199,52 @@ jobs:
 
       - name: Test the locked Python SDK
         run: |
+          rustup toolchain install 1.92.0 --profile minimal
+          cargo +1.92.0 build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
+          rustc +1.92.0 sdk/fixtures/stalled-worker.rs -o "${RUNNER_TEMP}/cigar-stalled-worker"
+          export CIGAR_TEST_WORKER="${GITHUB_WORKSPACE}/target/release/cigar-context-worker"
+          export CIGAR_TEST_STALLED_WORKER="${RUNNER_TEMP}/cigar-stalled-worker"
+          printf 'CIGAR_TEST_WORKER=%s\n' "${CIGAR_TEST_WORKER}" >>"${GITHUB_ENV}"
           uv sync --project sdk/python --frozen
           uv run --project sdk/python pytest -q sdk/python/tests
 
       - name: Build and verify wheel and source distribution
         run: |
           umask 077
-          dist_dir="${RUNNER_TEMP}/hol-cigar-0.9.4-dist"
+          package_version="$(python3 -c 'import tomllib;print(tomllib.load(open("sdk/python/pyproject.toml","rb"))["project"]["version"])')"
+          dist_dir="${RUNNER_TEMP}/hol-cigar-${package_version}-dist"
           test ! -e "${dist_dir}"
           mkdir -m 0700 "${dist_dir}"
           uv build --project sdk/python --out-dir "${dist_dir}"
-          test -f "${dist_dir}/hol_cigar-0.9.4-py3-none-any.whl"
-          test -f "${dist_dir}/hol_cigar-0.9.4.tar.gz"
+          test -f "${dist_dir}/hol_cigar-${package_version}-py3-none-any.whl"
+          test -f "${dist_dir}/hol_cigar-${package_version}.tar.gz"
           test "$(find "${dist_dir}" -type f ! -name '.gitignore' | wc -l | tr -d ' ')" = "2"
           uvx --from twine==6.2.0 twine check --strict "${dist_dir}"/*
           printf 'HOL_CIGAR_PR_DIST=%s\n' "${dist_dir}" >>"${GITHUB_ENV}"
+          printf 'HOL_CIGAR_PYTHON_VERSION=%s\n' "${package_version}" >>"${GITHUB_ENV}"
 
       - name: Qualify clean wheel and source-distribution installs
         run: |
-          wheel_env="${RUNNER_TEMP}/hol-cigar-0.9.4-wheel-env"
-          sdist_env="${RUNNER_TEMP}/hol-cigar-0.9.4-sdist-env"
+          wheel_env="${RUNNER_TEMP}/hol-cigar-${HOL_CIGAR_PYTHON_VERSION}-wheel-env"
+          sdist_env="${RUNNER_TEMP}/hol-cigar-${HOL_CIGAR_PYTHON_VERSION}-sdist-env"
           uv venv --python 3.14.6 "${wheel_env}"
           uv venv --python 3.14.6 "${sdist_env}"
           uv pip install --python "${wheel_env}/bin/python" \
-            "${HOL_CIGAR_PR_DIST}/hol_cigar-0.9.4-py3-none-any.whl"
+            "${HOL_CIGAR_PR_DIST}/hol_cigar-${HOL_CIGAR_PYTHON_VERSION}-py3-none-any.whl"
           uv pip install --python "${sdist_env}/bin/python" \
-            "${HOL_CIGAR_PR_DIST}/hol_cigar-0.9.4.tar.gz"
+            "${HOL_CIGAR_PR_DIST}/hol_cigar-${HOL_CIGAR_PYTHON_VERSION}.tar.gz"
           for package_python in \
             "${wheel_env}/bin/python" \
             "${sdist_env}/bin/python"
           do
             "${package_python}" - <<'PY'
-          import json
+          import json, os
           from importlib import metadata, resources
+          from pathlib import Path
 
           import cigar_sdk
 
-          assert metadata.version("hol-cigar") == "0.9.4"
+          assert metadata.version("hol-cigar") == os.environ["HOL_CIGAR_PYTHON_VERSION"]
           assert cigar_sdk.CONTEXT_ABI == "cigar.context.v1"
           assert metadata.metadata("hol-cigar").get_all("Project-URL") == [
               "Homepage, https://hol.org",
@@ -245,12 +254,10 @@ jobs:
           release = json.loads(
               resources.files("cigar_sdk").joinpath("release.json").read_text()
           )
-          assert release == {
-              "context_abi": "cigar.context.v1",
-              "name": "hol-cigar",
-              "schema_version": "cigar.sdk-release.v1",
-              "version": "0.9.4",
-          }
+          assert release == json.loads(Path("sdk/python/src/cigar_sdk/release.json").read_bytes())
+          with cigar_sdk.LocalContextGraph("ci-portable", worker_path=os.environ["CIGAR_TEST_WORKER"]) as graph:
+              graph.upsert({"id": "a", "source": "a", "text": "alpha"})
+              assert graph.compile({"required": ["a"]})["snapshot"]["stats"]["selected_sources"] == 1
           session_contract = json.loads(
               resources.files("cigar_sdk")
               .joinpath("workflow-context-session.v1.json")
@@ -434,6 +441,10 @@ jobs:
           corepack pnpm install --frozen-lockfile
           uv sync --project sdk/python --frozen
           env GOWORK=off go -C sdk/go mod download
+          cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
+          rustc sdk/fixtures/stalled-worker.rs -o "${RUNNER_TEMP}/cigar-stalled-worker"
+          printf 'CIGAR_TEST_WORKER=%s\n' "${CARGO_TARGET_DIR}/release/cigar-context-worker" >>"${GITHUB_ENV}"
+          printf 'CIGAR_TEST_STALLED_WORKER=%s\n' "${RUNNER_TEMP}/cigar-stalled-worker" >>"${GITHUB_ENV}"
 
       - name: Run all native non-fuzz non-soak merge matrices offline
         env:

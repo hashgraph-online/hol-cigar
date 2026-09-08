@@ -1,16 +1,19 @@
-# `@hol-org/cigar` 0.9.4 npm readiness assessment
+# `@hol-org/cigar` 0.9.4 npm release assessment
 
-Assessment date: 2026-08-31
+Assessment date: 2026-09-02
 
 ## Decision
 
-`@hol-org/cigar@0.9.4` is technically qualified as a public npm developer-preview candidate for
-the `alpha` dist-tag. External staging remains fail-closed until the packaging changes receive
-public PR review and merge. After merge, the first package must be staged from the exact reviewed
-archive and separately approved by an authorized npm maintainer with 2FA.
+`@hol-org/cigar@0.9.4` is published as a public npm developer preview. The live registry tarball is
+byte-identical to the twice-built canonical archive approved in public PR #33. Live metadata,
+exact-version installation, ESM import, release identity, exported surface, and production audit
+all passed. The immutable 0.9.4 profile is terminal and remains non-publishable so the release
+workflow cannot attempt to stage the same version again.
 
-No npm package, version, dist-tag, trusted publisher, staged package, Git tag, GitHub release, PR,
-or remote branch was created or changed during this assessment.
+The intended release channel is `alpha`. npm unexpectedly assigned both `alpha` and `latest` on
+this first publication. One WebAuthn-authorized removal of only `latest` was attempted with the
+documented `npm dist-tag rm` operation; the registry returned `E400 Bad Request` and did not change
+either tag. This tag-policy exception remains open and is not counted as a successful gate.
 
 ## Registry and authority
 
@@ -21,14 +24,20 @@ or remote branch was created or changed during this assessment.
 | User role | developer |
 | Organization owner | `kantorcodes` |
 | Package | `@hol-org/cigar@0.9.4` |
-| Registry state | public `E404` at 2026-08-31T15:14:38Z |
+| Registry state | public; published 2026-09-02T23:08:48.217Z |
 | Visibility | public |
 | Intended dist-tag | `alpha` |
-| `latest` | must remain absent |
+| Observed dist-tags | `alpha=0.9.4`, `latest=0.9.4` |
+| `latest` remediation | one removal request rejected by npm with `E400`; no state change |
+| Registry tarball | `https://registry.npmjs.org/@hol-org/cigar/-/cigar-0.9.4.tgz` |
+| Trusted Publisher | GitHub `hashgraph-online/hol-cigar`, `stage-hol-cigar-npm.yml`, environment `npm`, stage permission only |
 
 The npm website session and CLI session are separate. The CLI identity was explicitly verified
-with `npm whoami`, and organization membership was read back with `npm org ls hol-org`. No token or
-credential was written to the repository or printed into assessment evidence.
+with `npm whoami`, and organization membership was read back with `npm org ls hol-org`. Interactive
+approval used the account's WebAuthn security key/passkey; that configuration does not send an OTP
+by email or SMS. No token or credential was written to the repository or printed into release
+evidence. The bootstrap session ended with `npm logout`, and a final `npm whoami` returned
+`ENEEDAUTH`.
 
 ## Source and identity migration
 
@@ -45,12 +54,15 @@ and propagates that identity through:
 - documentation, examples, and refusal tests; and
 - npm readiness, verification, and staged-publication workflows.
 
-The package now declares the exact public repository, homepage, issue tracker, public registry,
+PR #33 merged the packaging change as commit
+`7866bab567c29fecc19d34d9071dccd90d30bd7c`, tree
+`71cc42969ec0636efa918cd57709352e627a5482`; the published archive was built from that exact clean
+merge. The package declares the exact public repository, homepage, issue tracker, public registry,
 public access, and `alpha` default. The npm tarball is intentionally not byte-identical to the
 historical GitHub `cigar-sdk-0.9.4.tgz` asset. The existing `v0.9.4` tag and GitHub assets must not
 be moved or replaced.
 
-## Canonical npm candidate
+## Canonical published artifact
 
 | Property | Value |
 | --- | --- |
@@ -65,11 +77,14 @@ be moved or replaced.
 | Context ABI | `cigar.context.v1` |
 | Frozen operations | 45 |
 
-Two independent npm 11.6.0 pack invocations, each following a fresh prepack build, produced
+Two independent npm 11.6.0 pack invocations from the clean merge, each following a fresh prepack
+build, produced
 byte-identical archives. The no-extraction verifier matched every canonical candidate field and
 all metadata, path, ownership, mode, source-map, secret-pattern, ABI, dependency, and operation
-checks. The same verifier intentionally returned exit code 2 when `--require-publishable` was
-added, proving the unreviewed publication gate remains closed.
+checks. After publication, the registry tarball was downloaded independently and compared
+byte-for-byte with the canonical archive; its SHA-1 and SHA-512 SRI also match. The verifier now
+rejects `--require-publishable` because 0.9.4 is an immutable terminal release, rather than a
+candidate eligible for another staging operation.
 
 The pack workflows explicitly set `umask 022` so package members are reproducibly mode `0644`;
 the containing candidate directories remain owner-only mode `0700`.
@@ -88,6 +103,9 @@ the containing candidate directories remain owner-only mode `0700`.
 | Production dependency audit | Passed; zero vulnerabilities at every severity |
 | Locked pnpm audit policy structure | Passed |
 | Exact npm stage dry-run identity, integrity, size, inventory, and modes | Passed; no staging occurred |
+| Live registry tarball comparison | Passed; byte-identical to the canonical archive |
+| Live exact-version clean install and ESM import | Passed; ABI and release identity matched |
+| Live installed production audit | Passed; zero vulnerabilities |
 | actionlint 1.7.7 | Passed for both npm workflows |
 | Patch whitespace/error check | Passed |
 
@@ -109,6 +127,7 @@ the strict tool validator does not accept package-store hard links.
 | TypeScript 7.0.2 Bundler resolution | Passed types only; no browser runtime claim |
 | CommonJS `require()` | Refused as unsupported |
 | `@hol-org/cigar/dist/*` private subpath | Refused as unsupported |
+| Public registry exact-version install | Passed with npm 12.0.2, scripts disabled, and no Git dependencies allowed |
 
 The supported engine range is Node `>=24.10.0 <25`. The package has no install hook, downloads no
 binary, is ESM-only, and claims HTTP transport only.
@@ -130,20 +149,41 @@ profile, two identical packs, an unoccupied version, a protected `npm` environme
 only `contents: read` and `id-token: write`. It uses `npm stage publish`, not direct publication,
 so an npm maintainer must still inspect and approve every candidate with 2FA.
 
-Because npm requires an existing package before Trusted Publisher configuration, 0.9.4 uses a
-one-time authenticated staged-publication bootstrap after merge. After 0.9.4 exists, configure the
-workflow as the package's single stage-only Trusted Publisher and disallow traditional publishing
-tokens. `0.9.5-alpha.1` and later can then receive OIDC-backed automatic provenance.
+npm staged publishing cannot create a brand-new package: the package must already exist. The
+initial `npm stage publish` therefore returned `E404` and created no stage. 0.9.4 used a one-time
+direct publication of the exact verified archive through an interactive WebAuthn session. This
+bootstrap exception did not create or store a long-lived publishing token.
 
-## Remaining blockers
+After the package became visible, the workflow was configured as the package's single stage-only
+Trusted Publisher. Readback returned trust ID `683e1f3b-2344-427f-acfc-b6f89266d7bf`, repository
+`hashgraph-online/hol-cigar`, workflow `stage-hol-cigar-npm.yml`, environment `npm`, and only the
+`createStagedPackage` permission. The GitHub `npm` environment requires reviewer `kantorcodes`,
+prevents self-review, and permits only tags matching `v0.9.*`. Package access was set to require
+2FA and disallow publishing-token bypass. `0.9.5-alpha.1` and later can therefore use OIDC-backed
+staging and automatic provenance, while still requiring separate human approval on npm.
 
-1. Publicly review and merge this packaging change with required CI passing.
-2. Rebuild the exact archive from the clean merge commit and require the same canonical digest.
-3. Stage the archive with public access and the `alpha` tag; do not use `latest`.
-4. Inspect and approve the staged package with 2FA.
-5. Verify live integrity, dist-tags, and a clean exact-version installation.
-6. Configure the stage-only Trusted Publisher and protected GitHub `npm` environment before
-   `0.9.5-alpha.1`.
+## Publication verification
+
+| Check | Observed result |
+| --- | --- |
+| Public metadata availability | Passed after npm's publication scan completed |
+| Name and version | `@hol-org/cigar@0.9.4` |
+| SHA-1 | `ac08dbcad3dfacc0fa2f9d88dbaf5b28e5ac4e53` |
+| SHA-512 SRI | `sha512-+XfQU9iD1RtUw5V1uGeABuMkbC2I2u6rbSJqp83nc4n9DOB/p0AacFyUqyOSFKbWVVKpSPK7WaetcgzHpUs6VA==` |
+| Downloaded SHA-256 | `73eb45b5a096639653350a2ab6436f75d3de32a1e3692d1808e8b2cfe32a77f8` |
+| Registry versus canonical bytes | Passed with exact binary comparison |
+| Registry inventory | 78 files, 2,305,674 unpacked bytes |
+| Clean consumer | Passed; `cigar.context.v1`, release JSON identity, and 104 exports observed |
+| Production audit | Passed; zero vulnerabilities |
+| Interactive-session cleanup | Passed; logged out and subsequent identity check returned `ENEEDAUTH` |
+
+## Remaining exception
+
+Remove only the unintended `latest` dist-tag through the npm package UI or npm support. After any
+remediation, read back the complete tag map and require exactly `alpha=0.9.4` with `latest` absent.
+Do not unpublish 0.9.4, do not alter its tarball, and do not republish the immutable name/version.
+Until that readback passes, the machine profile remains
+`published-with-tag-policy-exception` and non-publishable.
 
 The executable commands, verification sequence, OIDC fields, and recovery procedure are in
 `packaging/npm/README.md`.

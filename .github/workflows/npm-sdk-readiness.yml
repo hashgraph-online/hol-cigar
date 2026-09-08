@@ -10,6 +10,11 @@ on:
       - "scripts/release/verify_npm_sdk.py"
       - "scripts/release/tests/test_verify_npm_sdk.py"
       - "sdk/typescript/**"
+      - "sdk/python/**"
+      - "sdk/local-context-release.v1.json"
+      - "crates/cigar-context/**"
+      - "scripts/release/*context*"
+      - ".github/workflows/context-sdk-rc.yml"
       - "sdk/capabilities-v1.json"
       - "sdk/generate_clients.py"
       - "schemas/**"
@@ -27,6 +32,11 @@ on:
       - "scripts/release/verify_npm_sdk.py"
       - "scripts/release/tests/test_verify_npm_sdk.py"
       - "sdk/typescript/**"
+      - "sdk/python/**"
+      - "sdk/local-context-release.v1.json"
+      - "crates/cigar-context/**"
+      - "scripts/release/*context*"
+      - ".github/workflows/context-sdk-rc.yml"
       - "sdk/capabilities-v1.json"
       - "sdk/generate_clients.py"
       - "schemas/**"
@@ -46,7 +56,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-track:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.track.outputs.version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - id: track
+        run: |
+          version="$(node -p 'require("./sdk/typescript/package.json").version')"
+          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1"
+          printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
+
+  local-context-rc:
+    needs: release-track
+    if: needs.release-track.outputs.version == '0.10.0-rc.1' || needs.release-track.outputs.version == '0.10.0-beta.1'
+    uses: ./.github/workflows/context-sdk-rc.yml
+
   qualify:
+    needs: release-track
+    if: needs.release-track.outputs.version == '0.9.4'
     name: source, pack, consumers, and dry-run / Node 24.10.0
     runs-on: ubuntu-24.04
     timeout-minutes: 25

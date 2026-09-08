@@ -1,4 +1,5 @@
 export * from "./client.js";
+export * from "./context-api.js";
 export * from "./digest.js";
 export * from "./errors.js";
 export * as proto from "./generated/cigar_service_pb.js";

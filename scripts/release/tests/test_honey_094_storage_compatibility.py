@@ -64,16 +64,18 @@ class Honey094StorageCompatibilityTests(unittest.TestCase):
             f"v5 persistence core drifted from frozen 0.9.3 {FROZEN_093}",
         )
 
-    def test_workflow_checkpoint_reuses_the_existing_v5_service_record_path(self) -> None:
-        workflow = (ROOT / "crates/cigar-daemon/src/workflow_context_store.rs").read_text(
-            encoding="utf-8"
-        )
+    def test_workflow_checkpoint_reuses_the_existing_v5_service_record_path(
+        self,
+    ) -> None:
+        workflow = (
+            ROOT / "crates/cigar-daemon/src/workflow_context_store.rs"
+        ).read_text(encoding="utf-8")
         sqlite_v5 = (ROOT / "crates/cigar-store/src/sqlite_v5.rs").read_text(
             encoding="utf-8"
         )
-        revision_delta = (
-            ROOT / "crates/cigar-store/src/revision_delta.rs"
-        ).read_text(encoding="utf-8")
+        revision_delta = (ROOT / "crates/cigar-store/src/revision_delta.rs").read_text(
+            encoding="utf-8"
+        )
 
         for required in (
             'const SESSION_NAMESPACE: &str = "context.workflow-session.v1";',

@@ -6,7 +6,6 @@ import gzip
 import hashlib
 import io
 import json
-import os
 import sys
 import tarfile
 import tempfile
@@ -39,20 +38,47 @@ class NpmSdkVerifierTests(unittest.TestCase):
             "blockers": [],
         }
 
-    def test_committed_profile_is_explicitly_fail_closed_before_first_stage(self) -> None:
+    def test_committed_profile_is_terminal_after_publication(self) -> None:
         profile = verifier._load_profile(verifier.DEFAULT_PROFILE)
         self.assertFalse(profile["release_decision"]["publishable"])
-        self.assertEqual(profile["release_decision"]["status"], "blocked")
+        self.assertEqual(
+            profile["release_decision"]["status"],
+            "published-with-tag-policy-exception",
+        )
         self.assertEqual(
             {item["id"] for item in profile["release_decision"]["blockers"]},
-            {
-                "npm-packaging-change-not-yet-reviewed",
-                "first-publication-staged-approval-required",
-                "trusted-publisher-post-bootstrap-required",
-            },
+            {"npm-latest-tag-removal-required"},
         )
-        self.assertEqual(profile["source"]["revision"], "6e518ad95a018a80a04db295c0f91ec928a0ba0c")
-        self.assertEqual(profile["source"]["tree"], "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b")
+        self.assertEqual(
+            profile["source"]["revision"], "6e518ad95a018a80a04db295c0f91ec928a0ba0c"
+        )
+        self.assertEqual(
+            profile["source"]["tree"], "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b"
+        )
+        self.assertEqual(
+            profile["source"]["published_from_revision"],
+            "7866bab567c29fecc19d34d9071dccd90d30bd7c",
+        )
+        self.assertEqual(
+            profile["source"]["published_from_tree"],
+            "71cc42969ec0636efa918cd57709352e627a5482",
+        )
+        self.assertEqual(profile["registry"]["dist_tags"]["alpha"], "0.9.4")
+        self.assertEqual(profile["registry"]["dist_tags"]["latest"], "0.9.4")
+        self.assertEqual(
+            profile["registry"]["sha1"],
+            profile["canonical_release_asset"]["sha1"],
+        )
+        self.assertEqual(
+            profile["registry"]["integrity"],
+            "sha512-+XfQU9iD1RtUw5V1uGeABuMkbC2I2u6rbSJqp83nc4n9DOB/"
+            "p0AacFyUqyOSFKbWVVKpSPK7WaetcgzHpUs6VA==",
+        )
+        self.assertEqual(profile["registry"]["file_count"], 78)
+        self.assertEqual(
+            profile["registry"]["latest_policy"]["removal_result"],
+            "E400 Bad Request",
+        )
 
     def entries(self, *, repository: str | None = None) -> dict[str, bytes]:
         source = self.profile["source"]
@@ -91,10 +117,14 @@ class NpmSdkVerifierTests(unittest.TestCase):
             "version": "0.9.4",
             "context_abi": "cigar.context.v1",
         }
-        operations = "export const OPERATIONS={\n" + "\n".join(
-            f'  operation{index}: {{"operationId":"operation{index}"}},'
-            for index in range(45)
-        ) + "\n};\n"
+        operations = (
+            "export const OPERATIONS={\n"
+            + "\n".join(
+                f'  operation{index}: {{"operationId":"operation{index}"}},'
+                for index in range(45)
+            )
+            + "\n};\n"
+        )
         return {
             "package/package.json": canonical(package),
             "package/README.md": b"# CIGAR SDK\n",
@@ -171,7 +201,9 @@ class NpmSdkVerifierTests(unittest.TestCase):
         entries = self.entries()
         entries["package/README.md"] = b"built in /Users/alice/private/repo\n"
         archive = self.archive(entries)
-        with self.assertRaisesRegex(verifier.VerificationError, "private absolute path"):
+        with self.assertRaisesRegex(
+            verifier.VerificationError, "private absolute path"
+        ):
             verifier.assess(archive, self.profile_path(archive))
 
     def test_report_is_create_new_and_owner_read_only(self) -> None:
@@ -197,7 +229,7 @@ class NpmSdkVerifierTests(unittest.TestCase):
             for item in report["inventory"]
         ]
         entry = {
-            "id": f'{package["name"]}@{package["version"]}',
+            "id": f"{package['name']}@{package['version']}",
             "name": package["name"],
             "version": package["version"],
             "size": assessed_archive["bytes"],

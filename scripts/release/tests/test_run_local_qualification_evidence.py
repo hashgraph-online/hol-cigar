@@ -266,7 +266,9 @@ class LocalQualificationEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout.strip(), "bounded")
 
-        mutation = "from pathlib import Path; Path('tracked.txt').write_text('changed\\n')"
+        mutation = (
+            "from pathlib import Path; Path('tracked.txt').write_text('changed\\n')"
+        )
         with self.assertRaisesRegex(ReleaseError, "left the qualification source"):
             run_local_qualification._run(
                 repository,

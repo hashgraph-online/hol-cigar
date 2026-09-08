@@ -51,9 +51,7 @@ FORBIDDEN_PATH_PATTERNS = (
     "**/tests/**",
     "**/*.tsbuildinfo",
 )
-LIFECYCLE_SCRIPTS = frozenset(
-    {"preinstall", "install", "postinstall", "prepare"}
-)
+LIFECYCLE_SCRIPTS = frozenset({"preinstall", "install", "postinstall", "prepare"})
 PRIVATE_PATH_PATTERNS = (
     re.compile(rb"/(?:Users|home)/[A-Za-z0-9._-]+/"),
     re.compile(rb"/private/tmp/"),
@@ -150,7 +148,12 @@ def _load_profile(path: Path) -> dict[str, Any]:
 
 
 def _safe_path(raw: str) -> str:
-    if not raw or "\\" in raw or "\x00" in raw or unicodedata.normalize("NFC", raw) != raw:
+    if (
+        not raw
+        or "\\" in raw
+        or "\x00" in raw
+        or unicodedata.normalize("NFC", raw) != raw
+    ):
         raise VerificationError(f"non-canonical archive path: {raw!r}")
     path = PurePosixPath(raw)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
@@ -169,7 +172,9 @@ def _read_archive(path: Path) -> tuple[bytes, dict[str, tuple[bytes, int, int]]]
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
             members = archive.getmembers()
             if not members or len(members) > MAX_MEMBERS:
-                raise VerificationError("archive member count is outside the reviewed bound")
+                raise VerificationError(
+                    "archive member count is outside the reviewed bound"
+                )
             for member in members:
                 name = _safe_path(member.name)
                 alias = unicodedata.normalize("NFC", name).casefold()
@@ -177,11 +182,15 @@ def _read_archive(path: Path) -> tuple[bytes, dict[str, tuple[bytes, int, int]]]
                     raise VerificationError(f"archive path collision: {name}")
                 aliases.add(alias)
                 if not member.isfile() or member.issparse():
-                    raise VerificationError(f"archive member is not a regular file: {name}")
+                    raise VerificationError(
+                        f"archive member is not a regular file: {name}"
+                    )
                 if member.size <= 0 or member.size > MAX_MEMBER_BYTES:
                     raise VerificationError(f"archive member size is invalid: {name}")
                 if member.uid != 0 or member.gid != 0 or member.mode != 0o644:
-                    raise VerificationError(f"archive ownership or mode is not canonical: {name}")
+                    raise VerificationError(
+                        f"archive ownership or mode is not canonical: {name}"
+                    )
                 handle = archive.extractfile(member)
                 if handle is None:
                     raise VerificationError(f"archive member cannot be read: {name}")
@@ -190,7 +199,9 @@ def _read_archive(path: Path) -> tuple[bytes, dict[str, tuple[bytes, int, int]]]
                     raise VerificationError(f"archive member length changed: {name}")
                 expanded += len(member_payload)
                 if expanded > MAX_EXPANDED_BYTES:
-                    raise VerificationError("archive expanded size exceeds the reviewed bound")
+                    raise VerificationError(
+                        "archive expanded size exceeds the reviewed bound"
+                    )
                 entries[name] = (member_payload, member.mode, member.mtime)
     except (tarfile.TarError, OSError, EOFError) as error:
         raise VerificationError(f"cannot parse npm archive: {error}") from error
@@ -231,7 +242,9 @@ def _inventory(entries: dict[str, tuple[bytes, int, int]]) -> list[dict[str, Any
 
 def _scan_entries(entries: dict[str, tuple[bytes, int, int]]) -> None:
     for name, (payload, _mode, _mtime) in entries.items():
-        if any(fnmatch.fnmatchcase(name, pattern) for pattern in FORBIDDEN_PATH_PATTERNS):
+        if any(
+            fnmatch.fnmatchcase(name, pattern) for pattern in FORBIDDEN_PATH_PATTERNS
+        ):
             raise VerificationError(f"forbidden package path: {name}")
         if any(pattern.search(payload) for pattern in PRIVATE_PATH_PATTERNS):
             raise VerificationError(f"private absolute path appears in: {name}")
@@ -249,10 +262,17 @@ def _scan_entries(entries: dict[str, tuple[bytes, int, int]]) -> None:
                 or len(contents) != len(sources)
                 or not all(isinstance(item, str) for item in contents)
             ):
-                raise VerificationError(f"source map lacks exact inline sources: {name}")
+                raise VerificationError(
+                    f"source map lacks exact inline sources: {name}"
+                )
             for source in sources:
-                if source.startswith(("/", "file:", "http:", "https:")) or "\\" in source:
-                    raise VerificationError(f"source map exposes a non-relative source: {name}")
+                if (
+                    source.startswith(("/", "file:", "http:", "https:"))
+                    or "\\" in source
+                ):
+                    raise VerificationError(
+                        f"source map exposes a non-relative source: {name}"
+                    )
 
 
 def _metadata_checks(
@@ -288,7 +308,8 @@ def _metadata_checks(
     )
     checks = {
         "package_name": package.get("name") == package_profile.get("name"),
-        "package_version": package.get("version") == package_profile.get("requested_version"),
+        "package_version": package.get("version")
+        == package_profile.get("requested_version"),
         "license": package.get("license") == "Apache-2.0",
         "repository": repository == expected_repository,
         "homepage": package.get("homepage") == f"{source.get('repository')}#readme",
@@ -342,7 +363,9 @@ def assess(
     sha256 = hashlib.sha256(archive_payload).hexdigest()
     # npm exposes the registry's legacy SHA-1 shasum alongside SRI. It is compared
     # for metadata parity only; SHA-256 and SRI remain the security boundaries.
-    sha1 = hashlib.sha1(archive_payload, usedforsecurity=False).hexdigest()  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+    sha1 = hashlib.sha1(
+        archive_payload, usedforsecurity=False
+    ).hexdigest()  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
     semantic_tree = _semantic_tree(entries)
     canonical_checks = {
         "filename": archive_path.name == asset.get("filename"),
@@ -366,7 +389,9 @@ def assess(
             "sha256": sha256,
             "sha1": sha1,
             "npm_integrity": "sha512-"
-            + base64.b64encode(hashlib.sha512(archive_payload).digest()).decode("ascii"),
+            + base64.b64encode(hashlib.sha512(archive_payload).digest()).decode(
+                "ascii"
+            ),
             "semantic_tree_sha256": semantic_tree,
             "file_count": len(entries),
         },
@@ -452,7 +477,9 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
         or stat.S_IMODE(parent_metadata.st_mode) & 0o077
     ):
         raise VerificationError("report parent must be an owner-only directory")
-    payload = (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    payload = (
+        json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
     flags = (
         os.O_WRONLY
         | os.O_CREAT

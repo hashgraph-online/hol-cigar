@@ -76,7 +76,7 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
         )
         self.assertFalse(document["rollback"]["in_place_state_downgrade_allowed"])
 
-    def test_balanced_release_has_one_exact_0_9_4_python_publication_chain(
+    def test_frozen_0_9_4_publication_chain_is_separate_from_local_sdk_rc(
         self,
     ) -> None:
         product = json.loads((ROOT / "packaging/product-version.v1.json").read_bytes())
@@ -96,7 +96,15 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
         self.assertEqual(product["version"], "0.9.4")
         self.assertEqual(product["tag"], "v0.9.4")
         self.assertEqual(python_project["project"]["name"], "hol-cigar")
-        self.assertEqual(python_project["project"]["version"], "0.9.4")
+        local_release = json.loads(
+            (ROOT / "sdk/local-context-release.v1.json").read_bytes()
+        )
+        self.assertEqual(local_release["remote_workspace_version"], "0.9.4")
+        self.assertEqual(local_release["versions"]["python"], "0.10.0b1")
+        self.assertEqual(
+            python_project["project"]["version"], local_release["versions"]["python"]
+        )
+        self.assertFalse(local_release["published"])
         self.assertEqual(
             requirements["publication"]["pypi_distribution_version"],
             "0.9.4",

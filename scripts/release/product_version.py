@@ -1412,6 +1412,13 @@ def _update_plugin_package_manifest(root: Path, *, write: bool) -> None:
 
 def generate(root: Path) -> None:
     root = root.resolve(strict=True)
+    local_sdk_authority = root / "sdk/local-context-release.v1.json"
+    if local_sdk_authority.exists() or local_sdk_authority.is_symlink():
+        raise VersionError(
+            "independent context SDK release track is active; legacy all-product "
+            "version generation would overwrite SDK identities. Reconcile the "
+            "release authorities before using this generator. No files changed."
+        )
     _assert_inventory()
     _validate_managed_files(root)
     manifest = load_manifest(root)

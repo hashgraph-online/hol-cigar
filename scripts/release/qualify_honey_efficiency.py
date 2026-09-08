@@ -111,7 +111,9 @@ def _positive_series(value: Any, count: int, label: str) -> list[int]:
 
 
 def _ceil_fraction(value: Fraction) -> int:
-    return value.numerator // value.denominator + (value.numerator % value.denominator != 0)
+    return value.numerator // value.denominator + (
+        value.numerator % value.denominator != 0
+    )
 
 
 def _ols_slope(values: Sequence[int]) -> Fraction:
@@ -254,15 +256,21 @@ def validate_raw_observations(document: Any) -> Mapping[str, Any]:
         {"manifest_sha256", "installed_runtime_sha256"},
         "raw candidate",
     )
-    contract._sha256(candidate["manifest_sha256"], "raw candidate manifest", nonzero=True)
+    contract._sha256(
+        candidate["manifest_sha256"], "raw candidate manifest", nonzero=True
+    )
     contract._sha256(
         candidate["installed_runtime_sha256"], "raw installed runtime", nonzero=True
     )
-    fixtures = _strict_keys(root["fixtures"], {"manifest_sha256", "entries"}, "raw fixtures")
+    fixtures = _strict_keys(
+        root["fixtures"], {"manifest_sha256", "entries"}, "raw fixtures"
+    )
     if fixtures["manifest_sha256"] != contract.FIXTURE_SHA256:
         raise EfficiencyQualificationError("raw fixture authority drifted")
     entries = _bounded_sequence(fixtures["entries"], 3, 4, "raw fixture entries")
-    if len({entry.get("id") for entry in entries if isinstance(entry, dict)}) != len(entries):
+    if len({entry.get("id") for entry in entries if isinstance(entry, dict)}) != len(
+        entries
+    ):
         raise EfficiencyQualificationError("raw fixtures are duplicated")
     environment = _strict_keys(
         root["environment"],
@@ -283,8 +291,12 @@ def validate_raw_observations(document: Any) -> Mapping[str, Any]:
     )
     if len(_bounded_sequence(environment["tools"], 4, 32, "raw tools")) < 4:
         raise EfficiencyQualificationError("raw tool inventory is incomplete")
-    fixtures_document, fixture_payload = contract.load_json(repo_root() / contract.FIXTURE_PATH)
-    fixture_manifest = contract.validate_fixture_manifest(fixtures_document, fixture_payload)
+    fixtures_document, fixture_payload = contract.load_json(
+        repo_root() / contract.FIXTURE_PATH
+    )
+    fixture_manifest = contract.validate_fixture_manifest(
+        fixtures_document, fixture_payload
+    )
     if root["execution"] != contract._expected_execution(fixture_manifest):
         raise EfficiencyQualificationError("raw execution conditions drifted")
     stages = _bounded_sequence(root["stages"], 1, 256, "raw stages")
@@ -388,7 +400,9 @@ def validate_raw_observations(document: Any) -> Mapping[str, Any]:
         workflow_ids.add(identifier)
         for field in WORKFLOW_FIELDS - {"id"}:
             _bounded_integer(row[field], 0, 18_446_744_073_709_551_615, field)
-    validation = _strict_keys(root["validation"], set(VALIDATION_NAMES), "raw validation")
+    validation = _strict_keys(
+        root["validation"], set(VALIDATION_NAMES), "raw validation"
+    )
     for name in VALIDATION_NAMES:
         _boolean(validation[name], f"raw validation {name}")
     compatibility = _strict_keys(
@@ -402,7 +416,9 @@ def validate_raw_observations(document: Any) -> Mapping[str, Any]:
         },
         "raw compatibility",
     )
-    _bounded_integer(compatibility["v1_operation_count"], 0, 1_000, "v1 operation count")
+    _bounded_integer(
+        compatibility["v1_operation_count"], 0, 1_000, "v1 operation count"
+    )
     _bounded_integer(
         compatibility["v1_nominal_payload_count"], 0, 1_000, "v1 payload count"
     )
@@ -447,8 +463,12 @@ def _gate_measurements(raw: Mapping[str, Any]) -> dict[str, dict[str, bool | int
     compatibility = raw["compatibility"]
     startup = raw["startup"]
     return {
-        "H91-G001": {"incremental_storage_format": storage["incremental_storage_format"]},
-        "H91-G002": {"migration_root_revision_exact": storage["migration_root_revision_exact"]},
+        "H91-G001": {
+            "incremental_storage_format": storage["incremental_storage_format"]
+        },
+        "H91-G002": {
+            "migration_root_revision_exact": storage["migration_root_revision_exact"]
+        },
         "H91-G003": {"failpoint_recovery_exact": storage["failpoint_recovery_exact"]},
         "H91-G004": {"physical_growth_bytes_per_compilation": growth_per_compilation},
         "H91-G005": {
@@ -500,14 +520,17 @@ def _gate_measurements(raw: Mapping[str, Any]) -> dict[str, dict[str, bool | int
             )
         },
         "H91-G015": {
-            f"{name}_validation_fail_closed": validation[name] for name in VALIDATION_NAMES
+            f"{name}_validation_fail_closed": validation[name]
+            for name in VALIDATION_NAMES
         },
         "H91-G016": {
             "backup_restore_downgrade_passed": storage[
                 "backup_restore_downgrade_passed"
             ]
         },
-        "H91-G017": {"compaction_pin_drift_passed": storage["compaction_pin_drift_passed"]},
+        "H91-G017": {
+            "compaction_pin_drift_passed": storage["compaction_pin_drift_passed"]
+        },
         "H91-G018": {"deep_integrity_passed": storage["deep_integrity_passed"]},
         "H91-G019": {
             "v1_operation_count": compatibility["v1_operation_count"],
@@ -517,7 +540,9 @@ def _gate_measurements(raw: Mapping[str, Any]) -> dict[str, dict[str, bool | int
             "granular_v1_clients_compatible": compatibility[
                 "granular_v1_clients_compatible"
             ],
-            "future_operations_added_to_v1": compatibility["future_operations_added_to_v1"],
+            "future_operations_added_to_v1": compatibility[
+                "future_operations_added_to_v1"
+            ],
         },
         "H91-G021": {
             "prerelease": True,
@@ -546,15 +571,21 @@ def build_report(
     for gate_id in contract.GATE_IDS[:-1]:
         thresholds = [
             {"name": name, "operator": operator, "value": value, "unit": unit}
-            for name, operator, value, unit in contract.EXPECTED_GATE_THRESHOLDS[gate_id]
+            for name, operator, value, unit in contract.EXPECTED_GATE_THRESHOLDS[
+                gate_id
+            ]
         ]
         gate_measurements = [
             {"name": name, "value": measurements[gate_id][name], "unit": unit}
-            for name, _operator, _value, unit in contract.EXPECTED_GATE_THRESHOLDS[gate_id]
+            for name, _operator, _value, unit in contract.EXPECTED_GATE_THRESHOLDS[
+                gate_id
+            ]
         ]
         passed = all(
             contract._threshold_passed(
-                threshold["operator"], threshold["value"], gate_measurements[index]["value"]
+                threshold["operator"],
+                threshold["value"],
+                gate_measurements[index]["value"],
             )
             for index, threshold in enumerate(thresholds)
         )
@@ -578,9 +609,7 @@ def build_report(
         workflow["status"] = _workflow_status(raw_workflow)
         workflows.append(workflow)
     closure_measurements = {
-        "gates_001_through_022_passed": all(
-            gate["status"] == "pass" for gate in gates
-        ),
+        "gates_001_through_022_passed": all(gate["status"] == "pass" for gate in gates),
         "workflows_passed": all(workflow["status"] == "pass" for workflow in workflows),
     }
     closure_thresholds = [
@@ -591,9 +620,7 @@ def build_report(
         {
             "gate_id": "H91-G023",
             "release_gate_id": expected_release_gates["H91-G023"],
-            "status": "pass"
-            if all(closure_measurements.values())
-            else "fail",
+            "status": "pass" if all(closure_measurements.values()) else "fail",
             "thresholds": closure_thresholds,
             "measurements": [
                 {"name": name, "value": closure_measurements[name], "unit": unit}
@@ -602,15 +629,12 @@ def build_report(
                 ]
             ],
             "evidence_sha256": hashlib.sha256(
-                canonical_json_bytes(
-                    {"gate_id": "H91-G023", "raw_sha256": raw_sha256}
-                )
+                canonical_json_bytes({"gate_id": "H91-G023", "raw_sha256": raw_sha256})
             ).hexdigest(),
         }
     )
     stage_metrics = [
-        _stage_metric(stage["id"], stage["observations_ns"])
-        for stage in raw["stages"]
+        _stage_metric(stage["id"], stage["observations_ns"]) for stage in raw["stages"]
     ]
     overall = "pass" if all(gate["status"] == "pass" for gate in gates) else "fail"
     return {
@@ -659,7 +683,11 @@ def _regular_file_payload(path: Path, label: str, maximum: int) -> bytes:
         metadata = path.lstat()
     except OSError as error:
         raise EfficiencyQualificationError(f"{label} is unavailable") from error
-    if resolved != path or stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+    if (
+        resolved != path
+        or stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISREG(metadata.st_mode)
+    ):
         raise EfficiencyQualificationError(f"{label} must be a canonical regular file")
     if metadata.st_size < 1 or metadata.st_size > maximum:
         raise EfficiencyQualificationError(f"{label} size is outside its bound")
@@ -699,19 +727,25 @@ def _git_identity(root: Path) -> tuple[str, str]:
             raise EfficiencyQualificationError("cannot authenticate source identity")
         outputs.append(result.stdout)
     if outputs[0]:
-        raise EfficiencyQualificationError("qualification requires a clean exact source tree")
+        raise EfficiencyQualificationError(
+            "qualification requires a clean exact source tree"
+        )
     return outputs[1].decode().strip(), outputs[2].decode().strip()
 
 
 def _create_private_output(path: Path) -> None:
     if not path.is_absolute() or path.name in {"", ".", ".."}:
-        raise EfficiencyQualificationError("output directory must be an absolute new child")
+        raise EfficiencyQualificationError(
+            "output directory must be an absolute new child"
+        )
     try:
         parent = path.parent.resolve(strict=True)
     except OSError as error:
         raise EfficiencyQualificationError("output parent is unavailable") from error
     if parent != path.parent or path.exists() or path.is_symlink():
-        raise EfficiencyQualificationError("output directory already exists or is unsafe")
+        raise EfficiencyQualificationError(
+            "output directory already exists or is unsafe"
+        )
     path.mkdir(mode=0o700)
     metadata = path.lstat()
     if (
@@ -743,7 +777,9 @@ def produce(
             parse_constant=contract._reject_constant,
         )
     except (UnicodeError, json.JSONDecodeError) as error:
-        raise EfficiencyQualificationError("raw observations are not strict JSON") from error
+        raise EfficiencyQualificationError(
+            "raw observations are not strict JSON"
+        ) from error
     raw = validate_raw_observations(raw_document)
     manifest_payload = _regular_file_payload(
         candidate_manifest_path, "candidate manifest", 64 * 1024 * 1024
@@ -751,9 +787,15 @@ def produce(
     runtime_payload = _regular_file_payload(
         installed_runtime_path, "installed runtime", 4 * 1024 * 1024 * 1024
     )
-    if hashlib.sha256(manifest_payload).hexdigest() != raw["candidate"]["manifest_sha256"]:
+    if (
+        hashlib.sha256(manifest_payload).hexdigest()
+        != raw["candidate"]["manifest_sha256"]
+    ):
         raise EfficiencyQualificationError("candidate manifest binding is stale")
-    if hashlib.sha256(runtime_payload).hexdigest() != raw["candidate"]["installed_runtime_sha256"]:
+    if (
+        hashlib.sha256(runtime_payload).hexdigest()
+        != raw["candidate"]["installed_runtime_sha256"]
+    ):
         raise EfficiencyQualificationError("installed runtime binding is stale")
     commit, tree = _git_identity(root)
     if raw["source"] != {"commit": commit, "tree": tree, "clean": True}:

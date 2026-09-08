@@ -22,7 +22,9 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
         cls.fixtures, cls.fixture_payload = contract.load_json(
             ROOT / contract.FIXTURE_PATH
         )
-        cls.profile, cls.profile_payload = contract.load_json(ROOT / contract.PROFILE_PATH)
+        cls.profile, cls.profile_payload = contract.load_json(
+            ROOT / contract.PROFILE_PATH
+        )
 
     def report(self, raw: bytes) -> dict[str, object]:
         fixture_entries = [
@@ -180,7 +182,9 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             attachment = Path(directory) / "raw.json"
             attachment.write_bytes(b"changed\n")
-            with self.assertRaisesRegex(contract.EfficiencyContractError, "binding failed"):
+            with self.assertRaisesRegex(
+                contract.EfficiencyContractError, "binding failed"
+            ):
                 contract.validate_raw_attachment(report, attachment)
 
     def test_duplicate_keys_and_nonfinite_numbers_are_rejected(self) -> None:
@@ -201,7 +205,9 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
 
         report = self.report(b"raw\n")
         report["execution"]["warmup_requests"] = 4
-        with self.assertRaisesRegex(contract.EfficiencyContractError, "execution conditions"):
+        with self.assertRaisesRegex(
+            contract.EfficiencyContractError, "execution conditions"
+        ):
             contract.validate_report(report, self.fixtures, self.profile)
 
     def test_historical_handoff_is_external_and_path_free(self) -> None:
@@ -215,7 +221,9 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
     def test_threshold_weakening_is_rejected(self) -> None:
         report = self.report(b"raw\n")
         report["gate_results"][3]["thresholds"][0]["value"] = 1_048_577
-        with self.assertRaisesRegex(contract.EfficiencyContractError, "drifted or weakened"):
+        with self.assertRaisesRegex(
+            contract.EfficiencyContractError, "drifted or weakened"
+        ):
             contract.validate_report(report, self.fixtures, self.profile)
 
     def test_verified_copy_descriptor_has_no_path_or_protected_name(self) -> None:
@@ -236,7 +244,9 @@ class HoneyEfficiencyContractTests(unittest.TestCase):
         }
         contract.validate_verified_copy_descriptor(bound)
         bound["binding"]["path"] = "/private/protected.sqlite3"
-        with self.assertRaisesRegex(contract.EfficiencyContractError, "fields are not closed"):
+        with self.assertRaisesRegex(
+            contract.EfficiencyContractError, "fields are not closed"
+        ):
             contract.validate_verified_copy_descriptor(bound)
 
 

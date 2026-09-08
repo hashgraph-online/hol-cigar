@@ -3,6 +3,27 @@
 from typing import Final
 
 from cigar_sdk.client import AsyncCigarClient, BearerTokenProvider, CigarClient
+from cigar_sdk.context import (
+    LOCAL_CONTEXT_CORE_VERSION,
+    LOCAL_CONTEXT_PROTOCOL,
+    LocalContextError,
+    LocalContextGraph,
+)
+from cigar_sdk.context_types import (
+    LocalCitation,
+    LocalContextDelta,
+    LocalContextLimits,
+    LocalContextRequest,
+    LocalContextResult,
+    LocalContextSnapshot,
+    LocalDocument,
+    LocalEdgeKind,
+    LocalEvidenceBlock,
+    LocalGraphStats,
+    LocalSelectionStats,
+    LocalSourceUpdate,
+    LocalTokenCacheStats,
+)
 from cigar_sdk.digest import apply_context_delta, bundle_id, delta_digest, verify_bundle
 from cigar_sdk.errors import (
     CigarApiError,
@@ -47,6 +68,8 @@ CONTEXT_ABI: Final = "cigar.context.v1"
 
 __all__ = [
     "CONTEXT_ABI",
+    "LOCAL_CONTEXT_CORE_VERSION",
+    "LOCAL_CONTEXT_PROTOCOL",
     "MAX_WORKFLOW_DELTA_CHAIN_LENGTH",
     "MAX_WORKFLOW_REPLAY_CYCLES",
     "OPERATIONS",
@@ -61,6 +84,21 @@ __all__ = [
     "CigarError",
     "CigarTimeoutError",
     "CompatibilityError",
+    "LocalCitation",
+    "LocalContextDelta",
+    "LocalContextError",
+    "LocalContextGraph",
+    "LocalContextLimits",
+    "LocalContextRequest",
+    "LocalContextResult",
+    "LocalContextSnapshot",
+    "LocalDocument",
+    "LocalEdgeKind",
+    "LocalEvidenceBlock",
+    "LocalGraphStats",
+    "LocalSelectionStats",
+    "LocalSourceUpdate",
+    "LocalTokenCacheStats",
     "OperationEvent",
     "OperationRequest",
     "OperationResponse",

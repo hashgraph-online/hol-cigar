@@ -253,9 +253,7 @@ def main() -> int:
     }
     expected_versions = {
         name: (
-            python_distribution_version(version)
-            if name == "Python SDK"
-            else version
+            python_distribution_version(version) if name == "Python SDK" else version
         )
         for name in versions
     }
