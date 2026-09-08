@@ -119,6 +119,9 @@ def main():
             ".github/workflows/context-sdk-rc.yml",
             ".github/workflows/npm-sdk-readiness.yml",
             ".github/workflows/fast-ci.yml",
+            ".github/workflows/context-sdk-beta.yml",
+            ".github/workflows/publish-hol-cigar.yml",
+            ".github/workflows/stage-hol-cigar-npm.yml",
         ],
     )
     run(
@@ -133,8 +136,8 @@ def main():
             "check",
             "--strict",
             args.release
-            / "artifacts/hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl",
-            args.release / "artifacts/hol_cigar-0.10.0rc1.tar.gz",
+            / f"artifacts/hol_cigar-{release['python']}-py3-none-macosx_11_0_arm64.whl",
+            args.release / f"artifacts/hol_cigar-{release['python']}.tar.gz",
         ],
     )
     run("diff-whitespace", ["git", "diff", "--check"])
@@ -257,9 +260,10 @@ def main():
         "evidence": retained,
         "qualified_platform": release["native_qualified_host"],
         "limitations": [
-            "No native Linux/Windows qualification or hosted CI run in this session.",
+            "This diagnostic report alone does not establish hosted or independent build provenance; see the separate signed beta manifest.",
+            "No bundled native Linux/Windows qualification.",
             "Platform binary has macOS 11 deployment floor, not a test result on macOS 11.",
-            "Python 3.14.7 and Node 24.10.0/24.19.0 tested; Python 3.14.0 not tested.",
+            "Exact tested Python/Node versions are in retained logs; other supported versions are not individually qualified.",
             "Source distribution requires an explicit local worker for local context APIs.",
             "IPC adds startup, serialization and process memory versus in-process Rust.",
             "No new model answer-quality or token-reduction claim is made by SDK packaging.",

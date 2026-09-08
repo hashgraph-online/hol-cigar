@@ -2,6 +2,10 @@ name: context-sdk-rc
 
 on:
   workflow_call:
+    inputs:
+      build-id:
+        type: string
+        default: local
   workflow_dispatch:
 
 permissions:
@@ -33,6 +37,7 @@ jobs:
           sdk/python/.venv/bin/python -m unittest \
             scripts.release.tests.test_context_sdk_inputs \
             scripts.release.tests.test_context_sdk_handoff \
+            scripts.release.tests.test_context_sdk_beta \
             scripts.release.tests.test_release_entrypoint_evidence \
             scripts.release.tests.test_license_inventory.CargoLicenseClosureTests.test_committed_inventory_contains_the_complete_cargo_lock_closure
 
@@ -69,6 +74,7 @@ jobs:
           corepack install --global pnpm@10.34.5
           pnpm install --frozen-lockfile --ignore-scripts
           uv sync --project sdk/python --frozen
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           python3 sdk/generate_clients.py --check
           python3 -m unittest scripts.release.tests.test_balanced_compatibility tools.quality.tests.test_pypi_honey_workflow
       - name: Build reproducible RC archives without publication
@@ -85,15 +91,19 @@ jobs:
             --baseline "${GITHUB_WORKSPACE}/.tmp/sdk-094-baseline" \
             --uv "$(command -v uv)" --pnpm "$(command -v pnpm)" --npm "$(command -v npm)" \
             --cli "${RUNNER_TEMP}/sdk-rc-target/release/cigar-context"
+      - name: Finalize exact bytes and retain current advisory and qualification evidence
+        run: |
+          python3 scripts/release/finalize_context_sdk_rc.py \
+            --release "${RUNNER_TEMP}/sdk-rc" --qualification "${RUNNER_TEMP}/sdk-rc-checks" \
+            --artifacts "${RUNNER_TEMP}/qualified/artifacts" --evidence "${RUNNER_TEMP}/qualified/evidence" \
+            --uv "$(command -v uv)" --actionlint "$(go env GOPATH)/bin/actionlint"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: context-sdk-0.10.0-rc.1-macos-arm64
+          name: context-sdk-qualified-${{ inputs.build-id || 'local' }}
+          if-no-files-found: error
+          retention-days: 14
           path: |
-            ${{ runner.temp }}/sdk-rc/artifacts
-            ${{ runner.temp }}/sdk-rc/release.json
-            ${{ runner.temp }}/sdk-rc/logs
-            ${{ runner.temp }}/sdk-rc-checks/qualification.json
-            ${{ runner.temp }}/sdk-rc-checks/logs
+            ${{ runner.temp }}/qualified/
 
 # No registry token, id-token/write permission, publish command, or dist-tag mutation.

@@ -59,7 +59,7 @@ def artifact_names(version: str) -> set[str]:
     channel, number = match.groups()
     python = f"0.10.0{'rc' if channel == 'rc' else 'b'}{number}"
     return {
-        "cigar-context-0.10.0.crate",
+        f"cigar-context-{'0.10.0' if channel == 'rc' else version}.crate",
         f"hol-org-cigar-{version}.tgz",
         f"hol_cigar-{python}.tar.gz",
         f"hol_cigar-{python}-py3-none-macosx_11_0_arm64.whl",
@@ -253,7 +253,8 @@ def validate_report(report: dict, expected_release: str) -> None:
     require(
         isinstance(worker, dict)
         and worker.get("protocol") == "cigar.context-worker.v1"
-        and worker.get("core_version") == "0.10.0"
+        and worker.get("core_version")
+        == ("0.10.0" if "-rc." in expected_release else expected_release)
         and worker.get("sdk_release") == expected_release
         and worker.get("target") == "aarch64-apple-darwin",
         "worker identity mismatch",

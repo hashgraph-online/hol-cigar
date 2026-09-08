@@ -2,9 +2,9 @@
 
 `hol-cigar` provides local Rust context graphs and the compatible remote CIGAR SDK from [HOL.org](https://hol.org).
 
-> **Release candidate:** `0.10.0rc1`, Python 3.14. The platform wheel bundles the local context
+> **Beta:** `0.10.0b1`, Python 3.14. The platform wheel bundles the local context
 > worker for macOS ARM64; it does **not** include the Honey daemon. Remote v1 APIs remain compatible
-> with 0.9.4. Other native targets and production deployment are not qualified by this RC.
+> with 0.9.4. Other native targets and production deployment are not qualified by this beta.
 
 The Python 3.14 SDK exposes all 45 frozen CIGAR v1 operations through both
 `AsyncCigarClient` and `CigarClient`. Both facades provide bounded deadlines,
@@ -14,10 +14,11 @@ The PyPI distribution is named `hol-cigar`; its stable Python import namespace r
 The exported `cigar_sdk.CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
 
 ```sh
-python3.14 -m pip install ./hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl
+python3.14 -m pip install ./hol_cigar-0.10.0b1-py3-none-macosx_11_0_arm64.whl
 ```
 
-RC artifacts are prepared locally; this command does not imply registry publication.
+Verify the signed GitHub release assets before installation. Registry publication is separate;
+once listed on PyPI, use `python3.14 -m pip install 'hol-cigar==0.10.0b1'`.
 
 ## Local context graph (no server or model required)
 
@@ -46,7 +47,7 @@ whole caller-owned graph). `excerpt_mode="query_windows"` is opt-in; full text i
 Source withdrawal preserves hard edges, so missing required evidence fails closed. Snapshot
 digests are integrity commitments, not signatures or authority. Deltas reduce transport/storage
 bytes, not stateless model prompt tokens. Token budgets include Rust-rendered citations but
-exclude the provider envelope; reserve that separately. This RC does not claim new answer-quality
+exclude the provider envelope; reserve that separately. This beta does not claim new answer-quality
 or token-reduction gains beyond the underlying Rust selector.
 
 Use `with` or `close()` to release the worker. Each graph owns one process and privacy-local
@@ -58,7 +59,7 @@ mutations. Invalid wire fields also close it. A lock-wait `Busy` error leaves th
 
 The portable source distribution and wheels built without native staging retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.10.0 Rust source using Rust 1.92+:
+0.10.0-beta.1 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker

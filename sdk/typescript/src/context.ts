@@ -11,7 +11,7 @@ import type {
 } from "./context-types.js";
 
 export const LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1" as const;
-export const LOCAL_CONTEXT_CORE_VERSION = "0.10.0" as const;
+export const LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1" as const;
 const MAX_FRAME = 32 * 1024 * 1024;
 const MAX_RESPONSE = 64 * 1024 * 1024;
 const CORE_ERRORS = new Set(["InvalidInput", "LimitExceeded", "RequiredUnavailable", "BudgetUnsatisfiable",

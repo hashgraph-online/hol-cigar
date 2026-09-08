@@ -1,8 +1,9 @@
-# cigar-context 0.10.0
+# cigar-context 0.10.0-beta.1
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
-or external graph builder is required. This is an unpublished release candidate.
+or external graph builder is required. This is beta software. The GitHub release includes
+the source crate; crates.io publication is separate and is not implied.
 
 ```rust
 use cigar_context::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter};

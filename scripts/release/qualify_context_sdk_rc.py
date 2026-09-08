@@ -92,9 +92,30 @@ def main():
         out / "workflow-context-session.v1.json",
     )
     shutil.copy2(ROOT / "sdk/capabilities-v1.json", out / "capabilities-v1.json")
-    wheel = artifacts / "hol_cigar-0.10.0rc1-py3-none-macosx_11_0_arm64.whl"
-    sdist = artifacts / "hol_cigar-0.10.0rc1.tar.gz"
-    npm = artifacts / "hol-org-cigar-0.10.0-rc.1.tgz"
+    wheel = artifacts / f"hol_cigar-{staged['python']}-py3-none-macosx_11_0_arm64.whl"
+    sdist = artifacts / f"hol_cigar-{staged['python']}.tar.gz"
+    npm = artifacts / f"hol-org-cigar-{staged['npm']}.tgz"
+    sandbox = [
+        "/usr/bin/sandbox-exec",
+        "-p",
+        "(version 1)(allow default)(deny network*)",
+    ]
+    if staged.get("channel") == "beta":
+        # A failed connection alone is not sufficient: require the OS policy denial.
+        run(
+            "offline-policy-probe",
+            sandbox
+            + [
+                sys.executable,
+                "-c",
+                (
+                    "import errno,socket\n"
+                    "try: socket.create_connection(('1.1.1.1',443),timeout=2)\n"
+                    "except OSError as e: assert e.errno in (errno.EPERM,errno.EACCES), e\n"
+                    "else: raise RuntimeError('network denial was not enforced')\n"
+                ),
+            ],
+        )
     with zipfile.ZipFile(wheel) as package:
         metadata_name = next(
             n for n in package.namelist() if n.endswith(".dist-info/WHEEL")
@@ -225,6 +246,9 @@ def main():
         if kind == "sdist":
             command.append(extra["CIGAR_TEST_WORKER"])
         consumer_results[kind] = json.loads(run(f"{kind}-oracle", command))
+        if staged.get("channel") == "beta":
+            offline = json.loads(run(f"{kind}-offline-oracle", sandbox + command))
+            assert offline == consumer_results[kind]
         assert str(venv) in consumer_results[kind]["module"]
         run(f"{kind}-entrypoint", [venv / "bin/cigar-qualify-bundle"])
     npm_consumer = out / "npm-consumer"
@@ -241,12 +265,20 @@ def main():
     consumer_results["npm"] = json.loads(
         run("npm-oracle", ["node", "consumer.mjs", fixtures], npm_consumer)
     )
+    if staged.get("channel") == "beta":
+        offline = json.loads(
+            run(
+                "npm-offline-oracle",
+                sandbox + ["node", "consumer.mjs", fixtures],
+                npm_consumer,
+            )
+        )
+        assert offline == consumer_results["npm"]
     installed = npm_consumer / "node_modules/@hol-org/cigar"
     manifest = json.loads((installed / "package.json").read_bytes())
-    assert (
-        manifest["version"] == "0.10.0-rc.1"
-        and manifest["publishConfig"]["tag"] == "rc"
-    )
+    assert manifest["version"] == staged["npm"] and manifest["publishConfig"][
+        "tag"
+    ] == staged.get("channel", "rc")
     assert not any(
         k in manifest["scripts"] for k in ["preinstall", "install", "postinstall"]
     )

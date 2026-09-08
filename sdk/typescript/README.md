@@ -1,13 +1,14 @@
 # `@hol-org/cigar`
 
-0.10.0 release candidate for Node.js 24 ESM applications:
+0.10.0 beta 1 for Node.js 24 ESM applications:
 
 ```text
-npm install ./hol-org-cigar-0.10.0-rc.1.tgz
+npm install ./hol-org-cigar-0.10.0-beta.1.tgz
 ```
 
-RC artifacts are prepared locally; this does not imply registry publication. The intended
-prerelease channel is `rc`, never `latest`. The package intentionally does
+Verify the signed GitHub assets before installation. Registry publication requires a separate
+maintainer approval; once listed, use `npm install '@hol-org/cigar@0.10.0-beta.1'`.
+The prerelease channel is `beta`, never `latest`. The package intentionally does
 not claim CommonJS or browser-runtime support, and consumers should pin an exact version for
 reproducible workflow execution.
 
@@ -36,10 +37,10 @@ atomic `replaceSource`, line-preserving `chunks`, `compile`, `verify`, `delta`, 
 `stats`, and `clearCache` use the same Rust selector, citations, exact `o200k_base` accounting,
 incremental indexes, and bounded token cache as the Rust library. No server or model is needed.
 
-RC1 bundles a worker only for macOS ARM64. Other platforms retain the remote SDK; local graphs
+Beta 1 bundles a worker only for macOS ARM64. Other platforms retain the remote SDK; local graphs
 require an explicitly supplied, trusted absolute `workerPath` built from the matching Rust
-0.10.0 source (`cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker`).
-They are not natively qualified by this RC. There is no install script, runtime download, PATH
+0.10.0-beta.1 source (`cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker`).
+They are not natively qualified by this beta. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize

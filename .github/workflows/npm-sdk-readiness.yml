@@ -67,12 +67,12 @@ jobs:
       - id: track
         run: |
           version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1"
+          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1"
           printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   local-context-rc:
     needs: release-track
-    if: needs.release-track.outputs.version == '0.10.0-rc.1'
+    if: needs.release-track.outputs.version == '0.10.0-rc.1' || needs.release-track.outputs.version == '0.10.0-beta.1'
     uses: ./.github/workflows/context-sdk-rc.yml
 
   qualify:

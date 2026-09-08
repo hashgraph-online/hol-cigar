@@ -27,7 +27,7 @@ from cigar_sdk.context_types import (
 )
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.10.0"
+LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1"
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
 

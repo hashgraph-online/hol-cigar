@@ -2,7 +2,7 @@
 """Stage local SDK RC archives, never publish. Output must be a new directory.
 
 Requires pinned repo dependencies already installed, uv, pnpm, npm, Rust 1.92 and
-Python 3.14. RC1 native packaging is deliberately restricted to macOS ARM64.
+Python 3.14. Bundled native packaging is deliberately restricted to macOS ARM64.
 """
 
 from __future__ import annotations
@@ -52,9 +52,11 @@ def main() -> None:
     args = parser.parse_args()
     reject_evidence_directory(args.evidence_dir, "local SDK diagnostic build")
     source_binding = context_sdk_inputs.capture(ROOT, allow_dirty=args.allow_dirty)
+    identity = json.loads((ROOT / "sdk/local-context-release.v1.json").read_bytes())
+    core_version = identity["core_version"]
     if (platform.system(), platform.machine()) != ("Darwin", "arm64"):
         raise SystemExit(
-            "RC1 bundled-native profile supports macOS ARM64 only; do not mislabel another target"
+            "Bundled-native profile supports macOS ARM64 only; do not mislabel another target"
         )
     output = args.output.absolute()
     output.mkdir(parents=True, exist_ok=False)
@@ -163,13 +165,19 @@ def main() -> None:
             "--no-verify",
         ],
     )
-    archive = args.target_dir / "package/cigar-context-0.10.0.crate"
+    archive = args.target_dir / f"package/cigar-context-{core_version}.crate"
     shutil.copy2(archive, artifacts / archive.name)
     native_source = output / "native-source"
     native_source.mkdir()
     with tarfile.open(archive) as packed:
         packed.extractall(native_source, filter="data")
-    native_root = native_source / "cigar-context-0.10.0"
+    native_root = native_source / f"cigar-context-{core_version}"
+    # Debug/panic source paths must not depend on an independent builder's staging path.
+    # The two-host release gate below still compares the actual finished bytes.
+    env["RUSTFLAGS"] = (
+        f"--remap-path-prefix={native_root}=/cigar/native "
+        f"--remap-path-prefix={ROOT}=/cigar/source"
+    )
     run(
         "native-build-from-package",
         [args.cargo, "build", "--locked", "--release", "--features", "bpe", "--bins"],
@@ -181,8 +189,8 @@ def main() -> None:
     run("native-deployment", ["/usr/bin/otool", "-l", worker])
     manifest = {
         "protocol": "cigar.context-worker.v1",
-        "core_version": "0.10.0",
-        "sdk_release": "0.10.0-rc.1",
+        "core_version": core_version,
+        "sdk_release": identity["versions"]["typescript"],
         "target": "aarch64-apple-darwin",
         "sha256": sha(worker),
         "source_archive_sha256": sha(archive),
@@ -327,8 +335,9 @@ def main() -> None:
         )
     report = {
         "schema": "cigar.context-sdk-rc.v1",
-        "python": "0.10.0rc1",
-        "npm": "0.10.0-rc.1",
+        "python": identity["versions"]["python"],
+        "npm": identity["versions"]["typescript"],
+        "channel": identity["channel"],
         "published": False,
         "source_binding": source_binding,
         "native_qualified_host": platform.platform(),

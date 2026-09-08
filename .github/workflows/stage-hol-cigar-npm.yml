@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type "stage @hol-org/cigar with alpha dist-tag"
+        description: Type "stage @hol-org/cigar with alpha dist-tag" or "stage @hol-org/cigar 0.10.0-beta.1 with beta dist-tag"
         required: true
+        type: string
+      manifest_sha256:
+        description: SHA-256 of the approved signed beta manifest (beta only)
+        required: false
         type: string
 
 permissions:
@@ -21,6 +25,7 @@ concurrency:
 
 jobs:
   verify-and-stage:
+    if: inputs.confirm == 'stage @hol-org/cigar with alpha dist-tag'
     name: verify tagged source and stage one npm tarball
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -243,3 +248,78 @@ jobs:
             echo 'An authorized npm maintainer must inspect and approve this candidate in npmjs.com → Staged Packages with 2FA.'
             echo 'Do not approve if the displayed name, version, public visibility, or alpha tag differs.'
           } >>"${GITHUB_STEP_SUMMARY}"
+
+  verify-beta:
+    if: inputs.confirm == 'stage @hol-org/cigar 0.10.0-beta.1 with beta dist-tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.6"
+      - name: Verify exact signed beta and stage its qualified npm bytes without repacking
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: |
+          test "${GITHUB_REF}" = "refs/tags/v0.10.0-beta.1"
+          [[ "${MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          test "$(gh release view v0.10.0-beta.1 --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\ttrue'
+          gh release download v0.10.0-beta.1 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-beta"
+          python3 scripts/release/context_sdk_beta.py verify --verify-attestations \
+            --directory "${RUNNER_TEMP}/signed-beta" --commit "${GITHUB_SHA}" --manifest-sha256 "${MANIFEST_SHA256}"
+          mkdir -m 0700 npm-beta-stage
+          install -m 0400 "${RUNNER_TEMP}/signed-beta/hol-org-cigar-0.10.0-beta.1.tgz" npm-beta-stage/
+          cd npm-beta-stage
+          sha256sum hol-org-cigar-0.10.0-beta.1.tgz >SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hol-cigar-npm-beta-stage
+          path: npm-beta-stage/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  stage-beta:
+    name: stage protected beta through npm OIDC; maintainer approval still required
+    needs: verify-beta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@hol-org/cigar
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.19.0"
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hol-cigar-npm-beta-stage
+          path: npm-beta-stage/
+      - name: Require exact bytes and an unoccupied registry version
+        run: |
+          test "${GITHUB_REF}" = "refs/tags/v0.10.0-beta.1"
+          npm install --global --ignore-scripts npm@12.0.2
+          test "$(npm --version)" = "12.0.2"
+          cd npm-beta-stage
+          sha256sum --check --strict SHA256SUMS
+          if npm view @hol-org/cigar@0.10.0-beta.1 version --json >"${RUNNER_TEMP}/npm-beta-view.json" 2>&1; then
+            echo 'Beta version already exists; refusing duplicate staging' >&2
+            exit 1
+          fi
+          grep -q E404 "${RUNNER_TEMP}/npm-beta-view.json"
+          npm stage publish --dry-run --ignore-scripts --access public --tag beta ./hol-org-cigar-0.10.0-beta.1.tgz
+      - name: Stage exact beta through trusted publisher
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npm stage publish --ignore-scripts --access public --tag beta ./npm-beta-stage/hol-org-cigar-0.10.0-beta.1.tgz
+      - name: Record independent proof-of-presence approval requirement
+        run: |
+          echo 'An authorized npm maintainer must approve @hol-org/cigar 0.10.0-beta.1, public visibility, beta tag, in npmjs.com Staged Packages with 2FA. Staged is not published.' >>"${GITHUB_STEP_SUMMARY}"

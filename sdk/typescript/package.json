@@ -1,7 +1,7 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.10.0-rc.1",
-  "description": "CIGAR local Rust context graphs and compatible v1 TypeScript client (release candidate)",
+  "version": "0.10.0-beta.1",
+  "description": "CIGAR local Rust context graphs and compatible v1 TypeScript client (beta)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "rc"
+    "tag": "beta"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",
