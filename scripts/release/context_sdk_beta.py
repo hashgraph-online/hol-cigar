@@ -8,6 +8,7 @@ any Honey release contract. Signing is exclusively in the pinned hosted workflow
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import gzip
 import hashlib
 import io
@@ -33,6 +34,7 @@ BUNDLE = "provenance.sigstore.jsonl"
 PAYLOADS = handoff.artifact_names(VERSION) | {
     "qualification-evidence.tar.gz",
     "sbom.cdx.json",
+    "sbom.spdx.json",
     "RELEASE_NOTES.md",
 }
 SIGNED_FILES = PAYLOADS | {MANIFEST, "SHA256SUMS"}
@@ -154,6 +156,56 @@ def make_sbom(first: Path) -> dict:
     }
 
 
+def make_spdx(sbom: dict, commit: str, epoch: int) -> dict:
+    packages = []
+    for index, component in enumerate(sbom["components"], 1):
+        license_entry = component.get("licenses", [{}])[0]
+        declared = license_entry.get("expression") or license_entry.get(
+            "license", {}
+        ).get("id", "NOASSERTION")
+        packages.append(
+            {
+                "SPDXID": f"SPDXRef-Package-{index}",
+                "name": component["name"],
+                "versionInfo": component["version"],
+                "downloadLocation": "NOASSERTION",
+                "filesAnalyzed": False,
+                "licenseConcluded": "NOASSERTION",
+                "licenseDeclared": declared,
+                "copyrightText": "NOASSERTION",
+                "externalRefs": [
+                    {
+                        "referenceCategory": "PACKAGE-MANAGER",
+                        "referenceType": "purl",
+                        "referenceLocator": component["purl"],
+                    }
+                ],
+            }
+        )
+    return {
+        "spdxVersion": "SPDX-2.3",
+        "dataLicense": "CC0-1.0",
+        "SPDXID": "SPDXRef-DOCUMENT",
+        "name": f"CIGAR {VERSION} native and SDK runtime dependency inventory",
+        "documentNamespace": f"https://github.com/{REPO}/releases/{TAG}/sbom/{commit}",
+        "creationInfo": {
+            "creators": ["Tool: cigar-context-sdk-beta"],
+            "created": datetime.fromtimestamp(epoch, timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+        },
+        "packages": packages,
+        "relationships": [
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relationshipType": "DESCRIBES",
+                "relatedSpdxElement": package["SPDXID"],
+            }
+            for package in packages
+        ],
+    }
+
+
 def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) -> dict:
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "invalid release commit")
     require(re.fullmatch(r"[1-9][0-9]*", run_id) is not None, "invalid hosted run ID")
@@ -178,7 +230,12 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
                 expected_sha256=row["sha256"],
                 expected_bytes=row["bytes"],
             )
-        workspace.write_json("sbom.cdx.json", make_sbom(first))
+        sbom = make_sbom(first)
+        workspace.write_json("sbom.cdx.json", sbom)
+        workspace.write_json(
+            "sbom.spdx.json",
+            make_spdx(sbom, commit, reports[0]["source_binding"]["source_date_epoch"]),
+        )
         workspace.attach_file(
             ROOT / "docs/release/context-sdk-beta-notes.md", "RELEASE_NOTES.md"
         )

@@ -47,14 +47,14 @@ against the Rust oracle and the preserved 0.9.4 SDK suites. No model is required
 
 Each build also reruns all 516 installed-consumer oracle comparisons under OS-enforced network denial.
 `qualification-evidence.tar.gz` retains both builders' test logs and raw results.
-`sbom.cdx.json` covers the native worker closure and SDK runtime dependencies; bundled packages contain
+`sbom.cdx.json` and `sbom.spdx.json` cover the native worker closure and SDK runtime dependencies; bundled packages contain
 the native third-party license notices. Current public dependency advisories are checked during each build.
 These checks do not constitute an exhaustive source security audit.
 
 Every payload, manifest, and checksum inventory is signed with short-lived GitHub/Sigstore provenance;
 `provenance.sigstore.jsonl` retains the certificate, signature, and transparency evidence. Verification
 must pin the repository, workflow, tag, and expected source commit, not just check a self-supplied hash.
-From the exact tagged source checkout, with all ten release assets in a new directory:
+From the exact tagged source checkout, with all eleven release assets in a new directory:
 
 ```sh
 python3 scripts/release/context_sdk_beta.py verify --verify-attestations \

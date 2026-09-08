@@ -1,8 +1,23 @@
 # CIGAR 0.10.0 signed-beta release path
 
-Status: release preparation, not a signed or published beta. The qualified local
-Python and TypeScript packages are still `0.10.0rc1` / `0.10.0-rc.1`, with the
-`cigar-context` 0.10.0 core. Do not rename RC archives to beta filenames.
+Current implementation: genuine beta identities are Python `0.10.0b1`, npm and
+Rust core `0.10.0-beta.1`. The public-release path is now
+[`context-sdk-beta.yml`](../../.github/workflows/context-sdk-beta.yml), using two
+fresh hosted builders, the existing qualification tests, OS-enforced offline
+oracles, SPDX/CycloneDX runtime inventories, and GitHub/Sigstore provenance.
+See [beta release notes and verification](context-sdk-beta-notes.md) for the exact
+scope. Source metadata describes the unpublished build inputs; it is not a live
+registry-status API. Publication success must be read back from each public service.
+
+The older detached Ed25519 handoff below remains a diagnostic integrity tool and
+still reports `release_ready: false`. The beta publication workflow is the separate
+qualified orchestration it called for; it does not manufacture or reuse a production
+private key. Its signing identity is the exact hosted workflow, tag, and source commit.
+This changes the signer mechanism, not the requirement to authenticate every payload.
+No Git commit/tag signing, Apple Developer ID signing, notarization, SLSA level, or
+exhaustive source security audit is claimed. Beta security qualification consists of
+the scoped core/SDK regression and transport tests, release tamper/identity tests,
+and current dependency-advisory checks; broader source audit remains future work.
 
 This track covers the local context core and SDKs. It does not inherit the old
 Linux-only 0.1.0-beta.1 CLI qualification or qualify the Honey daemon, CLI, MCP,
@@ -36,11 +51,12 @@ installers, Rust remote SDK, or Go SDK as 0.10.0.
    CycloneDX SBOMs, dependency/native-library license closure, provenance,
    current security qualification, and OS-enforced no-egress results. Packing
    twice from one compiled worker does not satisfy independent reproducibility.
-6. Review the immutable handoff and independently distribute its expected
-   manifest digest, approved public trust policy and policy digest. Use the
-   existing isolated Ed25519 signing process. Private keys do not belong in
-   this checkout, the handoff, a build job, or the conversation.
-7. Verify every detached signature and exact payload inventory offline. Obtain
+6. Review the immutable beta manifest and independently distribute its expected
+   digest. For the public beta, use the pinned GitHub/Sigstore workflow identity,
+   source tag, and source commit. The detached Ed25519 procedure below remains
+   available for separately authorized external handoffs. Long-lived private keys
+   do not belong in this checkout, the handoff, a build job, or the conversation.
+7. Verify every signed payload and the exact inventory with the retained bundle. Obtain
    explicit publication authorization, then publish through protected release
    jobs and verify registry downloads, prerelease tags and installed consumers.
    Signed Git commits/tags and artifact signatures are separate properties.

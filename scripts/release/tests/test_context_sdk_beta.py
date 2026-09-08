@@ -157,6 +157,39 @@ class BetaPublicBytesTests(unittest.TestCase):
         self.assertIn("cigar-context-0.10.0-beta.1.crate", beta.PAYLOADS)
         self.assertNotIn("cigar-context-0.10.0.crate", beta.PAYLOADS)
 
+    def test_spdx_inventory_preserves_component_versions_licenses_and_identity(self):
+        components = [
+            {
+                "name": "first",
+                "version": "1.0",
+                "purl": "pkg:cargo/first@1.0",
+                "licenses": [{"expression": "MIT OR Apache-2.0"}],
+            },
+            {
+                "name": "second",
+                "version": "2.0",
+                "purl": "pkg:npm/second@2.0",
+                "licenses": [{"license": {"id": "BSD-3-Clause"}}],
+            },
+        ]
+        document = beta.make_spdx({"components": components}, COMMIT, 1_700_000_000)
+        self.assertEqual(document["spdxVersion"], "SPDX-2.3")
+        self.assertEqual(document["creationInfo"]["created"], "2023-11-14T22:13:20Z")
+        self.assertIn(COMMIT, document["documentNamespace"])
+        self.assertEqual(
+            [p["licenseDeclared"] for p in document["packages"]],
+            ["MIT OR Apache-2.0", "BSD-3-Clause"],
+        )
+        for package, component, relationship in zip(
+            document["packages"], components, document["relationships"], strict=True
+        ):
+            self.assertEqual(package["name"], component["name"])
+            self.assertEqual(package["versionInfo"], component["version"])
+            self.assertEqual(
+                package["externalRefs"][0]["referenceLocator"], component["purl"]
+            )
+            self.assertEqual(relationship["relatedSpdxElement"], package["SPDXID"])
+
 
 if __name__ == "__main__":
     unittest.main()

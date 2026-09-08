@@ -1,4 +1,4 @@
-# 0.10.0 — unpublished release candidate
+# 0.10.0-beta.1 — local context beta
 
 - Standalone incremental context graph, exact rendered-token budgets, source citations, typed
   relations, hard dependency/counterclaim closure, access filtering, semantic retriever input,
@@ -13,4 +13,9 @@
 The second candidate pass preserves the first candidate's public request/snapshot/delta schemas,
 tokenizer identity and selected output in differential testing. New APIs are additive. BPE caching
 changes memory retention (bounded and configurable), not token counts. The separate Honey runtime
-and SDK versions are not promoted by publishing this library.
+and Rust/Go remote SDK versions are not promoted by publishing this library.
+
+The beta adds Python `0.10.0b1` and TypeScript `0.10.0-beta.1` local graph APIs,
+preserving the 0.9.4 remote API surface. The macOS ARM64 bundled worker is rebuilt
+from the beta source crate. Publication requires independent hosted-build byte
+agreement, fresh-install and offline qualification, SBOMs, and signed provenance.
