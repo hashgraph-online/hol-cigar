@@ -6,7 +6,6 @@ import gzip
 import hashlib
 import io
 import json
-import os
 import sys
 import tarfile
 import tempfile
@@ -50,8 +49,12 @@ class NpmSdkVerifierTests(unittest.TestCase):
             {item["id"] for item in profile["release_decision"]["blockers"]},
             {"npm-latest-tag-removal-required"},
         )
-        self.assertEqual(profile["source"]["revision"], "6e518ad95a018a80a04db295c0f91ec928a0ba0c")
-        self.assertEqual(profile["source"]["tree"], "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b")
+        self.assertEqual(
+            profile["source"]["revision"], "6e518ad95a018a80a04db295c0f91ec928a0ba0c"
+        )
+        self.assertEqual(
+            profile["source"]["tree"], "eb0926ccb63b9a5a0ad1777334a04b3539b03d8b"
+        )
         self.assertEqual(
             profile["source"]["published_from_revision"],
             "7866bab567c29fecc19d34d9071dccd90d30bd7c",
@@ -114,10 +117,14 @@ class NpmSdkVerifierTests(unittest.TestCase):
             "version": "0.9.4",
             "context_abi": "cigar.context.v1",
         }
-        operations = "export const OPERATIONS={\n" + "\n".join(
-            f'  operation{index}: {{"operationId":"operation{index}"}},'
-            for index in range(45)
-        ) + "\n};\n"
+        operations = (
+            "export const OPERATIONS={\n"
+            + "\n".join(
+                f'  operation{index}: {{"operationId":"operation{index}"}},'
+                for index in range(45)
+            )
+            + "\n};\n"
+        )
         return {
             "package/package.json": canonical(package),
             "package/README.md": b"# CIGAR SDK\n",
@@ -194,7 +201,9 @@ class NpmSdkVerifierTests(unittest.TestCase):
         entries = self.entries()
         entries["package/README.md"] = b"built in /Users/alice/private/repo\n"
         archive = self.archive(entries)
-        with self.assertRaisesRegex(verifier.VerificationError, "private absolute path"):
+        with self.assertRaisesRegex(
+            verifier.VerificationError, "private absolute path"
+        ):
             verifier.assess(archive, self.profile_path(archive))
 
     def test_report_is_create_new_and_owner_read_only(self) -> None:
@@ -220,7 +229,7 @@ class NpmSdkVerifierTests(unittest.TestCase):
             for item in report["inventory"]
         ]
         entry = {
-            "id": f'{package["name"]}@{package["version"]}',
+            "id": f"{package['name']}@{package['version']}",
             "name": package["name"],
             "version": package["version"],
             "size": assessed_archive["bytes"],

@@ -96,10 +96,14 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
         self.assertEqual(product["version"], "0.9.4")
         self.assertEqual(product["tag"], "v0.9.4")
         self.assertEqual(python_project["project"]["name"], "hol-cigar")
-        local_release = json.loads((ROOT / "sdk/local-context-release.v1.json").read_bytes())
+        local_release = json.loads(
+            (ROOT / "sdk/local-context-release.v1.json").read_bytes()
+        )
         self.assertEqual(local_release["remote_workspace_version"], "0.9.4")
         self.assertEqual(local_release["versions"]["python"], "0.10.0rc1")
-        self.assertEqual(python_project["project"]["version"], local_release["versions"]["python"])
+        self.assertEqual(
+            python_project["project"]["version"], local_release["versions"]["python"]
+        )
         self.assertFalse(local_release["published"])
         self.assertEqual(
             requirements["publication"]["pypi_distribution_version"],

@@ -23,7 +23,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
         cls.fixtures, cls.fixture_payload = contract.load_json(
             ROOT / contract.FIXTURE_PATH
         )
-        cls.profile, cls.profile_payload = contract.load_json(ROOT / contract.PROFILE_PATH)
+        cls.profile, cls.profile_payload = contract.load_json(
+            ROOT / contract.PROFILE_PATH
+        )
 
     def raw(self) -> dict[str, object]:
         entries = [
@@ -56,7 +58,10 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
                 "manifest_sha256": hashlib.sha256(b"manifest").hexdigest(),
                 "installed_runtime_sha256": hashlib.sha256(b"runtime").hexdigest(),
             },
-            "fixtures": {"manifest_sha256": contract.FIXTURE_SHA256, "entries": entries},
+            "fixtures": {
+                "manifest_sha256": contract.FIXTURE_SHA256,
+                "entries": entries,
+            },
             "environment": {
                 "host_os": "macos",
                 "os_version": "15.6",
@@ -157,7 +162,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
             qualify.validate_raw_observations(raw)
         raw = self.raw()
         raw["latency"]["serial_request_latencies_ns"].pop()
-        with self.assertRaisesRegex(qualify.EfficiencyQualificationError, "invalid count"):
+        with self.assertRaisesRegex(
+            qualify.EfficiencyQualificationError, "invalid count"
+        ):
             qualify.validate_raw_observations(raw)
         raw = self.raw()
         raw["storage"]["mixed_workers_completed"] = 3
@@ -168,7 +175,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
         raw = qualify.validate_raw_observations(self.raw())
         report = qualify.build_report(raw, canonical_json_bytes(raw), self.profile)
         report["gate_results"][4]["thresholds"][0]["value"] = 11_000_000
-        with self.assertRaisesRegex(contract.EfficiencyContractError, "drifted or weakened"):
+        with self.assertRaisesRegex(
+            contract.EfficiencyContractError, "drifted or weakened"
+        ):
             contract.validate_report(report, self.fixtures, self.profile)
 
     def test_duplicate_and_nonfinite_raw_json_are_rejected(self) -> None:
@@ -205,7 +214,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
             manifest.write_bytes(b"changed")
             runtime.write_bytes(b"runtime")
             raw_path.write_bytes(canonical_json_bytes(raw_document))
-            with self.assertRaisesRegex(qualify.EfficiencyQualificationError, "manifest"):
+            with self.assertRaisesRegex(
+                qualify.EfficiencyQualificationError, "manifest"
+            ):
                 qualify.produce(
                     root=ROOT,
                     raw_path=raw_path,
@@ -218,7 +229,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
             with mock.patch.object(
                 qualify, "_git_identity", return_value=("c" * 40, "d" * 40)
             ):
-                with self.assertRaisesRegex(qualify.EfficiencyQualificationError, "source"):
+                with self.assertRaisesRegex(
+                    qualify.EfficiencyQualificationError, "source"
+                ):
                     qualify.produce(
                         root=ROOT,
                         raw_path=raw_path,
@@ -233,7 +246,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
             output.mkdir()
             marker = output / "marker"
             marker.write_text("preserve", encoding="utf-8")
-            with self.assertRaisesRegex(qualify.EfficiencyQualificationError, "already exists"):
+            with self.assertRaisesRegex(
+                qualify.EfficiencyQualificationError, "already exists"
+            ):
                 qualify.produce(
                     root=ROOT,
                     raw_path=Path("missing"),
@@ -243,7 +258,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
                 )
             self.assertEqual(marker.read_text(encoding="utf-8"), "preserve")
 
-    def test_producer_creates_private_report_bound_to_external_raw_attachment(self) -> None:
+    def test_producer_creates_private_report_bound_to_external_raw_attachment(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             scratch = Path(directory).resolve()
             raw_document = self.raw()
@@ -266,7 +283,9 @@ class HoneyEfficiencyQualificationTests(unittest.TestCase):
                 )
             self.assertEqual(report["overall_status"], "pass")
             self.assertEqual(output.stat().st_mode & 0o777, 0o700)
-            self.assertEqual((output / qualify.REPORT_NAME).stat().st_mode & 0o777, 0o600)
+            self.assertEqual(
+                (output / qualify.REPORT_NAME).stat().st_mode & 0o777, 0o600
+            )
             self.assertEqual(
                 {path.name for path in output.iterdir()}, {qualify.REPORT_NAME}
             )

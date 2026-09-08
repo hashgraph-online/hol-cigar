@@ -198,9 +198,7 @@ def _run(
             f"{command_label} left the qualification source unclean or unbound"
         ) from source_error
     if source_after != source_before:
-        raise ReleaseError(
-            f"{command_label} changed the qualification source identity"
-        )
+        raise ReleaseError(f"{command_label} changed the qualification source identity")
     if raw.returncode != expected:
         raise ReleaseError(
             f"{command_label}: {process_failure_summary(raw, 'local qualification command')}"
@@ -230,11 +228,15 @@ def _git_output(root: Path, *arguments: str) -> bytes:
 
 
 def _clean_source_snapshot(root: Path) -> tuple[str, str]:
-    revision = _git_output(root, "rev-parse", "--verify", "HEAD").strip().decode(
-        "ascii", errors="strict"
+    revision = (
+        _git_output(root, "rev-parse", "--verify", "HEAD")
+        .strip()
+        .decode("ascii", errors="strict")
     )
-    tree = _git_output(root, "rev-parse", "--verify", "HEAD^{tree}").strip().decode(
-        "ascii", errors="strict"
+    tree = (
+        _git_output(root, "rev-parse", "--verify", "HEAD^{tree}")
+        .strip()
+        .decode("ascii", errors="strict")
     )
     object_id = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
     if object_id.fullmatch(revision) is None or object_id.fullmatch(tree) is None:

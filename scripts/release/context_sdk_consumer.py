@@ -1,4 +1,5 @@
 """Installed-wheel/sdist cross-language oracle consumer. No source-tree SDK imports."""
+
 import json
 import sys
 from pathlib import Path
@@ -21,4 +22,13 @@ for case in cases:
             results.append(result)
     except LocalContextError as error:
         results.append({"error": error.code})
-print(json.dumps({"exports": cigar_sdk.__all__, "module": cigar_sdk.__file__, "results": results}, ensure_ascii=False))
+print(
+    json.dumps(
+        {
+            "exports": cigar_sdk.__all__,
+            "module": cigar_sdk.__file__,
+            "results": results,
+        },
+        ensure_ascii=False,
+    )
+)

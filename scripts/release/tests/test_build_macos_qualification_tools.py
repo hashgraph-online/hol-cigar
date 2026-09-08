@@ -217,11 +217,7 @@ class MacosQualificationToolBuilderTests(unittest.TestCase):
         ]
         self.assertEqual(
             selected_internal,
-            [
-                builder._honey_internal_input(
-                    builder.SPECS["conformance"], "0.9.4"
-                )
-            ],
+            [builder._honey_internal_input(builder.SPECS["conformance"], "0.9.4")],
         )
 
         selected = dict(profile.SELECTED)

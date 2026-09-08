@@ -17,15 +17,9 @@ class Balanced092ReleaseContractTests(unittest.TestCase):
         baseline = document["published_baseline"]
         self.assertEqual(baseline["version"], "0.9.1")
         self.assertEqual(baseline["git_tag"], "hol-cigar-v0.9.1-pypi.2")
-        self.assertEqual(
-            baseline["commit"], "ee9b52b69f4245c27b46da6ef2fc4a070430caed"
-        )
-        self.assertEqual(
-            baseline["tree"], "7c36625bfa09417150f3b0ec6dafc7161105234f"
-        )
-        self.assertEqual(
-            baseline["roles"], ["sole-comparator", "rollback-reference"]
-        )
+        self.assertEqual(baseline["commit"], "ee9b52b69f4245c27b46da6ef2fc4a070430caed")
+        self.assertEqual(baseline["tree"], "7c36625bfa09417150f3b0ec6dafc7161105234f")
+        self.assertEqual(baseline["roles"], ["sole-comparator", "rollback-reference"])
         self.assertEqual(
             [item["sha256"] for item in baseline["python_artifacts"]],
             [
@@ -62,7 +56,9 @@ class Balanced092ReleaseContractTests(unittest.TestCase):
         for binding in document["frozen_inputs"].values():
             payload = ROOT / binding["path"]
             self.assertTrue(payload.is_file())
-            self.assertEqual(hashlib.sha256(payload.read_bytes()).hexdigest(), binding["sha256"])
+            self.assertEqual(
+                hashlib.sha256(payload.read_bytes()).hexdigest(), binding["sha256"]
+            )
         cohort = document["comparison_cohort"]
         self.assertEqual(cohort["requests"], 100)
         self.assertEqual(cohort["requests_per_workflow"], 20)
@@ -71,11 +67,15 @@ class Balanced092ReleaseContractTests(unittest.TestCase):
         self.assertTrue(cohort["source_diversity_is_not_lineage_proxy"])
         self.assertFalse(cohort["cross_arm_cache_reuse"])
         storage_policy = document["storage_policy"]
-        self.assertEqual(storage_policy["checkpoint_cadence_matrix"], [4, 16, 64, 128, 256])
+        self.assertEqual(
+            storage_policy["checkpoint_cadence_matrix"], [4, 16, 64, 128, 256]
+        )
         self.assertEqual(
             storage_policy["release_default_maximum_deltas_since_checkpoint"], 4
         )
-        self.assertEqual(storage_policy["protocol_maximum_deltas_since_checkpoint"], 256)
+        self.assertEqual(
+            storage_policy["protocol_maximum_deltas_since_checkpoint"], 256
+        )
         self.assertEqual(storage_policy["focused_startup_repetitions"], 40)
         self.assertFalse(storage_policy["thresholds_modified_after_observation"])
         thresholds = document["thresholds"]

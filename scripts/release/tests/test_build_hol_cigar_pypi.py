@@ -17,7 +17,9 @@ import build_hol_cigar_pypi as builder  # noqa: E402
 
 
 class HolCigarPypiBuilderTests(unittest.TestCase):
-    def test_authority_is_versioned_attributed_and_explicitly_not_production(self) -> None:
+    def test_authority_is_versioned_attributed_and_explicitly_not_production(
+        self,
+    ) -> None:
         profile = builder.validate_authority()
         self.assertEqual(profile["distribution"], "hol-cigar")
         self.assertEqual(profile["version"], "0.9.1")
@@ -39,26 +41,25 @@ class HolCigarPypiBuilderTests(unittest.TestCase):
             destination = Path(temporary) / "source"
             builder.stage(builder.ROOT, destination)
             release = json.loads(
-                (
-                    destination
-                    / "src"
-                    / "cigar_sdk"
-                    / "release.json"
-                ).read_text(encoding="utf-8")
+                (destination / "src" / "cigar_sdk" / "release.json").read_text(
+                    encoding="utf-8"
+                )
             )
             self.assertEqual(release["name"], "hol-cigar")
             self.assertEqual(release["version"], "0.9.1")
             self.assertEqual(release["release_state"], "developer-preview")
             self.assertEqual(release["protocol_home"], "https://hol.org")
             self.assertTrue((destination / "src" / "cigar_sdk" / "client.py").is_file())
-            contract = (
-                destination / "tests" / "test_release_contract.py"
-            ).read_text(encoding="utf-8")
+            contract = (destination / "tests" / "test_release_contract.py").read_text(
+                encoding="utf-8"
+            )
             self.assertIn('metadata.version("hol-cigar")', contract)
             self.assertNotIn('metadata.version("cigar-sdk")', contract)
 
     def test_authority_rejects_missing_hol_attribution(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="hol-cigar-authority-test-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="hol-cigar-authority-test-"
+        ) as temporary:
             fixture = Path(temporary)
             (fixture / "packaging").mkdir()
             shutil.copytree(
