@@ -1,9 +1,9 @@
-# cigar-context 0.10.0-beta.1
+# cigar-context 0.10.1
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
-or external graph builder is required. This is beta software. The GitHub release includes
-the source crate; crates.io publication is separate and is not implied.
+or external graph builder is required. Version 0.10.1 improves common-term scoring and
+incremental source updates. The source crate is prepared separately from registry publication.
 
 ```rust
 use cigar_context::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter};
@@ -41,6 +41,15 @@ Use `ExcerptMode::Full` or mark the source required for code that must remain sy
 critical instructions, or evidence that cannot tolerate extraction. Identical selected text is
 coalesced while all selected provenance references remain available.
 
+`snapshot.prompt_view(max_tokens, &tokenizer)` optionally renders the same selected text
+with short handles (`c1`, `c2`, …) and source ranges. Keep the full snapshot and returned
+`ContextPrompt` together. `prompt.verify(&snapshot, &tokenizer)` reconstructs and checks the
+entire view; `prompt.resolve("c1", &snapshot, &tokenizer)` returns the original citations.
+The expected snapshot must come from the application's current authorized compilation.
+This separate rendering never changes the original snapshot, silently truncates source text,
+or omits hard dependencies. Its own exact budget excludes provider framing. Token savings
+depend on citation overhead and are not guaranteed for every input.
+
 Applications with an embedding index can pass ranked node IDs in `semantic_candidates`. This
 extends retrieval to synonyms and paraphrases without coupling the library to a model, vector
 database, similarity scale, or paid API. IDs still pass the authorization filter and hard-closure
@@ -69,7 +78,7 @@ Staging needs additional memory proportional to the replacement source, not a cl
 
 ### Exact counting and repeated requests
 
-`O200kTokenizer` uses an instance-local exact-text cache by default: at most 1,024 entries and
+`O200kTokenizer` uses an instance-local exact-text cache by default: at most 2,048 entries and
 8 MiB of retained text, plus bounded entry/allocator overhead. Final complete renderings are still
 counted exactly; counts are never estimated or added across blocks. This helps both repeated
 requests and repeated checks within one request. Cold requests still perform BPE work.

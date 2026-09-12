@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import time
 import unittest
@@ -88,6 +89,24 @@ class LocalContextTests(unittest.TestCase):
         with self.assertRaises(LocalContextError) as raised:
             graph.stats()
         self.assertEqual(raised.exception.code, "Closed")
+
+    def test_prompt_view_preserves_source_and_rejects_changed_citations(self):
+        graph = self.graph()
+        text = "Require the same identity on retry. Reject a mismatched signature. café 🦀"
+        graph.upsert({"id": "source:" + "a" * 100, "source": "contract.rs", "text": text})
+        snapshot = graph.compile({"query": "retry", "max_tokens": 512})["snapshot"]
+        prompt = graph.prompt_view(snapshot, 512)
+        self.assertEqual(graph.verify_prompt(prompt, snapshot), prompt)
+        self.assertEqual(json.loads(prompt["rendered"])["text"], text)
+        self.assertEqual(graph.resolve_citation("c1", prompt, snapshot), snapshot["blocks"][0]["citations"])
+        changed = copy.deepcopy(prompt)
+        changed["citations"]["c1"][0]["source"] = "unrelated.rs"
+        with self.assertRaises(LocalContextError) as raised:
+            graph.verify_prompt(changed, snapshot)
+        self.assertEqual(raised.exception.code, "Integrity")
+        with self.assertRaises(LocalContextError) as raised:
+            graph.prompt_view(snapshot, 1)
+        self.assertEqual(raised.exception.code, "BudgetUnsatisfiable")
 
     def test_bad_paths_and_options_fail_without_launch(self):
         for timeout in [0, -1, float("nan"), float("inf"), 1e100]:

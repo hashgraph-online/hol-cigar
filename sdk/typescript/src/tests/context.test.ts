@@ -8,6 +8,19 @@ const options = (extra: LocalContextOptions = {}): LocalContextOptions => ({
 });
 const code = (expected: string) => (error: unknown) => error instanceof LocalContextError && error.code === expected;
 
+test("compact prompt preserves source and verifies citation resolution", async () => {
+  await using graph = await LocalContextGraph.create("sdk-test", options());
+  const text = "Require the same identity on retry. Reject a mismatched signature. café 🦀";
+  await graph.upsert({id: `source:${"a".repeat(100)}`, source: "contract.rs", text});
+  const {snapshot} = await graph.compile({query: "retry", max_tokens: 512});
+  const prompt = await graph.promptView(snapshot, 512);
+  assert.deepEqual(await graph.verifyPrompt(prompt, snapshot), prompt);
+  assert.equal(JSON.parse(prompt.rendered).text, text);
+  assert.deepEqual(await graph.resolveCitation("c1", prompt, snapshot), snapshot.blocks[0]?.citations);
+  await assert.rejects(graph.verifyPrompt({...prompt, rendered: "tampered"}, snapshot), code("Integrity"));
+  await assert.rejects(graph.promptView(snapshot, 1), code("BudgetUnsatisfiable"));
+});
+
 test("local incremental cache and exact Rust rendering", async () => {
   await using graph = await LocalContextGraph.create("sdk-test", options());
   const doc = {id: "a", source: "src/a.rs", text: "fn authorize_user() { /* café 🦀 */ }\n"};

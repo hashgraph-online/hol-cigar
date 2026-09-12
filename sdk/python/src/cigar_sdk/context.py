@@ -15,8 +15,10 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 from cigar_sdk.context_types import (
+    LocalCitation,
     LocalContextDelta,
     LocalContextLimits,
+    LocalContextPrompt,
     LocalContextRequest,
     LocalContextResult,
     LocalContextSnapshot,
@@ -27,7 +29,7 @@ from cigar_sdk.context_types import (
 )
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1"
+LOCAL_CONTEXT_CORE_VERSION = "0.10.1"
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
 
@@ -190,6 +192,23 @@ class LocalContextGraph:
 
     def verify(self, snapshot: LocalContextSnapshot) -> LocalContextResult:
         return cast(LocalContextResult, self._call({"op": "verify", "snapshot": snapshot}))
+
+    def prompt_view(self, snapshot: LocalContextSnapshot, max_tokens: int) -> LocalContextPrompt:
+        """Compact data-role rendering; retain its citation map and the complete snapshot."""
+        return cast(
+            LocalContextPrompt, self._call({"op": "prompt_view", "snapshot": snapshot, "max_tokens": max_tokens})
+        )
+
+    def verify_prompt(self, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot) -> LocalContextPrompt:
+        return cast(LocalContextPrompt, self._call({"op": "verify_prompt", "prompt": prompt, "snapshot": snapshot}))
+
+    def resolve_citation(
+        self, reference: str, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot
+    ) -> list[LocalCitation]:
+        return cast(
+            list[LocalCitation],
+            self._call({"op": "resolve_citation", "reference": reference, "prompt": prompt, "snapshot": snapshot}),
+        )
 
     def delta(self, base: LocalContextSnapshot, target: LocalContextSnapshot) -> LocalContextDelta:
         return cast(LocalContextDelta, self._call({"op": "delta", "base": base, "target": target}))

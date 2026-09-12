@@ -61,3 +61,16 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^tests/integration/matrix-v1\.json$''']
 regexes = ['''HANDOFF-AUTH-001"\s*,\s*"HANDOFF-RESULT-001''']
+
+[[allowlists]]
+description = "Four public source-file SHA-256 values in retained context qualification evidence; these exact values were verified against the source files and archived crate."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^reports/evidence/(?:context-010(?:-pass2)?/manifest\.json|context-011/summary\.json|context-sdk-010-(?:rc1|clean)/release\.json)$''',
+]
+regexes = [
+  '''^\s*"crates/cigar-context/src/tokenizer\.rs": "(?:96cd44efde92d0630d8ed48b697cd07d2fb59123a32d326ba1c90205a2666308|2d9ffab532e4bba233756390982fb38b309150589b6e0ad711b7c023aa01c228|989999b15ced22d6c4b9e913b5368b2378a8238c4d7c955d1c35f0334ca4603b)",?\s*$''',
+  '''^\s*"sdk/typescript/src/context-api\.ts": "fe9478bb3e5afbc0d6c1ca89c976366d5da64ce1fc213bd5269784de3eaaa7a1",?\s*$''',
+]

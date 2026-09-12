@@ -1,0 +1,358 @@
+{
+  "schema": "cigar.context-011-qualification.v1",
+  "distinct_requests": 1434,
+  "exact_candidate_comparisons": 8604,
+  "successes": 1226,
+  "expected_errors": 208,
+  "metrics": {
+    "baseline/warm/real-source/full": {
+      "samples": 320,
+      "median_ns": 945041.5,
+      "p95_ns": 1337250
+    },
+    "baseline/warm/real-source/windows": {
+      "samples": 320,
+      "median_ns": 915833.5,
+      "p95_ns": 1348708
+    },
+    "baseline/warm/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 5104.5,
+      "p95_ns": 5167
+    },
+    "baseline/warm/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 302521.0,
+      "p95_ns": 347458
+    },
+    "baseline/warm/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 5125.0,
+      "p95_ns": 5333
+    },
+    "baseline/warm/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 2054103.5,
+      "p95_ns": 3668708
+    },
+    "baseline/warm/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 5500.0,
+      "p95_ns": 5792
+    },
+    "baseline/warm/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 23977917.0,
+      "p95_ns": 34489625
+    },
+    "candidate/warm/real-source/full": {
+      "samples": 320,
+      "median_ns": 952333.5,
+      "p95_ns": 1166708
+    },
+    "candidate/warm/real-source/windows": {
+      "samples": 320,
+      "median_ns": 902646.0,
+      "p95_ns": 1232208
+    },
+    "candidate/warm/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 5208.0,
+      "p95_ns": 6500
+    },
+    "candidate/warm/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 172291.5,
+      "p95_ns": 186542
+    },
+    "candidate/warm/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 5416.0,
+      "p95_ns": 5459
+    },
+    "candidate/warm/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 379375.0,
+      "p95_ns": 548833
+    },
+    "candidate/warm/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 5583.5,
+      "p95_ns": 6917
+    },
+    "candidate/warm/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 4541312.5,
+      "p95_ns": 7557583
+    },
+    "baseline/cold/real-source/full": {
+      "samples": 320,
+      "median_ns": 19508604.5,
+      "p95_ns": 21695333
+    },
+    "baseline/cold/real-source/windows": {
+      "samples": 320,
+      "median_ns": 5571916.5,
+      "p95_ns": 9438500
+    },
+    "baseline/cold/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 9020.5,
+      "p95_ns": 11291
+    },
+    "baseline/cold/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 780875.5,
+      "p95_ns": 830875
+    },
+    "baseline/cold/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 9500.0,
+      "p95_ns": 9875
+    },
+    "baseline/cold/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 2825021.0,
+      "p95_ns": 4287708
+    },
+    "baseline/cold/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 9625.0,
+      "p95_ns": 11250
+    },
+    "baseline/cold/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 31490625.5,
+      "p95_ns": 34758125
+    },
+    "candidate/cold/real-source/full": {
+      "samples": 320,
+      "median_ns": 18512708.5,
+      "p95_ns": 20310375
+    },
+    "candidate/cold/real-source/windows": {
+      "samples": 320,
+      "median_ns": 5245646.0,
+      "p95_ns": 8765458
+    },
+    "candidate/cold/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 8750.0,
+      "p95_ns": 12208
+    },
+    "candidate/cold/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 615708.0,
+      "p95_ns": 667709
+    },
+    "candidate/cold/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 9291.5,
+      "p95_ns": 11833
+    },
+    "candidate/cold/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 931958.5,
+      "p95_ns": 1071042
+    },
+    "candidate/cold/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 9459.0,
+      "p95_ns": 12209
+    },
+    "candidate/cold/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 6855750.0,
+      "p95_ns": 7313583
+    },
+    "baseline/uncached/real-source/full": {
+      "samples": 320,
+      "median_ns": 18643312.5,
+      "p95_ns": 20197917
+    },
+    "baseline/uncached/real-source/windows": {
+      "samples": 320,
+      "median_ns": 5490687.5,
+      "p95_ns": 8836958
+    },
+    "baseline/uncached/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 17708.0,
+      "p95_ns": 21250
+    },
+    "baseline/uncached/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 758938.0,
+      "p95_ns": 822459
+    },
+    "baseline/uncached/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 19562.5,
+      "p95_ns": 24208
+    },
+    "baseline/uncached/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 2793146.0,
+      "p95_ns": 3343791
+    },
+    "baseline/uncached/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 19583.5,
+      "p95_ns": 23458
+    },
+    "baseline/uncached/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 25407438.0,
+      "p95_ns": 27791666
+    },
+    "candidate/uncached/real-source/full": {
+      "samples": 320,
+      "median_ns": 19079354.5,
+      "p95_ns": 21373666
+    },
+    "candidate/uncached/real-source/windows": {
+      "samples": 320,
+      "median_ns": 5428853.5,
+      "p95_ns": 9267917
+    },
+    "candidate/uncached/scale-1000/selective": {
+      "samples": 40,
+      "median_ns": 18958.5,
+      "p95_ns": 20208
+    },
+    "candidate/uncached/scale-1000/common": {
+      "samples": 40,
+      "median_ns": 631520.5,
+      "p95_ns": 758959
+    },
+    "candidate/uncached/scale-10000/selective": {
+      "samples": 40,
+      "median_ns": 19958.0,
+      "p95_ns": 24208
+    },
+    "candidate/uncached/scale-10000/common": {
+      "samples": 40,
+      "median_ns": 927854.5,
+      "p95_ns": 1142625
+    },
+    "candidate/uncached/scale-50000/selective": {
+      "samples": 40,
+      "median_ns": 20167.0,
+      "p95_ns": 24583
+    },
+    "candidate/uncached/scale-50000/common": {
+      "samples": 40,
+      "median_ns": 8495041.0,
+      "p95_ns": 10071500
+    },
+    "baseline/rotating/full": {
+      "samples": 160,
+      "median_ns": 8817083.0,
+      "p95_ns": 15450959
+    },
+    "baseline/rotating/windows": {
+      "samples": 160,
+      "median_ns": 6308604.0,
+      "p95_ns": 9967291
+    },
+    "candidate/rotating/full": {
+      "samples": 160,
+      "median_ns": 1366063.0,
+      "p95_ns": 1656375
+    },
+    "candidate/rotating/windows": {
+      "samples": 160,
+      "median_ns": 1259979.0,
+      "p95_ns": 1626625
+    },
+    "baseline/updates/unchanged": {
+      "samples": 38,
+      "median_ns": 66684917.0,
+      "p95_ns": 67531375
+    },
+    "baseline/updates/one-changed": {
+      "samples": 38,
+      "median_ns": 84160729.0,
+      "p95_ns": 87028208
+    },
+    "candidate/updates/unchanged": {
+      "samples": 38,
+      "median_ns": 285104.0,
+      "p95_ns": 334750
+    },
+    "candidate/updates/one-changed": {
+      "samples": 38,
+      "median_ns": 522542.0,
+      "p95_ns": 639417
+    }
+  },
+  "peak_process_rss_bytes": {
+    "baseline-warm-0": 217448448,
+    "candidate-warm-0": 235405312,
+    "baseline-cold-0": 218071040,
+    "candidate-cold-0": 226967552,
+    "baseline-uncached-0": 212107264,
+    "candidate-uncached-0": 227016704,
+    "baseline-rotating-0": 89079808,
+    "candidate-rotating-0": 83886080,
+    "baseline-updates-0": 110395392,
+    "candidate-updates-0": 108969984,
+    "candidate-updates-1": 108511232,
+    "baseline-updates-1": 109772800,
+    "candidate-rotating-1": 83935232,
+    "baseline-rotating-1": 89522176,
+    "candidate-uncached-1": 224264192,
+    "baseline-uncached-1": 215711744,
+    "candidate-cold-1": 227409920,
+    "baseline-cold-1": 216006656,
+    "candidate-warm-1": 229736448,
+    "baseline-warm-1": 212500480
+  },
+  "build_ns": {
+    "baseline-warm-0": {
+      "real-source": 69106958,
+      "scale-1000": 3576625,
+      "scale-10000": 41355500,
+      "scale-50000": 207759667
+    },
+    "candidate-warm-0": {
+      "real-source": 64445750,
+      "scale-1000": 3801833,
+      "scale-10000": 40102709,
+      "scale-50000": 205697583
+    },
+    "candidate-warm-1": {
+      "real-source": 63353333,
+      "scale-1000": 3452125,
+      "scale-10000": 38470833,
+      "scale-50000": 196992167
+    },
+    "baseline-warm-1": {
+      "real-source": 59227792,
+      "scale-1000": 3587375,
+      "scale-10000": 38788583,
+      "scale-50000": 202685042
+    }
+  },
+  "prompt_tokens": {
+    "full": 17785,
+    "compact": 17472,
+    "requests": 16
+  },
+  "binaries": {
+    "baseline": "34ca30d514f869ff0b258b1cff309fdb2931bab8fdb4521e90d230fafa7ce147",
+    "candidate": "ef01c237620baebf0ae36f14f1952b3654da0979a8ae5d8b957e44b0b4550954"
+  },
+  "inputs_sha256": "d494bf2c89a150ee0eb82b700e01197d5b66490a4ef52d30f6f5b8b6b360502e",
+  "sources": {
+    "crates/cigar-context/src/graph.rs": "1b3d4295b8bef55825646240c1b7e1e5df17da2abe49eb7189ef07e87f5b5239",
+    "crates/cigar-context/src/lib.rs": "d6a2c804537f125968ab9b5c48adc5938bcecd8b34b09d4aa25b675f7f0cc1db",
+    "crates/cigar-context/src/main.rs": "f69944c2ce16637215ddf24dd72b57143708747d72e662cee5cae71abe399271",
+    "crates/cigar-context/src/prompt.rs": "a38b1f257b1cc53d25237f174fe2bd8b7d8ff8b508b5be41eae9f8eb3b49dea7",
+    "crates/cigar-context/src/select.rs": "5dcbef2990d084864deeec45721fd043c95f1c8ac4f56e93931205de3fcfd75f",
+    "crates/cigar-context/src/snapshot.rs": "b7ba03295eed1238237fcd1ad4dc2a5c72ec71e59baa58bdf64bdc4b21da06d0",
+    "crates/cigar-context/src/tokenizer.rs": "989999b15ced22d6c4b9e913b5368b2378a8238c4d7c955d1c35f0334ca4603b",
+    "crates/cigar-context/src/worker.rs": "4b613fc9be4de50f7823cc74bb82ef4b7fea438b345747b65ab291fd03f24a67"
+  },
+  "limitations": "Same-host, counterbalanced offline diagnostics. Exact retrieval output comparisons, not held-out answer-quality tests; RSS is whole-process peak."
+}

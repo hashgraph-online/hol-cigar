@@ -100,7 +100,7 @@ def main():
         "-p",
         "(version 1)(allow default)(deny network*)",
     ]
-    if staged.get("channel") == "beta":
+    if staged.get("channel") in {"beta", "stable"}:
         # A failed connection alone is not sufficient: require the OS policy denial.
         run(
             "offline-policy-probe",
@@ -246,7 +246,7 @@ def main():
         if kind == "sdist":
             command.append(extra["CIGAR_TEST_WORKER"])
         consumer_results[kind] = json.loads(run(f"{kind}-oracle", command))
-        if staged.get("channel") == "beta":
+        if staged.get("channel") in {"beta", "stable"}:
             offline = json.loads(run(f"{kind}-offline-oracle", sandbox + command))
             assert offline == consumer_results[kind]
         assert str(venv) in consumer_results[kind]["module"]
@@ -265,7 +265,7 @@ def main():
     consumer_results["npm"] = json.loads(
         run("npm-oracle", ["node", "consumer.mjs", fixtures], npm_consumer)
     )
-    if staged.get("channel") == "beta":
+    if staged.get("channel") in {"beta", "stable"}:
         offline = json.loads(
             run(
                 "npm-offline-oracle",
@@ -278,7 +278,9 @@ def main():
     manifest = json.loads((installed / "package.json").read_bytes())
     assert manifest["version"] == staged["npm"] and manifest["publishConfig"][
         "tag"
-    ] == staged.get("channel", "rc")
+    ] == (
+        "latest" if staged.get("channel") == "stable" else staged.get("channel", "rc")
+    )
     assert not any(
         k in manifest["scripts"] for k in ["preinstall", "install", "postinstall"]
     )
