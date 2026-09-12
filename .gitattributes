@@ -1,0 +1,2 @@
+# Rust formatting and source digests use the same bytes on every checkout platform.
+*.rs text eol=lf

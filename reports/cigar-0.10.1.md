@@ -87,6 +87,19 @@ These counts describe this core qualification, not 50 end-to-end Hiero runs on 0
 live-model evaluation, or successful EVM runtime validation. The previous workflow
 results must not be relabelled as tests of this candidate.
 
+Hosted CI also identified one release-version registration defect: the existing npm
+readiness router did not accept 0.10.1. It now routes the stable version through the
+same full SDK qualification. Two existing platform build problems are corrected:
+Rust sources retain LF line endings on Windows checkouts, and private helpers used
+only by the macOS vector store compile only on that platform. These fixes leave
+warnings and validation requirements enabled.
+
+Gitleaks flagged nine occurrences of four public source-file hashes, including one
+in the new benchmark summary. The four values were independently checked against
+current/previous source and the archived crate. A file/line/rule/value-specific
+exception preserves immutable evidence. A different synthetic value at the same
+path still triggers detection; no credential was found or exempted.
+
 ## Release qualification
 
 Core and local SDK package identities are stable `0.10.1`. The macOS ARM64 wheel and
@@ -101,3 +114,10 @@ offline SDK oracles, older SDK compatibility, dependency advisory checks, licens
 notices, SBOMs and exact-commit signed provenance. Beta verification retains its
 original signing identity. Local preparation does not publish or sign packages;
 the final candidate artifact report records the actual qualification status.
+
+The broader Honey CI remains a separate qualification scope. Its protected
+`CIGAR_XTASK_TOOL_INPUTS` manifest is absent in hosted source/coverage jobs, including
+the existing main-branch run `34670484527`. The repository also has two existing
+gRPC-Go dependency alerts in the older Go SDK/demo; neither dependency is in the
+0.10.1 core/Python/TypeScript artifacts. These failures are retained as outstanding
+Honey/repository issues and are not waived by the context release workflow.

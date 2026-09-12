@@ -11,6 +11,7 @@ from release_lib import ReleaseError, canonical_json_bytes
 
 
 EXACT_INPUTS = (
+    ".gitattributes",
     "Cargo.toml",
     "Cargo.lock",
     "pnpm-lock.yaml",
