@@ -1,3 +1,20 @@
+# 0.10.1 — incremental retrieval performance
+
+- Raise the default exact-token cache to 2,048 entries while retaining the 8 MiB text cap.
+- Accumulate broad-query scores in reusable document slots; preserve exact ranking,
+  authorization, hard closure, selected evidence and snapshot commitments.
+- Retain unchanged indexed documents during atomic source replacement, staging only changes.
+- Add opt-in `ContextPrompt`, `ContextSnapshot::prompt_view`, verification and citation
+  resolution, also exposed by the persistent worker and both local SDKs.
+- Prepare stable core/Python/TypeScript 0.10.1 packages and a fixed-tag release workflow
+  retaining independent-build, offline-consumer and signed-provenance requirements.
+
+8,604 differential comparisons over 1,434 requests agreed with 0.10.0. Same-host median
+latency fell 80–85% for rotating real-source queries, 81% for a 50k-document common-term
+query, and over 99% for unchanged/single-change source updates. Full-comparison process
+peak memory rose 8.0%. These are measured workload-specific gains, not answer-quality
+claims. Existing request/snapshot/delta schemas, token identity and remote v1 APIs are preserved.
+
 # 0.10.0-beta.1 — local context beta
 
 - Standalone incremental context graph, exact rendered-token budgets, source citations, typed

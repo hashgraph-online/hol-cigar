@@ -6,12 +6,12 @@ import { isAbsolute } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import type {
-  LocalContextDelta, LocalContextLimits, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
+  LocalCitation, LocalContextDelta, LocalContextLimits, LocalContextPrompt, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
   LocalDocument, LocalEdgeKind, LocalGraphStats, LocalSourceUpdate,
 } from "./context-types.js";
 
 export const LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1" as const;
-export const LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1" as const;
+export const LOCAL_CONTEXT_CORE_VERSION = "0.10.1" as const;
 const MAX_FRAME = 32 * 1024 * 1024;
 const MAX_RESPONSE = 64 * 1024 * 1024;
 const CORE_ERRORS = new Set(["InvalidInput", "LimitExceeded", "RequiredUnavailable", "BudgetUnsatisfiable",
@@ -178,6 +178,16 @@ export class LocalContextGraph implements AsyncDisposable {
     return this.call({op: "chunks", document, max_lines: maxLines, overlap_lines: overlapLines});
   }
   verify(snapshot: LocalContextSnapshot): Promise<LocalContextResult> { return this.call({op: "verify", snapshot}); }
+  /** Compact data-role rendering bound to the complete snapshot and retained citation map. */
+  promptView(snapshot: LocalContextSnapshot, maxTokens: number): Promise<LocalContextPrompt> {
+    return this.call({op: "prompt_view", snapshot, max_tokens: maxTokens});
+  }
+  verifyPrompt(prompt: LocalContextPrompt, snapshot: LocalContextSnapshot): Promise<LocalContextPrompt> {
+    return this.call({op: "verify_prompt", prompt, snapshot});
+  }
+  resolveCitation(reference: string, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot): Promise<readonly LocalCitation[]> {
+    return this.call({op: "resolve_citation", reference, prompt, snapshot});
+  }
   delta(base: LocalContextSnapshot, target: LocalContextSnapshot): Promise<LocalContextDelta> {
     return this.call({op: "delta", base, target});
   }

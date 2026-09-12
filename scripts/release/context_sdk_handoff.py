@@ -51,10 +51,17 @@ def require(condition: bool, message: str) -> None:
 
 
 def artifact_names(version: str) -> set[str]:
+    if version == "0.10.1":
+        return {
+            "cigar-context-0.10.1.crate",
+            "hol-org-cigar-0.10.1.tgz",
+            "hol_cigar-0.10.1.tar.gz",
+            "hol_cigar-0.10.1-py3-none-macosx_11_0_arm64.whl",
+        }
     match = RELEASE.fullmatch(version)
     require(
         match is not None,
-        "expected release must be an explicit 0.10.0 rc/beta prerelease",
+        "expected release must be an explicit 0.10.0 rc/beta prerelease or 0.10.1",
     )
     channel, number = match.groups()
     python = f"0.10.0{'rc' if channel == 'rc' else 'b'}{number}"

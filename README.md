@@ -103,25 +103,22 @@ The public protocol currently defines seven services covering catalog, context, 
 effects, replay, and operations. See the [public API reference](docs/reference/public-api.md) for the
 operation-level contract.
 
-## 0.10.0 local context library beta
+## 0.10.1 local context library
 
-This branch adds [`cigar-context` 0.10.0-beta.1](crates/cigar-context/README.md): an offline Rust library
+This branch provides [`cigar-context` 0.10.1](crates/cigar-context/README.md): an offline Rust library
 and JSON CLI for incremental context graphs, typed evidence dependencies and counterclaims,
 exact rendered-token budgets, source citations, optional semantic-retriever integration, and
-verified snapshot deltas. The second pass adds atomic source replacement and bounded exact-token
-caching, with substantially faster cold/warm queries and unchanged tested outputs. It has no
+verified snapshot deltas. Version 0.10.1 reuses unchanged source indexes, accelerates common-term
+scoring, increases the bounded token-cache capacity and adds optional verified prompt views. It has no
 daemon, database, or model-service requirement.
 
 Start with `python3 scripts/dev.py context` or the short Rust example in the library README.
-The [implementation plan](docs/proposals/cigar-0.10.0-plan.md) defines the scope and acceptance
-criteria. The [current measured differences report](reports/cigar-0.10.0-second-pass.md) includes raw evidence,
-limitations, and the remaining release gates. The existing compiler also receives a
-behavior-preserving packing optimization.
-The Python (`hol-cigar==0.10.0b1`) and TypeScript (`@hol-org/cigar@0.10.0-beta.1`) SDKs now
-add the same local graph through a persistent Rust worker while retaining their remote v1 APIs.
-See the [SDK RC report and local archives](reports/cigar-0.10.0-sdk-rc.md),
+The [measured differences report](reports/cigar-0.10.1.md) includes exact-output comparisons,
+performance evidence and tradeoffs. The Python (`hol-cigar==0.10.1`) and TypeScript
+(`@hol-org/cigar@0.10.1`) SDKs expose the same graph through a persistent Rust worker.
+See the [0.10.1 release notes](docs/release/context-sdk-0.10.1-notes.md),
 [Python guide](sdk/python/README.md), and [TypeScript guide](sdk/typescript/README.md).
-Bundled native RC artifacts are qualified locally on macOS ARM64; they are not published.
+The bundled native release profile covers macOS ARM64. Publication is separate from preparation.
 Frozen Honey 0.9.4 daemon publication contracts and historical artifacts below remain unchanged.
 
 ## CIGAR Honey 0.9.4 candidate

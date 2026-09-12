@@ -1,14 +1,14 @@
 [project]
 name = "hol-cigar"
-version = "0.10.0b1"
-description = "CIGAR local Rust context graphs and compatible v1 Python client (beta)"
+version = "0.10.1"
+description = "CIGAR local Rust context graphs and compatible v1 Python client"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14,<3.15"
 dependencies = ["protobuf==6.33.5"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3.14",

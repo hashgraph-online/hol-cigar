@@ -1285,7 +1285,7 @@ def assert_release_contracts() -> None:
         "typescript": version,
         "python": python_version,
     }
-    # Local context SDKs have their own beta track; this does not promote the frozen
+    # Local context SDKs have their own release track; this does not promote the frozen
     # Honey daemon, Rust/Go remote clients, or their 0.9.4 publication contracts.
     local_release_path = SDK / "local-context-release.v1.json"
     local_release = load_json(local_release_path) if local_release_path.exists() else None
@@ -1294,10 +1294,10 @@ def assert_release_contracts() -> None:
             "schema_version": "cigar.local-context-sdk-release.v1",
             "remote_workspace_version": version,
             "context_abi": context_abi,
-            "core_version": "0.10.0-beta.1",
+            "core_version": "0.10.1",
             "protocol": "cigar.context-worker.v1",
-            "channel": "beta",
-            "versions": {"python": "0.10.0b1", "typescript": "0.10.0-beta.1"},
+            "channel": "stable",
+            "versions": {"python": "0.10.1", "typescript": "0.10.1"},
             "bundled_native_targets": ["aarch64-apple-darwin"],
             "published": False,
         }

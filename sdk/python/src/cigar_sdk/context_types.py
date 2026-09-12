@@ -45,6 +45,17 @@ class LocalCitation(TypedDict):
     end_line: int
 
 
+class LocalContextPrompt(TypedDict):
+    schema: Literal["cigar.context-prompt.v1"]
+    id: str
+    snapshot_id: str
+    tokenizer: str
+    rendered: str
+    rendered_tokens: int
+    max_tokens: int
+    citations: dict[str, list[LocalCitation]]
+
+
 class LocalEvidenceBlock(TypedDict):
     text: str
     citations: list[LocalCitation]

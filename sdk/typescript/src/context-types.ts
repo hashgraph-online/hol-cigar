@@ -25,6 +25,11 @@ export type LocalContextSnapshot = Readonly<{
   blocks: readonly LocalEvidenceBlock[]; stats: LocalSelectionStats;
 }>;
 export type LocalContextResult = Readonly<{snapshot: LocalContextSnapshot; rendered: string}>;
+export type LocalContextPrompt = Readonly<{
+  schema: "cigar.context-prompt.v1"; id: string; snapshot_id: string; tokenizer: string;
+  rendered: string; rendered_tokens: number; max_tokens: number;
+  citations: Readonly<Record<string, readonly LocalCitation[]>>;
+}>;
 export type LocalContextDelta = Readonly<{
   base_id: string; target_id: string; graph_revision: number; stats: LocalSelectionStats;
   order: readonly string[]; added: readonly LocalEvidenceBlock[];

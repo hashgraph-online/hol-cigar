@@ -120,6 +120,7 @@ def main():
             ".github/workflows/npm-sdk-readiness.yml",
             ".github/workflows/fast-ci.yml",
             ".github/workflows/context-sdk-beta.yml",
+            ".github/workflows/context-sdk-release.yml",
             ".github/workflows/publish-hol-cigar.yml",
             ".github/workflows/stage-hol-cigar-npm.yml",
         ],
@@ -260,7 +261,7 @@ def main():
         "evidence": retained,
         "qualified_platform": release["native_qualified_host"],
         "limitations": [
-            "This diagnostic report alone does not establish hosted or independent build provenance; see the separate signed beta manifest.",
+            "This diagnostic report alone does not establish hosted or independent build provenance; see the separate signed release manifest.",
             "No bundled native Linux/Windows qualification.",
             "Platform binary has macOS 11 deployment floor, not a test result on macOS 11.",
             "Exact tested Python/Node versions are in retained logs; other supported versions are not individually qualified.",

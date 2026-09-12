@@ -100,7 +100,7 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
             (ROOT / "sdk/local-context-release.v1.json").read_bytes()
         )
         self.assertEqual(local_release["remote_workspace_version"], "0.9.4")
-        self.assertEqual(local_release["versions"]["python"], "0.10.0b1")
+        self.assertEqual(local_release["versions"]["python"], "0.10.1")
         self.assertEqual(
             python_project["project"]["version"], local_release["versions"]["python"]
         )

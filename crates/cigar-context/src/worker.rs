@@ -1,7 +1,7 @@
 //! Versioned, bounded stdio bridge. One caller-owned graph/cache per process.
 use cigar_context::{
-    ContextDelta, ContextError, ContextGraph, ContextRequest, ContextSnapshot, Document, EdgeKind,
-    GraphLimits, O200kTokenizer, TokenCacheLimits, TokenCounter,
+    ContextDelta, ContextError, ContextGraph, ContextPrompt, ContextRequest, ContextSnapshot,
+    Document, EdgeKind, GraphLimits, O200kTokenizer, TokenCacheLimits, TokenCounter,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -61,6 +61,19 @@ enum Command {
     },
     Verify {
         snapshot: ContextSnapshot,
+    },
+    PromptView {
+        snapshot: ContextSnapshot,
+        max_tokens: usize,
+    },
+    VerifyPrompt {
+        snapshot: ContextSnapshot,
+        prompt: ContextPrompt,
+    },
+    ResolveCitation {
+        snapshot: ContextSnapshot,
+        prompt: ContextPrompt,
+        reference: String,
     },
     Delta {
         base: ContextSnapshot,
@@ -135,6 +148,23 @@ impl Session {
                 overlap_lines,
             } => Ok(json!(document.chunks(max_lines, overlap_lines)?)),
             Command::Verify { snapshot } => self.rendered(snapshot),
+            Command::PromptView {
+                snapshot,
+                max_tokens,
+            } => Ok(json!(snapshot.prompt_view(max_tokens, &self.tokenizer)?)),
+            Command::VerifyPrompt { snapshot, prompt } => {
+                prompt.verify(&snapshot, &self.tokenizer)?;
+                Ok(json!(prompt))
+            }
+            Command::ResolveCitation {
+                snapshot,
+                prompt,
+                reference,
+            } => Ok(json!(prompt.resolve(
+                &reference,
+                &snapshot,
+                &self.tokenizer
+            )?)),
             Command::Delta { base, target } => {
                 Ok(json!(target.delta_from(&base, &self.tokenizer)?))
             }

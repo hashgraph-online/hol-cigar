@@ -1,14 +1,14 @@
 # `@hol-org/cigar`
 
-0.10.0 beta 1 for Node.js 24 ESM applications:
+0.10.1 release candidate for Node.js 24 ESM applications:
 
 ```text
-npm install ./hol-org-cigar-0.10.0-beta.1.tgz
+npm install ./hol-org-cigar-0.10.1.tgz
 ```
 
 Verify the signed GitHub assets before installation. Registry publication requires a separate
-maintainer approval; once listed, use `npm install '@hol-org/cigar@0.10.0-beta.1'`.
-The prerelease channel is `beta`, never `latest`. The package intentionally does
+maintainer approval; once listed, use `npm install '@hol-org/cigar@0.10.1'`.
+The stable package uses the `latest` registry channel upon publication. The package does
 not claim CommonJS or browser-runtime support, and consumers should pin an exact version for
 reproducible workflow execution.
 
@@ -37,10 +37,16 @@ atomic `replaceSource`, line-preserving `chunks`, `compile`, `verify`, `delta`, 
 `stats`, and `clearCache` use the same Rust selector, citations, exact `o200k_base` accounting,
 incremental indexes, and bounded token cache as the Rust library. No server or model is needed.
 
-Beta 1 bundles a worker only for macOS ARM64. Other platforms retain the remote SDK; local graphs
+The optional `promptView(snapshot, maxTokens)` returns a `LocalContextPrompt` with every
+selected text block and short citation handles. Retain its citation map and full snapshot;
+`verifyPrompt(prompt, snapshot)` and `resolveCitation("c1", prompt, snapshot)` check against
+the expected authorized snapshot. A separate exact budget fails without truncating evidence.
+Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
+
+Version 0.10.1 bundles a worker only for macOS ARM64. Other platforms retain the remote SDK; local graphs
 require an explicitly supplied, trusted absolute `workerPath` built from the matching Rust
-0.10.0-beta.1 source (`cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker`).
-They are not natively qualified by this beta. There is no install script, runtime download, PATH
+0.10.1 source (`cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker`).
+The bundled native profile covers macOS ARM64. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize
@@ -57,7 +63,7 @@ Use `await using` or `await graph.close()`. Calls are ordered, with at most 32 p
 `maxPending` 1..128), 64 MiB aggregate queued requests, 32 MiB per request, and 64 MiB per response.
 `timeoutMs` defaults to 30 seconds **per active exchange**, including pipe writes; queued calls
 wait their turn. `close()` aborts the active call and rejects the queue. Unsafe numeric integers
-are rejected, not silently rounded. Customize graph/cache `limits`; default cache is 1024
+are rejected, not silently rounded. Customize graph/cache `limits`; default cache is 2048
 strings/8 MiB. `clearCache` drops retained text but does not promise zeroization.
 Errors expose a content-free `LocalContextError.code`. Timeout, malformed wire fields, and
 protocol/pipe failures permanently close the graph; no mutations are automatically retried.
