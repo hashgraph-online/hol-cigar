@@ -536,6 +536,7 @@ def build(args) -> None:
         ).chmod(0o755)
     environment = {
         "SOURCE_DATE_EPOCH": str(binding["source_date_epoch"]),
+        "npm_config_cache": str(output / "npm-cache"),
         "PATH": str(Path(shutil.which(args.pnpm) or args.pnpm).absolute().parent)
         + os.pathsep
         + os.environ["PATH"],

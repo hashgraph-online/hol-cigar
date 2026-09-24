@@ -14,6 +14,7 @@ from release_lib import ReleaseError, canonical_json_bytes
 
 EXACT_INPUTS = (
     ".gitattributes",
+    ".github/actionlint.yaml",
     "Cargo.toml",
     "Cargo.lock",
     "pnpm-lock.yaml",
@@ -30,6 +31,7 @@ EXACT_INPUTS = (
     "scripts/release/context_platforms.py",
     "scripts/release/build_context_worker.py",
     "scripts/release/context_distribution.py",
+    "scripts/release/qualify_context_distribution.py",
     "scripts/release/context_sdk_cases.py",
     "scripts/release/context_sdk_consumer.py",
     "scripts/release/context-sdk-consumer.mjs",
@@ -93,8 +95,15 @@ def windows_source_digest(root: Path, path: Path) -> str:
         after = os.fstat(stream.fileno())
     fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
     for other in (opened, after, path.lstat()):
-        if any(getattr(before, key) != getattr(other, key) for key in fields):
-            raise ReleaseError("source input changed while reading")
+        changed = {
+            key: [getattr(before, key), getattr(other, key)]
+            for key in fields
+            if getattr(before, key) != getattr(other, key)
+        }
+        if changed:
+            raise ReleaseError(
+                f"source input changed while reading {path.relative_to(root)}: {changed}"
+            )
     if len(payload) != before.st_size:
         raise ReleaseError("source input size changed while reading")
     return hashlib.sha256(payload).hexdigest()
