@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
+import stat
 import subprocess
 
 from evidence_workspace import digest_secure_file
@@ -27,6 +29,8 @@ EXACT_INPUTS = (
     "scripts/release/context_sdk_inputs.py",
     "scripts/release/context_platforms.py",
     "scripts/release/build_context_worker.py",
+    "scripts/release/context_distribution.py",
+    "scripts/release/context_sdk_cases.py",
     "scripts/release/context_sdk_consumer.py",
     "scripts/release/context-sdk-consumer.mjs",
     "scripts/release/prepare_context_sdk_rc.py",
@@ -61,6 +65,39 @@ SOURCE_SUFFIXES = {
     ".typed",
     ".txt",
 }
+
+
+def windows_source_digest(root: Path, path: Path) -> str:
+    """Bind a regular checkout input on Windows, without a POSIX-storage claim.
+
+    Git cleanliness is checked separately at both build boundaries. Reject
+    junctions/reparse points and changed file identity rather than following them.
+    The private POSIX evidence workspace remains a separate, unchanged contract.
+    """
+    if not path.is_absolute() or not path.is_relative_to(root):
+        raise ReleaseError("source input is outside the checkout")
+    for current in [path, *path.parents]:
+        metadata = current.lstat()
+        if current.is_symlink() or getattr(metadata, "st_file_attributes", 0) & 0x400:
+            raise ReleaseError("source input uses a link or reparse point")
+        if current == root:
+            break
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise ReleaseError("source input must be a regular, unlinked file")
+    if not 0 <= before.st_size <= 64 * 1024 * 1024:
+        raise ReleaseError("source input exceeds byte limit")
+    with path.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        payload = stream.read(64 * 1024 * 1024 + 1)
+        after = os.fstat(stream.fileno())
+    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    for other in (opened, after, path.lstat()):
+        if any(getattr(before, key) != getattr(other, key) for key in fields):
+            raise ReleaseError("source input changed while reading")
+    if len(payload) != before.st_size:
+        raise ReleaseError("source input size changed while reading")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _git(root: Path, *arguments: str) -> bytes:
@@ -102,7 +139,11 @@ def capture(root: Path, *, allow_dirty: bool = False) -> dict[str, object]:
                 "NOTICE",
             }:
                 continue
-        source[name] = digest_secure_file(root / name).sha256
+        source[name] = (
+            windows_source_digest(root, root / name)
+            if os.name == "nt"
+            else digest_secure_file(root / name).sha256
+        )
     if not set(EXACT_INPUTS) <= set(source):
         raise ReleaseError("SDK source binding is missing a tracked build input")
     epoch = int(_git(root, "show", "-s", "--format=%ct", "HEAD").decode().strip())

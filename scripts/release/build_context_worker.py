@@ -212,6 +212,24 @@ def main() -> None:
     cli = oracle / cli_name
     shutil.copyfile(executable.parent / cli_name, cli)
     cli.chmod(0o755)
+    fixture = oracle / ("stalled-worker.exe" if os.name == "nt" else "stalled-worker")
+    run(
+        "stalled-worker-build",
+        [
+            Path(cargo).with_name("rustc.exe" if os.name == "nt" else "rustc"),
+            "--edition=2024",
+            "--target",
+            metadata["target"],
+            ROOT / "sdk/fixtures/stalled-worker.rs",
+            "-o",
+            fixture,
+            *(
+                ["-C", "target-feature=+crt-static", "-C", "link-arg=/Brepro"]
+                if os.name == "nt"
+                else []
+            ),
+        ],
+    )
     binary = context_platforms.inspect_binary(worker, args.platform)
     context_platforms.inspect_binary(cli, args.platform)
     run("worker-version", [worker, "--version"])

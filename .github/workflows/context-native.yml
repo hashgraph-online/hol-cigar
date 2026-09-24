@@ -72,10 +72,12 @@ jobs:
         run: |
           CIGAR_TOOLCHAIN="$(dirname "$(dirname "$(rustup which --toolchain "1.92.0-${CIGAR_TARGET}" cargo)")")"
           docker pull "${CIGAR_IMAGE}"
-          docker run --rm --mount "type=bind,src=${GITHUB_WORKSPACE},dst=/src,readonly" \
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=${GITHUB_WORKSPACE},dst=/src,readonly" \
             --mount "type=bind,src=${CIGAR_TOOLCHAIN},dst=/toolchain,readonly" \
             --mount "type=bind,src=${RUNNER_TEMP},dst=/out" \
             --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0=/src \
+            --env CARGO_HOME=/out/cargo-home \
             --workdir /src "${CIGAR_IMAGE}" \
             /opt/python/cp314-cp314/bin/python scripts/release/build_context_worker.py \
             --platform "${CIGAR_PLATFORM}" --cargo /toolchain/bin/cargo \
