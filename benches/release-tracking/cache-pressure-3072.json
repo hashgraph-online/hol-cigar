@@ -1,0 +1,31 @@
+{
+  "schema": "cigar.release-tracking-capacity-boundary.v1",
+  "reason_registered": "The retained 768-query cohort uses 771 cache entries and fits both defaults. These two additional sizes bracket the observed/default entry capacities (1024 and 2048); both sizes are fixed together before either is run.",
+  "paired_process_sessions": 8,
+  "documents": 3072,
+  "documents_per_query": 1,
+  "query_mode": "required_only",
+  "warmup_rotations": 2,
+  "measured_rotations": 3,
+  "refresh_trials": 8,
+  "max_tokens": 8192,
+  "modes": [
+    "default_cache",
+    "equal_256_entry_cache"
+  ],
+  "hypothesis": "At 1536 entries only the candidate default fits; at 3072 both defaults evict. Retain both results and all equal-small-cache controls regardless of latency outcome.",
+  "timing": "Same persistent-worker RPC scope and continuation checks as the initial plan; no lexical matches, one explicit required document per query, 768 distinct queries.",
+  "statistics": "Eight paired process sessions per mode, alternating version order, 2000 fixed-seed bootstrap draws of session medians.",
+  "improvement_threshold": "At least 10% paired median latency reduction with descriptive 95% interval above zero. Cache-capacity claim additionally requires fewer default-cache misses and no comparable benefit with equal small caches.",
+  "resource_watch": "Report peak RSS and bounded cache occupancy; flag median RSS increase over 20%.",
+  "expected_warm_misses": {
+    "default_cache": {
+      "baseline": true,
+      "candidate": true
+    },
+    "equal_256_entry_cache": {
+      "baseline": true,
+      "candidate": true
+    }
+  }
+}

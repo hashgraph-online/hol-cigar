@@ -136,7 +136,9 @@ impl Default for GraphLimits {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct IndexedDocument {
+    pub slot: usize,
     pub document: Document,
     pub terms: BTreeMap<String, IndexedTerm>,
     pub digest: String,
@@ -144,6 +146,7 @@ pub(crate) struct IndexedDocument {
     pub declarations: BTreeSet<String>,
 }
 
+#[derive(Clone)]
 pub(crate) struct IndexedTerm {
     pub count: u8,
     // None encodes the common line-zero occurrence (or no text occurrence when !in_text).
@@ -153,6 +156,7 @@ pub(crate) struct IndexedTerm {
     pub in_source: bool,
 }
 
+#[derive(Clone)]
 enum LinePosting {
     Single(usize),
     Multiple(Vec<usize>),
@@ -240,14 +244,22 @@ pub struct SourceUpdate {
 pub struct ContextGraph {
     pub(crate) domain: String,
     pub(crate) limits: GraphLimits,
-    pub(crate) documents: BTreeMap<String, IndexedDocument>,
-    // Store the saturated frequency beside each ID, avoiding random document lookups per term.
-    pub(crate) postings: BTreeMap<String, BTreeMap<Arc<str>, u8>>,
+    pub(crate) documents: BTreeMap<String, Arc<IndexedDocument>>,
+    // Reusable slots let broad queries accumulate exact scores without hashing source IDs.
+    // Slots never escape the graph or participate in a snapshot identity.
+    pub(crate) slots: Vec<Option<Arc<IndexedDocument>>>,
+    free_slots: Vec<usize>,
+    pub(crate) postings: BTreeMap<String, BTreeMap<Arc<str>, Posting>>,
     pub(crate) edges: BTreeMap<String, BTreeSet<(EdgeKind, String)>>,
     pub(crate) revision: u64,
     sources: BTreeMap<String, BTreeSet<String>>,
     bytes: usize,
     edge_count: usize,
+}
+
+pub(crate) struct Posting {
+    pub slot: usize,
+    pub count: u8,
 }
 
 impl ContextGraph {
@@ -268,6 +280,8 @@ impl ContextGraph {
             domain,
             limits,
             documents: BTreeMap::new(),
+            slots: Vec::new(),
+            free_slots: Vec::new(),
             postings: BTreeMap::new(),
             edges: BTreeMap::new(),
             revision: 0,
@@ -349,27 +363,14 @@ impl ContextGraph {
             value.in_source = true;
         }
         self.unindex(&document.id);
-        self.sources
-            .entry(document.source.clone())
-            .or_default()
-            .insert(document.id.clone());
-        let posting_id: Arc<str> = Arc::from(document.id.as_str());
-        for (term, value) in &terms {
-            self.postings
-                .entry(term.clone())
-                .or_default()
-                .insert(Arc::clone(&posting_id), value.count);
-        }
-        self.documents.insert(
-            document.id.clone(),
-            IndexedDocument {
-                document,
-                terms,
-                digest: content_digest,
-                text_digest,
-                declarations,
-            },
-        );
+        self.index(IndexedDocument {
+            slot: 0,
+            document,
+            terms,
+            digest: content_digest,
+            text_digest,
+            declarations,
+        });
         self.bytes = bytes;
         self.revision = revision;
         Ok(true)
@@ -393,25 +394,32 @@ impl ContextGraph {
         }
         let mut staged = Self::new(self.domain.clone(), self.limits)?;
         let mut result = SourceUpdate::default();
+        let mut incoming = BTreeSet::new();
+        let mut retained = BTreeSet::new();
+        let mut incoming_bytes = 0_usize;
         for document in documents {
-            if document.source != source || staged.documents.contains_key(&document.id) {
+            if document.source != source || !incoming.insert(document.id.clone()) {
                 return Err(ContextError::InvalidInput);
             }
+            incoming_bytes = incoming_bytes
+                .checked_add(document.text.len())
+                .ok_or(ContextError::LimitExceeded)?;
             match self.documents.get(&document.id) {
                 Some(old) if old.document.source != source => {
                     return Err(ContextError::InvalidInput);
                 }
-                Some(old) if old.document == document => result.unchanged += 1,
+                Some(old) if old.document == document => {
+                    result.unchanged += 1;
+                    retained.insert(document.id);
+                    continue;
+                }
                 Some(_) => result.replaced += 1,
                 None => result.inserted += 1,
             }
             staged.upsert(document)?;
         }
         let old_ids = self.sources.get(source).cloned().unwrap_or_default();
-        result.removed = old_ids
-            .iter()
-            .filter(|id| !staged.documents.contains_key(*id))
-            .count();
+        result.removed = old_ids.iter().filter(|id| !incoming.contains(*id)).count();
         if result.inserted + result.replaced + result.removed == 0 {
             result.revision = self.revision;
             return Ok(result);
@@ -424,9 +432,9 @@ impl ContextGraph {
         let bytes = self
             .bytes
             .checked_sub(removed_bytes)
-            .and_then(|v| v.checked_add(staged.bytes))
+            .and_then(|v| v.checked_add(incoming_bytes))
             .ok_or(ContextError::LimitExceeded)?;
-        let count = self.len() - old_ids.len() + staged.len();
+        let count = self.len() - old_ids.len() + incoming.len();
         if bytes > self.limits.max_total_bytes || count > self.limits.max_documents {
             return Err(ContextError::LimitExceeded);
         }
@@ -437,14 +445,16 @@ impl ContextGraph {
         // No fallible operations after this point. The temporary index bounds staging work and
         // leaves the live graph unchanged on all validation/limit failures.
         for id in old_ids {
-            self.unindex(&id);
-            self.documents.remove(&id);
+            if !retained.contains(&id) {
+                self.unindex(&id);
+            }
         }
-        for (term, entries) in staged.postings {
-            self.postings.entry(term).or_default().extend(entries);
+        // Release the staging slot references before moving its immutable nodes. Live slots
+        // are assigned here, so a staged ordinal cannot refer to an unrelated live document.
+        drop(staged.slots);
+        for (_, node) in staged.documents {
+            self.index(Arc::unwrap_or_clone(node));
         }
-        self.sources.extend(staged.sources);
-        self.documents.extend(staged.documents);
         self.bytes = bytes;
         self.revision = result.revision;
         Ok(result)
@@ -461,7 +471,6 @@ impl ContextGraph {
             .checked_add(1)
             .ok_or(ContextError::LimitExceeded)?;
         self.unindex(id);
-        self.documents.remove(id);
         self.bytes = bytes;
         self.revision = revision;
         Ok(true)
@@ -559,8 +568,36 @@ impl ContextGraph {
         Ok(true)
     }
 
+    fn index(&mut self, mut node: IndexedDocument) {
+        let slot = self.free_slots.pop().unwrap_or(self.slots.len());
+        node.slot = slot;
+        let node = Arc::new(node);
+        let document = &node.document;
+        let posting_id: Arc<str> = Arc::from(document.id.as_str());
+        for (term, value) in &node.terms {
+            self.postings.entry(term.clone()).or_default().insert(
+                Arc::clone(&posting_id),
+                Posting {
+                    slot,
+                    count: value.count,
+                },
+            );
+        }
+        self.sources
+            .entry(document.source.clone())
+            .or_default()
+            .insert(document.id.clone());
+        self.documents
+            .insert(document.id.clone(), Arc::clone(&node));
+        if slot == self.slots.len() {
+            self.slots.push(Some(node));
+        } else if let Some(entry) = self.slots.get_mut(slot) {
+            *entry = Some(node);
+        }
+    }
+
     fn unindex(&mut self, id: &str) {
-        if let Some(old) = self.documents.get(id) {
+        if let Some(old) = self.documents.remove(id) {
             if let Some(ids) = self.sources.get_mut(&old.document.source) {
                 ids.remove(id);
                 if ids.is_empty() {
@@ -574,6 +611,10 @@ impl ContextGraph {
                         self.postings.remove(term);
                     }
                 }
+            }
+            if let Some(slot) = self.slots.get_mut(old.slot) {
+                *slot = None;
+                self.free_slots.push(old.slot);
             }
         }
     }

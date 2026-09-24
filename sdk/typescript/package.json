@@ -1,7 +1,7 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.10.0-beta.1",
-  "description": "CIGAR local Rust context graphs and compatible v1 TypeScript client (beta)",
+  "version": "0.11.0",
+  "description": "Local context graphs, exact token budgets, citations and answer review. No HOL service required.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "beta"
+    "tag": "latest"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",
@@ -30,7 +30,14 @@
     "./context": {
       "types": "./dist/context-api.d.ts",
       "import": "./dist/context-api.js"
+    },
+    "./examples/local-workflow": {
+      "types": "./dist/examples/local-workflow.d.ts",
+      "import": "./dist/examples/local-workflow.js"
     }
+  },
+  "bin": {
+    "cigar-context": "./dist/local-cli.js"
   },
   "types": "./dist/index.d.ts",
   "files": [
@@ -38,6 +45,8 @@
     "fixtures/",
     "native/",
     "README.md",
+    "AGENT_GUIDE.md",
+    "llms.txt",
     "LICENSE",
     "NOTICE"
   ],
@@ -52,7 +61,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "generate:check": "python3 ../generate_clients.py --check",
+    "generate:check": "python3 ../generate_clients.py --check && python3 ../generate_local_assets.py --check",
     "build": "pnpm run clean && tsc && node tools/inline-sources.mjs && node -e \"require('node:fs').copyFileSync('release.json','dist/release.json')\"",
     "typecheck": "tsc --noEmit",
     "test": "pnpm run build && node --test dist/tests/*.test.js",

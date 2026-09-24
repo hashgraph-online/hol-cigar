@@ -6,12 +6,19 @@
 
 #![doc = include_str!("../README.md")]
 
+mod answer;
 mod graph;
+mod prompt;
 mod select;
 mod snapshot;
 mod tokenizer;
 
+pub use answer::{
+    AnswerAssessment, AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimAssessment,
+    ClaimIssue, ClaimReview, ClaimVerdict,
+};
 pub use graph::{ContextGraph, Document, EdgeKind, GraphLimits, SourceUpdate};
+pub use prompt::ContextPrompt;
 pub use select::{ContextRequest, ExcerptMode, SelectionStats};
 pub use snapshot::{Citation, ContextDelta, ContextSnapshot, EvidenceBlock};
 #[cfg(feature = "bpe")]

@@ -19,12 +19,25 @@ class CustomBuildHook(BuildHookInterface):
         if len(manifests) != 1:
             raise ValueError("stage exactly one native target per platform wheel")
         manifest = json.loads(manifests[0].read_bytes())
-        platform_tags = {"darwin-arm64": "macosx_11_0_arm64"}
+        package = Path(self.root) / "src/cigar_sdk"
+        inventory = json.loads((package / "native-platforms.v1.json").read_bytes())
+        if inventory.get("schema") != "cigar.native-platforms.v1":
+            raise ValueError("invalid native platform inventory")
+        platforms = {entry["id"]: entry for entry in inventory["platforms"]}
         target = manifests[0].parent.name
-        if target not in platform_tags:
-            raise ValueError("native wheel target has not been qualified by this RC profile")
-        worker = manifests[0].parent / "cigar-context-worker"
+        if target not in platforms:
+            raise ValueError("native wheel target is outside the release platform inventory")
+        metadata = platforms[target]
+        release = json.loads((package / "release.json").read_bytes())
+        if (
+            manifest.get("target") != metadata["target"]
+            or manifest.get("core_version") != release["local_context_core_version"]
+            or manifest.get("protocol") != release["local_context_protocol"]
+            or manifest.get("sdk_release") != release["version"]
+        ):
+            raise ValueError("native worker platform/version/protocol mismatch")
+        worker = manifests[0].parent / metadata["executable"]
         if hashlib.sha256(worker.read_bytes()).hexdigest() != manifest["sha256"]:
             raise ValueError("native worker checksum mismatch")
         build_data["pure_python"] = False
-        build_data["tag"] = f"py3-none-{platform_tags[target]}"
+        build_data["tag"] = f"py3-none-{metadata['wheel_tag']}"

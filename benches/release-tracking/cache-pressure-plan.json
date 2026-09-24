@@ -1,0 +1,18 @@
+{
+  "schema": "cigar.release-tracking-cache-pressure.v1",
+  "reason_registered": "The initial 64-query workload had zero warm misses with both default and 256-entry caches. Retain that result; add an explicitly separate 768-query working set to measure capacity pressure instead of attributing its speedup to cache size.",
+  "paired_process_sessions": 8,
+  "documents": 768,
+  "documents_per_query": 1,
+  "query_mode": "required_only",
+  "warmup_rotations": 2,
+  "measured_rotations": 3,
+  "refresh_trials": 8,
+  "max_tokens": 8192,
+  "modes": ["default_cache", "equal_256_entry_cache"],
+  "hypothesis": "The 0.11.0 default cache should reduce misses and warm latency when the working set exceeds 0.10.0's default. Equal small caches should remove most capacity-driven gains. Report actual occupancy and misses even if this hypothesis fails.",
+  "timing": "Same persistent-worker RPC scope and continuation checks as the initial plan; no lexical matches, one explicit required document per query, 768 distinct queries.",
+  "statistics": "Eight paired process sessions per mode, alternating version order, 2000 fixed-seed bootstrap draws of session medians.",
+  "improvement_threshold": "At least 10% paired median latency reduction with descriptive 95% interval above zero. Cache-capacity claim additionally requires fewer default-cache misses and no comparable benefit with equal small caches.",
+  "resource_watch": "Report peak RSS and bounded cache occupancy; flag median RSS increase over 20%."
+}

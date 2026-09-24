@@ -286,6 +286,8 @@ def main() -> None:
         "NOTICE",
         "pyproject.toml",
         "hatch_build.py",
+        "AGENT_GUIDE.md",
+        "llms.txt",
     ]:
         source = ROOT / "sdk/python" / name
         if source.is_dir():
@@ -299,7 +301,16 @@ def main() -> None:
     shutil.copytree(native.parent, py_stage / "src/cigar_sdk/_native")
     ts_stage = output / "typescript"
     ts_stage.mkdir()
-    for name in ["dist", "fixtures", "README.md", "LICENSE", "NOTICE", "package.json"]:
+    for name in [
+        "dist",
+        "fixtures",
+        "README.md",
+        "AGENT_GUIDE.md",
+        "llms.txt",
+        "LICENSE",
+        "NOTICE",
+        "package.json",
+    ]:
         source = ROOT / "sdk/typescript" / name
         if source.is_dir():
             shutil.copytree(

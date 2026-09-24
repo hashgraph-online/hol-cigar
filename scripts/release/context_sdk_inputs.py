@@ -11,15 +11,22 @@ from release_lib import ReleaseError, canonical_json_bytes
 
 
 EXACT_INPUTS = (
+    ".gitattributes",
     "Cargo.toml",
     "Cargo.lock",
     "pnpm-lock.yaml",
     "sdk/generate_clients.py",
+    "sdk/generate_local_assets.py",
+    "sdk/native-platforms.v1.json",
+    "sdk/LOCAL_CONTEXT_GUIDE.md",
+    "sdk/local-context-llms.txt",
     "sdk/local-context-release.v1.json",
     "sdk/capabilities-v1.json",
     "sdk/workflow-context-session.v1.json",
     "sdk/fixtures/stalled-worker.rs",
     "scripts/release/context_sdk_inputs.py",
+    "scripts/release/context_platforms.py",
+    "scripts/release/build_context_worker.py",
     "scripts/release/context_sdk_consumer.py",
     "scripts/release/context-sdk-consumer.mjs",
     "scripts/release/prepare_context_sdk_rc.py",
@@ -27,11 +34,15 @@ EXACT_INPUTS = (
     "scripts/release/finalize_context_sdk_rc.py",
     "scripts/release/context_sdk_handoff.py",
     "scripts/release/context_sdk_beta.py",
+    "scripts/release/context_sdk_release.py",
+    "docs/release/context-sdk-0.11.0-notes.md",
     "docs/release/context-sdk-beta-notes.md",
     "scripts/release/release_lib.py",
     "scripts/release/evidence_workspace.py",
     ".github/workflows/context-sdk-rc.yml",
     ".github/workflows/context-sdk-beta.yml",
+    ".github/workflows/context-sdk-release.yml",
+    ".github/workflows/context-native.yml",
     ".github/workflows/publish-hol-cigar.yml",
     ".github/workflows/stage-hol-cigar-npm.yml",
     ".github/workflows/npm-sdk-readiness.yml",
@@ -48,6 +59,7 @@ SOURCE_SUFFIXES = {
     ".lock",
     ".md",
     ".typed",
+    ".txt",
 }
 
 

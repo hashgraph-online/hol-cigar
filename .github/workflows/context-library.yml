@@ -25,6 +25,8 @@ jobs:
         run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
       - name: Check source quality, CLI, optional BPE, and core-only consumer
         run: python scripts/dev.py context
+      - name: Check offline answer-quality metrics and denominators
+        run: python -m unittest discover -s benches/answer-quality -p 'test_*.py'
       - name: Verify the standalone package
         run: cargo package --locked -p cigar-context --features bpe
       - name: Build public API documentation with warnings denied

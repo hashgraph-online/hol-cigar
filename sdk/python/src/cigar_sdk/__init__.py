@@ -1,4 +1,4 @@
-"""CIGAR v1 Python SDK."""
+"""Local CIGAR context graphs and compatible remote protocol clients."""
 
 from typing import Final
 
@@ -6,13 +6,22 @@ from cigar_sdk.client import AsyncCigarClient, BearerTokenProvider, CigarClient
 from cigar_sdk.context import (
     LOCAL_CONTEXT_CORE_VERSION,
     LOCAL_CONTEXT_PROTOCOL,
+    LocalContextCapabilities,
     LocalContextError,
     LocalContextGraph,
+    get_local_context_capabilities,
 )
 from cigar_sdk.context_types import (
+    LocalAnswerAssessment,
+    LocalAnswerClaim,
+    LocalAnswerDraft,
+    LocalAnswerPolicy,
     LocalCitation,
+    LocalClaimAssessment,
+    LocalClaimReview,
     LocalContextDelta,
     LocalContextLimits,
+    LocalContextPrompt,
     LocalContextRequest,
     LocalContextResult,
     LocalContextSnapshot,
@@ -84,11 +93,19 @@ __all__ = [
     "CigarError",
     "CigarTimeoutError",
     "CompatibilityError",
+    "LocalAnswerAssessment",
+    "LocalAnswerClaim",
+    "LocalAnswerDraft",
+    "LocalAnswerPolicy",
     "LocalCitation",
+    "LocalClaimAssessment",
+    "LocalClaimReview",
+    "LocalContextCapabilities",
     "LocalContextDelta",
     "LocalContextError",
     "LocalContextGraph",
     "LocalContextLimits",
+    "LocalContextPrompt",
     "LocalContextRequest",
     "LocalContextResult",
     "LocalContextSnapshot",
@@ -124,6 +141,7 @@ __all__ = [
     "bundle_id",
     "create_idempotency_key",
     "delta_digest",
+    "get_local_context_capabilities",
     "models",
     "validate_idempotency_key",
     "verify_bundle",

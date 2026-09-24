@@ -22,6 +22,7 @@ production certification or a claim that every supported OS/runtime combination 
 
 Download the matching files from this prerelease, verify them first, then install:
 
+<!-- docs-check: command context-beta-asset-install -->
 ```sh
 python3.14 -m pip install ./hol_cigar-0.10.0b1-py3-none-macosx_11_0_arm64.whl
 npm install ./hol-org-cigar-0.10.0-beta.1.tgz
@@ -29,6 +30,7 @@ npm install ./hol-org-cigar-0.10.0-beta.1.tgz
 
 Registry publication is separate. Once the respective registry lists this exact version:
 
+<!-- docs-check: command context-beta-registry-install -->
 ```sh
 python3.14 -m pip install 'hol-cigar==0.10.0b1'
 npm install '@hol-org/cigar@0.10.0-beta.1'
@@ -56,9 +58,10 @@ Every payload, manifest, and checksum inventory is signed with short-lived GitHu
 must pin the repository, workflow, tag, and expected source commit, not just check a self-supplied hash.
 From the exact tagged source checkout, with all eleven release assets in a new directory:
 
+<!-- docs-check: command context-beta-attestation-verify -->
 ```sh
 python3 scripts/release/context_sdk_beta.py verify --verify-attestations \
-  --directory /absolute/path/to/downloaded-assets --commit "$(git rev-parse HEAD)"
+  --directory "${CONTEXT_BETA_DIRECTORY}" --commit "${CONTEXT_BETA_COMMIT}"
 ```
 
 Use an independently obtained source commit; read `gh attestation verify --help` for direct verification.

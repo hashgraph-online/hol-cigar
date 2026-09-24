@@ -8,6 +8,7 @@ any Honey release contract. Signing is exclusively in the pinned hosted workflow
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import gzip
 import hashlib
@@ -41,6 +42,57 @@ SIGNED_FILES = PAYLOADS | {MANIFEST, "SHA256SUMS"}
 require = handoff.require
 
 
+@dataclass(frozen=True)
+class ReleaseProfile:
+    """Fixed release identity; callers never accept arbitrary signing identities."""
+
+    version: str
+    python: str
+    channel: str
+    workflow: str
+    manifest: str
+    notes: str
+
+    @property
+    def tag(self) -> str:
+        return "v" + self.version
+
+    @property
+    def schema(self) -> str:
+        return f"cigar.context-sdk-{self.channel}.v1"
+
+    @property
+    def payloads(self) -> set[str]:
+        return handoff.artifact_names(self.version) | {
+            "qualification-evidence.tar.gz",
+            "sbom.cdx.json",
+            "sbom.spdx.json",
+            "RELEASE_NOTES.md",
+        }
+
+    @property
+    def signed_files(self) -> set[str]:
+        return self.payloads | {self.manifest, "SHA256SUMS"}
+
+
+BETA = ReleaseProfile(
+    VERSION,
+    "0.10.0b1",
+    "beta",
+    WORKFLOW,
+    MANIFEST,
+    "docs/release/context-sdk-beta-notes.md",
+)
+STABLE = ReleaseProfile(
+    "0.11.0",
+    "0.11.0",
+    "stable",
+    REPO + "/.github/workflows/context-sdk-release.yml",
+    "release-manifest.json",
+    "docs/release/context-sdk-0.11.0-notes.md",
+)
+
+
 def read_json(path: Path) -> dict:
     binding = digest_secure_file(path)
     require(binding.bytes <= 16 * 1024 * 1024, "JSON exceeds byte limit")
@@ -55,9 +107,11 @@ def inventory(directory: Path, names: set[str]) -> list[dict]:
     return handoff.rows(result)
 
 
-def validate_build(directory: Path, commit: str) -> dict:
+def validate_build(
+    directory: Path, commit: str, profile: ReleaseProfile = BETA
+) -> dict:
     report = read_json(directory / "artifacts/release.json")
-    handoff.validate_report(report, VERSION)
+    handoff.validate_report(report, profile.version)
     binding = report.get("source_binding", {})
     require(
         binding.get("commit") == commit and binding.get("clean") is True,
@@ -69,7 +123,7 @@ def validate_build(directory: Path, commit: str) -> dict:
         "source input digest mismatch",
     )
     require(
-        inventory(directory / "artifacts", handoff.artifact_names(VERSION))
+        inventory(directory / "artifacts", handoff.artifact_names(profile.version))
         == report["artifacts"],
         "artifact bytes differ from qualified bytes",
     )
@@ -156,7 +210,9 @@ def make_sbom(first: Path) -> dict:
     }
 
 
-def make_spdx(sbom: dict, commit: str, epoch: int) -> dict:
+def make_spdx(
+    sbom: dict, commit: str, epoch: int, profile: ReleaseProfile = BETA
+) -> dict:
     packages = []
     for index, component in enumerate(sbom["components"], 1):
         license_entry = component.get("licenses", [{}])[0]
@@ -186,8 +242,8 @@ def make_spdx(sbom: dict, commit: str, epoch: int) -> dict:
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": f"CIGAR {VERSION} native and SDK runtime dependency inventory",
-        "documentNamespace": f"https://github.com/{REPO}/releases/{TAG}/sbom/{commit}",
+        "name": f"CIGAR {profile.version} native and SDK runtime dependency inventory",
+        "documentNamespace": f"https://github.com/{REPO}/releases/{profile.tag}/sbom/{commit}",
         "creationInfo": {
             "creators": ["Tool: cigar-context-sdk-beta"],
             "created": datetime.fromtimestamp(epoch, timezone.utc).strftime(
@@ -206,11 +262,20 @@ def make_spdx(sbom: dict, commit: str, epoch: int) -> dict:
     }
 
 
-def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) -> dict:
+def assemble(
+    first: Path,
+    second: Path,
+    output: Path,
+    commit: str,
+    run_id: str,
+    profile: ReleaseProfile = BETA,
+) -> dict:
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "invalid release commit")
     require(re.fullmatch(r"[1-9][0-9]*", run_id) is not None, "invalid hosted run ID")
     require(first.resolve() != second.resolve(), "two distinct build outputs required")
-    reports = [validate_build(directory, commit) for directory in (first, second)]
+    reports = [
+        validate_build(directory, commit, profile) for directory in (first, second)
+    ]
     require(
         reports[0]["source_binding"] == reports[1]["source_binding"],
         "independent source mismatch",
@@ -234,11 +299,11 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
         workspace.write_json("sbom.cdx.json", sbom)
         workspace.write_json(
             "sbom.spdx.json",
-            make_spdx(sbom, commit, reports[0]["source_binding"]["source_date_epoch"]),
+            make_spdx(
+                sbom, commit, reports[0]["source_binding"]["source_date_epoch"], profile
+            ),
         )
-        workspace.attach_file(
-            ROOT / "docs/release/context-sdk-beta-notes.md", "RELEASE_NOTES.md"
-        )
+        workspace.attach_file(ROOT / profile.notes, "RELEASE_NOTES.md")
         # Keep both raw evidence inventories; deterministic archive with no local ownership paths.
         with tempfile.TemporaryDirectory(prefix="cigar-beta-evidence-") as temporary:
             packed = Path(temporary).resolve() / "evidence.tar.gz"
@@ -261,14 +326,14 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
                             archive.addfile(info, io.BytesIO(data))
             workspace.attach_file(packed, "qualification-evidence.tar.gz")
         manifest = {
-            "schema": "cigar.context-sdk-beta.v1",
-            "release": VERSION,
+            "schema": profile.schema,
+            "release": profile.version,
             "source_commit": commit,
             "source_binding": reports[0]["source_binding"],
-            "profile": "context-core-and-sdk-macos-arm64-beta",
-            "python": "0.10.0b1",
-            "npm": VERSION,
-            "core": VERSION,
+            "profile": "context-core-and-sdk-macos-arm64-" + profile.channel,
+            "python": profile.python,
+            "npm": profile.version,
+            "core": profile.version,
             "bundled_native_targets": ["aarch64-apple-darwin"],
             "qualification_run": f"https://github.com/{REPO}/actions/runs/{run_id}",
             "independent_builds": 2,
@@ -277,16 +342,16 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
             "offline_oracle_comparisons_per_build": reports[0]["qualification"][
                 "total_result_comparisons"
             ],
-            "payloads": inventory(output, PAYLOADS),
+            "payloads": inventory(output, profile.payloads),
             "signature_policy": {
                 "repository": REPO,
-                "workflow": WORKFLOW,
-                "ref": "refs/tags/" + TAG,
+                "workflow": profile.workflow,
+                "ref": "refs/tags/" + profile.tag,
                 "source_digest": commit,
                 "hosted_runners_only": True,
             },
             "limitations": [
-                "Beta, not production certification. No full Honey daemon/CLI/MCP release or old Honey gate waiver.",
+                "Local context core and SDKs only. No full Honey daemon/CLI/MCP release or old Honey gate waiver.",
                 "Two fresh GitHub-hosted VMs in one workflow, not two independent trust organizations or a SLSA level claim.",
                 "Bundled native execution qualified on macOS ARM64 only; deployment floor is not an older-OS test result.",
                 "The portable sdist and other npm platforms need an explicit trusted matching worker for local APIs.",
@@ -295,10 +360,10 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
                 "PyPI/npm acceptance and npm maintainer approval are separate from the signed GitHub release.",
             ],
         }
-        workspace.write_json(MANIFEST, manifest)
+        workspace.write_json(profile.manifest, manifest)
         sums = "".join(
             f"{r['sha256']}  {r['file']}\n"
-            for r in inventory(output, PAYLOADS | {MANIFEST})
+            for r in inventory(output, profile.payloads | {profile.manifest})
         )
         with tempfile.TemporaryDirectory(prefix="cigar-beta-checksums-") as temporary:
             source = Path(temporary).resolve() / "SHA256SUMS"
@@ -308,42 +373,46 @@ def assemble(first: Path, second: Path, output: Path, commit: str, run_id: str) 
 
 
 def verify(
-    directory: Path, commit: str, attestations: bool, manifest_sha256: str | None = None
+    directory: Path,
+    commit: str,
+    attestations: bool,
+    manifest_sha256: str | None = None,
+    profile: ReleaseProfile = BETA,
 ) -> dict:
     handoff.require_exact_files(
-        directory, SIGNED_FILES | ({BUNDLE} if attestations else set())
+        directory, profile.signed_files | ({BUNDLE} if attestations else set())
     )
-    manifest_binding = digest_secure_file(directory / MANIFEST)
+    manifest_binding = digest_secure_file(directory / profile.manifest)
     if manifest_sha256 is not None:
         require(
             manifest_binding.sha256 == manifest_sha256,
             "approved manifest digest mismatch",
         )
-    document = read_json(directory / MANIFEST)
+    document = read_json(directory / profile.manifest)
     require(
         re.fullmatch(r"[0-9a-f]{40}", commit) is not None
         and document.get("source_commit") == commit,
         "release commit mismatch",
     )
     require(
-        document.get("schema") == "cigar.context-sdk-beta.v1"
-        and document.get("release") == VERSION,
-        "beta identity mismatch",
+        document.get("schema") == profile.schema
+        and document.get("release") == profile.version,
+        "release identity mismatch",
     )
     require(
-        document.get("payloads") == inventory(directory, PAYLOADS),
+        document.get("payloads") == inventory(directory, profile.payloads),
         "release payload mismatch",
     )
     sums = "".join(
         f"{r['sha256']}  {r['file']}\n"
-        for r in inventory(directory, PAYLOADS | {MANIFEST})
+        for r in inventory(directory, profile.payloads | {profile.manifest})
     )
     require(
         (directory / "SHA256SUMS").read_bytes() == sums.encode(),
         "checksum inventory mismatch",
     )
     if attestations:
-        for name in sorted(SIGNED_FILES):
+        for name in sorted(profile.signed_files):
             subprocess.run(
                 [
                     "gh",
@@ -355,9 +424,9 @@ def verify(
                     "--bundle",
                     str(directory / BUNDLE),
                     "--signer-workflow",
-                    WORKFLOW,
+                    profile.workflow,
                     "--source-ref",
-                    "refs/tags/" + TAG,
+                    "refs/tags/" + profile.tag,
                     "--source-digest",
                     commit,
                     "--signer-digest",
@@ -370,7 +439,7 @@ def verify(
     return document
 
 
-def main() -> None:
+def main(profile: ReleaseProfile = BETA) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("assemble", "verify"))
     parser.add_argument("--first", type=Path)
@@ -384,7 +453,9 @@ def main() -> None:
         "--evidence-dir", type=Path, help="inapplicable; --directory is explicit"
     )
     args = parser.parse_args()
-    reject_evidence_directory(args.evidence_dir, "beta release assembly/verification")
+    reject_evidence_directory(
+        args.evidence_dir, "context SDK release assembly/verification"
+    )
     try:
         if args.action == "assemble":
             require(
@@ -393,19 +464,27 @@ def main() -> None:
                 and args.run_id is not None,
                 "assembly requires both builds and hosted run ID",
             )
-            assemble(args.first, args.second, args.directory, args.commit, args.run_id)
-            verify(args.directory, args.commit, False)
+            assemble(
+                args.first,
+                args.second,
+                args.directory,
+                args.commit,
+                args.run_id,
+                profile,
+            )
+            verify(args.directory, args.commit, False, profile=profile)
         else:
             verify(
                 args.directory,
                 args.commit,
                 args.verify_attestations,
                 args.manifest_sha256,
+                profile,
             )
     except (ReleaseError, ValueError, KeyError) as error:
         raise SystemExit(str(error)) from error
     print(
-        f"Verified exact {VERSION} bytes; signatures verified: {args.verify_attestations}"
+        f"Verified exact {profile.version} bytes; signatures verified: {args.verify_attestations}"
     )
 
 

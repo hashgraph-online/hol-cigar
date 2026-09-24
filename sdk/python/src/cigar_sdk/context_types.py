@@ -5,6 +5,47 @@ from typing import Literal, NotRequired, TypedDict
 LocalEdgeKind = Literal["requires", "contradicts", "supports", "related"]
 
 
+class LocalAnswerClaim(TypedDict):
+    text: str
+    citations: list[str]
+    confidence_bps: int | None
+
+
+class LocalAnswerDraft(TypedDict):
+    snapshot_id: str
+    claims: list[LocalAnswerClaim]
+    abstain: NotRequired[bool]
+
+
+class LocalClaimReview(TypedDict):
+    """Host-trusted judgment; never take this from the generator's untrusted draft."""
+
+    claim_key: str
+    verdict: Literal["supported", "unsupported", "contradicted", "unknown"]
+    reviewed_counterevidence: NotRequired[list[str]]
+
+
+class LocalAnswerPolicy(TypedDict, total=False):
+    min_sources: int
+    high_confidence_bps: int
+
+
+class LocalClaimAssessment(TypedDict):
+    claim_key: str
+    independent_sources: int
+    issues: list[Literal["uncited", "invalid_citation", "insufficient_sources", "unreviewed",
+                         "unsupported", "contradicted", "unknown", "unreviewed_counterevidence"]]
+
+
+class LocalAnswerAssessment(TypedDict):
+    snapshot_id: str
+    draft_id: str
+    decision: Literal["release", "abstain"]
+    claims: list[LocalClaimAssessment]
+    confident_failures: int
+    missing_confidence: int
+
+
 class LocalDocument(TypedDict):
     id: str
     source: str
@@ -43,6 +84,17 @@ class LocalCitation(TypedDict):
     document_digest: str
     start_line: int
     end_line: int
+
+
+class LocalContextPrompt(TypedDict):
+    schema: Literal["cigar.context-prompt.v1"]
+    id: str
+    snapshot_id: str
+    tokenizer: str
+    rendered: str
+    rendered_tokens: int
+    max_tokens: int
+    citations: dict[str, list[LocalCitation]]
 
 
 class LocalEvidenceBlock(TypedDict):
