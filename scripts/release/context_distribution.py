@@ -566,12 +566,12 @@ def build(args) -> None:
     )
     for key in directories:
         shutil.copytree(workers / key / "native" / key, ts_stage / "native" / key)
-    artifacts = output / "artifacts"
-    artifacts.mkdir()
+    packed = output / "packed"
+    packed.mkdir()
     npm = npm_command(args.npm)
     runner.run(
         "npm-pack",
-        [*npm, "pack", "--ignore-scripts", "--pack-destination", artifacts],
+        [*npm, "pack", "--ignore-scripts", "--pack-destination", packed],
         cwd=ts_stage,
     )
     py_names = (
@@ -589,7 +589,7 @@ def build(args) -> None:
     stage_package(ROOT / "sdk/python", py_stage, py_names)
     runner.run(
         "python-sdist",
-        [args.uv, "build", "--sdist", "--out-dir", artifacts],
+        [args.uv, "build", "--sdist", "--out-dir", packed],
         cwd=py_stage,
     )
     for key in directories:
@@ -600,14 +600,22 @@ def build(args) -> None:
         )
         runner.run(
             "python-wheel-" + key,
-            [args.uv, "build", "--wheel", "--out-dir", artifacts],
+            [args.uv, "build", "--wheel", "--out-dir", packed],
             cwd=stage,
         )
     first = next(iter(directories))
     shutil.copyfile(
         workers / first / f"source/cigar-context-{VERSION}.crate",
-        artifacts / f"cigar-context-{VERSION}.crate",
+        packed / f"cigar-context-{VERSION}.crate",
     )
+    artifacts = output / "artifacts"
+    artifacts.mkdir()
+    require(
+        set(inventory(packed)) - {".gitignore"} == artifact_names(set(worker_reports)),
+        "package tools produced unexpected archives",
+    )
+    for name in sorted(artifact_names(set(worker_reports))):
+        shutil.copyfile(packed / name, artifacts / name)
     verification = verify_packages(artifacts, worker_reports)
     # Consumers use compiled tests from the same checkout against installed modules.
     shutil.copytree(ROOT / "sdk/typescript/dist/tests", output / "typescript-tests")

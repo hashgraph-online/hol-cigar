@@ -93,12 +93,18 @@ def windows_source_digest(root: Path, path: Path) -> str:
         opened = os.fstat(stream.fileno())
         payload = stream.read(64 * 1024 * 1024 + 1)
         after = os.fstat(stream.fileno())
-    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
-    for other in (opened, after, path.lstat()):
+    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+    # Windows can report different ctime values through path and handle APIs.
+    # Check ctime stability within each API, and file identity/mtime across both.
+    for initial, other, compared in (
+        (before, opened, fields),
+        (opened, after, (*fields, "st_ctime_ns")),
+        (before, path.lstat(), (*fields, "st_ctime_ns")),
+    ):
         changed = {
-            key: [getattr(before, key), getattr(other, key)]
-            for key in fields
-            if getattr(before, key) != getattr(other, key)
+            key: [getattr(initial, key), getattr(other, key)]
+            for key in compared
+            if getattr(initial, key) != getattr(other, key)
         }
         if changed:
             raise ReleaseError(

@@ -8,6 +8,7 @@ import struct
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 import zipfile
@@ -126,6 +127,31 @@ class DistributionBoundaryTests(unittest.TestCase):
         for platform_id in context_platforms.platforms():
             with self.subTest(platform=platform_id), self.assertRaises(ReleaseError):
                 context_platforms.inspect_binary(path, platform_id)
+
+    def test_windows_ctime_uses_consistent_apis_and_still_detects_mutation(self):
+        path = self.directory / "stable.py"
+        path.write_bytes(b"unchanged")
+        metadata = path.stat()
+        values = {
+            key: getattr(metadata, key)
+            for key in ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        }
+        opened = SimpleNamespace(
+            **(values | {"st_ctime_ns": values["st_ctime_ns"] + 100})
+        )
+        with mock.patch.object(context_sdk_inputs.os, "fstat", return_value=opened):
+            self.assertEqual(
+                context_sdk_inputs.windows_source_digest(self.directory, path),
+                hashlib.sha256(b"unchanged").hexdigest(),
+            )
+        changed = SimpleNamespace(
+            **(values | {"st_ctime_ns": values["st_ctime_ns"] + 101})
+        )
+        with mock.patch.object(
+            context_sdk_inputs.os, "fstat", side_effect=[opened, changed]
+        ):
+            with self.assertRaisesRegex(ReleaseError, "changed while reading"):
+                context_sdk_inputs.windows_source_digest(self.directory, path)
 
     def test_old_and_new_qualifiers_share_the_full_seeded_case_set(self):
         cases = build_cases(distribution.ROOT)
