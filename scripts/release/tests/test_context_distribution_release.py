@@ -10,6 +10,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import context_distribution as distribution  # noqa: E402
 import context_distribution_release as release  # noqa: E402
+import context_registry_readback as registry  # noqa: E402
 from context_sdk_cases import build_cases  # noqa: E402
 from release_lib import ReleaseError, canonical_json_bytes  # noqa: E402
 
@@ -197,6 +198,40 @@ class InstalledEvidenceTests(unittest.TestCase):
         self.candidate["artifacts"] = {"archive": "different-digest"}
         with self.assertRaisesRegex(ReleaseError, "different source or archives"):
             self.verify()
+
+
+class RegistryReadbackTests(unittest.TestCase):
+    def test_published_version_with_old_default_tag_is_not_success(self):
+        metadata = {
+            "name": "@hol-org/cigar",
+            "dist-tags": {"latest": "0.9.4"},
+            "versions": {"0.11.0": {}},
+        }
+        with mock.patch.object(registry, "metadata", return_value=metadata):
+            with self.assertRaisesRegex(ReleaseError, "default install"):
+                registry.readback({"payloads": []}, "npm")
+
+    def test_registry_metadata_cannot_hide_changed_downloaded_bytes(self):
+        expected = {
+            "file": "archive.tgz",
+            "bytes": 4,
+            "sha256": hashlib.sha256(b"good").hexdigest(),
+        }
+        with mock.patch.object(registry, "fetch", return_value=b"evil"):
+            with self.assertRaisesRegex(ReleaseError, "signed bytes"):
+                registry.check_archive(
+                    "https://registry.npmjs.org/archive.tgz",
+                    "registry.npmjs.org",
+                    expected,
+                )
+
+    def test_partial_pypi_publication_cannot_pass(self):
+        info = {"name": "hol-cigar", "version": "0.11.0"}
+        with mock.patch.object(
+            registry, "metadata", return_value={"info": info, "urls": []}
+        ):
+            with self.assertRaisesRegex(ReleaseError, "complete seven-wheel"):
+                registry.readback({"payloads": []}, "pypi")
 
 
 class IndependentBuildTests(unittest.TestCase):

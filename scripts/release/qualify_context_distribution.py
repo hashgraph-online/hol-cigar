@@ -263,7 +263,7 @@ def network_policy(output: Path, platform_id: str) -> dict:
         policy["kind"] = "windows-outbound-program-firewall"
         script = (
             "$ErrorActionPreference='Stop'; "
-            "$profiles=@(Get-NetFirewallProfile | Select-Object Name,Enabled); "
+            "$profiles=@(Get-NetFirewallProfile | Select-Object Name,@{Name='Enabled';Expression={$_.Enabled -eq 'True'}}); "
             f"$rules=@(Get-NetFirewallRule -Group '{FIREWALL_GROUP}' | "
             "ForEach-Object { $rule=$_; $filter=$rule | Get-NetFirewallApplicationFilter; "
             "[pscustomobject]@{Program=$filter.Program; Enabled=[string]$rule.Enabled; "

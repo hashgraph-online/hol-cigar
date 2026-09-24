@@ -1,0 +1,52 @@
+name: context-registry-readback
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_sha256:
+        description: SHA-256 of the approved signed v0.11.0 release manifest
+        required: true
+        type: string
+      registry:
+        description: Registry to verify after publication
+        required: true
+        type: choice
+        options: [both, npm, pypi]
+        default: both
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.7"
+      - name: Verify default versions and actual registry archive bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          REGISTRY: ${{ inputs.registry }}
+        run: |
+          test "${GITHUB_REF}" = "refs/tags/v0.11.0"
+          gh release download v0.11.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
+          python3 scripts/release/context_registry_readback.py \
+            --directory "${RUNNER_TEMP}/signed-stable" --commit "${GITHUB_SHA}" \
+            --manifest-sha256 "${MANIFEST_SHA256}" --registry "${REGISTRY}" \
+            --output "${RUNNER_TEMP}/registry-readback.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: context-registry-readback-${{ inputs.registry }}
+          path: ${{ runner.temp }}/registry-readback.json
+          if-no-files-found: error
+          retention-days: 14

@@ -23,7 +23,7 @@ import time
 
 import context_platforms
 import context_sdk_inputs
-from release_lib import ReleaseError, canonical_json_bytes
+from release_lib import ReleaseError, canonical_json_bytes, reject_evidence_directory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,12 +62,14 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--target-dir", type=Path, required=True)
     parser.add_argument("--cargo", default="cargo")
+    parser.add_argument("--evidence-dir", type=Path)
     parser.add_argument(
         "--allow-dirty",
         action="store_true",
         help="local diagnostics only; cannot qualify a release",
     )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "native distribution worker build")
     if not host_matches(args.platform):
         raise ReleaseError(
             "native build must execute on the declared OS, architecture and libc"

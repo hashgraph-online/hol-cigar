@@ -559,6 +559,11 @@ def main() -> None:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--run-id")
     parser.add_argument("--verify-attestations", action="store_true")
+    parser.add_argument(
+        "--check-advisories",
+        action="store_true",
+        help="Repeat the public dependency advisory lookup before publication",
+    )
     parser.add_argument("--manifest-sha256")
     parser.add_argument("--evidence-dir", type=Path)
     args = parser.parse_args()
@@ -576,6 +581,8 @@ def main() -> None:
         result = verify(
             args.directory, args.commit, args.verify_attestations, args.manifest_sha256
         )
+        if args.check_advisories:
+            advisories(load_json(args.directory / "sbom.cdx.json"))
         print(
             json.dumps(
                 {

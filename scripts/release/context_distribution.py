@@ -467,7 +467,7 @@ class Runner:
 
 def npm_command(executable: str) -> list[str]:
     path = Path(shutil.which(executable) or executable).absolute()
-    if path.suffix.lower() == ".cmd":
+    if os.name == "nt" or path.suffix.lower() == ".cmd":
         script = path.parent / "node_modules/npm/bin/npm-cli.js"
         require(script.is_file(), "cannot locate npm's JavaScript entrypoint")
         return ["node", str(script)]
