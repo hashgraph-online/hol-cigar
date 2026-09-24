@@ -107,7 +107,7 @@ class Worker:
 
 
 def evidence_cases():
-    fixtures = json.loads((ROOT / "crates/cigar-context/fixtures/quality.json").read_text())
+    fixtures = json.loads((ROOT / "crates/cigar-context/fixtures/quality.json").read_text(encoding="utf-8"))
     result = []
     for fixture in fixtures:
         docs = [{"id": d[0], "source": d[1], "text": d[2]} for d in fixture["documents"]]
