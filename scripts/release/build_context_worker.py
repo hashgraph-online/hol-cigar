@@ -201,6 +201,10 @@ def main() -> None:
             "target-feature=+crt-static",
             "-C",
             "link-arg=/Brepro",
+            # PDBs are not distributed. Their identifiers can retain build-local
+            # inputs even when the executable code is identical across hosts.
+            "-C",
+            "link-arg=/DEBUG:NONE",
             "-C",
             f"linker={pinned_linker}",
             "-C",
