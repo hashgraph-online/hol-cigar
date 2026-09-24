@@ -1,8 +1,6 @@
 name: context-native
 
 on:
-  push:
-    branches: [codex/cigar-0.11.0-distribution]
   workflow_dispatch:
   workflow_call:
 

@@ -63,6 +63,7 @@ def environment(output: Path) -> dict:
     result.pop("CIGAR_TEST_WORKER", None)
     result.pop("CIGAR_TEST_STALLED_WORKER", None)
     result["PYTHONPATH"] = ""
+    result["PYTHONIOENCODING"] = "utf-8"
     result["npm_config_cache"] = str(output / "npm-cache")
     return result
 
@@ -97,6 +98,7 @@ def prepare(args) -> None:
         / args.platform
         / metadata["executable"]
     )
+    worker.chmod(0o755)
     fixture_name = "stalled-worker.exe" if os.name == "nt" else "stalled-worker"
     fixture = (
         args.stalled_worker
@@ -188,7 +190,12 @@ def prepare(args) -> None:
         shutil.copyfile(ROOT / "sdk" / name, output / name)
     result = runner.run(
         "npm-installed-tests",
-        ["node", "--test", *sorted((test_copy / "dist/tests").glob("*.test.js"))],
+        [
+            "node",
+            "--test",
+            "--test-reporter=tap",
+            *sorted((test_copy / "dist/tests").glob("*.test.js")),
+        ],
         cwd=output,
     ).decode()
     require(

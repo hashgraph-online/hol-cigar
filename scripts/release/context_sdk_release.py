@@ -6,7 +6,7 @@ beta entrypoint keeps its original identity and cannot verify a stable release.
 The shared parser accepts --evidence-dir and rejects it for this explicit-directory command.
 """
 
-from context_sdk_beta import STABLE, main
+from context_distribution_release import main
 
 if __name__ == "__main__":
-    main(STABLE)
+    main()

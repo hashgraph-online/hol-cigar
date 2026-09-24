@@ -1298,7 +1298,7 @@ def assert_release_contracts() -> None:
             "protocol": "cigar.context-worker.v1",
             "channel": "stable",
             "versions": {"python": "0.11.0", "typescript": "0.11.0"},
-            "bundled_native_targets": ["aarch64-apple-darwin"],
+            "bundled_native_targets": [entry["target"] for entry in load_json(SDK / "native-platforms.v1.json")["platforms"]],
             "published": False,
         }
         if local_release != expected_local or version != "0.9.4":

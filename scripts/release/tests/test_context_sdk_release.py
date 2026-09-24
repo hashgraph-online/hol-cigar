@@ -119,8 +119,13 @@ class StableReleaseTests(unittest.TestCase):
         source = (
             release.ROOT / ".github/workflows/context-sdk-release.yml"
         ).read_text()
-        self.assertIn("branches: [codex/cigar-0.11.0]", source)
-        self.assertIn("builder: [first, second]", source)
+        self.assertIn("branches: [codex/cigar-0.11.0-distribution]", source)
+        self.assertIn("uses: ./.github/workflows/context-distribution.yml", source)
+        matrix = (
+            release.ROOT / ".github/workflows/context-distribution.yml"
+        ).read_text()
+        self.assertIn("builder: [first, second]", matrix)
+        self.assertIn("runtime: [minimum, current]", matrix)
         self.assertIn("github.ref == 'refs/tags/v0.11.0'", source)
         self.assertIn("--verify-attestations", source)
         self.assertNotIn("--prerelease", source)

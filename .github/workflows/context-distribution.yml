@@ -1,0 +1,254 @@
+name: context-distribution
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  native:
+    uses: ./.github/workflows/context-native.yml
+
+  legacy-compatibility:
+    uses: ./.github/workflows/context-sdk-rc.yml
+    with:
+      build-id: compatibility
+
+  build:
+    needs: native
+    strategy:
+      fail-fast: false
+      matrix:
+        builder: [first, second]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.10.0"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.7"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.6"
+          cache: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: "0.12.3"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: context-worker-*-${{ matrix.builder }}
+          path: ${{ runner.temp }}/workers
+      - name: Check generators, types, and release failure controls
+        run: |
+          corepack enable
+          corepack install --global pnpm@10.34.5
+          pnpm install --frozen-lockfile --ignore-scripts
+          uv sync --project sdk/python --frozen
+          python3 sdk/generate_clients.py --check
+          python3 sdk/generate_local_assets.py --check
+          sdk/python/.venv/bin/ruff check scripts/release sdk/python sdk/generate_local_assets.py
+          sdk/python/.venv/bin/ruff format --check scripts/release
+          sdk/python/.venv/bin/mypy --config-file sdk/python/pyproject.toml sdk/python/src/cigar_sdk
+          python3 -m unittest scripts.release.tests.test_context_distribution scripts.release.tests.test_context_sdk_inputs scripts.release.tests.test_context_distribution_release scripts.release.tests.test_context_sdk_release
+      - name: Build one npm archive, seven platform wheels, and source archives
+        env:
+          CIGAR_BUILDER: ${{ matrix.builder }}
+        run: |
+          python3 scripts/release/context_distribution.py build --workers "${RUNNER_TEMP}/workers" \
+            --builder "${CIGAR_BUILDER}" --output "${RUNNER_TEMP}/candidate" \
+            --pnpm "$(command -v pnpm)" --npm "$(command -v npm)" --uv "$(command -v uv)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: context-distribution-${{ matrix.builder }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/candidate/artifacts/
+            ${{ runner.temp }}/candidate/workers/
+            ${{ runner.temp }}/candidate/logs/
+            ${{ runner.temp }}/candidate/typescript-tests/
+            ${{ runner.temp }}/candidate/candidate.json
+            ${{ runner.temp }}/candidate/checks.json
+
+  compare:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.7"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: context-distribution-*
+          path: ${{ runner.temp }}/candidates
+      - name: Require matching independent worker and SDK archive bytes
+        run: |
+          python3 scripts/release/context_distribution.py compare \
+            --first "${RUNNER_TEMP}/candidates/context-distribution-first" \
+            --second "${RUNNER_TEMP}/candidates/context-distribution-second" --commit "${GITHUB_SHA}"
+
+  installed:
+    needs: compare
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [darwin-arm64, darwin-x64, linux-x64-gnu, linux-arm64-gnu, linux-x64-musl, linux-arm64-musl, win32-x64]
+        runtime: [minimum, current]
+        include:
+          - runtime: minimum
+            node: "24.10.0"
+            python: "3.14.0"
+            node_gnu: node:24.10.0-bookworm-slim@sha256:b8d2197aff9129d16c801a3e3e1b2a873c4946480f5a310f38056df2268c38d9
+            node_musl: node:24.10.0-alpine3.22@sha256:775ba24d35a13e74dedce1d2af4ad510337b68d8e22be89e0ce2ccc299329083
+          - runtime: current
+            node: "24.19.0"
+            python: "3.14.7"
+            node_gnu: node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+            node_musl: node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: darwin-x64
+            runner: macos-15-intel
+          - platform: linux-x64-gnu
+            runner: ubuntu-24.04
+            libc: gnu
+          - platform: linux-arm64-gnu
+            runner: ubuntu-24.04-arm
+            libc: gnu
+          - platform: linux-x64-musl
+            runner: ubuntu-24.04
+            libc: musl
+          - platform: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            libc: musl
+          - platform: win32-x64
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      CIGAR_PLATFORM: ${{ matrix.platform }}
+      CIGAR_RUNTIME: ${{ matrix.runtime }}
+      CIGAR_PYTHON_VERSION: ${{ matrix.python }}
+      CIGAR_NODE_IMAGE: ${{ matrix.libc == 'musl' && matrix.node_musl || matrix.node_gnu }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: context-distribution-first
+          path: ${{ runner.temp }}/candidate
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: runner.os != 'Linux'
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        if: runner.os != 'Linux'
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        if: runner.os != 'Linux'
+        with:
+          version: "0.12.3"
+      - name: Install and test exact archives on macOS or Windows
+        if: runner.os != 'Linux'
+        run: |
+          python scripts/release/qualify_context_distribution.py prepare \
+            --candidate "${RUNNER_TEMP}/candidate" --output "${RUNNER_TEMP}/installed" \
+            --platform "${CIGAR_PLATFORM}" --runtime "${CIGAR_RUNTIME}" --uv "$(command -v uv)" --npm "$(command -v npm)"
+      - name: Run macOS consumers with all network access denied
+        if: runner.os == 'macOS'
+        run: |
+          /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
+            python scripts/release/qualify_context_distribution.py offline --output "${RUNNER_TEMP}/installed"
+      - name: Deny external traffic for every Windows consumer executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True
+          $programs = Get-Content -Raw "$env:RUNNER_TEMP/installed/programs.json" | ConvertFrom-Json
+          $index = 0
+          foreach ($program in $programs) {
+            New-NetFirewallRule -DisplayName "CIGAR qualification $index" -Group 'CIGAR context distribution qualification' `
+              -Direction Outbound -Action Block -Profile Any -Protocol Any -Program $program | Out-Null
+            $index++
+          }
+          python scripts/release/qualify_context_distribution.py offline --output "$env:RUNNER_TEMP/installed"
+          if ($LASTEXITCODE -ne 0) { throw 'Offline Windows consumer qualification failed' }
+      - name: Install and test Linux consumers, then repeat with no external network
+        if: runner.os == 'Linux'
+        run: |
+          docker build --file scripts/release/containers/context-consumer.Dockerfile \
+            --build-arg "NODE_IMAGE=${CIGAR_NODE_IMAGE}" --build-arg "CIGAR_PYTHON_VERSION=${CIGAR_PYTHON_VERSION}" \
+            --tag cigar-context-consumer scripts/release/containers
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=${GITHUB_WORKSPACE},dst=/src,readonly" --mount "type=bind,src=${RUNNER_TEMP},dst=/out" \
+            --env UV_CACHE_DIR=/out/uv-cache --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory \
+            --env GIT_CONFIG_VALUE_0=/src --workdir /src cigar-context-consumer \
+            scripts/release/qualify_context_distribution.py prepare --candidate /out/candidate --output /out/installed \
+            --platform "${CIGAR_PLATFORM}" --runtime "${CIGAR_RUNTIME}" --uv /usr/local/bin/uv --npm /usr/local/bin/npm
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=${GITHUB_WORKSPACE},dst=/src,readonly" --mount "type=bind,src=${RUNNER_TEMP},dst=/out" \
+            --env UV_CACHE_DIR=/out/uv-cache --workdir /src cigar-context-consumer \
+            scripts/release/qualify_context_distribution.py offline --output /out/installed
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: context-installed-${{ matrix.platform }}-${{ matrix.runtime }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/installed/qualification.json
+            ${{ runner.temp }}/installed/prepare.json
+            ${{ runner.temp }}/installed/checks.json
+            ${{ runner.temp }}/installed/cases.json
+            ${{ runner.temp }}/installed/programs.json
+            ${{ runner.temp }}/installed/logs/
+            ${{ runner.temp }}/installed/offline/
+
+  assemble:
+    needs: [installed, legacy-compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.7"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: ${{ runner.temp }}/evidence
+      - name: Bind exact archives to every installed qualification and current dependency checks
+        run: |
+          python3 scripts/release/context_sdk_release.py assemble \
+            --first "${RUNNER_TEMP}/evidence/context-distribution-first" \
+            --second "${RUNNER_TEMP}/evidence/context-distribution-second" \
+            --qualifications "${RUNNER_TEMP}/evidence" \
+            --legacy "${RUNNER_TEMP}/evidence/context-sdk-qualified-compatibility" \
+            --directory "${RUNNER_TEMP}/stable-release" --commit "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: context-sdk-release-release
+          path: ${{ runner.temp }}/stable-release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

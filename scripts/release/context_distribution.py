@@ -690,7 +690,10 @@ def main() -> None:
         not sys.flags.optimize, "distribution qualification requires assertions enabled"
     )
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("build", "verify-candidate"))
+    parser.add_argument("command", choices=("build", "verify-candidate", "compare"))
+    parser.add_argument("--first", type=Path)
+    parser.add_argument("--second", type=Path)
+    parser.add_argument("--commit")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--workers", type=Path)
@@ -706,6 +709,14 @@ def main() -> None:
     if args.command == "build":
         require(args.output is not None, "build requires a create-new output directory")
         build(args)
+    elif args.command == "compare":
+        require(
+            args.first is not None
+            and args.second is not None
+            and args.commit is not None,
+            "comparison requires two candidate directories and their exact commit",
+        )
+        print(json.dumps(compare_candidates(args.first, args.second, args.commit)))
     else:
         require(args.directory is not None, "verify requires a candidate directory")
         report = verify_candidate(args.directory, release=not args.allow_diagnostic)
@@ -718,6 +729,43 @@ def main() -> None:
                 }
             )
         )
+
+
+def compare_candidates(first: Path, second: Path, commit: str) -> dict:
+    require(
+        first.resolve() != second.resolve(),
+        "two distinct candidate directories required",
+    )
+    left, right = verify_candidate(first), verify_candidate(second)
+    require(
+        left["builder"] == "first" and right["builder"] == "second",
+        "candidate builder identities differ",
+    )
+    require(
+        left["source_binding"] == right["source_binding"]
+        and left["source_binding"]["commit"] == commit,
+        "independent builders used different source",
+    )
+    require(
+        left["artifacts"] == right["artifacts"], "independent SDK archive bytes differ"
+    )
+    require(
+        all(
+            left["workers"][key]["worker"] == right["workers"][key]["worker"]
+            for key in left["platforms"]
+        ),
+        "independent native worker bytes differ",
+    )
+    return {
+        "schema": "cigar.context-distribution-comparison.v1",
+        "status": "identical",
+        "release_ready": False,
+        "source_commit": commit,
+        "platforms": left["platforms"],
+        "artifacts": left["artifacts"],
+        "independent_builds": 2,
+        "limitation": "Hosted workflow job separation establishes builder independence; matching files alone do not.",
+    }
 
 
 if __name__ == "__main__":

@@ -249,6 +249,9 @@ def _pe(data: bytes, identity: str) -> dict:
         "userenv.dll",
         "ws2_32.dll",
         "bcrypt.dll",
+        # Windows system RNG used by Rust std (ProcessPrng), present since Windows 8.
+        # https://learn.microsoft.com/en-us/windows/win32/seccng/processprng
+        "bcryptprimitives.dll",
         "ntdll.dll",
         "ole32.dll",
         "shell32.dll",

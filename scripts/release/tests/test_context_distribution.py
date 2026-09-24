@@ -167,6 +167,33 @@ class DistributionBoundaryTests(unittest.TestCase):
             )
         )
 
+    def test_windows_system_rng_is_allowed_but_third_party_runtime_is_rejected(self):
+        data = bytearray(1024)
+        data[:2] = b"MZ"
+        struct.pack_into("<I", data, 0x3C, 0x80)
+        data[0x80:0x84] = b"PE\0\0"
+        struct.pack_into("<HH", data, 0x84, 0x8664, 1)
+        struct.pack_into("<H", data, 0x94, 240)
+        struct.pack_into("<H", data, 0x98, 0x20B)
+        struct.pack_into("<II", data, 0x98 + 120, 0x1000, 40)
+        struct.pack_into("<IIII", data, 0x98 + 240 + 8, 512, 0x1000, 512, 512)
+        struct.pack_into("<IIIII", data, 512, 1, 0, 0, 0x1060, 1)
+        path = self.directory / "worker.exe"
+        for dll, valid in (
+            (b"bcryptprimitives.dll", True),
+            (b"vendorprimitives.dll", False),
+        ):
+            data[608:629] = dll + b"\0"
+            path.write_bytes(data)
+            if valid:
+                self.assertEqual(
+                    context_platforms.inspect_binary(path, "win32-x64")["needed"],
+                    [dll.decode()],
+                )
+            else:
+                with self.assertRaisesRegex(ReleaseError, "non-system DLL"):
+                    context_platforms.inspect_binary(path, "win32-x64")
+
 
 if __name__ == "__main__":
     unittest.main()
