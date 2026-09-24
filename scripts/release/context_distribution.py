@@ -184,6 +184,16 @@ def validate_native(
         "worker-compile",
         "dependencies",
     }
+    if platform_id == "win32-x64" and (
+        not diagnostic
+        or any(row["name"] == "linker-version" for row in report["checks"])
+    ):
+        required.add("linker-version")
+        require(
+            report.get("linker", {}).get("version", "").startswith("LLD ")
+            and len(report["linker"].get("sha256", "")) == 64,
+            "Windows build must use the pinned Rust linker",
+        )
     if not diagnostic or any(
         row["name"] == "stalled-worker-build" for row in report["checks"]
     ):
@@ -755,6 +765,11 @@ def compare_candidates(first: Path, second: Path, commit: str) -> dict:
             for key in left["platforms"]
         ),
         "independent native worker bytes differ",
+    )
+    require(
+        left["workers"].get("win32-x64", {}).get("linker")
+        == right["workers"].get("win32-x64", {}).get("linker"),
+        "independent Windows linker identities differ",
     )
     return {
         "schema": "cigar.context-distribution-comparison.v1",

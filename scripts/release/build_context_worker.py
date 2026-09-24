@@ -171,8 +171,42 @@ def main() -> None:
         f"--remap-path-prefix={crate}=/cigar/native",
         f"--remap-path-prefix={ROOT}=/cigar/source",
     ]
+    windows_flags = []
+    linker = None
     if args.platform == "win32-x64":
-        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/Brepro"]
+        # Hosted Windows images can roll between independent jobs. Use the
+        # linker shipped by the exact Rust toolchain, not the image's link.exe.
+        # https://doc.rust-lang.org/rustc/codegen-options/index.html#linker-flavor
+        rustc = Path(cargo).with_name("rustc.exe")
+        sysroot = Path(
+            subprocess.check_output(
+                [rustc, "--print", "sysroot"], text=True, timeout=30
+            ).strip()
+        )
+        pinned_linker = (
+            sysroot / "lib/rustlib" / metadata["target"] / "bin/rust-lld.exe"
+        )
+        if not pinned_linker.is_file():
+            raise ReleaseError("the pinned Rust distribution has no Windows linker")
+        linker_version = (
+            run("linker-version", [pinned_linker, "-flavor", "link", "--version"])
+            .decode()
+            .strip()
+        )
+        if not linker_version.startswith("LLD "):
+            raise ReleaseError("the pinned Windows linker has an unexpected identity")
+        linker = {"version": linker_version, "sha256": digest(pinned_linker)}
+        windows_flags = [
+            "-C",
+            "target-feature=+crt-static",
+            "-C",
+            "link-arg=/Brepro",
+            "-C",
+            f"linker={pinned_linker}",
+            "-C",
+            "linker-flavor=lld-link",
+        ]
+        flags += windows_flags
     # Cargo's encoded form preserves paths containing spaces without shell parsing.
     env.pop("RUSTFLAGS", None)
     env["CARGO_ENCODED_RUSTFLAGS"] = "\x1f".join(flags)
@@ -225,11 +259,7 @@ def main() -> None:
             ROOT / "sdk/fixtures/stalled-worker.rs",
             "-o",
             fixture,
-            *(
-                ["-C", "target-feature=+crt-static", "-C", "link-arg=/Brepro"]
-                if os.name == "nt"
-                else []
-            ),
+            *windows_flags,
         ],
     )
     binary = context_platforms.inspect_binary(worker, args.platform)
@@ -344,6 +374,8 @@ def main() -> None:
             "Requires independent-build byte comparison and installed SDK qualification before release."
         ],
     }
+    if linker is not None:
+        report["linker"] = linker
     (output / "build.json").write_bytes(canonical_json_bytes(report))
     # Only stable payloads/receipts are uploaded. The source extraction is build scratch.
     print(
