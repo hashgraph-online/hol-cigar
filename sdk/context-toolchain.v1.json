@@ -8,9 +8,11 @@
     "pytest": "9.1.1",
     "mypy": "2.3.1",
     "ruff": "0.16.9",
-    "hatchling": "1.32.4"
+    "hatchling": "1.32.4",
+    "twine": "7.0.0"
   },
   "legacy_exceptions": {
-    "beta-candidate.yml": "The historical beta producer retains Ruff 0.14.10; local SDK candidate jobs use the current lock."
+    "beta-candidate.yml": "The historical beta producer retains Ruff 0.14.10; local SDK candidate jobs use the current lock.",
+    "publish-hol-cigar.yml": "Frozen 0.9.4 and 0.10 beta publication checks retain Twine 6.2.0; the current local SDK uses Twine 7.0.0 for metadata 2.5."
   }
 }

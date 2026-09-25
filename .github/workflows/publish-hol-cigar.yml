@@ -178,7 +178,7 @@ jobs:
             install -m 0400 "${archive}" dist/
           done
           test "$(find dist -type f | wc -l | tr -d ' ')" = "8"
-          python3 -m pip install --disable-pip-version-check --no-input twine==6.2.0
+          python3 -m pip install --disable-pip-version-check --no-input twine==7.0.0
           python3 -m twine check --strict dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

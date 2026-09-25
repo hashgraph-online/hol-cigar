@@ -132,7 +132,10 @@ def main():
             "tool",
             "run",
             "--from",
-            "twine==6.2.0",
+            "twine=="
+            + json.loads((ROOT / "sdk/context-toolchain.v1.json").read_bytes())[
+                "python"
+            ]["twine"],
             "twine",
             "check",
             "--strict",

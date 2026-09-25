@@ -215,11 +215,11 @@ jobs:
           dist_dir="${RUNNER_TEMP}/hol-cigar-${package_version}-dist"
           test ! -e "${dist_dir}"
           mkdir -m 0700 "${dist_dir}"
-          uv build --project sdk/python --out-dir "${dist_dir}"
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv build --project sdk/python --out-dir "${dist_dir}"
           test -f "${dist_dir}/hol_cigar-${package_version}-py3-none-any.whl"
           test -f "${dist_dir}/hol_cigar-${package_version}.tar.gz"
           test "$(find "${dist_dir}" -type f ! -name '.gitignore' | wc -l | tr -d ' ')" = "2"
-          uvx --from twine==6.2.0 twine check --strict "${dist_dir}"/*
+          uvx --from twine==7.0.0 twine check --strict "${dist_dir}"/*
           printf 'HOL_CIGAR_PR_DIST=%s\n' "${dist_dir}" >>"${GITHUB_ENV}"
           printf 'HOL_CIGAR_PYTHON_VERSION=%s\n' "${package_version}" >>"${GITHUB_ENV}"
 
@@ -231,14 +231,14 @@ jobs:
           uv venv --python 3.14.6 "${sdist_env}"
           uv pip install --python "${wheel_env}/bin/python" \
             "${HOL_CIGAR_PR_DIST}/hol_cigar-${HOL_CIGAR_PYTHON_VERSION}-py3-none-any.whl"
-          uv pip install --python "${sdist_env}/bin/python" \
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv pip install --python "${sdist_env}/bin/python" \
             "${HOL_CIGAR_PR_DIST}/hol_cigar-${HOL_CIGAR_PYTHON_VERSION}.tar.gz"
           for package_python in \
             "${wheel_env}/bin/python" \
             "${sdist_env}/bin/python"
           do
             "${package_python}" - <<'PY'
-          import json, os
+          import json, os, tomllib
           from importlib import metadata, resources
           from pathlib import Path
 
@@ -246,10 +246,9 @@ jobs:
 
           assert metadata.version("hol-cigar") == os.environ["HOL_CIGAR_PYTHON_VERSION"]
           assert cigar_sdk.CONTEXT_ABI == "cigar.context.v1"
+          project = tomllib.loads(Path("sdk/python/pyproject.toml").read_text())["project"]
           assert metadata.metadata("hol-cigar").get_all("Project-URL") == [
-              "Homepage, https://hol.org",
-              "Repository, https://github.com/hashgraph-online/hol-cigar",
-              "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
+              f"{name}, {url}" for name, url in project["urls"].items()
           ]
           release = json.loads(
               resources.files("cigar_sdk").joinpath("release.json").read_text()

@@ -97,6 +97,13 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
             )
             checked += 1
     assert checked, "no reviewed installer pins found"
+    for path in ("fast-ci.yml", "publish-hol-cigar.yml"):
+        source = (root / ".github/workflows" / path).read_text()
+        if path == "publish-hol-cigar.yml":
+            source = source.split("  verify-stable-bytes:", 1)[1]
+        assert re.findall(r"twine==([\d.]+)", source) == [policy["python"]["twine"]], (
+            f"metadata checker drift: {path}"
+        )
     container = (
         root / "scripts/release/containers/context-consumer.Dockerfile"
     ).read_text()
