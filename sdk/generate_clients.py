@@ -329,24 +329,38 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     }
   }
 }
-function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>): unknown {
+function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>, depth = 0, budget: ValidationBudget = { nodes: 0 }): unknown {
+  if (depth > 64 || ++budget.nodes > 100_000) fail("payload", "payload exceeds nesting or node bounds");
   const reference = schema["$ref"];
   if (typeof reference === "string") {
     const definitions = root["$defs"] as Record<string, Record<string, unknown>>;
-    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root);
+    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root, depth + 1, budget);
   }
   const alternatives = schema["oneOf"] ?? schema["anyOf"];
   if (Array.isArray(alternatives)) {
     for (const alternative of alternatives) {
-      try { validate(alternative as Record<string, unknown>, value, root, "payload"); return coerce(alternative as Record<string, unknown>, value, root); } catch { /* variant probe */ }
+      try {
+        // Canonical CBOR decodes small integers as numbers, including nested
+        // int64/uint64 fields. Probe the normalized branch, not the raw value.
+        const candidate = alternative as Record<string, unknown>;
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
     return value;
   }
   const declared = schema["type"];
   if (Array.isArray(declared)) {
     for (const kind of declared) {
-      try { return coerce({ ...schema, type: kind }, value, root); } catch { /* union probe */ }
+      try {
+        const candidate = { ...schema, type: kind };
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
+    return value;
   }
   if (declared === "integer") {
     const wide = schema["format"] === "int64" || schema["format"] === "uint64";
@@ -355,14 +369,17 @@ function coerce(schema: Record<string, unknown>, value: unknown, root: Record<st
   }
   if (declared === "array" && Array.isArray(value)) {
     const item = schema["items"] as Record<string, unknown> | undefined;
-    return item === undefined ? value : value.map((child) => coerce(item, child, root));
+    return item === undefined ? value : value.map((child) => coerce(item, child, root, depth + 1, budget));
   }
   if ((declared === "object" || "properties" in schema) && typeof value === "object" && value !== null && !Array.isArray(value)) {
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patterns = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
+    const additional = schema["additionalProperties"];
     return Object.fromEntries(Object.entries(value).map(([key, child]) => {
-      const matched = properties[key] ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1];
-      return [key, matched === undefined ? child : coerce(matched, child, root)];
+      const matched = properties[key]
+        ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1]
+        ?? (typeof additional === "object" && additional !== null ? additional as Record<string, unknown> : undefined);
+      return [key, matched === undefined ? child : coerce(matched, child, root, depth + 1, budget)];
     }));
   }
   return value;
@@ -1245,6 +1262,14 @@ def assert_packaged_fixtures() -> None:
         raise AssertionError(
             "packaged semantic bundle fixture drift: " + ", ".join(drift)
         )
+
+    union_responses = (SDK / "fixtures/union-responses-v1.json").read_bytes()
+    for path in (
+        SDK / "typescript/fixtures/union-responses-v1.json",
+        SDK / "python/src/cigar_sdk/fixtures/union-responses-v1.json",
+    ):
+        if path.read_bytes() != union_responses:
+            raise AssertionError(f"packaged union response fixture drift: {path.relative_to(SDK)}")
 
 
 def assert_release_contracts() -> None:

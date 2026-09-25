@@ -27,6 +27,7 @@ EXACT_INPUTS = (
     "sdk/capabilities-v1.json",
     "sdk/workflow-context-session.v1.json",
     "sdk/fixtures/stalled-worker.rs",
+    "sdk/fixtures/union-responses-v1.json",
     "scripts/release/context_sdk_inputs.py",
     "scripts/release/context_platforms.py",
     "scripts/release/build_context_worker.py",
