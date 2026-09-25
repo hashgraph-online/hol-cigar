@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -153,11 +154,30 @@ def main():
         json.dumps(expected, ensure_ascii=False) + "\n"
     )
     consumer_results = {}
+    locked = tomllib.loads((ROOT / "sdk/python/uv.lock").read_text())
+    test_dependencies = [
+        f"{item['name']}=={item['version']}"
+        for item in locked["package"]
+        if item["name"] in {"pytest", "hypothesis"}
+    ]
+    policy = json.loads((ROOT / "sdk/context-toolchain.v1.json").read_bytes())
     for kind, archive in [("wheel", wheel), ("sdist", sdist)]:
         venv = out / f"{kind}-venv"
         run(f"{kind}-venv", [args.uv, "venv", "--python", sys.executable, venv])
         python = venv / "bin/python"
-        run(f"{kind}-install", [args.uv, "pip", "install", "--python", python, archive])
+        run(
+            f"{kind}-install",
+            [
+                args.uv,
+                "pip",
+                "install",
+                "--python",
+                python,
+                archive,
+                f"protobuf=={policy['python']['protobuf_minimum']}",
+            ],
+            extra={"CIGAR_ALLOW_PORTABLE_WHEEL": "1"} if kind == "sdist" else {},
+        )
         extra = (
             {}
             if kind == "wheel"
@@ -169,7 +189,7 @@ def main():
         )
         run(
             f"{kind}-test-tools",
-            [args.uv, "pip", "install", "--python", python, "pytest==9.0.3"],
+            [args.uv, "pip", "install", "--python", python, *test_dependencies],
         )
         run(
             f"{kind}-tests",

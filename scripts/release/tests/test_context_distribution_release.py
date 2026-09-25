@@ -88,7 +88,7 @@ class InstalledEvidenceTests(unittest.TestCase):
                 {
                     "name": "@bufbuild/protobuf",
                     "version": "2.11.0",
-                    "license": "Apache-2.0",
+                    "license": "(Apache-2.0 AND BSD-3-Clause)",
                     "metadata_sha256": "4" * 64,
                     "integrity": "sha512-fixture",
                 }

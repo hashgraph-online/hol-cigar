@@ -412,6 +412,7 @@ def make_sbom(
                     "3-Clause BSD License": "BSD-3-Clause",
                     "BSD-3-Clause": "BSD-3-Clause",
                     "Apache-2.0": "Apache-2.0",
+                    "(Apache-2.0 AND BSD-3-Clause)": "(Apache-2.0 AND BSD-3-Clause)",
                 }
                 require(
                     package["license"] in licenses,
@@ -468,7 +469,7 @@ def make_sbom(
             "properties": [
                 {
                     "name": "cigar:scope",
-                    "value": "Native runtime closure for all seven targets and SDK runtime dependencies; excludes build tools and operating-system libraries.",
+                    "value": "Native runtime closure for the qualified platform set and SDK runtime dependencies; excludes build tools and operating-system libraries.",
                 }
             ]
         },

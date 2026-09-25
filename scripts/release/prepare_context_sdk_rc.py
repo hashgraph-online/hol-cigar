@@ -282,6 +282,7 @@ def main() -> None:
         "src",
         "tests",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE",
         "NOTICE",
         "pyproject.toml",
