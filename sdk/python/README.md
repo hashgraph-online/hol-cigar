@@ -6,21 +6,57 @@ CIGAR owns a Rust graph in a persistent local worker process.
 
 ## Install and check
 
-Version 0.12.0 is an unpublished candidate for Python `>=3.14 <3.15`. The PyPI distribution is `hol-cigar`;
+Version 0.12.0 supports Python `>=3.14 <3.15`. The PyPI distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install /absolute/path/to/hol_cigar-0.12.0-py3-none-PLATFORM.whl
+python3.14 -m pip install --upgrade 'hol-cigar==0.12.0'
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 ```
 
-Use the exact wheel for your platform from the candidate's qualification report;
-replace `PLATFORM` with its wheel tag. Public default installs remain on 0.11.0.
+PyPI selects the native wheel for your supported platform; no Rust compiler or
+separate worker installation is required.
 See the bundled [changelog](CHANGELOG.md) for migration details. The supported
 protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
 compile; `demo` runs the complete workflow. Add `--json` for machine-readable results.
+
+## Improvements from 0.11.0
+
+Version 0.12.0 strengthens integrity checks and worker lifecycle handling while
+reducing Python startup cost. Existing valid bundle IDs, context snapshots,
+`cigar.context.v1`, the worker protocol and all 69 Python public exports are preserved.
+
+| Measure | 0.11.0 | 0.12.0 |
+| --- | --- | --- |
+| Local graph API import, median | 59.06 ms | 6.50 ms (89% lower) |
+| Import plus first graph, median | 109.72 ms | 62.83 ms (43% lower) |
+| Worker-hashing peak Python allocation | 7.29 MB | 1.18 MB (84% lower) |
+| First-graph Python peak RSS, median | 46.28 MB | 31.06 MB (33% lower) |
+| Ambiguous non-string/NFC-colliding mapping keys | Could lose entries before hashing | Rejected before conversion |
+| Protobuf dependency | Exactly 6.33.5 | `>=6.33.5,<8`; qualified with 6.33.5 and 7.36.2 |
+
+The performance comparison used installed packages on one macOS ARM64 host,
+Python 3.14.7, protobuf 6.33.5 in both environments, warm filesystem and bytecode
+caches, and 25 fresh-process samples per startup case. MB means 1,000,000 bytes;
+Python RSS excludes the child worker. Steady-state compile performance was
+essentially unchanged. These are measured results, not guarantees for every host.
+
+Worker cleanup is now bounded and idempotent, preserves the original timeout or
+transport error, and exposes `cleanup_complete`. Inherited graphs fail promptly
+after `fork()`; create a new graph in the child. Worker verification still hashes
+the complete executable on every launch, using a bounded buffer.
+
+The comparison also recorded tradeoffs: some native workloads had up to 7.4%
+higher median latency and one microsecond-scale p95 increased 26%. Native benchmark
+peak RSS increased up to 3.5%; wheel sizes increased 0.13–0.17%. These observations
+passed the defined median/RSS thresholds but do not establish zero degradation.
+Offline answer-review results matched 0.11.0; no reduction in real-model
+hallucinations is claimed. Workerless source builds now require explicit opt-in.
+
+See the [full comparison and qualification scope](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/docs/release/context-sdk-0.12.0-comparison.md)
+and the [changelog](CHANGELOG.md) for compatibility and migration details.
 
 ## Local context graph (no server or model required)
 

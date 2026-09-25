@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.12.0 — candidate, unreleased
+## 0.12.0 — 2026-09-25
 
 - Reject non-string and Unicode-normalization-colliding mapping keys before
   semantic-bundle hashing or nominal payload conversion. Valid canonical IDs
@@ -16,8 +16,10 @@
 - Add integrity property tests, lifecycle/fork tests, API compatibility and Python
   coverage measurements. Preserve the context ABI and local worker protocol.
 
-This candidate has not been published. Consult its qualification report for the
-platforms, dependency versions and exact artifact hashes actually tested.
+The release includes seven native platform wheels and one portable source archive.
+See the [comparison report](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/docs/release/context-sdk-0.12.0-comparison.md)
+for measured improvements, observed increases and qualification limits. Exact
+artifact hashes and signed qualification evidence accompany the GitHub release.
 
 ## 0.11.0 — 2026-09-24
 

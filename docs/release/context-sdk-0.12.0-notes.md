@@ -1,10 +1,11 @@
-# CIGAR 0.12.0 candidate
+# CIGAR 0.12.0 release
 
-This is an unpublished candidate. Qualification results and artifact hashes must
-be checked before installation or promotion. The existing 0.11.0 registry release
-remains the public default until a separate publication decision.
+This release delivers integrity hardening, reliable worker cleanup and faster
+Python startup. The Python distribution is `hol-cigar==0.12.0`; its native wheels
+support all seven existing platforms. The npm 0.12.0 archive is qualified here,
+but npm registry publication is a separate action.
 
-The candidate rejects ambiguous Python semantic-bundle mapping keys, includes the
+The release rejects ambiguous Python semantic-bundle mapping keys, includes the
 npm canonical-CBOR union response repair, preserves worker errors through cleanup,
 and rejects inherited Python graphs after fork. It also adds lazy Python exports,
 bounded worker hashing in both SDKs, explicit workerless build opt-in, dependency
@@ -16,8 +17,10 @@ unchanged. Valid canonical bundle identities and snapshot semantics are preserve
 
 Python remains `>=3.14,<3.15`; Node remains `>=24.10.0,<25`. The Python runtime
 requirement is `protobuf>=6.33.5,<8`, with minimum/current qualification recorded
-separately. The seven-platform target matrix is unchanged; candidate testing is
-not proof of a platform until its installed artifact checks complete.
+separately. The seven-platform target matrix is unchanged. The signed release
+manifest binds the exact archives to fourteen installed minimum/current
+qualifications and two independent builds. Python 0.12.0 is supported for private
+security reporting under the [security policy](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/SECURITY.md).
 
 Source installs without a staged worker now require
 `CIGAR_ALLOW_PORTABLE_WHEEL=1` and a matching trusted `worker_path`. Platform wheels
@@ -31,5 +34,12 @@ and I/O-thread completion.
 Answer review still relies on independently trusted factual judgments. Offline
 fixtures establish enforcement and compatibility, not a model hallucination rate.
 
-See the [implementation plan](../proposals/cigar-0.12.0-plan.md) and
-[Python changelog](../../sdk/python/CHANGELOG.md).
+The controlled installed comparison measured 89% lower local API import time,
+43% lower import-plus-first-graph time, and 84% lower worker-hashing Python
+allocation on one macOS ARM64 host. Steady-state compilation was essentially
+unchanged. Some native benchmark medians increased up to 7.4%, one microsecond-scale
+p95 increased 26%, and native process RSS increased up to 3.5%. Passing the
+median/RSS thresholds does not establish zero degradation in every metric.
+
+See the [comparison and qualification scope](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/docs/release/context-sdk-0.12.0-comparison.md)
+and [Python changelog](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/python/CHANGELOG.md).

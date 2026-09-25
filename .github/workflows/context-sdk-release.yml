@@ -65,7 +65,7 @@ jobs:
         run: |
           gh release create v0.12.0 "${RUNNER_TEMP}/stable-release/"* \
             --repo "${GITHUB_REPOSITORY}" --verify-tag --latest=true \
-            --title "CIGAR 0.12.0 — reviewed answers and measured context quality" \
+            --title "CIGAR 0.12.0 — integrity, reliable cleanup and faster Python startup" \
             --notes-file "${RUNNER_TEMP}/stable-release/RELEASE_NOTES.md"
       - name: Download public bytes and verify again
         env:

@@ -6,9 +6,10 @@ Only an exact release whose authenticated release announcement explicitly marks 
 eligible for security fixes. Development snapshots, unsigned artifacts, locally rebuilt packages,
 and releases outside their announced support window are unsupported.
 
-The current local SDK release is `0.11.0` (`hol-cigar` / `@hol-org/cigar`). Reports
-against that release are accepted through the private channel below. `0.12.0`
-is currently an unpublished candidate, not an additional supported release.
+The current Python local SDK release is `hol-cigar==0.12.0`; the npm registry
+release remains `@hol-org/cigar@0.11.0` until separately published. Reports against
+these releases are accepted through the private channel below. Registry
+publication receipts and signed release announcements identify published artifacts.
 No calendar support window or extended-maintenance commitment is implied here;
 the publisher records those commitments in authenticated release announcements.
 Other CIGAR/Honey product tracks retain their own release-specific support policy.
