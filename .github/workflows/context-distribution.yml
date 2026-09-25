@@ -78,6 +78,7 @@ jobs:
           python3 scripts/release/context_distribution.py build --workers "${RUNNER_TEMP}/workers" \
             --builder "${CIGAR_BUILDER}" --output "${RUNNER_TEMP}/candidate" \
             --pnpm "$(command -v pnpm)" --npm "$(command -v npm)" --uv "$(command -v uv)"
+          cp "${RUNNER_TEMP}/python-coverage.json" "${RUNNER_TEMP}/candidate/logs/python-coverage.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -92,7 +93,6 @@ jobs:
             ${{ runner.temp }}/candidate/typescript-tests/
             ${{ runner.temp }}/candidate/candidate.json
             ${{ runner.temp }}/candidate/checks.json
-            ${{ runner.temp }}/python-coverage.json
 
   compare:
     needs: build
