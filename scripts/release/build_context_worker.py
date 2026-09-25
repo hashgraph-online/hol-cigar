@@ -321,13 +321,27 @@ def main() -> None:
         "CIGAR context worker dependency notices. Exact source versions are in the accompanying Rust crate.\n"
     ]
     active = {node["id"] for node in dependencies["resolve"]["nodes"]}
+    dependency_purls = {
+        package["id"]: f"pkg:cargo/{package['name']}@{package['version']}"
+        for package in dependencies["packages"]
+    }
+    resolved = {node["id"]: node for node in dependencies["resolve"]["nodes"]}
     for package in sorted(
         dependencies["packages"], key=lambda item: (item["name"], item["version"])
     ):
         if package["id"] not in active:
             continue
         records.append(
-            {key: package[key] for key in ("name", "version", "license", "source")}
+            {
+                **{
+                    key: package[key]
+                    for key in ("name", "version", "license", "source")
+                },
+                "dependencies": sorted(
+                    dependency_purls[item]
+                    for item in resolved[package["id"]]["dependencies"]
+                ),
+            }
         )
         notices.append(
             f"\n=== {package['name']} {package['version']} ({package['license']}) ===\n"

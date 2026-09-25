@@ -6,17 +6,17 @@ CIGAR owns a Rust graph in a persistent local worker process.
 
 ## Install and check
 
-Version 0.11.0 supports ESM on Node.js `>=24.10.0 <25`:
+Version 0.12.0 is an unpublished candidate for ESM on Node.js `>=24.10.0 <25`:
 
 ```text
-npm install --save-exact @hol-org/cigar@0.11.0
+npm install --save-exact /absolute/path/to/hol-org-cigar-0.12.0.tgz
 npx --no-install cigar-context doctor
 npx --no-install cigar-context demo
 ```
 
-When evaluating an unpublished candidate, install its exact `hol-org-cigar-0.11.0.tgz`
-file instead of the registry version. Release status is recorded in the repository's
-[distribution plan](https://github.com/hashgraph-online/hol-cigar/blob/codex/cigar-0.11.0-distribution/docs/proposals/cigar-0.11.0-distribution.md).
+Install the exact archive from the candidate's qualification report. Public default
+installs remain on 0.11.0 until a separate publication decision. This candidate
+includes the canonical-CBOR union decoding repair and bounded worker hashing.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
 citations, cache reuse, trusted fixture reviews, source updates and stale-review
@@ -52,12 +52,12 @@ selected text block and short citation handles. Retain its citation map and full
 the expected authorized snapshot. A separate exact budget fails without truncating evidence.
 Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
 
-The 0.11.0 distribution matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with
+The 0.12.0 distribution matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with
 glibc 2.28+ or musl 1.2+, and Windows x64. The release checks require every advertised
 worker before publication. Browser, edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
-the matching Rust 0.11.0 source. There is no install script, runtime download, PATH
+the matching Rust 0.12.0 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize
@@ -111,7 +111,7 @@ matching worker, use `LocalContextGraph.create("project", {workerPath: "/absolut
 or `cigar-context doctor --worker /absolute/path`.
 
 The installed package includes `AGENT_GUIDE.md` and `llms.txt`. The
-[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
 covers explicit file ingestion, graph relationships, authorization and the answer-review flow.
 
 ## Compatible remote client
@@ -184,4 +184,4 @@ context and refuses stale snapshots/reviews, invalid citations, missing support
 or unreviewed explicit conflicts. `confidence_bps` (0–10000 or null) is telemetry;
 it never authorizes release. Keep policy and verdicts outside model control.
 CIGAR does not run a semantic judge. See the
-[core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/crates/cigar-context/README.md#check-answers-before-display).
+[core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/crates/cigar-context/README.md#check-answers-before-display).

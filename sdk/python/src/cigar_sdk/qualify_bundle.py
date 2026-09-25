@@ -9,6 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from cigar_sdk.digest import bundle_id, verify_bundle
+from cigar_sdk.errors import ValidationError
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValidationError("fixture JSON contains a duplicate mapping key")
+        result[key] = value
+    return result
 
 
 def main() -> None:
@@ -17,7 +27,7 @@ def main() -> None:
         if len(sys.argv) > 1
         else resources.files("cigar_sdk.fixtures").joinpath("semantic-bundle-v1.json")
     )
-    fixture: dict[str, Any] = json.loads(source.read_text(encoding="utf-8"))
+    fixture: dict[str, Any] = json.loads(source.read_text(encoding="utf-8"), object_pairs_hook=_unique_object)
     if fixture.get("schema_version") != "cigar.sdk-semantic-bundle-fixture.v1":
         raise ValueError("unsupported semantic bundle fixture")
     bundle = fixture["bundle"]

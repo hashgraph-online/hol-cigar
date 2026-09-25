@@ -2,8 +2,8 @@ name: context-sdk-release
 
 on:
   push:
-    branches: [codex/cigar-0.11.0-distribution]
-    tags: [v0.11.0]
+    branches: [codex/cigar-0.12.0-candidate]
+    tags: [v0.12.0]
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/context-distribution.yml
 
   attest-and-release:
-    if: github.repository == 'hashgraph-online/hol-cigar' && github.ref == 'refs/tags/v0.11.0'
+    if: github.repository == 'hashgraph-online/hol-cigar' && github.ref == 'refs/tags/v0.12.0'
     needs: distribution
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -43,7 +43,7 @@ jobs:
           path: ${{ runner.temp }}/stable-release/
       - name: Reverify exact assembled bytes before obtaining signatures
         run: |
-          test "${GITHUB_REF}" = "refs/tags/v0.11.0"
+          test "${GITHUB_REF}" = "refs/tags/v0.12.0"
           python3 scripts/release/context_sdk_release.py verify \
             --directory "${RUNNER_TEMP}/stable-release" --commit "${GITHUB_SHA}"
       - name: Sign public payload provenance using short-lived GitHub OIDC identity
@@ -63,14 +63,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.11.0 "${RUNNER_TEMP}/stable-release/"* \
+          gh release create v0.12.0 "${RUNNER_TEMP}/stable-release/"* \
             --repo "${GITHUB_REPOSITORY}" --verify-tag --latest=true \
-            --title "CIGAR 0.11.0 — reviewed answers and measured context quality" \
+            --title "CIGAR 0.12.0 — reviewed answers and measured context quality" \
             --notes-file "${RUNNER_TEMP}/stable-release/RELEASE_NOTES.md"
       - name: Download public bytes and verify again
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download v0.11.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/public-readback"
+          gh release download v0.12.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/public-readback"
           python3 scripts/release/context_sdk_release.py verify --verify-attestations \
             --directory "${RUNNER_TEMP}/public-readback" --commit "${GITHUB_SHA}"

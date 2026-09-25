@@ -68,30 +68,30 @@ def readback(document: dict, registry: str) -> dict:
         )
         require(
             data["name"] == "@hol-org/cigar"
-            and data["dist-tags"]["latest"] == "0.11.0",
-            "npm default install does not select 0.11.0",
+            and data["dist-tags"]["latest"] == "0.12.0",
+            "npm default install does not select 0.12.0",
         )
-        version = data["versions"]["0.11.0"]
+        version = data["versions"]["0.12.0"]
         require(
-            version["name"] == "@hol-org/cigar" and version["version"] == "0.11.0",
+            version["name"] == "@hol-org/cigar" and version["version"] == "0.12.0",
             "npm version identity differs",
         )
         checked["npm"] = {
-            "default": "0.11.0",
+            "default": "0.12.0",
             "archives": [
                 check_archive(
                     version["dist"]["tarball"],
                     "registry.npmjs.org",
-                    records["hol-org-cigar-0.11.0.tgz"],
+                    records["hol-org-cigar-0.12.0.tgz"],
                 )
             ],
         }
     if registry in {"pypi", "both"}:
-        data = metadata("https://pypi.org/pypi/hol-cigar/0.11.0/json", "pypi.org")
+        data = metadata("https://pypi.org/pypi/hol-cigar/0.12.0/json", "pypi.org")
         current = metadata("https://pypi.org/pypi/hol-cigar/json", "pypi.org")
         require(
             data["info"]["name"] == "hol-cigar"
-            and data["info"]["version"] == current["info"]["version"] == "0.11.0",
+            and data["info"]["version"] == current["info"]["version"] == "0.12.0",
             "PyPI default version differs",
         )
         expected = {name for name in records if name.startswith("hol_cigar-")}
@@ -110,11 +110,11 @@ def readback(document: dict, registry: str) -> dict:
                 "PyPI metadata differs from the signed archive",
             )
             archives.append(check_archive(row["url"], "files.pythonhosted.org", record))
-        checked["pypi"] = {"default": "0.11.0", "archives": archives}
+        checked["pypi"] = {"default": "0.12.0", "archives": archives}
     return {
         "schema": "cigar.context-registry-readback.v1",
         "status": "passed",
-        "release": "0.11.0",
+        "release": "0.12.0",
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "source_commit": document["source_commit"],
         "registries": checked,

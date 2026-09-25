@@ -2,12 +2,12 @@
   "schema_version": "cigar.local-context-sdk-release.v1",
   "remote_workspace_version": "0.9.4",
   "context_abi": "cigar.context.v1",
-  "core_version": "0.11.0",
+  "core_version": "0.12.0",
   "protocol": "cigar.context-worker.v1",
   "channel": "stable",
   "versions": {
-    "python": "0.11.0",
-    "typescript": "0.11.0"
+    "python": "0.12.0",
+    "typescript": "0.12.0"
   },
   "bundled_native_targets": [
     "aarch64-apple-darwin",

@@ -1,0 +1,16 @@
+{
+  "schema": "cigar.context-toolchain.v1",
+  "reviewed_at": "2026-09-25T16:40:00Z",
+  "uv": "0.12.18",
+  "python": {
+    "protobuf_minimum": "6.33.5",
+    "protobuf_current": "7.36.2",
+    "pytest": "9.1.1",
+    "mypy": "2.3.1",
+    "ruff": "0.16.9",
+    "hatchling": "1.32.4"
+  },
+  "legacy_exceptions": {
+    "beta-candidate.yml": "The historical beta producer retains Ruff 0.14.10; local SDK candidate jobs use the current lock."
+  }
+}

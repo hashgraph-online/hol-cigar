@@ -43,7 +43,7 @@ class LocalRuntimeTests(unittest.TestCase):
                     binary.write_bytes(f"fixture bytes for {identity}".encode())
                     manifest = {
                         "protocol": "cigar.context-worker.v1",
-                        "core_version": "0.11.0",
+                        "core_version": "0.12.0",
                         "target": metadata["target"],
                         "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                     }

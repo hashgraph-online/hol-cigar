@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Assemble and verify the complete, qualified CIGAR 0.11.0 distribution."""
+"""Assemble and verify the complete, qualified local CIGAR distribution."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from email.parser import BytesParser
 import errno
 import gzip
 import hashlib
@@ -24,7 +25,7 @@ from urllib.request import Request, urlopen
 import context_distribution as distribution
 import context_platforms
 import context_sdk_beta as legacy
-from qualify_context_distribution import RUNTIMES
+from qualify_context_distribution import PROTOBUF_VERSIONS, RUNTIMES
 from context_sdk_cases import build_cases
 from release_lib import (
     ReleaseError,
@@ -54,12 +55,12 @@ class DistributionProfile(legacy.ReleaseProfile):
 
 
 PROFILE = DistributionProfile(
-    "0.11.0",
-    "0.11.0",
+    distribution.VERSION,
+    distribution.VERSION,
     "stable",
     legacy.REPO + "/.github/workflows/context-sdk-release.yml",
     "release-manifest.json",
-    "docs/release/context-sdk-0.11.0-notes.md",
+    f"docs/release/context-sdk-{distribution.VERSION}-notes.md",
 )
 
 
@@ -129,14 +130,40 @@ def validate_qualification(
     install_names = {
         f"{kind}-{check}": 0
         for kind in ("wheel", "sdist")
-        for check in ("venv", "install", "tests", "legacy-entrypoint")
+        for check in ("venv", "install", "dependencies", "tests", "legacy-entrypoint")
     }
-    install_names.update({"npm-install": 0, "npm-installed-tests": 0})
+    install_names.update(
+        {"npm-install": 0, "npm-dependencies": 0, "npm-installed-tests": 0}
+    )
     require(
         prepared["checks"] == report["installation_checks"],
         "retained installation checks differ",
     )
     check_logs(files, prefix + "logs/", report["installation_checks"], install_names)
+    receipts = report["runtime_dependencies"]
+    require(
+        receipts == prepared["runtime_dependencies"]
+        and set(receipts) == {"wheel", "sdist", "npm"},
+        "runtime dependency evidence differs or is missing",
+    )
+    for kind, receipt in receipts.items():
+        require(
+            receipt == raw_json(files, prefix + f"logs/{kind}-dependencies.stdout"),
+            "runtime dependencies differ from installed metadata",
+        )
+        require(
+            receipt["schema"] == "cigar.installed-runtime-dependencies.v1"
+            and receipt["version"] == distribution.VERSION,
+            "runtime dependency receipt identity mismatch",
+        )
+        if kind != "npm":
+            require(
+                receipt["name"] == "hol-cigar"
+                and receipt["ecosystem"] == "pypi"
+                and [(row["name"], row["version"]) for row in receipt["components"]]
+                == [("protobuf", PROTOBUF_VERSIONS[runtime])],
+                "Python dependency qualification missed its minimum/current bound",
+            )
     offline_names = {
         f"{kind}-{check}": (1 if check == "missing-worker" else 0)
         for kind in ("wheel", "sdist", "npm")
@@ -268,38 +295,175 @@ def validate_qualification(
     return report
 
 
-def make_sbom(first: Path, candidate: dict) -> dict:
+def make_sbom(
+    first: Path,
+    candidate: dict,
+    qualifications: list[dict],
+    *,
+    inventories: dict | None = None,
+    archives: Path | None = None,
+) -> dict:
     components = {}
+    dependencies: dict[str, set[str]] = {}
     for key in candidate["platforms"]:
         directory = first / "workers" / key / "native" / key
-        for package in load_json(directory / "dependencies.json"):
+        inventory = (
+            inventories[key]
+            if inventories is not None
+            else load_json(directory / "dependencies.json")
+        )
+        for package in inventory:
             purl = f"pkg:cargo/{package['name']}@{package['version']}"
+            require(
+                bool(package["license"]), "native dependency lacks license evidence"
+            )
             components[purl] = {
+                "bom-ref": purl,
                 "type": "library",
                 "name": package["name"],
                 "version": package["version"],
                 "purl": purl,
-                "licenses": [{"expression": package["license"]}]
-                if package["license"]
-                else [],
+                "licenses": [{"expression": package["license"]}],
             }
-    for ecosystem, name, version, license_id in (
-        ("pypi", "protobuf", "6.33.5", "BSD-3-Clause"),
-        ("npm", "@bufbuild/protobuf", "2.12.1", "Apache-2.0"),
-    ):
-        purl = f"pkg:{ecosystem}/{quote(name, safe='/')}@{version}"
-        components[purl] = {
-            "type": "library",
-            "name": name,
-            "version": version,
-            "purl": purl,
-            "licenses": [{"license": {"id": license_id}}],
-        }
+            dependencies.setdefault(purl, set()).update(package.get("dependencies", []))
+    archives = archives or first / "artifacts"
+    npm_files = distribution.archive_files(
+        archives / f"hol-org-cigar-{distribution.VERSION}.tgz"
+    )
+    npm = json.loads(npm_files["package/package.json"])
+    wheel_name = next(name for name in candidate["artifacts"] if name.endswith(".whl"))
+    wheel = distribution.archive_files(archives / wheel_name)
+    metadata = BytesParser().parsebytes(
+        next(
+            value
+            for name, value in wheel.items()
+            if name.endswith(".dist-info/METADATA")
+        )
+    )
+    contracts = {
+        "pypi": (
+            metadata["Name"],
+            metadata["Version"],
+            metadata.get_all("Requires-Dist") or [],
+            metadata["License-Expression"],
+        ),
+        "npm": (
+            npm["name"],
+            npm["version"],
+            npm.get("dependencies", {}),
+            npm["license"],
+        ),
+    }
+    require(
+        bool(qualifications), "SBOM requires actual installed dependency resolutions"
+    )
+    for qualification in qualifications:
+        for kind, receipt in qualification["runtime_dependencies"].items():
+            ecosystem = receipt["ecosystem"]
+            name, version, requirements, license_expression = contracts[ecosystem]
+            require(
+                (receipt["name"], receipt["version"], receipt["requirements"])
+                == (name, version, requirements),
+                "installed dependencies differ from artifact metadata",
+            )
+            root = f"pkg:{ecosystem}/{quote(name, safe='/')}@{version}"
+            components[root] = {
+                "bom-ref": root,
+                "type": "library",
+                "name": name,
+                "version": version,
+                "purl": root,
+                "licenses": [{"expression": license_expression}],
+                "properties": [
+                    {
+                        "name": "cigar:declared-dependencies",
+                        "value": json.dumps(requirements, sort_keys=True),
+                    }
+                ],
+            }
+            dependencies.setdefault(root, set()).add(
+                f"pkg:cargo/cigar-context@{distribution.VERSION}"
+            )
+            expected = (
+                set(requirements)
+                if ecosystem == "npm"
+                else {
+                    re.split(r"[ <>=!~;\[]", value, maxsplit=1)[0]
+                    for value in requirements
+                }
+            )
+            require(
+                {item["name"] for item in receipt["components"]} == expected
+                and len(receipt["components"]) == len(expected),
+                "installed dependency inventory does not match archive requirements",
+            )
+            for package in receipt["components"]:
+                require(
+                    bool(package["license"]),
+                    "SDK dependency lacks installed license evidence",
+                )
+                if ecosystem == "npm":
+                    require(
+                        package["version"] == requirements[package["name"]],
+                        "npm resolved dependency differs from archive requirement",
+                    )
+                # These are reviewed metadata spellings, not assumed package versions.
+                licenses = {
+                    "3-Clause BSD License": "BSD-3-Clause",
+                    "BSD-3-Clause": "BSD-3-Clause",
+                    "Apache-2.0": "Apache-2.0",
+                }
+                require(
+                    package["license"] in licenses,
+                    "SDK dependency license requires review",
+                )
+                purl = f"pkg:{ecosystem}/{quote(package['name'], safe='/')}@{package['version']}"
+                dependencies[root].add(purl)
+                if purl not in components:
+                    components[purl] = {
+                        "bom-ref": purl,
+                        "type": "library",
+                        "name": package["name"],
+                        "version": package["version"],
+                        "purl": purl,
+                        "licenses": [{"expression": licenses[package["license"]]}],
+                        "properties": [],
+                    }
+                properties = components[purl]["properties"]
+                properties.append(
+                    {
+                        "name": "cigar:qualified-environment",
+                        "value": json.dumps(
+                            {
+                                "platform": qualification["platform"],
+                                "runtime": qualification["runtime"],
+                                "consumer": kind,
+                                "metadata_sha256": package["metadata_sha256"],
+                                **(
+                                    {"integrity": package["integrity"]}
+                                    if "integrity" in package
+                                    else {"record_sha256": package["record_sha256"]}
+                                ),
+                            },
+                            sort_keys=True,
+                        ),
+                    }
+                )
+    require(
+        all(
+            value in components for values in dependencies.values() for value in values
+        ),
+        "SBOM dependency edge has no component",
+    )
     return {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
         "version": 1,
         "components": [components[key] for key in sorted(components)],
+        "dependencies": [
+            {"ref": key, "dependsOn": sorted(values)}
+            for key, values in sorted(dependencies.items())
+        ],
         "metadata": {
             "properties": [
                 {
@@ -365,10 +529,10 @@ def assemble(args) -> None:
     # to the exact code packaged here (native workers have their own full matrix).
     old = legacy.validate_build(args.legacy, args.commit, legacy.STABLE)
     old_npm = distribution.archive_files(
-        args.legacy / "artifacts/hol-org-cigar-0.11.0.tgz"
+        args.legacy / f"artifacts/hol-org-cigar-{distribution.VERSION}.tgz"
     )
     new_npm = distribution.archive_files(
-        args.first / "artifacts/hol-org-cigar-0.11.0.tgz"
+        args.first / f"artifacts/hol-org-cigar-{distribution.VERSION}.tgz"
     )
     require(
         {
@@ -424,7 +588,7 @@ def assemble(args) -> None:
                     retained, f"installed/{key}/{runtime}/", candidate, key, runtime
                 )
             )
-    sbom = make_sbom(args.first, candidate)
+    sbom = make_sbom(args.first, candidate, qualifications)
     retained["advisories.json"] = canonical_json_bytes(advisories(sbom))
     output = args.directory.absolute()
     output.mkdir(parents=True, exist_ok=False)
@@ -529,15 +693,42 @@ def verify(
         for name in distribution.artifact_names(set(first["platforms"])):
             shutil.copyfile(directory / name, archives / name)
         distribution.verify_packages(archives, first["workers"])
+    qualifications = []
     for key in document["platforms"]:
         require(
             first["workers"][key]["worker"] == second["workers"][key]["worker"],
             "retained native bytes differ",
         )
         for runtime in RUNTIMES:
-            validate_qualification(
-                retained, f"installed/{key}/{runtime}/", first, key, runtime
+            qualifications.append(
+                validate_qualification(
+                    retained, f"installed/{key}/{runtime}/", first, key, runtime
+                )
             )
+    rebuilt = make_sbom(
+        directory,
+        first,
+        qualifications,
+        archives=directory,
+        inventories={
+            key: raw_json(
+                retained, f"first/workers/{key}/native/{key}/dependencies.json"
+            )
+            for key in first["platforms"]
+        },
+    )
+    require(
+        rebuilt == load_json(directory / "sbom.cdx.json"),
+        "SBOM differs from shipped archives and installed dependency evidence",
+    )
+    spdx = legacy.make_spdx(
+        rebuilt, commit, first["source_binding"]["source_date_epoch"], PROFILE
+    )
+    spdx["creationInfo"]["creators"] = ["Tool: cigar-context-sdk-distribution"]
+    require(
+        spdx == load_json(directory / "sbom.spdx.json"),
+        "SPDX dependency evidence differs",
+    )
     advisory = raw_json(retained, "advisories.json")
     require(
         not advisory["findings"]

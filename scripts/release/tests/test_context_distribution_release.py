@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -57,9 +58,47 @@ class InstalledEvidenceTests(unittest.TestCase):
             "legacy_exports": {},
         }
         install = []
+        receipts = {}
         for kind in ("wheel", "sdist"):
             for name in ("venv", "install", "tests", "legacy-entrypoint"):
                 install.append(self.log("logs/", f"{kind}-{name}", b"passed\n"))
+            receipts[kind] = {
+                "schema": "cigar.installed-runtime-dependencies.v1",
+                "ecosystem": "pypi",
+                "name": "hol-cigar",
+                "version": distribution.VERSION,
+                "requirements": ["protobuf<8,>=6.33.5"],
+                "components": [
+                    {
+                        "name": "protobuf",
+                        "version": release.PROTOBUF_VERSIONS["minimum"],
+                        "license": "3-Clause BSD License",
+                        "metadata_sha256": "2" * 64,
+                        "record_sha256": "3" * 64,
+                    }
+                ],
+            }
+        receipts["npm"] = {
+            "schema": "cigar.installed-runtime-dependencies.v1",
+            "ecosystem": "npm",
+            "name": "@hol-org/cigar",
+            "version": distribution.VERSION,
+            "requirements": {"@bufbuild/protobuf": "2.11.0"},
+            "components": [
+                {
+                    "name": "@bufbuild/protobuf",
+                    "version": "2.11.0",
+                    "license": "Apache-2.0",
+                    "metadata_sha256": "4" * 64,
+                    "integrity": "sha512-fixture",
+                }
+            ],
+        }
+        self.report["runtime_dependencies"] = receipts
+        for kind, receipt in receipts.items():
+            install.append(
+                self.log("logs/", f"{kind}-dependencies", canonical_json_bytes(receipt))
+            )
         install.extend(
             self.log("logs/", name, b"passed\n")
             for name in ("npm-install", "npm-installed-tests")
@@ -116,6 +155,7 @@ class InstalledEvidenceTests(unittest.TestCase):
                 "platform",
                 "runtime",
                 "versions",
+                "runtime_dependencies",
             )
         }
         prepared.update(
@@ -199,13 +239,86 @@ class InstalledEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ReleaseError, "different source or archives"):
             self.verify()
 
+    def test_dependency_summary_cannot_substitute_installed_versions(self):
+        self.report["runtime_dependencies"]["wheel"]["components"][0]["version"] = (
+            "7.36.2"
+        )
+        self.put("qualification.json", self.report)
+        with self.assertRaisesRegex(ReleaseError, "runtime dependency evidence"):
+            self.verify()
+
+    def test_sbom_uses_installed_versions_and_requires_complete_dependency_evidence(
+        self,
+    ):
+        native = {
+            "darwin-arm64": [
+                {
+                    "name": "cigar-context",
+                    "version": distribution.VERSION,
+                    "license": "Apache-2.0",
+                    "dependencies": [],
+                }
+            ]
+        }
+        candidate = {"platforms": ["darwin-arm64"], "artifacts": {"fixture.whl": {}}}
+        npm = {
+            "name": "@hol-org/cigar",
+            "version": distribution.VERSION,
+            "dependencies": {"@bufbuild/protobuf": "2.11.0"},
+            "license": "Apache-2.0",
+        }
+        wheel = (
+            f"Name: hol-cigar\nVersion: {distribution.VERSION}\n"
+            "Requires-Dist: protobuf<8,>=6.33.5\nLicense-Expression: Apache-2.0\n\n"
+        ).encode()
+
+        def archives(path):
+            return (
+                {"package/package.json": json.dumps(npm).encode()}
+                if str(path).endswith(".tgz")
+                else {"fixture.dist-info/METADATA": wheel}
+            )
+
+        with mock.patch.object(distribution, "archive_files", side_effect=archives):
+            sbom = release.make_sbom(
+                Path("fixture"), candidate, [self.report], inventories=native
+            )
+            refs = {item["purl"] for item in sbom["components"]}
+            self.assertIn("pkg:pypi/protobuf@6.33.5", refs)
+            self.assertIn("pkg:npm/%40bufbuild/protobuf@2.11.0", refs)
+            edges = {item["ref"]: item["dependsOn"] for item in sbom["dependencies"]}
+            self.assertIn(
+                "pkg:pypi/protobuf@6.33.5",
+                edges[f"pkg:pypi/hol-cigar@{distribution.VERSION}"],
+            )
+            spdx = release.legacy.make_spdx(sbom, "1" * 40, 1, release.PROFILE)
+            self.assertTrue(
+                any(
+                    item["relationshipType"] == "DEPENDS_ON"
+                    for item in spdx["relationships"]
+                )
+            )
+            for mutation in ("version", "missing", "license"):
+                changed = copy.deepcopy(self.report)
+                package = changed["runtime_dependencies"]["npm"]["components"][0]
+                if mutation == "version":
+                    package["version"] = "2.12.0"
+                elif mutation == "missing":
+                    changed["runtime_dependencies"]["npm"]["components"] = []
+                else:
+                    package["license"] = None
+                with self.subTest(mutation=mutation), self.assertRaises(ReleaseError):
+                    release.make_sbom(
+                        Path("fixture"), candidate, [changed], inventories=native
+                    )
+
 
 class RegistryReadbackTests(unittest.TestCase):
     def test_published_version_with_old_default_tag_is_not_success(self):
         metadata = {
             "name": "@hol-org/cigar",
             "dist-tags": {"latest": "0.9.4"},
-            "versions": {"0.11.0": {}},
+            "versions": {"0.12.0": {}},
         }
         with mock.patch.object(registry, "metadata", return_value=metadata):
             with self.assertRaisesRegex(ReleaseError, "default install"):
@@ -226,7 +339,7 @@ class RegistryReadbackTests(unittest.TestCase):
                 )
 
     def test_partial_pypi_publication_cannot_pass(self):
-        info = {"name": "hol-cigar", "version": "0.11.0"}
+        info = {"name": "hol-cigar", "version": "0.12.0"}
         with mock.patch.object(
             registry, "metadata", return_value={"info": info, "urls": []}
         ):
@@ -241,7 +354,7 @@ class IndependentBuildTests(unittest.TestCase):
             sum(name.endswith(".whl") for name in release.PROFILE.payloads), 7
         )
         self.assertIn(
-            "hol_cigar-0.11.0-py3-none-win_amd64.whl", release.PROFILE.payloads
+            "hol_cigar-0.12.0-py3-none-win_amd64.whl", release.PROFILE.payloads
         )
 
     def test_same_build_cannot_be_its_own_comparison(self):

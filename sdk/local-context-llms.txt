@@ -1,4 +1,4 @@
-# CIGAR 0.11.0: local context graphs
+# CIGAR 0.12.0: local context graphs
 
 No HOL account, API key, service, daemon, database or model provider is needed for the local graph.
 
@@ -7,7 +7,7 @@ No HOL account, API key, service, daemon, database or model provider is needed f
 - Node diagnostic: npx --no-install cigar-context doctor --json
 - Python diagnostic: python -m cigar_sdk.local_cli doctor --json
 - Full offline integration example: cigar-context demo --json (use the command in the installed environment).
-- If /context is absent, the installed npm SDK may be 0.9.4; choose the local 0.11.0 distribution.
+- If /context is absent, the installed npm SDK may be 0.9.4; choose the local 0.12.0 distribution.
 - If the worker is unavailable, use the diagnostic platform/version guidance. This is not a missing HOL service.
 - Reuse one graph per privacy domain, ingest explicitly authorized text, replace changed sources, pass current allowed IDs, preserve required dependencies and citations, and close the graph on shutdown.
 - Answer review requires separately trusted semantic verdicts. Confidence and a generator's own supported flag do not authorize release. Only display assessed claims on release; recheck when source or policy changes.
@@ -15,7 +15,7 @@ No HOL account, API key, service, daemon, database or model provider is needed f
 
 ## Versioned documentation
 
-- [Agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/LOCAL_CONTEXT_GUIDE.md)
-- [Node.js guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/typescript/README.md)
-- [Python guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/python/README.md)
-- [Core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/crates/cigar-context/README.md)
+- [Agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+- [Node.js guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/typescript/README.md)
+- [Python guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/python/README.md)
+- [Core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/crates/cigar-context/README.md)

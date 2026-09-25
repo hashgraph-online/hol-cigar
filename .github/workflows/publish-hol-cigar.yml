@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirm:
-        description: Type "publish hol-cigar 0.11.0", "publish hol-cigar 0.10.0b1", or "publish hol-cigar 0.9.4"
+        description: Type "publish hol-cigar 0.12.0", "publish hol-cigar 0.10.0b1", or "publish hol-cigar 0.9.4"
         required: true
         type: string
 
@@ -151,7 +151,7 @@ jobs:
           compression-level: 0
 
   verify-stable-bytes:
-    if: inputs.confirm == 'publish hol-cigar 0.11.0'
+    if: inputs.confirm == 'publish hol-cigar 0.12.0'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -166,15 +166,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
         run: |
-          test "${GITHUB_REF}" = "refs/tags/v0.11.0"
+          test "${GITHUB_REF}" = "refs/tags/v0.12.0"
           [[ "${MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]]
-          test "$(gh release view v0.11.0 --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
-          gh release download v0.11.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
+          test "$(gh release view v0.12.0 --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
+          gh release download v0.12.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
           python3 scripts/release/context_sdk_release.py verify --verify-attestations --check-advisories \
             --directory "${RUNNER_TEMP}/signed-stable" --commit "${GITHUB_SHA}" --manifest-sha256 "${MANIFEST_SHA256}"
           mkdir -m 0700 dist
-          install -m 0400 "${RUNNER_TEMP}/signed-stable/hol_cigar-0.11.0.tar.gz" dist/
-          for archive in "${RUNNER_TEMP}/signed-stable/"hol_cigar-0.11.0-*.whl; do
+          install -m 0400 "${RUNNER_TEMP}/signed-stable/hol_cigar-0.12.0.tar.gz" dist/
+          for archive in "${RUNNER_TEMP}/signed-stable/"hol_cigar-0.12.0-*.whl; do
             install -m 0400 "${archive}" dist/
           done
           test "$(find dist -type f | wc -l | tr -d ' ')" = "8"
@@ -182,7 +182,7 @@ jobs:
           python3 -m twine check --strict dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hol-cigar-0.11.0-pypi
+          name: hol-cigar-0.12.0-pypi
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -203,7 +203,7 @@ jobs:
       - name: Retrieve verified distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.confirm == 'publish hol-cigar 0.11.0' && 'hol-cigar-0.11.0-pypi' || inputs.confirm == 'publish hol-cigar 0.10.0b1' && 'hol-cigar-0.10.0b1-pypi' || 'hol-cigar-0.9.4-pypi' }}
+          name: ${{ inputs.confirm == 'publish hol-cigar 0.12.0' && 'hol-cigar-0.12.0-pypi' || inputs.confirm == 'publish hol-cigar 0.10.0b1' && 'hol-cigar-0.10.0b1-pypi' || 'hol-cigar-0.9.4-pypi' }}
           path: dist/
 
       - name: Publish with Trusted Publishing and attestations

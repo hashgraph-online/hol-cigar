@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type "stage @hol-org/cigar 0.11.0 with latest dist-tag", "stage @hol-org/cigar 0.10.0-beta.1 with beta dist-tag", or "stage @hol-org/cigar with alpha dist-tag"
+        description: Type "stage @hol-org/cigar 0.12.0 with latest dist-tag", "stage @hol-org/cigar 0.10.0-beta.1 with beta dist-tag", or "stage @hol-org/cigar with alpha dist-tag"
         required: true
         type: string
       manifest_sha256:
@@ -325,7 +325,7 @@ jobs:
           echo 'An authorized npm maintainer must approve @hol-org/cigar 0.10.0-beta.1, public visibility, beta tag, in npmjs.com Staged Packages with 2FA. Staged is not published.' >>"${GITHUB_STEP_SUMMARY}"
 
   verify-stable:
-    if: inputs.confirm == 'stage @hol-org/cigar 0.11.0 with latest dist-tag'
+    if: inputs.confirm == 'stage @hol-org/cigar 0.12.0 with latest dist-tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -340,16 +340,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
         run: |
-          test "${GITHUB_REF}" = "refs/tags/v0.11.0"
+          test "${GITHUB_REF}" = "refs/tags/v0.12.0"
           [[ "${MANIFEST_SHA256}" =~ ^[0-9a-f]{64}$ ]]
-          test "$(gh release view v0.11.0 --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
-          gh release download v0.11.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
+          test "$(gh release view v0.12.0 --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
+          gh release download v0.12.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
           python3 scripts/release/context_sdk_release.py verify --verify-attestations --check-advisories \
             --directory "${RUNNER_TEMP}/signed-stable" --commit "${GITHUB_SHA}" --manifest-sha256 "${MANIFEST_SHA256}"
           mkdir -m 0700 npm-stable-stage
-          install -m 0400 "${RUNNER_TEMP}/signed-stable/hol-org-cigar-0.11.0.tgz" npm-stable-stage/
+          install -m 0400 "${RUNNER_TEMP}/signed-stable/hol-org-cigar-0.12.0.tgz" npm-stable-stage/
           cd npm-stable-stage
-          sha256sum hol-org-cigar-0.11.0.tgz >SHA256SUMS
+          sha256sum hol-org-cigar-0.12.0.tgz >SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hol-cigar-npm-stable-stage
@@ -380,21 +380,21 @@ jobs:
           path: npm-stable-stage/
       - name: Require exact bytes and an unoccupied registry version
         run: |
-          test "${GITHUB_REF}" = "refs/tags/v0.11.0"
+          test "${GITHUB_REF}" = "refs/tags/v0.12.0"
           npm install --global --ignore-scripts npm@12.0.2
           test "$(npm --version)" = "12.0.2"
           cd npm-stable-stage
           sha256sum --check --strict SHA256SUMS
-          if npm view @hol-org/cigar@0.11.0 version --json >"${RUNNER_TEMP}/npm-stable-view.json" 2>&1; then
+          if npm view @hol-org/cigar@0.12.0 version --json >"${RUNNER_TEMP}/npm-stable-view.json" 2>&1; then
             echo 'Stable version already exists; refusing duplicate staging' >&2
             exit 1
           fi
           grep -q E404 "${RUNNER_TEMP}/npm-stable-view.json"
-          npm stage publish --dry-run --ignore-scripts --access public --tag latest ./hol-org-cigar-0.11.0.tgz
+          npm stage publish --dry-run --ignore-scripts --access public --tag latest ./hol-org-cigar-0.12.0.tgz
       - name: Stage exact stable archive through trusted publisher
         env:
           NPM_CONFIG_PROVENANCE: "true"
-        run: npm stage publish --ignore-scripts --access public --tag latest ./npm-stable-stage/hol-org-cigar-0.11.0.tgz
+        run: npm stage publish --ignore-scripts --access public --tag latest ./npm-stable-stage/hol-org-cigar-0.12.0.tgz
       - name: Record proof-of-presence and default-install readback requirements
         run: |
-          echo 'An authorized npm maintainer must approve @hol-org/cigar 0.11.0, public visibility, latest tag, in npmjs.com Staged Packages with 2FA. Then run context-registry-readback against v0.11.0. Staged is not published.' >>"${GITHUB_STEP_SUMMARY}"
+          echo 'An authorized npm maintainer must approve @hol-org/cigar 0.12.0, public visibility, latest tag, in npmjs.com Staged Packages with 2FA. Then run context-registry-readback against v0.12.0. Staged is not published.' >>"${GITHUB_STEP_SUMMARY}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and inspect the complete 0.11 distribution; never publish packages.
+"""Build and inspect the local SDK distribution; never publish packages.
 
 One npm archive contains every worker; each Python wheel contains exactly one.
 Native build receipts are required inputs, not substitutes for installed tests.
@@ -34,8 +34,9 @@ from release_lib import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.11.0"
-PROTOCOL = "cigar.context-worker.v1"
+IDENTITY = load_json(ROOT / "sdk/local-context-release.v1.json")
+VERSION = IDENTITY["core_version"]
+PROTOCOL = IDENTITY["protocol"]
 MAX_FILE = 64 * 1024 * 1024
 MAX_TOTAL = 512 * 1024 * 1024
 
@@ -361,9 +362,19 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
             "wheel Python contract mismatch",
         )
         require(
-            metadata.get_all("Requires-Dist") == ["protobuf==6.33.5"],
+            metadata.get_all("Requires-Dist") == ["protobuf<8,>=6.33.5"],
             "wheel runtime dependencies changed",
         )
+        require("cigar_sdk/py.typed" in wheel, "wheel typing marker missing")
+        require(
+            metadata["License-Expression"] == "Apache-2.0"
+            and metadata.get_all("License-File") == ["LICENSE", "NOTICE"],
+            "wheel license metadata mismatch",
+        )
+        for name in ("LICENSE", "NOTICE"):
+            require(
+                bool(wheel.get(info + "licenses/" + name)), "wheel license file missing"
+            )
         require(
             f"Tag: {tag}\n" in wheel[info + "WHEEL"].decode()
             and b"Root-Is-Purelib: false\n" in wheel[info + "WHEEL"],
@@ -412,6 +423,10 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
     )
     for name in (
         "PKG-INFO",
+        "LICENSE",
+        "NOTICE",
+        "CHANGELOG.md",
+        "src/cigar_sdk/py.typed",
         "AGENT_GUIDE.md",
         "llms.txt",
         "hatch_build.py",
@@ -588,6 +603,7 @@ def build(args) -> None:
         "src",
         "tests",
         "README.md",
+        "CHANGELOG.md",
         "AGENT_GUIDE.md",
         "llms.txt",
         "LICENSE",

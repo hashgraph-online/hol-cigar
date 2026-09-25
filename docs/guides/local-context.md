@@ -14,12 +14,12 @@ Run `npx --no-install cigar-context doctor --json` in the npm consumer, or
 compiles synthetic context locally and reports the selected platform and version.
 
 If `/context` is not exported, inspect the installed npm version: the old 0.9.4
-service SDK lacks that API. Use the 0.11.0 distribution. If a worker is unavailable,
+service SDK lacks that API. Use the 0.12.0 distribution. If a worker is unavailable,
 inspect the diagnostic's platform and error code. Reinstall the matching distribution
 or explicitly supply a trusted matching worker. Do not infer that HOL services or
 credentials are required from either error. Never silently fall back to a server.
 
-The 0.11.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
+The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
 Node environments must permit local subprocesses; browser/edge execution is a

@@ -18,6 +18,8 @@ import shutil
 import socket
 import subprocess
 import sys
+import tomllib
+import xml.etree.ElementTree as ET
 
 from build_context_worker import host_matches
 import context_distribution as distribution
@@ -36,6 +38,10 @@ require = distribution.require
 RUNTIMES = {
     "minimum": {"node": "24.10.0", "python": "3.14.0"},
     "current": {"node": "24.19.0", "python": "3.14.7"},
+}
+TOOL_POLICY = load_json(ROOT / "sdk/context-toolchain.v1.json")
+PROTOBUF_VERSIONS = {
+    key: TOOL_POLICY["python"]["protobuf_" + key] for key in ("minimum", "current")
 }
 FIREWALL_GROUP = "CIGAR context distribution qualification"
 
@@ -116,6 +122,13 @@ def prepare(args) -> None:
         str(worker),
     }
     archives = candidate / "artifacts"
+    dependency_receipts = {}
+    locked = tomllib.loads((ROOT / "sdk/python/uv.lock").read_text())
+    test_dependencies = [
+        f"{item['name']}=={item['version']}"
+        for item in locked["package"]
+        if item["name"] in {"pytest", "hypothesis"}
+    ]
     for kind, archive in (
         (
             "wheel",
@@ -127,9 +140,39 @@ def prepare(args) -> None:
         venv = output / (kind + "-venv")
         runner.run(kind + "-venv", [args.uv, "venv", "--python", sys.executable, venv])
         python = executable(venv, "python")
+        if kind == "sdist":
+            runner.environment["CIGAR_ALLOW_PORTABLE_WHEEL"] = "1"
+        else:
+            runner.environment.pop("CIGAR_ALLOW_PORTABLE_WHEEL", None)
         runner.run(
             kind + "-install",
-            [args.uv, "pip", "install", "--python", python, archive, "pytest==9.0.3"],
+            [
+                args.uv,
+                "pip",
+                "install",
+                "--python",
+                python,
+                archive,
+                *test_dependencies,
+                f"protobuf=={PROTOBUF_VERSIONS[args.runtime]}",
+                "--exclude-newer-package",
+                "pytest=2026-09-25T16:40:00Z",
+                "--exclude-newer-package",
+                "protobuf=2026-09-25T16:40:00Z",
+                "--exclude-newer-package",
+                "hatchling=2026-09-25T16:40:00Z",
+            ],
+        )
+        dependency_receipts[kind] = json.loads(
+            runner.run(
+                kind + "-dependencies",
+                [
+                    python,
+                    ROOT / "scripts/release/context_dependency_evidence.py",
+                    "python",
+                ],
+                cwd=output,
+            )
         )
         if kind == "sdist":
             runner.environment["CIGAR_TEST_WORKER"] = str(worker)
@@ -137,12 +180,35 @@ def prepare(args) -> None:
             runner.environment.pop("CIGAR_TEST_WORKER", None)
         result = runner.run(
             kind + "-tests",
-            [python, "-m", "pytest", ROOT / "sdk/python/tests", "-q"],
+            [
+                python,
+                "-m",
+                "pytest",
+                ROOT / "sdk/python/tests",
+                "-q",
+                "--junitxml",
+                output / "logs" / f"{kind}-tests.xml",
+            ],
             cwd=output,
         ).decode()
+        skipped = [
+            case
+            for case in ET.parse(output / "logs" / f"{kind}-tests.xml").iter("testcase")
+            if case.find("skipped") is not None
+        ]
+        expected = (
+            {"test_fork_with_owned_locks_rejects_child_and_preserves_parent"}
+            if os.name == "nt"
+            else set()
+        )
         require(
-            "passed" in result and "skipped" not in result,
-            "Python installed tests were skipped",
+            "passed" in result
+            and {case.get("name") for case in skipped} == expected
+            and len(skipped) == len(expected)
+            and all(
+                case.get("classname", "").endswith("test_lifecycle") for case in skipped
+            ),
+            "Python installed tests were unexpectedly skipped",
         )
         runner.run(
             kind + "-legacy-entrypoint",
@@ -168,6 +234,18 @@ def prepare(args) -> None:
             archives / f"hol-org-cigar-{distribution.VERSION}.tgz",
         ],
         cwd=npm,
+    )
+    dependency_receipts["npm"] = json.loads(
+        runner.run(
+            "npm-dependencies",
+            [
+                sys.executable,
+                ROOT / "scripts/release/context_dependency_evidence.py",
+                "npm",
+                "--directory",
+                npm,
+            ],
+        )
     )
     shutil.copyfile(
         ROOT / "scripts/release/context-sdk-consumer.mjs", npm / "consumer.mjs"
@@ -230,6 +308,7 @@ def prepare(args) -> None:
         "diagnostic": report["diagnostic"],
         "npm_command": command,
         "checks": runner.checks,
+        "runtime_dependencies": dependency_receipts,
         "cases": distribution.file_record(output / "cases.json"),
         "programs": distribution.file_record(output / "programs.json"),
     }
@@ -486,6 +565,7 @@ def offline(args) -> None:
         "full_workflow_checks": demos["npm"]["checks"],
         "legacy_exports": {key: value["exports"] for key, value in results.items()},
         "installation_checks": prepared["checks"],
+        "runtime_dependencies": prepared["runtime_dependencies"],
         "offline_checks": runner.checks,
     }
     (output / "qualification.json").write_bytes(canonical_json_bytes(report))

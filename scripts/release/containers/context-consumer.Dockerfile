@@ -1,5 +1,5 @@
 ARG NODE_IMAGE
-FROM ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc AS uv
+FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc AS uv
 FROM ${NODE_IMAGE}
 RUN if command -v apk >/dev/null; then apk add --no-cache git; \
     else apt-get update && apt-get install -y --no-install-recommends git; fi

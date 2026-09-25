@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import queue
 import subprocess
 import threading
@@ -62,34 +63,47 @@ class LocalContextGraph:
     it is never searched in PATH. Calls are serialized. The timeout includes lock wait
     and pipe I/O. A lock-wait timeout does not interrupt another caller's operation.
     A transport timeout closes this graph, because mutation outcome may be unknown.
+    Instances belong to the creating process; create a new graph after fork().
     """
 
     def __init__(
-        self, domain: str, *, limits: LocalContextLimits | None = None,
-        worker_path: str | Path | None = None, timeout: float = 30.0,
+        self,
+        domain: str,
+        *,
+        limits: LocalContextLimits | None = None,
+        worker_path: str | Path | None = None,
+        timeout: float = 30.0,
     ) -> None:
         if not math.isfinite(timeout) or timeout <= 0 or timeout > threading.TIMEOUT_MAX:
             raise LocalContextError("InvalidInput")
+        self._owner_pid = os.getpid()
         binary = resolve_local_worker(worker_path) if worker_path is not None else _bundled_worker()
         self._timeout = timeout
         self._closed = False
+        self._cleanup_complete = False
+        self._stop = threading.Event()
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._next_id = 0
         self._jobs: queue.Queue[tuple[bytes, queue.Queue[bytes | None]] | None] = queue.Queue(maxsize=1)
+        self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
             self._process = subprocess.Popen(
-                [str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                shell=False, close_fds=True,
+                [str(binary)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                shell=False,
+                close_fds=True,
             )
         except OSError:
             raise LocalContextError("WorkerUnavailable") from None
-        self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
-        self._thread.start()
         try:
+            self._thread.start()
             hello = self._call({"op": "init", "domain": domain, "limits": limits or {}})
             if (
-                not isinstance(hello, dict) or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
+                not isinstance(hello, dict)
+                or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
                 or hello.get("core_version") != LOCAL_CONTEXT_CORE_VERSION
                 or hello.get("max_frame_bytes") != _MAX_FRAME
                 or hello.get("max_response_bytes") != _MAX_RESPONSE
@@ -102,17 +116,38 @@ class LocalContextGraph:
     def _exchange_loop(self) -> None:
         stdin, stdout = self._process.stdin, self._process.stdout
         assert stdin is not None and stdout is not None
-        while (job := self._jobs.get()) is not None:
-            frame, response = job
-            try:
-                stdin.write(frame)
-                stdin.flush()
-                value = stdout.readline(_MAX_RESPONSE + 1)
-                response.put_nowait(value)
-            except (OSError, ValueError):
-                response.put_nowait(None)
+        try:
+            while not self._stop.is_set():
+                try:
+                    job = self._jobs.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                if job is None or self._stop.is_set():
+                    break
+                frame, response = job
+                try:
+                    stdin.write(frame)
+                    stdin.flush()
+                    value = stdout.readline(_MAX_RESPONSE + 1)
+                    response.put_nowait(value)
+                except OSError, ValueError:
+                    response.put_nowait(None)
+        finally:
+            # Only the I/O owner closes buffered streams: another thread could
+            # block indefinitely acquiring their internal locks during a write.
+            for pipe in (stdin, stdout):
+                try:
+                    pipe.close()
+                except OSError, ValueError:
+                    pass
+
+    def _ensure_process_owner(self) -> None:
+        # Check before touching inherited locks, queues, pipes or the Popen object.
+        if os.getpid() != self._owner_pid:
+            raise LocalContextError("ForkedProcess")
 
     def _call(self, command: dict[str, Any]) -> Any:
+        self._ensure_process_owner()
         deadline = time.monotonic() + self._timeout
         if not self._lock.acquire(timeout=self._timeout):
             raise LocalContextError("Busy")
@@ -121,14 +156,25 @@ class LocalContextGraph:
                 raise LocalContextError("Closed")
             self._next_id = (self._next_id % 4_294_967_295) + 1
             try:
-                frame = (json.dumps({"id": self._next_id, "command": command}, ensure_ascii=False,
-                                    allow_nan=False, separators=(",", ":")) + "\n").encode("utf-8")
-            except (ValueError, TypeError, UnicodeError, RecursionError):
+                frame = (
+                    json.dumps(
+                        {"id": self._next_id, "command": command},
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                ).encode("utf-8")
+            except ValueError, TypeError, UnicodeError, RecursionError:
                 raise LocalContextError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalContextError("LimitExceeded")
             response: queue.Queue[bytes | None] = queue.Queue(maxsize=1)
-            self._jobs.put_nowait((frame, response))
+            try:
+                self._jobs.put_nowait((frame, response))
+            except queue.Full:
+                self.close()
+                raise LocalContextError("Transport") from None
             try:
                 value = response.get(timeout=max(0.0, deadline - time.monotonic()))
             except queue.Empty:
@@ -146,10 +192,17 @@ class LocalContextGraph:
                 if reply["ok"]:
                     return reply["result"]
                 code = reply["error"]
-                if code not in {"InvalidInput", "LimitExceeded", "RequiredUnavailable", "BudgetUnsatisfiable",
-                                "Tokenizer", "Integrity", "BaseMismatch"}:
+                if code not in {
+                    "InvalidInput",
+                    "LimitExceeded",
+                    "RequiredUnavailable",
+                    "BudgetUnsatisfiable",
+                    "Tokenizer",
+                    "Integrity",
+                    "BaseMismatch",
+                }:
                     raise ValueError
-            except (ValueError, TypeError, KeyError, RecursionError):
+            except ValueError, TypeError, KeyError, RecursionError:
                 self.close()
                 raise LocalContextError("Transport") from None
             raise LocalContextError(code)
@@ -177,24 +230,33 @@ class LocalContextGraph:
         return cast(LocalContextResult, self._call({"op": "compile", "request": request}))
 
     def chunks(self, document: LocalDocument, max_lines: int, overlap_lines: int = 0) -> list[LocalDocument]:
-        return cast(list[LocalDocument], self._call({"op": "chunks", "document": document,
-                                                    "max_lines": max_lines, "overlap_lines": overlap_lines}))
+        return cast(
+            list[LocalDocument],
+            self._call({"op": "chunks", "document": document, "max_lines": max_lines, "overlap_lines": overlap_lines}),
+        )
 
     def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
         """Bind exact claims to their snapshot for a separate trusted reviewer; no truth judgment."""
         return cast(list[str], self._call({"op": "review_keys", "draft": draft}))
 
     def check_answer(
-        self, request: LocalContextRequest, draft: LocalAnswerDraft,
-        reviews: list[LocalClaimReview], policy: LocalAnswerPolicy | None = None,
+        self,
+        request: LocalContextRequest,
+        draft: LocalAnswerDraft,
+        reviews: list[LocalClaimReview],
+        policy: LocalAnswerPolicy | None = None,
     ) -> LocalAnswerAssessment:
         """Recompile current authorized context and enforce host-trusted claim reviews.
 
         Keep reviews/policy outside model control. Only display assessed claims on release.
         Confidence is telemetry, not permission. This does not run a semantic judge.
         """
-        return cast(LocalAnswerAssessment, self._call({"op": "check_answer", "request": request,
-                    "draft": draft, "reviews": reviews, "policy": policy or {}}))
+        return cast(
+            LocalAnswerAssessment,
+            self._call(
+                {"op": "check_answer", "request": request, "draft": draft, "reviews": reviews, "policy": policy or {}}
+            ),
+        )
 
     def verify(self, snapshot: LocalContextSnapshot) -> LocalContextResult:
         return cast(LocalContextResult, self._call({"op": "verify", "snapshot": snapshot}))
@@ -229,30 +291,58 @@ class LocalContextGraph:
         self._call({"op": "clear_cache"})
 
     def close(self) -> None:
+        """Stop accepting work and attempt bounded cleanup without masking errors.
+
+        If OS-level failures prevent completion, ``cleanup_complete`` stays false
+        and another close() retries. Never operates on an inherited instance.
+        """
+        self._ensure_process_owner()
         with self._close_lock:
-            if self._closed:
+            if self._cleanup_complete:
                 return
             self._closed = True
-            if self._process.poll() is None:
-                try:
-                    self._process.kill()
-                except ProcessLookupError:
-                    pass
-            self._process.wait(timeout=5)
-            # Killing the child unblocks the single I/O thread, including blocked writes.
-            self._jobs.put(None, timeout=5)
-            self._thread.join(timeout=5)
-            if self._process.stdin is not None:
-                try:
-                    self._process.stdin.close()
-                except OSError:
-                    pass
-            if self._process.stdout is not None:
-                self._process.stdout.close()
+            self._stop.set()
+            deadline = time.monotonic() + 5.0
+            try:
+                self._process.kill()
+            except OSError:
+                pass
+            try:
+                self._jobs.put_nowait(None)
+            except queue.Full:
+                pass
+            try:
+                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except OSError, subprocess.TimeoutExpired:
+                # Keep reaping retryable; cleanup must not replace the API error.
+                pass
+            if self._thread.ident is not None:
+                self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            else:
+                # Thread creation failed; no thread can own these buffers.
+                for pipe in (self._process.stdin, self._process.stdout):
+                    if pipe is None:
+                        continue
+                    try:
+                        pipe.close()
+                    except OSError, ValueError:
+                        pass
+            try:
+                self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
+            except OSError:
+                self._cleanup_complete = False
+
+    @property
+    def cleanup_complete(self) -> bool:
+        """Whether close has reaped the worker and joined its I/O thread."""
+        self._ensure_process_owner()
+        return self._cleanup_complete
 
     def __enter__(self) -> Self:
+        self._ensure_process_owner()
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
-                 traceback: TracebackType | None) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
+    ) -> None:
         self.close()

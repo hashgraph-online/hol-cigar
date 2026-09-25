@@ -548,7 +548,8 @@ class _EventStream(Iterator[OperationEvent]):
         if set(value) != {"operation_id", "event_id", "payload_cbor"}:
             raise TransportError("event contains unknown or missing fields")
         if (
-            not isinstance(value.get("event_id"), str)
+            event_id is None
+            or not isinstance(value.get("event_id"), str)
             or re.fullmatch(r"[\x21-\x7e]{1,256}", value["event_id"]) is None
             or value["event_id"] != event_id
         ):

@@ -6,18 +6,19 @@ CIGAR owns a Rust graph in a persistent local worker process.
 
 ## Install and check
 
-Version 0.11.0 supports Python `>=3.14 <3.15`. The PyPI distribution is `hol-cigar`;
+Version 0.12.0 is an unpublished candidate for Python `>=3.14 <3.15`. The PyPI distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install 'hol-cigar==0.11.0'
+python3.14 -m pip install /absolute/path/to/hol_cigar-0.12.0-py3-none-PLATFORM.whl
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 ```
 
-When evaluating an unpublished candidate, install the exact wheel for your platform
-instead of the registry version. Release status is recorded in the repository's
-[distribution plan](https://github.com/hashgraph-online/hol-cigar/blob/codex/cigar-0.11.0-distribution/docs/proposals/cigar-0.11.0-distribution.md).
+Use the exact wheel for your platform from the candidate's qualification report;
+replace `PLATFORM` with its wheel tag. Public default installs remain on 0.11.0.
+See the bundled [changelog](CHANGELOG.md) for migration details. The supported
+protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
 compile; `demo` runs the complete workflow. Add `--json` for machine-readable results.
 
@@ -64,13 +65,21 @@ Cache clearing drops strings but does not guarantee memory zeroization. A `Local
 has a content-free `code`; timeout/protocol/pipe failure closes the graph and never retries
 mutations. Invalid wire fields also close it. A lock-wait `Busy` error leaves the active call alone.
 
-The 0.11.0 wheel matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with glibc 2.28+
+Create graphs in the process that uses them. After `fork()`, inherited graph
+operations and `close()` raise `ForkedProcess` before touching inherited locks or
+the parent's worker. Create a new graph in the child; use a spawn-based process
+pool where possible. `close()` is idempotent and preserves ordinary primary errors.
+If OS cleanup fails, `cleanup_complete` remains false and another close retries.
+
+The 0.12.0 wheel matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with glibc 2.28+
 or musl 1.2+, and Windows x64. The release checks require every advertised wheel
 before publication. Each platform wheel contains its worker and needs no Rust compiler.
 
-The portable source distribution and wheels built without native staging retain all SDK APIs,
+Building a wheel from the portable source distribution without native staging
+requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
+`pip install --no-binary hol-cigar` source installs. These builds retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.11.0 Rust source using Rust 1.92+:
+0.12.0 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
@@ -114,7 +123,7 @@ An explicitly supplied matching worker can be checked with
 `python -m cigar_sdk.local_cli doctor --worker /absolute/path`.
 
 The installed `cigar_sdk` package includes `AGENT_GUIDE.md` and `llms.txt`. The
-[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
 explains explicit file ingestion, graph relationships, authorization and reviewed answers.
 
 ## Compatible remote client
@@ -167,4 +176,4 @@ current authorized context and rejects stale snapshots/reviews. Missing reviews,
 unresolved support, invalid citations or unreviewed explicit conflicts block release.
 `confidence_bps` is optional telemetry (0–10000), never permission. Keep reviews and
 policy outside model control; CIGAR does not run a semantic judge. See the
-[core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/crates/cigar-context/README.md#check-answers-before-display).
+[core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/crates/cigar-context/README.md#check-answers-before-display).

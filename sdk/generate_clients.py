@@ -1315,14 +1315,17 @@ def assert_release_contracts() -> None:
     local_release_path = SDK / "local-context-release.v1.json"
     local_release = load_json(local_release_path) if local_release_path.exists() else None
     if local_release is not None:
+        local_version = local_release.get("core_version", "")
+        if re.fullmatch(r"0\.\d+\.\d+", local_version) is None:
+            raise AssertionError("invalid local-context release version")
         expected_local = {
             "schema_version": "cigar.local-context-sdk-release.v1",
             "remote_workspace_version": version,
             "context_abi": context_abi,
-            "core_version": "0.11.0",
+            "core_version": local_version,
             "protocol": "cigar.context-worker.v1",
             "channel": "stable",
-            "versions": {"python": "0.11.0", "typescript": "0.11.0"},
+            "versions": {"python": local_version, "typescript": local_version},
             "bundled_native_targets": [entry["target"] for entry in load_json(SDK / "native-platforms.v1.json")["platforms"]],
             "published": False,
         }

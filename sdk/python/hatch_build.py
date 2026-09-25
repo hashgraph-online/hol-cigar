@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
@@ -13,7 +14,12 @@ class CustomBuildHook(BuildHookInterface):
             return
         native = Path(self.root) / "src/cigar_sdk/_native"
         if not native.exists():
-            # Portable SDK-only wheel/sdist: local graphs require an explicit worker_path.
+            if os.environ.get("CIGAR_ALLOW_PORTABLE_WHEEL") != "1":
+                raise ValueError(
+                    "native worker is not staged; set CIGAR_ALLOW_PORTABLE_WHEEL=1 "
+                    "only for an intentional SDK-only source/development wheel, "
+                    "then supply a matching trusted worker_path"
+                )
             return
         manifests = list(native.glob("*/manifest.json"))
         if len(manifests) != 1:

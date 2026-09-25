@@ -66,7 +66,7 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: false
-          version: "0.11.8"
+          version: "0.12.18"
 
       - name: Verify the native host and pinned language toolchains
         run: |
@@ -77,7 +77,7 @@ jobs:
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
           test "$(go version | awk '{print $3}')" = "go1.26.6"
-          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.12.18"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -122,7 +122,7 @@ jobs:
         run: |
           cargo fetch --locked
           corepack pnpm install --frozen-lockfile
-          uv sync --project sdk/python --frozen
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           env GOWORK=off go -C sdk/go mod download
 
       - name: Check formatting, generated sources, vectors, and architecture offline
@@ -186,12 +186,12 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: false
-          version: "0.11.8"
+          version: "0.12.18"
 
       - name: Verify pinned package toolchain and publication contract
         run: |
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
-          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.12.18"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           python3 -m unittest \
             scripts.release.tests.test_balanced_compatibility \
@@ -205,7 +205,7 @@ jobs:
           export CIGAR_TEST_WORKER="${GITHUB_WORKSPACE}/target/release/cigar-context-worker"
           export CIGAR_TEST_STALLED_WORKER="${RUNNER_TEMP}/cigar-stalled-worker"
           printf 'CIGAR_TEST_WORKER=%s\n' "${CIGAR_TEST_WORKER}" >>"${GITHUB_ENV}"
-          uv sync --project sdk/python --frozen
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           uv run --project sdk/python pytest -q sdk/python/tests
 
       - name: Build and verify wheel and source distribution
@@ -396,7 +396,7 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: false
-          version: "0.11.8"
+          version: "0.12.18"
 
       - name: Install the pinned protocol compiler
         uses: ./.github/actions/setup-protoc
@@ -413,7 +413,7 @@ jobs:
           test "$(go env GOOS)" = "darwin"
           test "$(go env GOARCH)" = "arm64"
           test "$(go version | awk '{print $3}')" = "go1.26.6"
-          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.11.8"
+          test "$(uv --version | awk 'NR == 1 {print $2}')" = "0.12.18"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
           printf 'CARGO_TARGET_DIR=%s\n' \
@@ -439,7 +439,7 @@ jobs:
             --locked \
             --target aarch64-apple-darwin
           corepack pnpm install --frozen-lockfile
-          uv sync --project sdk/python --frozen
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           env GOWORK=off go -C sdk/go mod download
           cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
           rustc sdk/fixtures/stalled-worker.rs -o "${RUNNER_TEMP}/cigar-stalled-worker"

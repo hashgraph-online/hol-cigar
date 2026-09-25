@@ -1,15 +1,15 @@
 [project]
 name = "hol-cigar"
-version = "0.11.0"
+version = "0.12.0"
 description = "Local context graphs, exact token budgets, citations and answer review. No HOL service required."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14,<3.15"
-dependencies = ["protobuf==6.33.5"]
+dependencies = ["protobuf>=6.33.5,<8"]
+keywords = ["context", "rag", "graph", "citations", "tokens", "llm"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
-  "License :: OSI Approved :: Apache Software License",
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",
@@ -21,6 +21,9 @@ classifiers = [
 Homepage = "https://hol.org"
 Repository = "https://github.com/hashgraph-online/hol-cigar"
 Issues = "https://github.com/hashgraph-online/hol-cigar/issues"
+Documentation = "https://github.com/hashgraph-online/hol-cigar/blob/main/sdk/LOCAL_CONTEXT_GUIDE.md"
+Changelog = "https://github.com/hashgraph-online/hol-cigar/blob/main/sdk/python/CHANGELOG.md"
+Security = "https://github.com/hashgraph-online/hol-cigar/security/policy"
 
 [project.scripts]
 cigar-context = "cigar_sdk.local_cli:main"
@@ -29,20 +32,22 @@ cigar-agent-b-handoff = "cigar_sdk.examples.agent_b_handoff:main"
 
 [dependency-groups]
 dev = [
-  "mypy==1.19.1",
-  "pytest==9.0.3",
-  "ruff==0.14.10",
+  "coverage[toml]>=7,<8",
+  "hypothesis>=6,<7",
+  "mypy==2.3.1",
+  "pytest==9.1.1",
+  "ruff==0.16.9",
 ]
 
 [build-system]
-requires = ["hatchling==1.28.0"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cigar_sdk"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/cigar_sdk", "tests", "README.md", "AGENT_GUIDE.md", "llms.txt", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
+include = ["src/cigar_sdk", "tests", "README.md", "CHANGELOG.md", "AGENT_GUIDE.md", "llms.txt", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
 exclude = ["src/cigar_sdk/_native"]
 
 [tool.hatch.build.hooks.custom]
@@ -60,3 +65,24 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 python_version = "3.14"
 strict = true
 exclude = ["src/cigar_sdk/generated", "src/cigar_sdk/verify_replay.py", "src/cigar_sdk/verify_vectors.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["cigar_sdk"]
+omit = ["*/cigar_sdk/generated/*", "*/cigar_sdk/verify_replay.py", "*/cigar_sdk/verify_vectors.py"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+
+[tool.uv]
+exclude-newer = "7 days"
+
+# Explicit tool/runtime versions reviewed for the 0.12 candidate on this date.
+# Keep the default release-age policy for every other dependency.
+[tool.uv.exclude-newer-package]
+ruff = "2026-09-25T16:40:00Z"
+mypy = "2026-09-25T16:40:00Z"
+pytest = "2026-09-25T16:40:00Z"
+hatchling = "2026-09-25T16:40:00Z"
+protobuf = "2026-09-25T16:40:00Z"

@@ -83,7 +83,7 @@ class StableReleaseTests(unittest.TestCase):
                 argv = call.args[0]
                 for flag, expected in (
                     ("--signer-workflow", self.profile.workflow),
-                    ("--source-ref", "refs/tags/v0.11.0"),
+                    ("--source-ref", "refs/tags/v0.12.0"),
                     ("--source-digest", self.commit),
                     ("--signer-digest", self.commit),
                 ):
@@ -119,14 +119,14 @@ class StableReleaseTests(unittest.TestCase):
         source = (
             release.ROOT / ".github/workflows/context-sdk-release.yml"
         ).read_text()
-        self.assertIn("branches: [codex/cigar-0.11.0-distribution]", source)
+        self.assertIn("branches: [codex/cigar-0.12.0-candidate]", source)
         self.assertIn("uses: ./.github/workflows/context-distribution.yml", source)
         matrix = (
             release.ROOT / ".github/workflows/context-distribution.yml"
         ).read_text()
         self.assertIn("builder: [first, second]", matrix)
         self.assertIn("runtime: [minimum, current]", matrix)
-        self.assertIn("github.ref == 'refs/tags/v0.11.0'", source)
+        self.assertIn("github.ref == 'refs/tags/v0.12.0'", source)
         self.assertIn("--verify-attestations", source)
         self.assertNotIn("--prerelease", source)
 

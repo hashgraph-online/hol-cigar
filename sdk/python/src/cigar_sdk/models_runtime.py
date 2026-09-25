@@ -9,7 +9,7 @@ from dataclasses import fields, is_dataclass
 from types import MappingProxyType
 from typing import Any
 
-from cigar_sdk.digest import _deterministic_cbor
+from cigar_sdk.digest import _deterministic_cbor, _unique_mapping_items
 from cigar_sdk.errors import ValidationError
 from cigar_sdk.generated.models import PAYLOAD_SCHEMAS
 
@@ -28,7 +28,7 @@ def _plain(value: Any, depth: int = 0, budget: list[int] | None = None) -> Any:
                 result[field.name] = _plain(child, depth + 1, budget)
         return result
     if isinstance(value, Mapping):
-        return {str(key): _plain(child, depth + 1, budget) for key, child in value.items()}
+        return {key: _plain(child, depth + 1, budget) for key, child in _unique_mapping_items(value)}
     if isinstance(value, (tuple, list)):
         return [_plain(child, depth + 1, budget) for child in value]
     if isinstance(value, (bool, int, str, bytes)):
@@ -137,7 +137,7 @@ def _validate(
             raise ValidationError(f"{path}: object has too few fields")
         if isinstance(schema.get("maxProperties"), int) and len(value) > schema["maxProperties"]:
             raise ValidationError(f"{path}: object has too many fields")
-        for name, child in value.items():
+        for name, child in _unique_mapping_items(value):
             child_schema = properties.get(name) if isinstance(properties, Mapping) else None
             if isinstance(child_schema, Mapping):
                 _validate(child_schema, child, root, f"{path}/{name}", depth + 1, budget)
@@ -198,7 +198,7 @@ def _coerce(
         properties = schema.get("properties", {})
         patterns = schema.get("patternProperties", {})
         result: dict[str, Any] = {}
-        for name, child in value.items():
+        for name, child in _unique_mapping_items(value):
             property_schema: Any = properties.get(name) if isinstance(properties, Mapping) else None
             if property_schema is None and isinstance(patterns, Mapping):
                 property_schema = next((item for pattern, item in patterns.items() if re.search(pattern, name)), None)
@@ -214,7 +214,7 @@ def _freeze(value: Any, depth: int = 0, budget: list[int] | None = None) -> Any:
     if depth > 64 or budget[0] > 100_000:
         raise ValidationError("payload exceeds nesting or node bounds")
     if isinstance(value, Mapping):
-        return MappingProxyType({key: _freeze(child, depth + 1, budget) for key, child in value.items()})
+        return MappingProxyType({key: _freeze(child, depth + 1, budget) for key, child in _unique_mapping_items(value)})
     if isinstance(value, (tuple, list)):
         return tuple(_freeze(child, depth + 1, budget) for child in value)
     return value

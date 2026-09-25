@@ -144,7 +144,7 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.8"
+          version: "0.12.18"
           enable-cache: true
       - name: Hydrate and verify the pinned pnpm 11 audit-only distribution
         run: |
@@ -189,7 +189,7 @@ jobs:
       - name: Audit Python production dependencies
         if: always()
         run: |
-          uv sync --project sdk/python --frozen
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           uv export --project sdk/python --no-dev --format requirements-txt --no-emit-project --no-hashes | uvx --from pip-audit==2.10.1 pip-audit --strict --no-deps -r /dev/stdin
       - name: Enforce the TypeScript production dependency audit
         if: always()

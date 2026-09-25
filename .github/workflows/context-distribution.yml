@@ -43,7 +43,7 @@ jobs:
           cache: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
         with:
-          version: "0.12.3"
+          version: "0.12.18"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: context-worker-*-${{ matrix.builder }}
@@ -53,13 +53,24 @@ jobs:
           corepack enable
           corepack install --global pnpm@10.34.5
           pnpm install --frozen-lockfile --ignore-scripts
-          uv sync --project sdk/python --frozen
+          CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           python3 sdk/generate_clients.py --check
           python3 sdk/generate_local_assets.py --check
+          python3 scripts/release/check_context_version.py
           sdk/python/.venv/bin/ruff check scripts/release sdk/python sdk/generate_local_assets.py
           sdk/python/.venv/bin/ruff format --check scripts/release
           sdk/python/.venv/bin/mypy --config-file sdk/python/pyproject.toml sdk/python/src/cigar_sdk
-          python3 -m unittest scripts.release.tests.test_context_distribution scripts.release.tests.test_context_sdk_inputs scripts.release.tests.test_context_distribution_release scripts.release.tests.test_context_sdk_release
+          python3 -m unittest scripts.release.tests.test_context_distribution scripts.release.tests.test_context_sdk_inputs scripts.release.tests.test_context_distribution_release scripts.release.tests.test_context_sdk_release scripts.release.tests.test_context_policy
+      - name: Gate Python statement and branch coverage with the real worker
+        env:
+          CIGAR_TEST_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/native/linux-x64-gnu/cigar-context-worker
+          CIGAR_TEST_STALLED_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/oracle/stalled-worker
+          COVERAGE_FILE: ${{ runner.temp }}/python.coverage
+        run: |
+          chmod +x "${CIGAR_TEST_WORKER}" "${CIGAR_TEST_STALLED_WORKER}"
+          sdk/python/.venv/bin/python -m coverage run --rcfile=sdk/python/pyproject.toml -m pytest -q sdk/python/tests
+          sdk/python/.venv/bin/python -m coverage json --rcfile=sdk/python/pyproject.toml -o "${RUNNER_TEMP}/python-coverage.json"
+          python3 scripts/release/check_python_coverage.py "${RUNNER_TEMP}/python-coverage.json"
       - name: Build one npm archive, seven platform wheels, and source archives
         env:
           CIGAR_BUILDER: ${{ matrix.builder }}
@@ -81,6 +92,7 @@ jobs:
             ${{ runner.temp }}/candidate/typescript-tests/
             ${{ runner.temp }}/candidate/candidate.json
             ${{ runner.temp }}/candidate/checks.json
+            ${{ runner.temp }}/python-coverage.json
 
   compare:
     needs: build
@@ -165,7 +177,7 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
         if: runner.os != 'Linux'
         with:
-          version: "0.12.3"
+          version: "0.12.18"
       - name: Install and test exact archives on macOS or Windows
         if: runner.os != 'Linux'
         run: |

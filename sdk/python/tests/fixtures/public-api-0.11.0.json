@@ -1,0 +1,696 @@
+{
+  "abi": "cigar.context.v1",
+  "exports": {
+    "AsyncCigarClient": {
+      "methods": {
+        "accept_handoff": "(self, request: 'TypedOperationRequest[AcceptHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffAcceptance]'",
+        "authorize_effect": "(self, request: 'TypedOperationRequest[AuthorizeEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "batch_atoms": "(self, request: 'TypedOperationRequest[BatchAtomsRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[AtomBatchResponse]'",
+        "compare_live_replay": "(self, request: 'TypedOperationRequest[CompareLiveReplayRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayExecution]'",
+        "compensate_effect": "(self, request: 'TypedOperationRequest[CompensateEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "compile_context_bundle": "(self, request: 'TypedOperationRequest[CompileContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextBundle]'",
+        "compile_context_delta": "(self, request: 'TypedOperationRequest[CompileContextDeltaRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextDeltaResponse]'",
+        "create_context_plan": "(self, request: 'TypedOperationRequest[CreateContextPlanRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextPlanResponse]'",
+        "create_handoff": "(self, request: 'TypedOperationRequest[CreateHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CreateHandoffResponse]'",
+        "create_replay": "(self, request: 'TypedOperationRequest[CreateReplayRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayJobResponse]'",
+        "create_space": "(self, request: 'TypedOperationRequest[CreateSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextCommit]'",
+        "create_space_checkpoint": "(self, request: 'TypedOperationRequest[CheckpointSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceCheckpointResponse]'",
+        "discover_sources": "(self, request: 'TypedOperationRequest[DiscoverSourcesRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[DiscoveryPlanResponse]'",
+        "dispatch_effect": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "explain_context_bundle": "(self, request: 'TypedOperationRequest[ExplainContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextExplanationResponse]'",
+        "fork_space": "(self, request: 'TypedOperationRequest[ForkSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceForkResponse]'",
+        "get_capabilities": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CapabilitiesResponse]'",
+        "get_configuration": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConfigurationResponse]'",
+        "get_context_bundle": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextBundle]'",
+        "get_context_bundle_manifest": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SelectionManifest]'",
+        "get_diagnostics": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[DiagnosticsResponse]'",
+        "get_effect_status": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "get_liveness": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[LivenessResponse]'",
+        "get_metrics": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MetricsResponse]'",
+        "get_readiness": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReadinessResponse]'",
+        "get_replay_completeness": "(self, request: 'TypedOperationRequest[ReplayIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayCompleteness]'",
+        "get_source_status": "(self, request: 'TypedOperationRequest[SourceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SourceStatusResponse]'",
+        "get_space_log": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceLogResponse]'",
+        "get_version": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[VersionResponse]'",
+        "ingest_catalog": "(self, request: 'TypedOperationRequest[IngestCatalogRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[IngestionReceiptResponse]'",
+        "list_space_conflicts": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConflictListResponse]'",
+        "materialize_context_bundle": "(self, request: 'TypedOperationRequest[MaterializeContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MaterializationResponse]'",
+        "merge_handoff": "(self, request: 'TypedOperationRequest[MergeHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffMergeResponse]'",
+        "negotiate": "(self, *, options: 'CallOptions | None' = None) -> 'tuple[TypedOperationResponse[Any], TypedOperationResponse[Any]]'",
+        "paginate": "(self, operation_id: 'str', request: 'OperationRequest', *, options: 'CallOptions | None' = None) -> 'AsyncIterator[OperationResponse]'",
+        "prepare_effect": "(self, request: 'TypedOperationRequest[PrepareEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "preview_handoff": "(self, request: 'TypedOperationRequest[HandoffIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffPreviewResponse]'",
+        "publish_space": "(self, request: 'TypedOperationRequest[PublishSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpacePublishResponse]'",
+        "query_catalog": "(self, request: 'TypedOperationRequest[QueryCatalogRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CatalogQueryResponse]'",
+        "reconcile_effect": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "record_handoff_result": "(self, request: 'TypedOperationRequest[RecordHandoffResultRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffResultReceipt]'",
+        "resolve_space_conflict": "(self, request: 'TypedOperationRequest[ResolveSpaceConflictRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConflictResolutionResponse]'",
+        "revalidate_context_bundle": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[RevalidationResponse]'",
+        "revoke_handoff": "(self, request: 'TypedOperationRequest[RevokeHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MutationReceipt]'",
+        "run_observational_replay": "(self, request: 'TypedOperationRequest[ReplayIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayExecution]'",
+        "subscribe_space_events": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedAsyncEventStream[SpaceEventPayload]'",
+        "tombstone_atom": "(self, request: 'TypedOperationRequest[AtomIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MutationReceipt]'"
+      },
+      "signature": "(base_url: 'str', *, bearer_token: 'BearerTokenProvider | None' = None, timeout: 'float' = 30.0, max_attempts: 'int' = 3, transport: 'HttpTransport | None' = None, trust_custom_transport: 'bool' = False, allow_insecure_loopback: 'bool' = False) -> 'None'"
+    },
+    "BearerTokenProvider": {
+      "signature": null
+    },
+    "CONTEXT_ABI": {
+      "signature": null
+    },
+    "CallOptions": {
+      "methods": {},
+      "signature": "(timeout: 'float | None' = None, max_attempts: 'int | None' = None, resume_from: 'str | None' = None) -> None"
+    },
+    "CigarApiError": {
+      "methods": {},
+      "signature": "(status: 'int', problem: 'ProblemDetails') -> 'None'"
+    },
+    "CigarClient": {
+      "methods": {
+        "accept_handoff": "(self, request: 'TypedOperationRequest[AcceptHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffAcceptance]'",
+        "authorize_effect": "(self, request: 'TypedOperationRequest[AuthorizeEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "batch_atoms": "(self, request: 'TypedOperationRequest[BatchAtomsRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[AtomBatchResponse]'",
+        "compare_live_replay": "(self, request: 'TypedOperationRequest[CompareLiveReplayRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayExecution]'",
+        "compensate_effect": "(self, request: 'TypedOperationRequest[CompensateEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "compile_context_bundle": "(self, request: 'TypedOperationRequest[CompileContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextBundle]'",
+        "compile_context_delta": "(self, request: 'TypedOperationRequest[CompileContextDeltaRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextDeltaResponse]'",
+        "create_context_plan": "(self, request: 'TypedOperationRequest[CreateContextPlanRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextPlanResponse]'",
+        "create_handoff": "(self, request: 'TypedOperationRequest[CreateHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CreateHandoffResponse]'",
+        "create_replay": "(self, request: 'TypedOperationRequest[CreateReplayRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayJobResponse]'",
+        "create_space": "(self, request: 'TypedOperationRequest[CreateSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextCommit]'",
+        "create_space_checkpoint": "(self, request: 'TypedOperationRequest[CheckpointSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceCheckpointResponse]'",
+        "discover_sources": "(self, request: 'TypedOperationRequest[DiscoverSourcesRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[DiscoveryPlanResponse]'",
+        "dispatch_effect": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "explain_context_bundle": "(self, request: 'TypedOperationRequest[ExplainContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextExplanationResponse]'",
+        "fork_space": "(self, request: 'TypedOperationRequest[ForkSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceForkResponse]'",
+        "get_capabilities": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CapabilitiesResponse]'",
+        "get_configuration": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConfigurationResponse]'",
+        "get_context_bundle": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ContextBundle]'",
+        "get_context_bundle_manifest": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SelectionManifest]'",
+        "get_diagnostics": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[DiagnosticsResponse]'",
+        "get_effect_status": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "get_liveness": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[LivenessResponse]'",
+        "get_metrics": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MetricsResponse]'",
+        "get_readiness": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReadinessResponse]'",
+        "get_replay_completeness": "(self, request: 'TypedOperationRequest[ReplayIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayCompleteness]'",
+        "get_source_status": "(self, request: 'TypedOperationRequest[SourceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SourceStatusResponse]'",
+        "get_space_log": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpaceLogResponse]'",
+        "get_version": "(self, request: 'TypedOperationRequest[EmptyRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[VersionResponse]'",
+        "ingest_catalog": "(self, request: 'TypedOperationRequest[IngestCatalogRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[IngestionReceiptResponse]'",
+        "list_space_conflicts": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConflictListResponse]'",
+        "materialize_context_bundle": "(self, request: 'TypedOperationRequest[MaterializeContextBundleRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MaterializationResponse]'",
+        "merge_handoff": "(self, request: 'TypedOperationRequest[MergeHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffMergeResponse]'",
+        "negotiate": "(self, *, options: 'CallOptions | None' = None) -> 'tuple[TypedOperationResponse[Any], TypedOperationResponse[Any]]'",
+        "paginate": "(self, operation_id: 'str', request: 'OperationRequest', *, options: 'CallOptions | None' = None) -> 'Iterator[OperationResponse]'",
+        "prepare_effect": "(self, request: 'TypedOperationRequest[PrepareEffectRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "preview_handoff": "(self, request: 'TypedOperationRequest[HandoffIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffPreviewResponse]'",
+        "publish_space": "(self, request: 'TypedOperationRequest[PublishSpaceRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[SpacePublishResponse]'",
+        "query_catalog": "(self, request: 'TypedOperationRequest[QueryCatalogRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[CatalogQueryResponse]'",
+        "reconcile_effect": "(self, request: 'TypedOperationRequest[EffectIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[EffectStatusResponse]'",
+        "record_handoff_result": "(self, request: 'TypedOperationRequest[RecordHandoffResultRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[HandoffResultReceipt]'",
+        "resolve_space_conflict": "(self, request: 'TypedOperationRequest[ResolveSpaceConflictRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ConflictResolutionResponse]'",
+        "revalidate_context_bundle": "(self, request: 'TypedOperationRequest[BundleIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[RevalidationResponse]'",
+        "revoke_handoff": "(self, request: 'TypedOperationRequest[RevokeHandoffRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MutationReceipt]'",
+        "run_observational_replay": "(self, request: 'TypedOperationRequest[ReplayIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[ReplayExecution]'",
+        "subscribe_space_events": "(self, request: 'TypedOperationRequest[SpaceIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedEventStream[SpaceEventPayload]'",
+        "tombstone_atom": "(self, request: 'TypedOperationRequest[AtomIdRequest]', *, options: 'CallOptions | None' = None) -> 'TypedOperationResponse[MutationReceipt]'"
+      },
+      "signature": "(base_url: 'str', *, bearer_token: 'BearerTokenProvider | None' = None, timeout: 'float' = 30.0, max_attempts: 'int' = 3, transport: 'HttpTransport | None' = None, trust_custom_transport: 'bool' = False, allow_insecure_loopback: 'bool' = False) -> 'None'"
+    },
+    "CigarError": {
+      "methods": {},
+      "signature": null
+    },
+    "CigarTimeoutError": {
+      "methods": {},
+      "signature": null
+    },
+    "CompatibilityError": {
+      "methods": {},
+      "signature": null
+    },
+    "LOCAL_CONTEXT_CORE_VERSION": {
+      "signature": null
+    },
+    "LOCAL_CONTEXT_PROTOCOL": {
+      "signature": null
+    },
+    "LocalAnswerAssessment": {
+      "annotations": {
+        "claims": "list[cigar_sdk.context_types.LocalClaimAssessment]",
+        "confident_failures": "<class 'int'>",
+        "decision": "typing.Literal['release', 'abstain']",
+        "draft_id": "<class 'str'>",
+        "missing_confidence": "<class 'int'>",
+        "snapshot_id": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "claims",
+        "confident_failures",
+        "decision",
+        "draft_id",
+        "missing_confidence",
+        "snapshot_id"
+      ],
+      "signature": null
+    },
+    "LocalAnswerClaim": {
+      "annotations": {
+        "citations": "list[str]",
+        "confidence_bps": "int | None",
+        "text": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "citations",
+        "confidence_bps",
+        "text"
+      ],
+      "signature": null
+    },
+    "LocalAnswerDraft": {
+      "annotations": {
+        "abstain": "<class 'bool'>",
+        "claims": "list[cigar_sdk.context_types.LocalAnswerClaim]",
+        "snapshot_id": "<class 'str'>"
+      },
+      "optional": [
+        "abstain"
+      ],
+      "required": [
+        "claims",
+        "snapshot_id"
+      ],
+      "signature": null
+    },
+    "LocalAnswerPolicy": {
+      "annotations": {
+        "high_confidence_bps": "<class 'int'>",
+        "min_sources": "<class 'int'>"
+      },
+      "optional": [
+        "high_confidence_bps",
+        "min_sources"
+      ],
+      "required": [],
+      "signature": null
+    },
+    "LocalCitation": {
+      "annotations": {
+        "document_digest": "<class 'str'>",
+        "end_line": "<class 'int'>",
+        "node_id": "<class 'str'>",
+        "source": "<class 'str'>",
+        "start_line": "<class 'int'>"
+      },
+      "optional": [],
+      "required": [
+        "document_digest",
+        "end_line",
+        "node_id",
+        "source",
+        "start_line"
+      ],
+      "signature": null
+    },
+    "LocalClaimAssessment": {
+      "annotations": {
+        "claim_key": "<class 'str'>",
+        "independent_sources": "<class 'int'>",
+        "issues": "list[typing.Literal['uncited', 'invalid_citation', 'insufficient_sources', 'unreviewed', 'unsupported', 'contradicted', 'unknown', 'unreviewed_counterevidence']]"
+      },
+      "optional": [],
+      "required": [
+        "claim_key",
+        "independent_sources",
+        "issues"
+      ],
+      "signature": null
+    },
+    "LocalClaimReview": {
+      "annotations": {
+        "claim_key": "<class 'str'>",
+        "reviewed_counterevidence": "list[str]",
+        "verdict": "typing.Literal['supported', 'unsupported', 'contradicted', 'unknown']"
+      },
+      "optional": [
+        "reviewed_counterevidence"
+      ],
+      "required": [
+        "claim_key",
+        "verdict"
+      ],
+      "signature": null
+    },
+    "LocalContextCapabilities": {
+      "annotations": {
+        "core_version": "<class 'str'>",
+        "error_code": "str | None",
+        "guidance": "<class 'str'>",
+        "package_version": "<class 'str'>",
+        "platform": "<class 'str'>",
+        "protocol": "<class 'str'>",
+        "requires_hol_services": "typing.Literal[False]",
+        "runtime": "<class 'str'>",
+        "supported_platforms": "list[str]",
+        "worker_available": "<class 'bool'>",
+        "worker_source": "typing.Literal['bundled', 'explicit']"
+      },
+      "optional": [],
+      "required": [
+        "core_version",
+        "error_code",
+        "guidance",
+        "package_version",
+        "platform",
+        "protocol",
+        "requires_hol_services",
+        "runtime",
+        "supported_platforms",
+        "worker_available",
+        "worker_source"
+      ],
+      "signature": null
+    },
+    "LocalContextDelta": {
+      "annotations": {
+        "added": "list[cigar_sdk.context_types.LocalEvidenceBlock]",
+        "base_id": "<class 'str'>",
+        "graph_revision": "<class 'int'>",
+        "order": "list[str]",
+        "stats": "<class 'cigar_sdk.context_types.LocalSelectionStats'>",
+        "target_id": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "added",
+        "base_id",
+        "graph_revision",
+        "order",
+        "stats",
+        "target_id"
+      ],
+      "signature": null
+    },
+    "LocalContextError": {
+      "methods": {},
+      "signature": "(code: 'str') -> 'None'"
+    },
+    "LocalContextGraph": {
+      "methods": {
+        "apply_delta": "(self, base: 'LocalContextSnapshot', delta: 'LocalContextDelta') -> 'LocalContextResult'",
+        "check_answer": "(self, request: 'LocalContextRequest', draft: 'LocalAnswerDraft', reviews: 'list[LocalClaimReview]', policy: 'LocalAnswerPolicy | None' = None) -> 'LocalAnswerAssessment'",
+        "chunks": "(self, document: 'LocalDocument', max_lines: 'int', overlap_lines: 'int' = 0) -> 'list[LocalDocument]'",
+        "clear_cache": "(self) -> 'None'",
+        "close": "(self) -> 'None'",
+        "compile": "(self, request: 'LocalContextRequest') -> 'LocalContextResult'",
+        "delta": "(self, base: 'LocalContextSnapshot', target: 'LocalContextSnapshot') -> 'LocalContextDelta'",
+        "link": "(self, from_id: 'str', to_id: 'str', kind: 'LocalEdgeKind') -> 'bool'",
+        "prompt_view": "(self, snapshot: 'LocalContextSnapshot', max_tokens: 'int') -> 'LocalContextPrompt'",
+        "remove": "(self, node_id: 'str') -> 'bool'",
+        "replace_source": "(self, source: 'str', documents: 'list[LocalDocument]') -> 'LocalSourceUpdate'",
+        "resolve_citation": "(self, reference: 'str', prompt: 'LocalContextPrompt', snapshot: 'LocalContextSnapshot') -> 'list[LocalCitation]'",
+        "review_keys": "(self, draft: 'LocalAnswerDraft') -> 'list[str]'",
+        "stats": "(self) -> 'LocalGraphStats'",
+        "unlink": "(self, from_id: 'str', to_id: 'str', kind: 'LocalEdgeKind') -> 'bool'",
+        "upsert": "(self, document: 'LocalDocument') -> 'bool'",
+        "verify": "(self, snapshot: 'LocalContextSnapshot') -> 'LocalContextResult'",
+        "verify_prompt": "(self, prompt: 'LocalContextPrompt', snapshot: 'LocalContextSnapshot') -> 'LocalContextPrompt'"
+      },
+      "signature": "(domain: 'str', *, limits: 'LocalContextLimits | None' = None, worker_path: 'str | Path | None' = None, timeout: 'float' = 30.0) -> 'None'"
+    },
+    "LocalContextLimits": {
+      "annotations": {
+        "cache_entries": "<class 'int'>",
+        "cache_text_bytes": "<class 'int'>",
+        "max_document_bytes": "<class 'int'>",
+        "max_documents": "<class 'int'>",
+        "max_edges": "<class 'int'>",
+        "max_edges_per_document": "<class 'int'>",
+        "max_total_bytes": "<class 'int'>"
+      },
+      "optional": [
+        "cache_entries",
+        "cache_text_bytes",
+        "max_document_bytes",
+        "max_documents",
+        "max_edges",
+        "max_edges_per_document",
+        "max_total_bytes"
+      ],
+      "required": [],
+      "signature": null
+    },
+    "LocalContextPrompt": {
+      "annotations": {
+        "citations": "dict[str, list[cigar_sdk.context_types.LocalCitation]]",
+        "id": "<class 'str'>",
+        "max_tokens": "<class 'int'>",
+        "rendered": "<class 'str'>",
+        "rendered_tokens": "<class 'int'>",
+        "schema": "typing.Literal['cigar.context-prompt.v1']",
+        "snapshot_id": "<class 'str'>",
+        "tokenizer": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "citations",
+        "id",
+        "max_tokens",
+        "rendered",
+        "rendered_tokens",
+        "schema",
+        "snapshot_id",
+        "tokenizer"
+      ],
+      "signature": null
+    },
+    "LocalContextRequest": {
+      "annotations": {
+        "allowed": "list[str] | None",
+        "evidence_per_term": "<class 'int'>",
+        "excerpt_mode": "typing.Literal['full', 'query_windows']",
+        "graph_depth": "<class 'int'>",
+        "max_blocks": "<class 'int'>",
+        "max_candidates": "<class 'int'>",
+        "max_tokens": "<class 'int'>",
+        "policy_revision": "<class 'str'>",
+        "query": "<class 'str'>",
+        "required": "list[str]",
+        "reserve_tokens": "<class 'int'>",
+        "semantic_candidates": "list[str]"
+      },
+      "optional": [
+        "allowed",
+        "evidence_per_term",
+        "excerpt_mode",
+        "graph_depth",
+        "max_blocks",
+        "max_candidates",
+        "max_tokens",
+        "policy_revision",
+        "query",
+        "required",
+        "reserve_tokens",
+        "semantic_candidates"
+      ],
+      "required": [],
+      "signature": null
+    },
+    "LocalContextResult": {
+      "annotations": {
+        "rendered": "<class 'str'>",
+        "snapshot": "<class 'cigar_sdk.context_types.LocalContextSnapshot'>"
+      },
+      "optional": [],
+      "required": [
+        "rendered",
+        "snapshot"
+      ],
+      "signature": null
+    },
+    "LocalContextSnapshot": {
+      "annotations": {
+        "blocks": "list[cigar_sdk.context_types.LocalEvidenceBlock]",
+        "domain": "<class 'str'>",
+        "graph_revision": "<class 'int'>",
+        "id": "<class 'str'>",
+        "policy_revision": "<class 'str'>",
+        "stats": "<class 'cigar_sdk.context_types.LocalSelectionStats'>",
+        "tokenizer": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "blocks",
+        "domain",
+        "graph_revision",
+        "id",
+        "policy_revision",
+        "stats",
+        "tokenizer"
+      ],
+      "signature": null
+    },
+    "LocalDocument": {
+      "annotations": {
+        "id": "<class 'str'>",
+        "source": "<class 'str'>",
+        "start_line": "<class 'int'>",
+        "text": "<class 'str'>"
+      },
+      "optional": [
+        "start_line"
+      ],
+      "required": [
+        "id",
+        "source",
+        "text"
+      ],
+      "signature": null
+    },
+    "LocalEdgeKind": {
+      "signature": "(*args, **kwargs)"
+    },
+    "LocalEvidenceBlock": {
+      "annotations": {
+        "citations": "list[cigar_sdk.context_types.LocalCitation]",
+        "text": "<class 'str'>"
+      },
+      "optional": [],
+      "required": [
+        "citations",
+        "text"
+      ],
+      "signature": null
+    },
+    "LocalGraphStats": {
+      "annotations": {
+        "cache": "<class 'cigar_sdk.context_types.LocalTokenCacheStats'>",
+        "documents": "<class 'int'>",
+        "revision": "<class 'int'>"
+      },
+      "optional": [],
+      "required": [
+        "cache",
+        "documents",
+        "revision"
+      ],
+      "signature": null
+    },
+    "LocalSelectionStats": {
+      "annotations": {
+        "available_tokens": "<class 'int'>",
+        "budget_rejected_roots": "<class 'int'>",
+        "candidates": "<class 'int'>",
+        "covered_terms": "<class 'int'>",
+        "documents": "<class 'int'>",
+        "lexical_matches": "<class 'int'>",
+        "limit_rejected_roots": "<class 'int'>",
+        "query_terms": "<class 'int'>",
+        "rendered_tokens": "<class 'int'>",
+        "selected_blocks": "<class 'int'>",
+        "selected_sources": "<class 'int'>",
+        "unavailable_roots": "<class 'int'>"
+      },
+      "optional": [],
+      "required": [
+        "available_tokens",
+        "budget_rejected_roots",
+        "candidates",
+        "covered_terms",
+        "documents",
+        "lexical_matches",
+        "limit_rejected_roots",
+        "query_terms",
+        "rendered_tokens",
+        "selected_blocks",
+        "selected_sources",
+        "unavailable_roots"
+      ],
+      "signature": null
+    },
+    "LocalSourceUpdate": {
+      "annotations": {
+        "inserted": "<class 'int'>",
+        "removed": "<class 'int'>",
+        "replaced": "<class 'int'>",
+        "revision": "<class 'int'>",
+        "unchanged": "<class 'int'>"
+      },
+      "optional": [],
+      "required": [
+        "inserted",
+        "removed",
+        "replaced",
+        "revision",
+        "unchanged"
+      ],
+      "signature": null
+    },
+    "LocalTokenCacheStats": {
+      "annotations": {
+        "entries": "<class 'int'>",
+        "hits": "<class 'int'>",
+        "misses": "<class 'int'>",
+        "text_bytes": "<class 'int'>"
+      },
+      "optional": [],
+      "required": [
+        "entries",
+        "hits",
+        "misses",
+        "text_bytes"
+      ],
+      "signature": null
+    },
+    "MAX_WORKFLOW_DELTA_CHAIN_LENGTH": {
+      "signature": null
+    },
+    "MAX_WORKFLOW_REPLAY_CYCLES": {
+      "signature": null
+    },
+    "OPERATIONS": {
+      "signature": null
+    },
+    "OPERATION_COUNT": {
+      "signature": null
+    },
+    "OperationEvent": {
+      "methods": {},
+      "signature": "(operation_id: 'str', event_id: 'str', payload_cbor: 'bytes') -> None"
+    },
+    "OperationRequest": {
+      "methods": {},
+      "signature": "(payload_cbor: 'bytes' = b'', path_parameters: 'tuple[PathParameter, ...]' = <factory>, idempotency_key: 'str | None' = None, expected_revision: 'str | None' = None, dry_run: 'bool' = False, page_cursor: 'str | None' = None, page_size: 'int | None' = None) -> None"
+    },
+    "OperationResponse": {
+      "methods": {},
+      "signature": "(operation_id: 'str', payload_cbor: 'bytes', semantic_etag: 'str | None' = None, next_page_cursor: 'str | None' = None) -> None"
+    },
+    "PAYLOAD_TYPES": {
+      "signature": null
+    },
+    "PathParameter": {
+      "methods": {},
+      "signature": "(name: 'str', value: 'str') -> None"
+    },
+    "TransportError": {
+      "methods": {},
+      "signature": null
+    },
+    "TypedOperationEvent": {
+      "methods": {},
+      "signature": "(operation_id: 'str', event_id: 'str', payload: 'T', payload_cbor: 'bytes') -> None"
+    },
+    "TypedOperationRequest": {
+      "methods": {},
+      "signature": "(payload: 'T', idempotency_key: 'str | None' = None, expected_revision: 'str | None' = None, dry_run: 'bool' = False, page_cursor: 'str | None' = None, page_size: 'int | None' = None) -> None"
+    },
+    "TypedOperationResponse": {
+      "methods": {},
+      "signature": "(operation_id: 'str', payload: 'T', payload_cbor: 'bytes', semantic_etag: 'str | None' = None, next_page_cursor: 'str | None' = None) -> None"
+    },
+    "ValidationError": {
+      "methods": {},
+      "signature": null
+    },
+    "WORKFLOW_SESSION_EVENT_NAMES": {
+      "signature": null
+    },
+    "WorkflowContextCycleIdentity": {
+      "methods": {},
+      "signature": "(plan_id: 'str', bundle_id: 'str', contract_digest: 'str', selected_delta: 'WorkflowDeltaReplayIdentity | None', materialized_bundle_id: 'str', tokenizer_fingerprint: 'str', materializer_fingerprint: 'str', physical_input_tokens: 'int', invocation_id: 'str', request_digest: 'str', idempotency_key_digest: 'str', model_result_digest: 'str', effect: 'WorkflowEffectReplayIdentity | None', outcome_digest: 'str', outcome_revision: 'int') -> None"
+    },
+    "WorkflowContextPhase": {
+      "methods": {},
+      "signature": "(*values)"
+    },
+    "WorkflowContextReplayComparison": {
+      "methods": {},
+      "signature": "(bundle_delta_selection: 'WorkflowReplayDiffStatus', materialization: 'WorkflowReplayDiffStatus', model_result_identity: 'WorkflowReplayDiffStatus', tool_effect_decisions: 'WorkflowReplayDiffStatus', outcome: 'WorkflowReplayDiffStatus', exact_match: 'bool') -> None"
+    },
+    "WorkflowContextReplayIdentity": {
+      "methods": {},
+      "signature": "(cycles: 'tuple[WorkflowContextCycleIdentity, ...]') -> None"
+    },
+    "WorkflowContextSession": {
+      "methods": {
+        "begin_model_invocation": "(self, invocation_id: 'str', request_digest: 'str', idempotency_key_digest: 'str') -> 'None'",
+        "checkpoint_cycle": "(self) -> 'None'",
+        "compare_replay": "(self, candidate: 'WorkflowContextReplayIdentity') -> 'WorkflowContextReplayComparison'",
+        "finish": "(self) -> 'None'",
+        "quarantine_context": "(self, bundle_id: 'str', reason: 'WorkflowQuarantineReason') -> 'None'",
+        "record_bundle_compiled": "(self, bundle_id: 'str', contract_digest: 'str') -> 'None'",
+        "record_delta_applied": "(self, base_bundle_id: 'str', target_bundle_id: 'str', delta_digest: 'str') -> 'None'",
+        "record_delta_compiled": "(self, base_bundle_id: 'str', target_bundle_id: 'str', delta_digest: 'str') -> 'None'",
+        "record_effect_authorized": "(self, effect_id: 'str', intent_digest: 'str', effect_version: 'int', state: 'str' = 'authorized', attempt_count: 'int' = 0, reconciliation_count: 'int' = 0) -> 'None'",
+        "record_effect_dispatched": "(self, effect_id: 'str', intent_digest: 'str', effect_version: 'int', state: 'str', attempt_count: 'int', reconciliation_count: 'int') -> 'None'",
+        "record_effect_observed": "(self, effect_id: 'str', intent_digest: 'str', effect_version: 'int', state: 'str', attempt_count: 'int', reconciliation_count: 'int') -> 'None'",
+        "record_effect_prepared": "(self, effect_id: 'str', intent_digest: 'str', effect_version: 'int', state: 'str' = 'prepared', attempt_count: 'int' = 0, reconciliation_count: 'int' = 0) -> 'None'",
+        "record_effect_revalidated": "(self, bundle_id: 'str', *, valid: 'bool') -> 'None'",
+        "record_materialized": "(self, bundle_id: 'str', tokenizer_fingerprint: 'str', materializer_fingerprint: 'str', physical_input_tokens: 'int') -> 'None'",
+        "record_model_result": "(self, invocation_id: 'str', result_digest: 'str') -> 'None'",
+        "record_observation": "(self, publication_digest: 'str', revision: 'int') -> 'None'",
+        "record_plan_created": "(self, plan_id: 'str', bundle_id: 'str', contract_digest: 'str') -> 'None'",
+        "record_replay_verified": "(self, decision_id: 'str', execution_id: 'str', candidate: 'WorkflowContextReplayIdentity') -> 'WorkflowContextReplayComparison'",
+        "replay_identity": "(self) -> 'WorkflowContextReplayIdentity'"
+      },
+      "signature": "() -> 'None'"
+    },
+    "WorkflowDeltaReplayIdentity": {
+      "methods": {},
+      "signature": "(base_bundle_id: 'str', target_bundle_id: 'str', delta_digest: 'str') -> None"
+    },
+    "WorkflowEffectReplayIdentity": {
+      "methods": {},
+      "signature": "(effect_id: 'str', intent_digest: 'str', effect_version: 'int', state: 'str', attempt_count: 'int', reconciliation_count: 'int') -> None"
+    },
+    "WorkflowQuarantineReason": {
+      "methods": {},
+      "signature": "(*values)"
+    },
+    "WorkflowReplayDiffStatus": {
+      "methods": {},
+      "signature": "(*values)"
+    },
+    "WorkflowResumeAction": {
+      "methods": {},
+      "signature": "(*values)"
+    },
+    "WorkflowSessionError": {
+      "methods": {},
+      "signature": "(code: 'WorkflowSessionErrorCode') -> 'None'"
+    },
+    "WorkflowSessionErrorCode": {
+      "methods": {},
+      "signature": "(*values)"
+    },
+    "apply_context_delta": {
+      "signature": "(base: 'Mapping[str, Any]', expected_target: 'Mapping[str, Any]', delta: 'Mapping[str, Any]', sealed_digest: 'str') -> 'dict[str, Any]'"
+    },
+    "bundle_id": {
+      "signature": "(bundle: 'Mapping[str, Any]') -> 'str'"
+    },
+    "create_idempotency_key": {
+      "signature": "(prefix: 'str' = 'cigar') -> 'str'"
+    },
+    "delta_digest": {
+      "signature": "(delta: 'Mapping[str, Any]') -> 'str'"
+    },
+    "get_local_context_capabilities": {
+      "signature": "(*, worker_path: 'str | Path | None' = None) -> 'LocalContextCapabilities'"
+    },
+    "models": {
+      "signature": null
+    },
+    "validate_idempotency_key": {
+      "signature": "(value: 'str') -> 'str'"
+    },
+    "verify_bundle": {
+      "signature": "(bundle: 'Mapping[str, Any]') -> 'None'"
+    }
+  }
+}

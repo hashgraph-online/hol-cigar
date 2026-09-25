@@ -84,12 +84,20 @@ BETA = ReleaseProfile(
     "docs/release/context-sdk-beta-notes.md",
 )
 STABLE = ReleaseProfile(
-    "0.11.0",
-    "0.11.0",
+    json.loads((ROOT / "sdk/local-context-release.v1.json").read_bytes())["versions"][
+        "typescript"
+    ],
+    json.loads((ROOT / "sdk/local-context-release.v1.json").read_bytes())["versions"][
+        "python"
+    ],
     "stable",
     REPO + "/.github/workflows/context-sdk-release.yml",
     "release-manifest.json",
-    "docs/release/context-sdk-0.11.0-notes.md",
+    "docs/release/context-sdk-"
+    + json.loads((ROOT / "sdk/local-context-release.v1.json").read_bytes())[
+        "core_version"
+    ]
+    + "-notes.md",
 )
 
 
@@ -238,6 +246,19 @@ def make_spdx(
                 ],
             }
         )
+    identities = {
+        item["purl"]: package["SPDXID"]
+        for item, package in zip(sbom["components"], packages, strict=True)
+    }
+    edges = [
+        {
+            "spdxElementId": identities[row["ref"]],
+            "relationshipType": "DEPENDS_ON",
+            "relatedSpdxElement": identities[dependency],
+        }
+        for row in sbom.get("dependencies", [])
+        for dependency in row["dependsOn"]
+    ]
     return {
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
@@ -258,7 +279,8 @@ def make_spdx(
                 "relatedSpdxElement": package["SPDXID"],
             }
             for package in packages
-        ],
+        ]
+        + edges,
     }
 
 

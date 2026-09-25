@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from cigar_sdk.errors import ValidationError
@@ -15,6 +15,22 @@ from cigar_sdk.errors import ValidationError
 _DIGEST = re.compile(r"^1220[0-9a-f]{64}$")
 _LANES = {"rules": 0, "task": 1, "evidence": 2, "history": 3, "tools": 4}
 _REPRESENTATIONS = {"exact", "extracted", "summarized", "redacted"}
+
+
+def _unique_mapping_items(value: Mapping[Any, Any]) -> Iterator[tuple[str, Any]]:
+    """Validate before copying: no entry may disappear under the NFC profile.
+
+    Preserve the original spelling here; normalization remains field-specific.
+    """
+    seen: set[str] = set()
+    for key, child in value.items():
+        if not isinstance(key, str):
+            raise ValidationError("canonical mapping keys must be strings")
+        normalized = unicodedata.normalize("NFC", key)
+        if normalized in seen:
+            raise ValidationError("canonical mapping keys collide after Unicode normalization")
+        seen.add(normalized)
+        yield key, child
 
 
 def _head(major: int, argument: int) -> bytes:
@@ -56,7 +72,7 @@ def _deterministic_cbor(value: Any, depth: int = 0, budget: list[int] | None = N
     if isinstance(value, list):
         return _head(4, len(value)) + b"".join(_deterministic_cbor(child, depth + 1, budget) for child in value)
     if isinstance(value, Mapping):
-        entries = [(_deterministic_cbor(str(key), depth + 1, budget), child) for key, child in value.items()]
+        entries = [(_deterministic_cbor(key, depth + 1, budget), child) for key, child in _unique_mapping_items(value)]
         entries.sort(key=lambda entry: entry[0])
         return _head(5, len(entries)) + b"".join(
             key + _deterministic_cbor(child, depth + 1, budget) for key, child in entries
@@ -89,7 +105,8 @@ def _normalize(value: Any, depth: int = 0, budget: list[int] | None = None) -> A
         return [_normalize(item, depth + 1, budget) for item in value]
     if isinstance(value, Mapping):
         return {
-            unicodedata.normalize("NFC", str(key)): _normalize(child, depth + 1, budget) for key, child in value.items()
+            unicodedata.normalize("NFC", key): _normalize(child, depth + 1, budget)
+            for key, child in _unique_mapping_items(value)
         }
     raise ValidationError("semantic records contain an unsupported canonical value")
 
@@ -125,8 +142,7 @@ def _block(value: Any, index: int) -> dict[str, Any]:
 
 
 def bundle_id(bundle: Mapping[str, Any]) -> str:
-    fields = dict(bundle)
-    fields.pop("bundle_id", None)
+    fields = {key: child for key, child in _unique_mapping_items(bundle) if key != "bundle_id"}
     encoded = _deterministic_cbor([2, _normalize(fields)])
     separated = b"CIGAR-BUNDLE\0v1\0" + encoded
     return "1220" + hashlib.sha256(separated).hexdigest()

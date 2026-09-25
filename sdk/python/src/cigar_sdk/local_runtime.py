@@ -12,23 +12,23 @@ from typing import Literal, TypedDict
 from cigar_sdk.native_platforms import NATIVE_PLATFORMS
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.11.0"
+LOCAL_CONTEXT_CORE_VERSION = "0.12.0"
 
 _GUIDANCE = {
     "WorkerUnavailable": (
         "The local worker is missing or cannot execute. Install the wheel for this platform, or supply an absolute "
-        "trusted worker_path built from matching 0.11.0 sources. HOL services and API keys are not required."
+        "trusted worker_path built from matching 0.12.0 sources. HOL services and API keys are not required."
     ),
     "UnsupportedPlatform": (
         "This runtime has no bundled local worker. Use a supported Python platform, or supply an absolute trusted "
-        "worker_path built from matching 0.11.0 sources. HOL services are not required."
+        "worker_path built from matching 0.12.0 sources. HOL services are not required."
     ),
     "WorkerIntegrity": (
         "The bundled worker does not match its versioned manifest. Reinstall the verified wheel; "
         "do not bypass the integrity check."
     ),
     "IncompatibleWorker": (
-        "The executable does not implement the matching 0.11.0 worker protocol. "
+        "The executable does not implement the matching 0.12.0 worker protocol. "
         "Use the worker shipped with this package or build the matching source."
     ),
 }
@@ -88,13 +88,24 @@ def bundled_worker() -> Path:
             and manifest.get("protocol") == LOCAL_CONTEXT_PROTOCOL
             and manifest.get("core_version") == LOCAL_CONTEXT_CORE_VERSION
             and manifest.get("target") == metadata["target"]
-            and manifest.get("sha256") == hashlib.sha256(binary.read_bytes()).hexdigest()
+            and manifest.get("sha256") == _sha256_file(binary)
         )
-    except (OSError, ValueError, TypeError):
+    except OSError, ValueError, TypeError:
         raise LocalContextError("WorkerUnavailable") from None
     if not valid:
         raise LocalContextError("WorkerIntegrity")
     return binary
+
+
+def _sha256_file(path: Path) -> str:
+    """Reverify every launch using bounded memory, including on short reads."""
+    digest = hashlib.sha256()
+    buffer = bytearray(1024 * 1024)
+    view = memoryview(buffer)
+    with path.open("rb") as handle:
+        while size := handle.readinto(buffer):
+            digest.update(view[:size])
+    return digest.hexdigest()
 
 
 def resolve_local_worker(worker_path: str | Path | None = None) -> Path:
@@ -104,7 +115,7 @@ def resolve_local_worker(worker_path: str | Path | None = None) -> Path:
         binary = Path(worker_path)
         if not binary.is_absolute() or not binary.is_file():
             raise ValueError
-    except (OSError, TypeError, ValueError):
+    except OSError, TypeError, ValueError:
         raise LocalContextError("WorkerUnavailable") from None
     return binary
 
