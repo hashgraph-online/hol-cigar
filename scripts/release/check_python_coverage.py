@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+from release_lib import reject_evidence_directory
+
 
 def validate(document: dict) -> dict:
     limits = {
@@ -45,5 +47,9 @@ def validate(document: dict) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path)
+    parser.add_argument(
+        "--evidence-dir", type=Path, help="inapplicable to stdout checks"
+    )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "coverage report check")
     print(json.dumps(validate(json.loads(args.report.read_text())), sort_keys=True))

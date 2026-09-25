@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import re
 
+from release_lib import reject_evidence_directory
+
 
 def sha256(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
@@ -95,7 +97,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kind", choices=("python", "npm"))
     parser.add_argument("--directory", type=Path)
+    parser.add_argument(
+        "--evidence-dir", type=Path, help="inapplicable to stdout receipts"
+    )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "installed dependency stdout receipt")
     receipt = python_receipt() if args.kind == "python" else npm_receipt(args.directory)
     print(json.dumps(receipt, sort_keys=True))
 

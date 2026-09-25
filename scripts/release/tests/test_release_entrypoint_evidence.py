@@ -69,6 +69,9 @@ class SourceOnlyEntrypointTests(unittest.TestCase):
             ),
             ("product_version.py", "check", "--root", str(ROOT)),
             ("post_beta_profile.py", "check", "--root", str(ROOT)),
+            ("check_context_version.py",),
+            ("check_python_coverage.py", "/tmp/not-opened-coverage.json"),
+            ("context_dependency_evidence.py", "python"),
         )
         environment = os.environ.copy()
         environment.pop("CIGAR_EVIDENCE_DIR", None)

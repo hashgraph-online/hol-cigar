@@ -10,6 +10,8 @@ import re
 import sys
 import tomllib
 
+from release_lib import reject_evidence_directory
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -112,5 +114,9 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected")
+    parser.add_argument(
+        "--evidence-dir", type=Path, help="inapplicable to source checks"
+    )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "source version check")
     print(json.dumps(validate(expected=args.expected), sort_keys=True))
