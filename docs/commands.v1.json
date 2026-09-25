@@ -2,6 +2,75 @@
   "schema_version": "cigar.docs-commands.v1",
   "commands": [
     {
+      "id": "context-beta-asset-install",
+      "mode": "installed-candidate",
+      "cwd": "${CONTEXT_BETA_CONSUMER}",
+      "steps": [
+        {
+          "argv": [
+            "python3.14",
+            "-m",
+            "pip",
+            "install",
+            "./hol_cigar-0.10.0b1-py3-none-macosx_11_0_arm64.whl"
+          ],
+          "expected_exit": 0
+        },
+        {
+          "argv": [
+            "npm",
+            "install",
+            "./hol-org-cigar-0.10.0-beta.1.tgz"
+          ],
+          "expected_exit": 0
+        }
+      ],
+      "block_sha256": "ec0bf68d81c4ce8ea5beeb63ff7a87dc2742784da2bcc88a849c584166710108"
+    },
+    {
+      "id": "context-beta-registry-install",
+      "mode": "live",
+      "cwd": "${CONTEXT_BETA_CONSUMER}",
+      "steps": [
+        {
+          "argv": [
+            "python3.14",
+            "-m",
+            "pip",
+            "install",
+            "hol-cigar==0.10.0b1"
+          ],
+          "expected_exit": 0
+        },
+        {
+          "argv": [
+            "npm",
+            "install",
+            "@hol-org/cigar@0.10.0-beta.1"
+          ],
+          "expected_exit": 0
+        }
+      ],
+      "block_sha256": "cec85c0dca0d1df069876ceb2bbfc21835ca590176549942ab872ff75a798e3a"
+    },
+    {
+      "id": "context-beta-attestation-verify",
+      "mode": "live",
+      "cwd": "${CONTEXT_BETA_SOURCE}",
+      "argv": [
+        "python3",
+        "scripts/release/context_sdk_beta.py",
+        "verify",
+        "--verify-attestations",
+        "--directory",
+        "${CONTEXT_BETA_DIRECTORY}",
+        "--commit",
+        "${CONTEXT_BETA_COMMIT}"
+      ],
+      "expected_exit": 0,
+      "block_sha256": "488215501314c1d9f3ce0c17f38585b794eb4ea35cec523f02a27493c0d302ff"
+    },
+    {
       "id": "release-metadata-local",
       "block_sha256": "fe94090307c9f051916f1e6b7b24ba64c50567acb0722c53e85c4000dbe4c15c",
       "mode": "local",

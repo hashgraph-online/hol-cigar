@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-import platform
 import queue
 import subprocess
 import threading
@@ -15,8 +13,14 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 from cigar_sdk.context_types import (
+    LocalAnswerAssessment,
+    LocalAnswerDraft,
+    LocalAnswerPolicy,
+    LocalCitation,
+    LocalClaimReview,
     LocalContextDelta,
     LocalContextLimits,
+    LocalContextPrompt,
     LocalContextRequest,
     LocalContextResult,
     LocalContextSnapshot,
@@ -25,40 +29,30 @@ from cigar_sdk.context_types import (
     LocalGraphStats,
     LocalSourceUpdate,
 )
+from cigar_sdk.local_runtime import (
+    LOCAL_CONTEXT_CORE_VERSION as LOCAL_CONTEXT_CORE_VERSION,
+)
+from cigar_sdk.local_runtime import (
+    LOCAL_CONTEXT_PROTOCOL as LOCAL_CONTEXT_PROTOCOL,
+)
+from cigar_sdk.local_runtime import (
+    LocalContextCapabilities as LocalContextCapabilities,
+)
+from cigar_sdk.local_runtime import (
+    LocalContextError as LocalContextError,
+)
+from cigar_sdk.local_runtime import (
+    bundled_worker as _bundled_worker,
+)
+from cigar_sdk.local_runtime import (
+    get_local_context_capabilities as get_local_context_capabilities,
+)
+from cigar_sdk.local_runtime import (
+    resolve_local_worker,
+)
 
-LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1"
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
-
-
-class LocalContextError(Exception):
-    """Stable, content-free error. Transport failures permanently close the graph."""
-
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(f"local context error: {code}")
-
-
-def _bundled_worker() -> Path:
-    machine = {"aarch64": "arm64", "AMD64": "x64", "x86_64": "x64"}.get(
-        platform.machine(), platform.machine()
-    )
-    system = {"Darwin": "darwin", "Linux": "linux", "Windows": "win32"}.get(platform.system(), "unknown")
-    directory = Path(__file__).parent / "_native" / f"{system}-{machine}"
-    binary = directory / ("cigar-context-worker.exe" if system == "win32" else "cigar-context-worker")
-    try:
-        manifest = json.loads((directory / "manifest.json").read_bytes())
-        valid = (
-            manifest["protocol"] == LOCAL_CONTEXT_PROTOCOL
-            and manifest["core_version"] == LOCAL_CONTEXT_CORE_VERSION
-            and manifest["sha256"] == hashlib.sha256(binary.read_bytes()).hexdigest()
-        )
-    except (OSError, ValueError, KeyError, TypeError):
-        raise LocalContextError("WorkerUnavailable") from None
-    if not valid:
-        raise LocalContextError("WorkerIntegrity")
-    return binary
 
 
 class LocalContextGraph:
@@ -76,9 +70,7 @@ class LocalContextGraph:
     ) -> None:
         if not math.isfinite(timeout) or timeout <= 0 or timeout > threading.TIMEOUT_MAX:
             raise LocalContextError("InvalidInput")
-        binary = Path(worker_path) if worker_path is not None else _bundled_worker()
-        if not binary.is_absolute() or not binary.is_file():
-            raise LocalContextError("WorkerUnavailable")
+        binary = resolve_local_worker(worker_path) if worker_path is not None else _bundled_worker()
         self._timeout = timeout
         self._closed = False
         self._lock = threading.Lock()
@@ -188,8 +180,41 @@ class LocalContextGraph:
         return cast(list[LocalDocument], self._call({"op": "chunks", "document": document,
                                                     "max_lines": max_lines, "overlap_lines": overlap_lines}))
 
+    def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
+        """Bind exact claims to their snapshot for a separate trusted reviewer; no truth judgment."""
+        return cast(list[str], self._call({"op": "review_keys", "draft": draft}))
+
+    def check_answer(
+        self, request: LocalContextRequest, draft: LocalAnswerDraft,
+        reviews: list[LocalClaimReview], policy: LocalAnswerPolicy | None = None,
+    ) -> LocalAnswerAssessment:
+        """Recompile current authorized context and enforce host-trusted claim reviews.
+
+        Keep reviews/policy outside model control. Only display assessed claims on release.
+        Confidence is telemetry, not permission. This does not run a semantic judge.
+        """
+        return cast(LocalAnswerAssessment, self._call({"op": "check_answer", "request": request,
+                    "draft": draft, "reviews": reviews, "policy": policy or {}}))
+
     def verify(self, snapshot: LocalContextSnapshot) -> LocalContextResult:
         return cast(LocalContextResult, self._call({"op": "verify", "snapshot": snapshot}))
+
+    def prompt_view(self, snapshot: LocalContextSnapshot, max_tokens: int) -> LocalContextPrompt:
+        """Compact data-role rendering; retain its citation map and the complete snapshot."""
+        return cast(
+            LocalContextPrompt, self._call({"op": "prompt_view", "snapshot": snapshot, "max_tokens": max_tokens})
+        )
+
+    def verify_prompt(self, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot) -> LocalContextPrompt:
+        return cast(LocalContextPrompt, self._call({"op": "verify_prompt", "prompt": prompt, "snapshot": snapshot}))
+
+    def resolve_citation(
+        self, reference: str, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot
+    ) -> list[LocalCitation]:
+        return cast(
+            list[LocalCitation],
+            self._call({"op": "resolve_citation", "reference": reference, "prompt": prompt, "snapshot": snapshot}),
+        )
 
     def delta(self, base: LocalContextSnapshot, target: LocalContextSnapshot) -> LocalContextDelta:
         return cast(LocalContextDelta, self._call({"op": "delta", "base": base, "target": target}))

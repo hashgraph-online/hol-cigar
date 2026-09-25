@@ -63,12 +63,23 @@ test("problem details are deeply copied and frozen", () => {
   }, TypeError);
 });
 
-test("deadline, redirect, and response byte bounds fail closed", async () => {
+test("deadline, redirect, and response byte bounds fail closed", async (t) => {
   assert.throws(() => new sdk.CigarClient({
     baseUrl: "http://localhost",
     allowInsecureLoopback: true,
     fetch: async () => new Response(),
   }), sdk.ValidationError);
+
+  // Control time and timeout delivery so runner scheduling cannot decide whether
+  // the request exceeds its deadline. Verify the requested delay and abort signal.
+  let now = 1_700_000_000_000;
+  const timeouts: { delay: number; controller: AbortController }[] = [];
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(AbortSignal, "timeout", (delay: number) => {
+    const controller = new AbortController();
+    timeouts.push({ delay, controller });
+    return controller.signal;
+  });
 
   let calls = 0;
   const deadlineClient = new sdk.CigarClient({
@@ -78,6 +89,8 @@ test("deadline, redirect, and response byte bounds fail closed", async () => {
     fetch: async (_input, init) => {
       calls += 1;
       assert.equal(init?.redirect, "error");
+      assert.equal(new Headers(init?.headers).get("x-cigar-timeout-ms"), "50");
+      now += 49;
       return new Response("", {
         status: 503,
         headers: {
@@ -87,13 +100,13 @@ test("deadline, redirect, and response byte bounds fail closed", async () => {
       });
     },
   });
-  const started = Date.now();
   await assert.rejects(
     deadlineClient.getVersion({ payload: {} }, { timeoutMs: 50 }),
     sdk.CigarTimeoutError,
   );
   assert.equal(calls, 1);
-  assert.ok(Date.now() - started < 150);
+  assert.equal(timeouts.length, 1);
+  assert.equal(timeouts[0]!.delay, 50);
 
   const oversized = new sdk.CigarClient({
     baseUrl: "http://localhost",
@@ -117,15 +130,36 @@ test("deadline, redirect, and response byte bounds fail closed", async () => {
   });
   await assert.rejects(duplicate.getVersion({ payload: {} }), sdk.TransportError);
 
+  const providerStarted = Promise.withResolvers<AbortSignal | undefined>();
+  const providerTimeoutIndex = timeouts.length;
+  let providerFetches = 0;
   const provider = new sdk.CigarClient({
     baseUrl: "http://localhost",
     ...local,
-    bearerToken: async () => await new Promise<string>(() => undefined),
-    fetch: async () => { throw new Error("network must not be reached"); },
+    bearerToken: async (signal) => {
+      providerStarted.resolve(signal);
+      return await new Promise<string>(() => undefined);
+    },
+    fetch: async () => {
+      providerFetches += 1;
+      throw new Error("network must not be reached");
+    },
   });
-  const providerStarted = Date.now();
-  await assert.rejects(provider.getVersion({ payload: {} }, { timeoutMs: 20 }), sdk.CigarTimeoutError);
-  assert.ok(Date.now() - providerStarted < 120);
+  const pending = assert.rejects(
+    provider.getVersion({ payload: {} }, { timeoutMs: 20 }),
+    sdk.CigarTimeoutError,
+  );
+  const providerSignal = await providerStarted.promise;
+  const providerTimeout = timeouts[providerTimeoutIndex]!;
+  assert.equal(providerTimeout.delay, 20);
+  assert.equal(providerSignal, providerTimeout.controller.signal);
+  assert.equal(providerSignal.aborted, false);
+  now += 20;
+  providerTimeout.controller.abort(new DOMException("deadline elapsed", "TimeoutError"));
+  await pending;
+  assert.equal(providerSignal.aborted, true);
+  assert.equal(providerFetches, 0);
+  assert.equal(timeouts.length, providerTimeoutIndex + 1);
 });
 
 test("SSE reconnects after a body read failure without duplicate delivery", async () => {

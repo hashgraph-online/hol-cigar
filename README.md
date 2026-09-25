@@ -6,17 +6,58 @@ Governed context, bounded agent authority, and replayable evidence for AI agent 
 
 CIGAR is an open protocol developed by [HOL](https://hol.org).
 
-[Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
+**Local context graphs work without HOL services, an account, API keys, a daemon, or a database.**
+Use `LocalContextGraph` from `@hol-org/cigar/context`. The TypeScript package runs a bundled
+Rust worker locally; its separate `CigarClient` API connects to a caller-selected CIGAR server.
+
+[Local npm quickstart](#local-npm-quickstart) · [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
 [0.9.4 candidate](#cigar-honey-094-candidate) · [Candidate evidence](#094-candidate-evidence) ·
 [Release gates](#094-candidate-release-gates) ·
 [Documentation](#documentation) ·
 [Security](#security)
 
 > [!IMPORTANT]
-> The current private product identity is **CIGAR Honey 0.9.4 candidate** (`0.9.4`). Its Python
+> The separate runtime profile documented below is **CIGAR Honey 0.9.4 candidate** (`0.9.4`). Its Python
 > development distribution is `hol-cigar==0.9.4`. This is unsupported evaluation software: it is not
 > production-qualified, signed, or notarized. See [current status](#current-status) and the exact
 > [candidate release gates](#094-candidate-release-gates) before evaluating it.
+
+## Local npm quickstart
+
+The npm package name is **`@hol-org/cigar`**. `hol-cigar` is the Python distribution name.
+Registry state checked on 2026-09-24: `latest` selects the older 0.9.4 service SDK, which has
+no local graph export. Install the published local graph beta explicitly:
+
+```sh
+npm install --save-exact @hol-org/cigar@0.10.0-beta.1
+```
+
+The bundled worker requires **macOS ARM64 and Node.js >=24.10.0 <25**. Save this as
+`context.mjs` and run `node context.mjs`:
+
+```js
+import { LocalContextGraph } from "@hol-org/cigar/context";
+
+const graph = await LocalContextGraph.create("my-project");
+try {
+  await graph.replaceSource("docs/retries.md", [
+    {id: "retry-policy", source: "docs/retries.md", text: "Retry at most three times."},
+  ]);
+  const result = await graph.compile({query: "retry", max_tokens: 512, reserve_tokens: 64});
+  console.log(result.rendered);
+} finally {
+  await graph.close();
+}
+```
+
+Keep the graph open across requests in your application to reuse its indexes and token cache.
+Supply document text yourself; `source` is a citation locator and does not open a file.
+
+The [0.11.0 candidate](#0110-local-context-library-candidate) adds compact prompt citations and
+answer review; it is not yet published. Its [TypeScript guide](sdk/typescript/README.md) describes
+the candidate API and the explicit matching-worker option for other platforms. The
+[distribution plan](docs/proposals/cigar-0.11.0-distribution.md) tracks the
+work needed for a reliable default install across platforms.
 
 ## Why CIGAR?
 
@@ -54,8 +95,9 @@ Choose the path that matches what you are trying to do:
 
 | Goal | Start here |
 |---|---|
+| Create a local context graph from npm | Follow the [local npm quickstart](#local-npm-quickstart); no HOL services are required. |
 | Use the published Python SDK baseline | Install `hol-cigar==0.9.1` from PyPI; the import package remains `cigar_sdk`. |
-| Use the TypeScript npm preview | Install `@hol-org/cigar@alpha`; inspect the [`@hol-org/cigar@0.9.4` release assessment](reports/npm-sdk-0.9.4-readiness.md) for its exact scope and verification evidence. |
+| Connect to an existing CIGAR server from TypeScript | Use the compatible remote client; inspect the [`@hol-org/cigar@0.9.4` release assessment](reports/npm-sdk-0.9.4-readiness.md) for its exact scope and verification evidence. |
 | Evaluate the private Honey 0.9.4 candidate | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
 | Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |
 | Try agent coordination | Follow the [two-agent workflow](docs/guides/honey-two-agent.md). |
@@ -103,26 +145,28 @@ The public protocol currently defines seven services covering catalog, context, 
 effects, replay, and operations. See the [public API reference](docs/reference/public-api.md) for the
 operation-level contract.
 
-## 0.10.0 local context library beta
+## 0.11.0 local context library candidate
 
-This branch adds [`cigar-context` 0.10.0-beta.1](crates/cigar-context/README.md): an offline Rust library
-and JSON CLI for incremental context graphs, typed evidence dependencies and counterclaims,
-exact rendered-token budgets, source citations, optional semantic-retriever integration, and
-verified snapshot deltas. The second pass adds atomic source replacement and bounded exact-token
-caching, with substantially faster cold/warm queries and unchanged tested outputs. It has no
-daemon, database, or model-service requirement.
+This branch prepares [`cigar-context` 0.11.0](crates/cigar-context/README.md), with
+matching Python and TypeScript SDKs. It adds a bounded answer-review contract:
+current authorized evidence, exact claim/snapshot bindings, independently supplied
+trusted verdicts, citation checks, distinct source groups and explicit counterevidence.
+Unreviewed or unsupported claims cannot pass merely by reporting high confidence.
+The host supplies and evaluates its semantic reviewer; CIGAR does not certify truth.
 
-Start with `python3 scripts/dev.py context` or the short Rust example in the library README.
-The [implementation plan](docs/proposals/cigar-0.10.0-plan.md) defines the scope and acceptance
-criteria. The [current measured differences report](reports/cigar-0.10.0-second-pass.md) includes raw evidence,
-limitations, and the remaining release gates. The existing compiler also receives a
-behavior-preserving packing optimization.
-The Python (`hol-cigar==0.10.0b1`) and TypeScript (`@hol-org/cigar@0.10.0-beta.1`) SDKs now
-add the same local graph through a persistent Rust worker while retaining their remote v1 APIs.
-See the [SDK RC report and local archives](reports/cigar-0.10.0-sdk-rc.md),
+The [measurement plan](docs/proposals/cigar-0.11.0-plan.md) defines release gates.
+The [answer-quality tools](benches/answer-quality/README.md) provide explicit
+factuality, citation, abstention, calibration and efficiency metrics. Synthetic
+contract tests do not establish live-model hallucination reduction.
+
+Start with `python3 scripts/dev.py context`. See the
+[release notes](docs/release/context-sdk-0.11.0-notes.md),
 [Python guide](sdk/python/README.md), and [TypeScript guide](sdk/typescript/README.md).
-Bundled native RC artifacts are qualified locally on macOS ARM64; they are not published.
-Frozen Honey 0.9.4 daemon publication contracts and historical artifacts below remain unchanged.
+The [distribution work](docs/proposals/cigar-0.11.0-distribution.md) adds platform workers,
+installed diagnostics, a complete local workflow and agent instructions for npm/PyPI.
+Publication requires new artifacts and hosted qualification for every advertised platform.
+The earlier locally qualified artifact covers macOS ARM64. The Honey history below
+retains its original 0.9.4 identity.
 
 ## CIGAR Honey 0.9.4 candidate
 

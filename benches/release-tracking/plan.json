@@ -1,0 +1,32 @@
+{
+  "schema": "cigar.release-tracking-plan.v1",
+  "evaluation": "offline; authored replay only; no provider or semantic judge",
+  "baseline": "0.10.0-beta.1",
+  "candidate": "0.11.0",
+  "answer_replay": {
+    "treatments": ["v10_citation_host", "v11_citation_host", "v11_reviewed_host"],
+    "max_attempts": 2,
+    "high_confidence_threshold": 0.8,
+    "gold": "Closed-world typed fact ledger, independently scored from supplied review verdicts; scripted claims are rendered deterministically from their propositions.",
+    "control": "Both citation hosts verify current snapshot identity, nonempty claims and selected citations. The reviewed host additionally calls the actual v0.11.0 check_answer API. This is an application-adoption experiment, not a native v0.10.0 hallucination rate.",
+    "primary_metrics": ["released unsupported or contradicted claims", "confident erroneous releases", "fully supported and cited answer yield", "useful fact recall", "unanswerable abstention", "attempts to completion", "false refusals of initially valid answers"],
+    "diagnostics": ["trusted reviewer false positive", "trusted reviewer false negative", "incomplete but supported answer", "unknown support despite reviewer approval"],
+    "acceptance": ["Citation-only host outputs match between versions", "Reviewed host has zero erroneous releases in the honest-review stratum", "Initially valid reviewed controls retain full answer yield", "Repairable honest-review episodes finish within two attempts", "Reviewer-error controls remain visible and are never scored using reviewer verdicts as gold"]
+  },
+  "performance": {
+    "paired_process_sessions": 8,
+    "documents": 768,
+    "documents_per_query": 12,
+    "warmup_rotations": 2,
+    "measured_rotations": 3,
+    "refresh_trials": 8,
+    "max_tokens": 8192,
+    "modes": ["default_cache", "equal_256_entry_cache"],
+    "timing": "End-to-end worker RPC including JSON serialization, IPC, graph compilation, native snapshot verification and response parsing. Source-refresh measurements include replacing the complete source and compiling the affected request. Warmup, transcript writing, Python validation and worker startup excluded; startup reported separately.",
+    "correctness": "Every complete response matches between versions at the same sequence position. Required IDs, exact token cap, expected errors, source refresh and cache bounds are checked.",
+    "statistics": "Alternate version order; bootstrap eight paired process-session medians, never individual repeated requests; deterministic 2000 draws.",
+    "improvement_threshold": "At least 10% paired median latency reduction and the descriptive 95% interval entirely above zero for a workload. Otherwise report improvement not established; do not tune fixtures after measurement.",
+    "resource_watch": "Report per-process peak RSS and cache occupancy; flag a default-cache median RSS increase greater than 20%."
+  },
+  "limitations": ["Authored facts and scripted drafts do not measure real-model hallucination prevalence or calibration", "Reviews are a host trust assumption, not supplied by CIGAR", "Persistent BPE-worker gains do not imply gains in Hiero's fresh-process UTF-8 adapter", "Same-host timing does not establish cross-platform performance", "EVM prompt overflow and generic-retrieval diagnostics remain separate Hiero integration issues"]
+}

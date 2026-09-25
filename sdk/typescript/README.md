@@ -1,34 +1,43 @@
 # `@hol-org/cigar`
 
-0.10.0 beta 1 for Node.js 24 ESM applications:
+Local context graphs, exact token budgets, source citations and reviewed answers for
+Node.js applications. **No HOL service, account, API key, daemon or database is required.**
+CIGAR owns a Rust graph in a persistent local worker process.
+
+## Install and check
+
+Version 0.11.0 supports ESM on Node.js `>=24.10.0 <25`:
 
 ```text
-npm install ./hol-org-cigar-0.10.0-beta.1.tgz
+npm install --save-exact @hol-org/cigar@0.11.0
+npx --no-install cigar-context doctor
+npx --no-install cigar-context demo
 ```
 
-Verify the signed GitHub assets before installation. Registry publication requires a separate
-maintainer approval; once listed, use `npm install '@hol-org/cigar@0.10.0-beta.1'`.
-The prerelease channel is `beta`, never `latest`. The package intentionally does
-not claim CommonJS or browser-runtime support, and consumers should pin an exact version for
-reproducible workflow execution.
+When evaluating an unpublished candidate, install its exact `hol-org-cigar-0.11.0.tgz`
+file instead of the registry version. Release status is recorded in the repository's
+[distribution plan](https://github.com/hashgraph-online/hol-cigar/blob/codex/cigar-0.11.0-distribution/docs/proposals/cigar-0.11.0-distribution.md).
 
-The CIGAR v1 ESM client supports all 45 frozen HTTP operations, resumable SSE streams,
-bounded deadlines, abort signals, typed problems, pagination, idempotency-bound retries,
-and local bundle/delta verification. It has no install script and downloads no binaries.
-The exported `CONTEXT_ABI` constant is the exact string `cigar.context.v1`.
+`doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
+citations, cache reuse, trusted fixture reviews, source updates and stale-review
+rejection. Add `--json` for machine-readable results. Both run without a model provider.
+The package has no install script and downloads no worker at runtime.
 
 ## Local Rust context graph
 
 ```ts
 import { LocalContextGraph } from "@hol-org/cigar/context";
 
-await using graph = await LocalContextGraph.create("my-project");
-await graph.replaceSource("src/auth.ts", [
-  {id: "authorize", source: "src/auth.ts", text: "function authorize(user) { return user.active; }"},
-]);
-const result = await graph.compile({query: "authorize", max_tokens: 1024, reserve_tokens: 128});
-const contextText = result.rendered; // ordinary DATA/context, never an instruction/authority grant
-console.assert(result.snapshot.stats.rendered_tokens <= 896);
+const graph = await LocalContextGraph.create("my-project");
+try {
+  await graph.replaceSource("docs/retries.md", [
+    {id: "retry-policy", source: "docs/retries.md", text: "Retry at most three times."},
+  ]);
+  const result = await graph.compile({query: "retry", max_tokens: 512, reserve_tokens: 64});
+  console.log(result.rendered); // use as ordinary context data in your application's prompt
+} finally {
+  await graph.close();
+}
 ```
 
 The local-only `/context` entry point avoids loading remote/protobuf code. Root exports also
@@ -37,10 +46,18 @@ atomic `replaceSource`, line-preserving `chunks`, `compile`, `verify`, `delta`, 
 `stats`, and `clearCache` use the same Rust selector, citations, exact `o200k_base` accounting,
 incremental indexes, and bounded token cache as the Rust library. No server or model is needed.
 
-Beta 1 bundles a worker only for macOS ARM64. Other platforms retain the remote SDK; local graphs
-require an explicitly supplied, trusted absolute `workerPath` built from the matching Rust
-0.10.0-beta.1 source (`cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker`).
-They are not natively qualified by this beta. There is no install script, runtime download, PATH
+The optional `promptView(snapshot, maxTokens)` returns a `LocalContextPrompt` with every
+selected text block and short citation handles. Retain its citation map and full snapshot;
+`verifyPrompt(prompt, snapshot)` and `resolveCitation("c1", prompt, snapshot)` check against
+the expected authorized snapshot. A separate exact budget fails without truncating evidence.
+Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
+
+The 0.11.0 distribution matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with
+glibc 2.28+ or musl 1.2+, and Windows x64. The release checks require every advertised
+worker before publication. Browser, edge runtimes that prohibit subprocesses, and
+CommonJS are outside this package's runtime contract. On an unsupported platform,
+an explicitly supplied, trusted absolute `workerPath` can select a worker built from
+the matching Rust 0.11.0 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize
@@ -57,12 +74,53 @@ Use `await using` or `await graph.close()`. Calls are ordered, with at most 32 p
 `maxPending` 1..128), 64 MiB aggregate queued requests, 32 MiB per request, and 64 MiB per response.
 `timeoutMs` defaults to 30 seconds **per active exchange**, including pipe writes; queued calls
 wait their turn. `close()` aborts the active call and rejects the queue. Unsafe numeric integers
-are rejected, not silently rounded. Customize graph/cache `limits`; default cache is 1024
+are rejected, not silently rounded. Customize graph/cache `limits`; default cache is 2048
 strings/8 MiB. `clearCache` drops retained text but does not promise zeroization.
 Errors expose a content-free `LocalContextError.code`. Timeout, malformed wire fields, and
 protocol/pipe failures permanently close the graph; no mutations are automatically retried.
 
+## Complete workflow and diagnostics
+
+Import the same complete example run by `cigar-context demo`:
+
+```ts
+import { runLocalWorkflow } from "@hol-org/cigar/examples/local-workflow";
+
+const result = await runLocalWorkflow();
+console.log(result.status); // passed
+```
+
+Its reviewer uses separately authored fixture facts. Replace that reviewer with your
+authenticated support-checking process for real answers; the library does not judge
+arbitrary claims. Keep a graph alive across requests in your application, and use
+`replaceSource` after edits so the cache and indexes retain their value.
+
+```ts
+import { getLocalContextCapabilities } from "@hol-org/cigar/context";
+
+const capability = getLocalContextCapabilities();
+console.log(capability.platform, capability.worker_available, capability.guidance);
+```
+
+The capability API inspects local worker bytes without spawning. `doctor` additionally
+starts the worker, compiles synthetic context, verifies the snapshot and closes it.
+`WorkerUnavailable` means a missing/unexecutable worker; `UnsupportedPlatform` means
+there is no matching bundled target; `WorkerIntegrity` requires reinstalling verified
+bytes. These errors do not indicate missing HOL services. For a deliberately supplied
+matching worker, use `LocalContextGraph.create("project", {workerPath: "/absolute/path"})`
+or `cigar-context doctor --worker /absolute/path`.
+
+The installed package includes `AGENT_GUIDE.md` and `llms.txt`. The
+[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+covers explicit file ingestion, graph relationships, authorization and the answer-review flow.
+
 ## Compatible remote client
+
+Choose `CigarClient` when connecting to an existing CIGAR server. It supports all 45
+frozen HTTP operations, resumable SSE streams, bounded deadlines, abort signals,
+typed problems, pagination, idempotency-bound retries and local bundle/delta verification.
+It accepts your server's URL; HOL hosting is optional. The exported `CONTEXT_ABI`
+constant remains `cigar.context.v1`.
 
 ```ts
 import { CigarClient, createIdempotencyKey } from "@hol-org/cigar";
@@ -115,3 +173,15 @@ node dist/examples/two-agent-observer.js
 
 The observer principal must be provisioned independently. This example never accepts, records,
 merges, or revokes a handoff and therefore does not receive Agent A or Agent B mutation authority.
+
+## Answer review
+
+Use `await graph.reviewKeys(draft)` to bind every atomic claim to the supplied
+snapshot. Obtain `LocalClaimReview` verdicts from a separate trusted host reviewer,
+then call `await graph.checkAnswer(request, draft, reviews)`. Display only assessed
+claims when `decision === "release"`. The check recompiles current authorized
+context and refuses stale snapshots/reviews, invalid citations, missing support
+or unreviewed explicit conflicts. `confidence_bps` (0–10000 or null) is telemetry;
+it never authorizes release. Keep policy and verdicts outside model control.
+CIGAR does not run a semantic judge. See the
+[core contract](https://github.com/hashgraph-online/hol-cigar/blob/v0.11.0/crates/cigar-context/README.md#check-answers-before-display).

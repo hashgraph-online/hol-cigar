@@ -38,6 +38,7 @@ jobs:
             scripts.release.tests.test_context_sdk_inputs \
             scripts.release.tests.test_context_sdk_handoff \
             scripts.release.tests.test_context_sdk_beta \
+            scripts.release.tests.test_context_sdk_release \
             scripts.release.tests.test_release_entrypoint_evidence \
             scripts.release.tests.test_license_inventory.CargoLicenseClosureTests.test_committed_inventory_contains_the_complete_cargo_lock_closure
 

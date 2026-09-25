@@ -8,6 +8,43 @@ const options = (extra: LocalContextOptions = {}): LocalContextOptions => ({
 });
 const code = (expected: string) => (error: unknown) => error instanceof LocalContextError && error.code === expected;
 
+test("answer review blocks confident errors, missing reviews and stale context", async () => {
+  await using graph = await LocalContextGraph.create("answer-sdk-test", options());
+  await graph.upsert({id: "a", source: "contract.md", text: "Retry at most three times."});
+  const request = {required: ["a"]};
+  const {snapshot} = await graph.compile(request);
+  const draft = {snapshot_id: snapshot.id, claims: [
+    {text: "Retry at most three times.", citations: ["a"], confidence_bps: 9900}]};
+  const [key] = await graph.reviewKeys(draft);
+  assert.ok(key);
+  for (const verdict of ["unsupported", "contradicted", "unknown"] as const) {
+    const result = await graph.checkAnswer(request, draft, [{claim_key: key, verdict}]);
+    assert.equal(result.decision, "abstain");
+    assert.equal(result.confident_failures, 1);
+  }
+  assert.equal((await graph.checkAnswer(request, draft, [])).decision, "abstain");
+  const reviews = [{claim_key: key, verdict: "supported" as const}];
+  assert.equal((await graph.checkAnswer(request, draft, reviews)).decision, "release");
+  assert.equal((await graph.checkAnswer(request, draft, reviews, {min_sources: 2})).decision, "abstain");
+  const changed = {...draft, claims: [{...draft.claims[0]!, text: "Retry thirty times."}]};
+  await assert.rejects(graph.checkAnswer(request, changed, reviews), code("InvalidInput"));
+  await graph.upsert({id: "a", source: "contract.md", text: "Retry once."});
+  await assert.rejects(graph.checkAnswer(request, draft, reviews), code("BaseMismatch"));
+});
+
+test("compact prompt preserves source and verifies citation resolution", async () => {
+  await using graph = await LocalContextGraph.create("sdk-test", options());
+  const text = "Require the same identity on retry. Reject a mismatched signature. café 🦀";
+  await graph.upsert({id: `source:${"a".repeat(100)}`, source: "contract.rs", text});
+  const {snapshot} = await graph.compile({query: "retry", max_tokens: 512});
+  const prompt = await graph.promptView(snapshot, 512);
+  assert.deepEqual(await graph.verifyPrompt(prompt, snapshot), prompt);
+  assert.equal(JSON.parse(prompt.rendered).text, text);
+  assert.deepEqual(await graph.resolveCitation("c1", prompt, snapshot), snapshot.blocks[0]?.citations);
+  await assert.rejects(graph.verifyPrompt({...prompt, rendered: "tampered"}, snapshot), code("Integrity"));
+  await assert.rejects(graph.promptView(snapshot, 1), code("BudgetUnsatisfiable"));
+});
+
 test("local incremental cache and exact Rust rendering", async () => {
   await using graph = await LocalContextGraph.create("sdk-test", options());
   const doc = {id: "a", source: "src/a.rs", text: "fn authorize_user() { /* café 🦀 */ }\n"};

@@ -1,16 +1,18 @@
 [project]
 name = "hol-cigar"
-version = "0.10.0b1"
-description = "CIGAR local Rust context graphs and compatible v1 Python client (beta)"
+version = "0.11.0"
+description = "Local context graphs, exact token budgets, citations and answer review. No HOL service required."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14,<3.15"
 dependencies = ["protobuf==6.33.5"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: Apache Software License",
-  "Operating System :: OS Independent",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
@@ -21,6 +23,7 @@ Repository = "https://github.com/hashgraph-online/hol-cigar"
 Issues = "https://github.com/hashgraph-online/hol-cigar/issues"
 
 [project.scripts]
+cigar-context = "cigar_sdk.local_cli:main"
 cigar-qualify-bundle = "cigar_sdk.qualify_bundle:main"
 cigar-agent-b-handoff = "cigar_sdk.examples.agent_b_handoff:main"
 
@@ -39,7 +42,7 @@ build-backend = "hatchling.build"
 packages = ["src/cigar_sdk"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/cigar_sdk", "tests", "README.md", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
+include = ["src/cigar_sdk", "tests", "README.md", "AGENT_GUIDE.md", "llms.txt", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
 exclude = ["src/cigar_sdk/_native"]
 
 [tool.hatch.build.hooks.custom]

@@ -1,5 +1,22 @@
 /** Local graph wire values; these do not replace the frozen remote Context ABI. */
 export type LocalEdgeKind = "requires" | "contradicts" | "supports" | "related";
+export type LocalAnswerClaim = Readonly<{text: string; citations: readonly string[]; confidence_bps: number | null}>;
+export type LocalAnswerDraft = Readonly<{snapshot_id: string; claims: readonly LocalAnswerClaim[]; abstain?: boolean}>;
+/** Host-trusted judgment, supplied separately from untrusted model output. */
+export type LocalClaimReview = Readonly<{
+  claim_key: string; verdict: "supported" | "unsupported" | "contradicted" | "unknown";
+  reviewed_counterevidence?: readonly string[];
+}>;
+export type LocalAnswerPolicy = Readonly<{min_sources?: number; high_confidence_bps?: number}>;
+export type LocalClaimAssessment = Readonly<{
+  claim_key: string; independent_sources: number;
+  issues: readonly ("uncited" | "invalid_citation" | "insufficient_sources" | "unreviewed" |
+    "unsupported" | "contradicted" | "unknown" | "unreviewed_counterevidence")[];
+}>;
+export type LocalAnswerAssessment = Readonly<{
+  snapshot_id: string; draft_id: string; decision: "release" | "abstain";
+  claims: readonly LocalClaimAssessment[]; confident_failures: number; missing_confidence: number;
+}>;
 export type LocalDocument = Readonly<{id: string; source: string; text: string; start_line?: number}>;
 export type LocalContextLimits = Readonly<{
   max_documents?: number; max_document_bytes?: number; max_total_bytes?: number;
@@ -25,6 +42,11 @@ export type LocalContextSnapshot = Readonly<{
   blocks: readonly LocalEvidenceBlock[]; stats: LocalSelectionStats;
 }>;
 export type LocalContextResult = Readonly<{snapshot: LocalContextSnapshot; rendered: string}>;
+export type LocalContextPrompt = Readonly<{
+  schema: "cigar.context-prompt.v1"; id: string; snapshot_id: string; tokenizer: string;
+  rendered: string; rendered_tokens: number; max_tokens: number;
+  citations: Readonly<Record<string, readonly LocalCitation[]>>;
+}>;
 export type LocalContextDelta = Readonly<{
   base_id: string; target_id: string; graph_revision: number; stats: LocalSelectionStats;
   order: readonly string[]; added: readonly LocalEvidenceBlock[];

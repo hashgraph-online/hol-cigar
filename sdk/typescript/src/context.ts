@@ -1,28 +1,20 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessByStdio } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
-import { isAbsolute } from "node:path";
 import type { Readable, Writable } from "node:stream";
-import { fileURLToPath } from "node:url";
+import { LocalContextError, LOCAL_CONTEXT_PROTOCOL, LOCAL_CONTEXT_CORE_VERSION, resolveLocalWorker } from "./local-runtime.js";
+export { LocalContextError, LOCAL_CONTEXT_PROTOCOL, LOCAL_CONTEXT_CORE_VERSION,
+  getLocalContextCapabilities } from "./local-runtime.js";
+export type { LocalContextCapabilities } from "./local-runtime.js";
 import type {
-  LocalContextDelta, LocalContextLimits, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
+  LocalAnswerAssessment, LocalAnswerDraft, LocalAnswerPolicy, LocalClaimReview,
+  LocalCitation, LocalContextDelta, LocalContextLimits, LocalContextPrompt, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
   LocalDocument, LocalEdgeKind, LocalGraphStats, LocalSourceUpdate,
 } from "./context-types.js";
 
-export const LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1" as const;
-export const LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1" as const;
 const MAX_FRAME = 32 * 1024 * 1024;
 const MAX_RESPONSE = 64 * 1024 * 1024;
 const CORE_ERRORS = new Set(["InvalidInput", "LimitExceeded", "RequiredUnavailable", "BudgetUnsatisfiable",
   "Tokenizer", "Integrity", "BaseMismatch"]);
-
-export class LocalContextError extends Error {
-  constructor(readonly code: string) {
-    super(`local context error: ${code}`);
-    this.name = "LocalContextError";
-  }
-}
 
 export type LocalContextOptions = Readonly<{
   /** Explicit trusted executable; never searched in PATH or downloaded. */
@@ -33,20 +25,6 @@ export type LocalContextOptions = Readonly<{
   /** Includes the active request; bounded to 1..128. Default 32. */
   maxPending?: number;
 }>;
-
-function bundledWorker(): string {
-  const directory = new URL(`../native/${process.platform}-${process.arch}/`, import.meta.url);
-  const binary = new URL(process.platform === "win32" ? "cigar-context-worker.exe" : "cigar-context-worker", directory);
-  let manifest: Record<string, unknown>;
-  let digest: string;
-  try {
-    manifest = JSON.parse(readFileSync(new URL("manifest.json", directory), "utf8")) as Record<string, unknown>;
-    digest = createHash("sha256").update(readFileSync(binary)).digest("hex");
-  } catch { throw new LocalContextError("WorkerUnavailable"); }
-  if (!manifest || manifest.protocol !== LOCAL_CONTEXT_PROTOCOL || manifest.core_version !== LOCAL_CONTEXT_CORE_VERSION ||
-      manifest.sha256 !== digest) throw new LocalContextError("WorkerIntegrity");
-  return fileURLToPath(binary);
-}
 
 type Pending = {id: number; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout};
 
@@ -75,10 +53,7 @@ export class LocalContextGraph implements AsyncDisposable {
         !Number.isInteger(this.maxPending) || this.maxPending < 1 || this.maxPending > 128) {
       throw new LocalContextError("InvalidInput");
     }
-    const binary = options.workerPath ?? bundledWorker();
-    try {
-      if (!isAbsolute(binary) || !statSync(binary).isFile()) throw new Error();
-    } catch { throw new LocalContextError("WorkerUnavailable"); }
+    const binary = resolveLocalWorker(options.workerPath);
     this.child = spawn(binary, [], {stdio: ["pipe", "pipe", "ignore"], shell: false, windowsHide: true});
     this.exited = new Promise((resolve) => { this.child.once("close", resolve); });
     this.child.on("error", () => this.fail("WorkerUnavailable"));
@@ -178,6 +153,28 @@ export class LocalContextGraph implements AsyncDisposable {
     return this.call({op: "chunks", document, max_lines: maxLines, overlap_lines: overlapLines});
   }
   verify(snapshot: LocalContextSnapshot): Promise<LocalContextResult> { return this.call({op: "verify", snapshot}); }
+  /** Compact data-role rendering bound to the complete snapshot and retained citation map. */
+  promptView(snapshot: LocalContextSnapshot, maxTokens: number): Promise<LocalContextPrompt> {
+    return this.call({op: "prompt_view", snapshot, max_tokens: maxTokens});
+  }
+
+  /** Bind claims to a snapshot for a trusted reviewer; this performs no factual judgment. */
+  reviewKeys(draft: LocalAnswerDraft): Promise<readonly string[]> {
+    return this.call({op: "review_keys", draft});
+  }
+
+  /** Recompile current authorized context. Reviews/policy must stay outside model control.
+   * Only display assessed claims on release; confidence never grants release permission. */
+  checkAnswer(request: LocalContextRequest, draft: LocalAnswerDraft,
+    reviews: readonly LocalClaimReview[], policy: LocalAnswerPolicy = {}): Promise<LocalAnswerAssessment> {
+    return this.call({op: "check_answer", request, draft, reviews, policy});
+  }
+  verifyPrompt(prompt: LocalContextPrompt, snapshot: LocalContextSnapshot): Promise<LocalContextPrompt> {
+    return this.call({op: "verify_prompt", prompt, snapshot});
+  }
+  resolveCitation(reference: string, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot): Promise<readonly LocalCitation[]> {
+    return this.call({op: "resolve_citation", reference, prompt, snapshot});
+  }
   delta(base: LocalContextSnapshot, target: LocalContextSnapshot): Promise<LocalContextDelta> {
     return this.call({op: "delta", base, target});
   }

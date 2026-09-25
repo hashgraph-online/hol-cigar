@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import time
 import unittest
@@ -89,12 +90,56 @@ class LocalContextTests(unittest.TestCase):
             graph.stats()
         self.assertEqual(raised.exception.code, "Closed")
 
+    def test_prompt_view_preserves_source_and_rejects_changed_citations(self):
+        graph = self.graph()
+        text = "Require the same identity on retry. Reject a mismatched signature. café 🦀"
+        graph.upsert({"id": "source:" + "a" * 100, "source": "contract.rs", "text": text})
+        snapshot = graph.compile({"query": "retry", "max_tokens": 512})["snapshot"]
+        prompt = graph.prompt_view(snapshot, 512)
+        self.assertEqual(graph.verify_prompt(prompt, snapshot), prompt)
+        self.assertEqual(json.loads(prompt["rendered"])["text"], text)
+        self.assertEqual(graph.resolve_citation("c1", prompt, snapshot), snapshot["blocks"][0]["citations"])
+        changed = copy.deepcopy(prompt)
+        changed["citations"]["c1"][0]["source"] = "unrelated.rs"
+        with self.assertRaises(LocalContextError) as raised:
+            graph.verify_prompt(changed, snapshot)
+        self.assertEqual(raised.exception.code, "Integrity")
+        with self.assertRaises(LocalContextError) as raised:
+            graph.prompt_view(snapshot, 1)
+        self.assertEqual(raised.exception.code, "BudgetUnsatisfiable")
+
     def test_bad_paths_and_options_fail_without_launch(self):
         for timeout in [0, -1, float("nan"), float("inf"), 1e100]:
             with self.assertRaises(LocalContextError):
                 LocalContextGraph("test", timeout=timeout)
         with self.assertRaises(LocalContextError):
             LocalContextGraph("test", worker_path=Path("relative-path"))
+
+    def test_answer_review_rejects_confident_errors_and_stale_evidence(self):
+        graph = self.graph()
+        graph.upsert({"id": "a", "source": "contract.md", "text": "Retry at most three times."})
+        request = {"required": ["a"]}
+        snapshot = graph.compile(request)["snapshot"]
+        draft = {"snapshot_id": snapshot["id"], "claims": [
+            {"text": "Retry at most three times.", "citations": ["a"], "confidence_bps": 9900}]}
+        key = graph.review_keys(draft)[0]
+        for verdict in ["unsupported", "contradicted", "unknown"]:
+            result = graph.check_answer(request, draft, [{"claim_key": key, "verdict": verdict}])
+            self.assertEqual(result["decision"], "abstain")
+            self.assertEqual(result["confident_failures"], 1)
+        self.assertEqual(graph.check_answer(request, draft, [])["decision"], "abstain")
+        reviews = [{"claim_key": key, "verdict": "supported"}]
+        self.assertEqual(graph.check_answer(request, draft, reviews)["decision"], "release")
+        self.assertEqual(graph.check_answer(request, draft, reviews, {"min_sources": 2})["decision"], "abstain")
+        changed = copy.deepcopy(draft)
+        changed["claims"][0]["text"] = "Retry thirty times."
+        with self.assertRaises(LocalContextError) as raised:
+            graph.check_answer(request, changed, reviews)
+        self.assertEqual(raised.exception.code, "InvalidInput")
+        graph.upsert({"id": "a", "source": "contract.md", "text": "Retry once."})
+        with self.assertRaises(LocalContextError) as raised:
+            graph.check_answer(request, draft, reviews)
+        self.assertEqual(raised.exception.code, "BaseMismatch")
 
     def test_invalid_frame_closes_transport_without_content_echo(self):
         graph = self.graph()

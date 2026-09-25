@@ -1,6 +1,11 @@
 # CIGAR documentation
 
-CIGAR is an alpha project from [HOL.org](https://hol.org).
+CIGAR provides local context graphs and a separate governed runtime from [HOL.org](https://hol.org).
+
+**For npm/PyPI context graphs, start with the [standalone guide](guides/local-context.md).**
+The 0.11.0 local library needs no HOL service, account, API key, daemon or database.
+It includes context compilation, citations, incremental updates and a trusted answer-review
+contract. The guide explains the installed `cigar-context doctor` and `demo` commands.
 
 Start at the [documentation home](site/index.md). The published set is declared by
 `site-manifest.v1.json`; implementation notes under `execution/` are intentionally excluded.
