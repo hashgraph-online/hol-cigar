@@ -41,7 +41,7 @@ class PyPIHoneyWorkflowTests(unittest.TestCase):
         self.assertNotIn("actions/checkout@", publish)
         self.assertNotIn("run:", publish)
         self.assertIn(
-            "pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247",
+            "pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33",
             publish,
         )
         self.assertIn("verify-metadata: true", publish)
