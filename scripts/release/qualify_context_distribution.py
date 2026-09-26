@@ -133,9 +133,9 @@ def prepare(args) -> None:
         (
             "wheel",
             archives
-            / f"hol_cigar-{distribution.VERSION}-py3-none-{metadata['wheel_tag']}.whl",
+            / f"hol_cigar-{distribution.PYTHON_VERSION}-py3-none-{metadata['wheel_tag']}.whl",
         ),
-        ("sdist", archives / f"hol_cigar-{distribution.VERSION}.tar.gz"),
+        ("sdist", archives / f"hol_cigar-{distribution.PYTHON_VERSION}.tar.gz"),
     ):
         venv = output / (kind + "-venv")
         runner.run(kind + "-venv", [args.uv, "venv", "--python", sys.executable, venv])
@@ -464,7 +464,7 @@ def offline(args) -> None:
         else:
             expected.append({"snapshot": json.loads(result.stdout)})
     (directory / "rust-oracle.json").write_bytes(canonical_json_bytes(expected))
-    results, demos = {}, {}
+    results, demos, shared_views = {}, {}, {}
     for kind in ("wheel", "sdist", "npm"):
         if kind == "npm":
             cwd = output / "npm-consumer"
@@ -516,6 +516,33 @@ def offline(args) -> None:
             and demos[kind]["reviewer"] == "scripted-fixture",
             "complete installed workflow failed",
         )
+        if kind == "npm":
+            view_command = [
+                "node",
+                "--input-type=module",
+                "-e",
+                'import {runSharedViews} from "@hol-org/cigar/examples/shared-views"; '
+                "console.log(JSON.stringify(await runSharedViews()));",
+            ]
+        else:
+            view_command = [
+                executable(venv, "python"),
+                "-m",
+                "cigar_sdk.examples.shared_views",
+                *explicit,
+            ]
+        shared_views[kind] = json.loads(
+            runner.run(kind + "-shared-views", view_command, cwd=cwd)
+        )
+        require(
+            shared_views[kind]["status"] == "passed"
+            and shared_views[kind]["agents"] == 5
+            and shared_views[kind]["workers"] == 1
+            and shared_views[kind]["released"]
+            == shared_views[kind]["missing_review_abstentions"]
+            == 50,
+            "installed five-agent shared-view workflow failed",
+        )
         missing = json.loads(
             runner.run(
                 kind + "-missing-worker",
@@ -546,6 +573,10 @@ def offline(args) -> None:
         demos["wheel"] == demos["sdist"] == demos["npm"],
         "SDK complete workflow results differ",
     )
+    require(
+        shared_views["wheel"] == shared_views["sdist"] == shared_views["npm"],
+        "SDK shared-view workflow results differ",
+    )
     report = {
         "schema": "cigar.context-distribution-qualification.v1",
         "status": "passed",
@@ -563,6 +594,7 @@ def offline(args) -> None:
         "expected_errors": sum("error" in row for row in expected),
         "all_rendered_outputs_equal": True,
         "full_workflow_checks": demos["npm"]["checks"],
+        "shared_view_workflow": shared_views["npm"],
         "legacy_exports": {key: value["exports"] for key, value in results.items()},
         "installation_checks": prepared["checks"],
         "runtime_dependencies": prepared["runtime_dependencies"],
