@@ -8,6 +8,7 @@ is deterministic; separate SDK tests exercise concurrent threads/promises.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import importlib.metadata
 import json
@@ -75,6 +76,40 @@ def child(args):
         ]
 
     def sample_rss():
+        if sys.platform == "darwin":
+            # Darwin SDK sys/proc_info.h: six uint64_t fields (resident bytes
+            # second), followed by twelve int32_t counters. Query only our children.
+            class TaskInfo(ctypes.Structure):
+                _fields_ = [
+                    ("wide", ctypes.c_uint64 * 6),
+                    ("counters", ctypes.c_int32 * 12),
+                ]
+
+            libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+            libproc.proc_pidinfo.argtypes = [
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint64,
+                ctypes.c_void_p,
+                ctypes.c_int,
+            ]
+            libproc.proc_pidinfo.restype = ctypes.c_int
+            total = 0
+            for graph in graphs:
+                info = TaskInfo()
+                size = ctypes.sizeof(info)
+                if (
+                    libproc.proc_pidinfo(
+                        graph._process.pid, 4, 0, ctypes.byref(info), size
+                    )
+                    != size
+                ):
+                    raise OSError(
+                        ctypes.get_errno(), "cannot read benchmark worker RSS"
+                    )
+                total += info.wide[1]
+            sampled_rss.append(total)
+            return
         pids = ",".join(str(g._process.pid) for g in graphs)
         result = subprocess.run(
             ["ps", "-o", "rss=", "-p", pids], check=True, text=True, capture_output=True
@@ -216,12 +251,23 @@ def child(args):
             data = compile_one(i)
             assert check(i, data, [])["decision"] == "abstain"
             totals["missing_review_abstained"] += 1
-            # An independent fixture oracle deliberately rejects this claim at high confidence.
+            # Deliberately falsify the known revision; the host's independent fixture
+            # oracle supplies a contradiction verdict bound to the altered claim.
+            client, context, draft, _ = data
+            draft = draft | {
+                "claims": [
+                    {
+                        "text": f"agent-{i} document 0: revision {revisions[i] + 1000}.",
+                        "citations": [f"agent-{i}-0"],
+                        "confidence_bps": 9999,
+                    }
+                ]
+            }
             wrong = [
-                {"claim_key": row["claim_key"], "verdict": "contradicted"}
-                for row in data[3]
+                {"claim_key": key, "verdict": "contradicted"}
+                for key in client.review_keys(draft)
             ]
-            assessed = check(i, data, wrong)
+            assessed = check(i, (client, context, draft, wrong))
             assert (
                 assessed["decision"] == "abstain"
                 and assessed["confident_failures"] == 1
@@ -278,8 +324,11 @@ def compare(args):
             if worker:
                 command.extend(["--worker", worker])
             result = subprocess.run(
-                command, check=True, capture_output=True, text=True, timeout=180
+                command, capture_output=True, text=True, timeout=180
             )
+            if result.returncode:
+                print(result.stderr, file=sys.stderr)
+                result.check_returncode()
             rows.append(
                 {"cohort": cohort, "variant": label, **json.loads(result.stdout)}
             )

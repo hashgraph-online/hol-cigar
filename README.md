@@ -32,6 +32,9 @@ serially inside the worker; this alpha adds safe sharing, not parallel Rust exec
 HUMIDOR retains scheduling, retries and workflow recovery. Durable handoffs/effects,
 multi-host sharing and upgrading HUMIDOR's Honey integration require separate work.
 See the [alpha contract and test plan](docs/release/context-sdk-0.13.0-alpha.1-notes.md).
+The [0.12 versus alpha comparison](docs/release/context-sdk-0.13.0-alpha.1-comparison.md)
+records 78–79% lower worker RSS than five private graphs, identical legacy fixture
+outputs, measured costs and the remaining qualification limits.
 
 [0.12 improvements](#improvements-in-0120) · [Local Python quickstart](#local-python-quickstart) ·
 [Local npm quickstart](#local-npm-quickstart) · [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
