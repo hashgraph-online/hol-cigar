@@ -252,7 +252,7 @@ pub struct ContextGraph {
     pub(crate) postings: BTreeMap<String, BTreeMap<Arc<str>, Posting>>,
     pub(crate) edges: BTreeMap<String, BTreeSet<(EdgeKind, String)>>,
     pub(crate) revision: u64,
-    sources: BTreeMap<String, BTreeSet<String>>,
+    pub(crate) sources: BTreeMap<String, BTreeSet<String>>,
     bytes: usize,
     edge_count: usize,
 }

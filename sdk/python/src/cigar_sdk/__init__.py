@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         LocalContextCapabilities,
         LocalContextError,
         LocalContextGraph,
+        LocalContextView,
         get_local_context_capabilities,
     )
     from cigar_sdk.context_types import (
@@ -37,6 +38,11 @@ if TYPE_CHECKING:
         LocalSelectionStats,
         LocalSourceUpdate,
         LocalTokenCacheStats,
+        LocalViewAssessment,
+        LocalViewContext,
+        LocalViewHandle,
+        LocalViewResult,
+        LocalViewSpec,
     )
     from cigar_sdk.digest import apply_context_delta, bundle_id, delta_digest, verify_bundle
     from cigar_sdk.errors import (
@@ -89,6 +95,12 @@ _EXPORTS: Final[dict[str, tuple[str, str | None]]] = {
     "LocalContextCapabilities": ("cigar_sdk.context", "LocalContextCapabilities"),
     "LocalContextError": ("cigar_sdk.context", "LocalContextError"),
     "LocalContextGraph": ("cigar_sdk.context", "LocalContextGraph"),
+    "LocalContextView": ("cigar_sdk.context", "LocalContextView"),
+    "LocalViewAssessment": ("cigar_sdk.context_types", "LocalViewAssessment"),
+    "LocalViewContext": ("cigar_sdk.context_types", "LocalViewContext"),
+    "LocalViewHandle": ("cigar_sdk.context_types", "LocalViewHandle"),
+    "LocalViewResult": ("cigar_sdk.context_types", "LocalViewResult"),
+    "LocalViewSpec": ("cigar_sdk.context_types", "LocalViewSpec"),
     "get_local_context_capabilities": ("cigar_sdk.context", "get_local_context_capabilities"),
     "LocalAnswerAssessment": ("cigar_sdk.context_types", "LocalAnswerAssessment"),
     "LocalAnswerClaim": ("cigar_sdk.context_types", "LocalAnswerClaim"),
@@ -185,6 +197,7 @@ __all__ = [
     "LocalContextRequest",
     "LocalContextResult",
     "LocalContextSnapshot",
+    "LocalContextView",
     "LocalDocument",
     "LocalEdgeKind",
     "LocalEvidenceBlock",
@@ -192,6 +205,11 @@ __all__ = [
     "LocalSelectionStats",
     "LocalSourceUpdate",
     "LocalTokenCacheStats",
+    "LocalViewAssessment",
+    "LocalViewContext",
+    "LocalViewHandle",
+    "LocalViewResult",
+    "LocalViewSpec",
     "OperationEvent",
     "OperationRequest",
     "OperationResponse",

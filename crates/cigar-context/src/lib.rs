@@ -12,6 +12,7 @@ mod prompt;
 mod select;
 mod snapshot;
 mod tokenizer;
+mod views;
 
 pub use answer::{
     AnswerAssessment, AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimAssessment,
@@ -25,6 +26,9 @@ pub use snapshot::{Citation, ContextDelta, ContextSnapshot, EvidenceBlock};
 pub use tokenizer::O200kTokenizer;
 pub use tokenizer::{
     CachedTokenCounter, TokenCacheLimits, TokenCacheStats, TokenCounter, Utf8ByteCounter,
+};
+pub use views::{
+    ContextView, ContextViewAssessment, ContextViewHandle, ContextViewSpec, ContextViews,
 };
 
 use sha2::{Digest, Sha256};

@@ -1,8 +1,9 @@
 //! Versioned, bounded stdio bridge. One caller-owned graph/cache per process.
 use cigar_context::{
     AnswerDraft, AnswerPolicy, ClaimReview, ContextDelta, ContextError, ContextGraph,
-    ContextPrompt, ContextRequest, ContextSnapshot, Document, EdgeKind, GraphLimits,
-    O200kTokenizer, TokenCacheLimits, TokenCounter,
+    ContextPrompt, ContextRequest, ContextSnapshot, ContextView, ContextViewHandle,
+    ContextViewSpec, ContextViews, Document, EdgeKind, GraphLimits, O200kTokenizer,
+    TokenCacheLimits, TokenCounter,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -96,6 +97,29 @@ enum Command {
     },
     Stats {},
     ClearCache {},
+    DefineView {
+        spec: ContextViewSpec,
+    },
+    RevokeView {
+        view_id: String,
+    },
+    CompileView {
+        view: ContextViewHandle,
+        request: ContextRequest,
+    },
+    ReplaceViewSource {
+        view: ContextViewHandle,
+        source: String,
+        documents: Vec<Document>,
+    },
+    CheckViewAnswer {
+        view: ContextViewHandle,
+        context: ContextView,
+        draft: AnswerDraft,
+        reviews: Vec<ClaimReview>,
+        #[serde(default)]
+        policy: AnswerPolicy,
+    },
 }
 
 #[derive(Deserialize)]
@@ -108,6 +132,7 @@ struct Request {
 struct Session {
     graph: ContextGraph,
     tokenizer: O200kTokenizer,
+    views: ContextViews,
 }
 
 impl Session {
@@ -132,7 +157,11 @@ impl Session {
             max_entries: limits.cache_entries.unwrap_or(cache.max_entries),
             max_text_bytes: limits.cache_text_bytes.unwrap_or(cache.max_text_bytes),
         })?;
-        Ok(Self { graph, tokenizer })
+        Ok(Self {
+            graph,
+            tokenizer,
+            views: ContextViews::default(),
+        })
     }
 
     fn rendered(&self, snapshot: ContextSnapshot) -> Result<Value, ContextError> {
@@ -207,6 +236,39 @@ impl Session {
                 self.tokenizer.clear_cache()?;
                 Ok(Value::Null)
             }
+            Command::DefineView { spec } => Ok(json!(self.views.define(spec)?)),
+            Command::RevokeView { view_id } => Ok(json!(self.views.revoke(&view_id))),
+            Command::CompileView { view, request } => {
+                let context = self
+                    .views
+                    .compile(&self.graph, &view, &request, &self.tokenizer)?;
+                Ok(json!({"rendered": context.snapshot().render(), "context": context}))
+            }
+            Command::ReplaceViewSource {
+                view,
+                source,
+                documents,
+            } => Ok(json!(self.views.replace_source(
+                &mut self.graph,
+                &view,
+                &source,
+                documents
+            )?)),
+            Command::CheckViewAnswer {
+                view,
+                context,
+                draft,
+                reviews,
+                policy,
+            } => Ok(json!(self.views.check_answer(
+                &self.graph,
+                &view,
+                &context,
+                &draft,
+                &reviews,
+                &policy,
+                &self.tokenizer
+            )?)),
         }
     }
 }
@@ -219,7 +281,7 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
         let value = Session::new(domain, limits)?;
         let reply = json!({"protocol": PROTOCOL, "core_version": env!("CARGO_PKG_VERSION"),
             "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
-            "max_response_bytes": MAX_RESPONSE});
+            "max_response_bytes": MAX_RESPONSE, "capabilities": ["context_views.v1"]});
         *session = Some(value);
         Ok(reply)
     } else {

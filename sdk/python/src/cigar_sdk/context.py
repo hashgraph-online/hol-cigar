@@ -29,6 +29,11 @@ from cigar_sdk.context_types import (
     LocalEdgeKind,
     LocalGraphStats,
     LocalSourceUpdate,
+    LocalViewAssessment,
+    LocalViewContext,
+    LocalViewHandle,
+    LocalViewResult,
+    LocalViewSpec,
 )
 from cigar_sdk.local_runtime import (
     LOCAL_CONTEXT_CORE_VERSION as LOCAL_CONTEXT_CORE_VERSION,
@@ -109,6 +114,10 @@ class LocalContextGraph:
                 or hello.get("max_response_bytes") != _MAX_RESPONSE
             ):
                 raise LocalContextError("IncompatibleWorker")
+            capabilities = hello.get("capabilities", [])
+            if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
+                raise LocalContextError("IncompatibleWorker")
+            self._supports_views = "context_views.v1" in capabilities
         except BaseException:
             self.close()
             raise
@@ -211,6 +220,24 @@ class LocalContextGraph:
 
     def upsert(self, document: LocalDocument) -> bool:
         return cast(bool, self._call({"op": "upsert", "document": document}))
+
+    def _view_call(self, command: dict[str, Any]) -> Any:
+        if not self._supports_views:
+            raise LocalContextError("IncompatibleWorker")
+        return self._call(command)
+
+    def create_view(self, spec: LocalViewSpec) -> LocalContextView:
+        """Define/replace a host-owned view over this graph. Replacing revokes its old handles.
+
+        Sources are indexed once. Keep the root graph and this method outside agent control;
+        a view is not a sandbox or a replacement for authenticated CIGAR service capabilities.
+        """
+        handle = cast(LocalViewHandle, self._view_call({"op": "define_view", "spec": spec}))
+        return LocalContextView(self, handle)
+
+    def revoke_view(self, view_id: str) -> bool:
+        """Revoke access through existing view handles without deleting shared source data."""
+        return cast(bool, self._view_call({"op": "revoke_view", "view_id": view_id}))
 
     def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
         """Atomically replace one source; [] withdraws it. Hard edges remain fail-closed."""
@@ -346,3 +373,62 @@ class LocalContextGraph:
         self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
     ) -> None:
         self.close()
+
+
+class LocalContextView:
+    """A scoped facade sharing its owner's single worker/index and bounded call queue.
+
+    Host-created views are logical source partitions within one trusted application.
+    Do not give untrusted code the root graph, worker pipe, review authority or filesystem.
+    Views are session-local; worker failure closes all of them without automatic retry.
+    """
+
+    def __init__(self, graph: LocalContextGraph, handle: LocalViewHandle) -> None:
+        self._graph = graph
+        self._handle = handle.copy()
+
+    def compile(self, request: LocalContextRequest) -> LocalViewResult:
+        """Compile authorized current sources; request access may narrow but cannot widen scope."""
+        return cast(
+            LocalViewResult,
+            self._graph._view_call({"op": "compile_view", "view": self._handle, "request": request}),
+        )
+
+    def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
+        """Atomically replace a writable source. Cross-source document ID collisions are denied."""
+        return cast(
+            LocalSourceUpdate,
+            self._graph._view_call(
+                {"op": "replace_view_source", "view": self._handle, "source": source, "documents": documents}
+            ),
+        )
+
+    def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
+        """Use context['snapshot']['id'] in the draft; these remain the legacy claim-review keys."""
+        return self._graph.review_keys(draft)
+
+    def check_answer(
+        self,
+        context: LocalViewContext,
+        draft: LocalAnswerDraft,
+        reviews: list[LocalClaimReview],
+        policy: LocalAnswerPolicy | None = None,
+    ) -> LocalViewAssessment:
+        """Recompile and recheck current scope; every authorized source/edge change invalidates.
+
+        Unrelated writes outside the view do not invalidate. Reviews/policy remain host-trusted.
+        This transient assessment grants no external effect authority or durable approval.
+        """
+        return cast(
+            LocalViewAssessment,
+            self._graph._view_call(
+                {
+                    "op": "check_view_answer",
+                    "view": self._handle,
+                    "context": context,
+                    "draft": draft,
+                    "reviews": reviews,
+                    "policy": policy or {},
+                }
+            ),
+        )

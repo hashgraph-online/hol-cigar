@@ -6,23 +6,70 @@ CIGAR owns a Rust graph in a persistent local worker process.
 
 ## Install and check
 
-Version 0.12.0 supports Python `>=3.14 <3.15`. The PyPI distribution is `hol-cigar`;
+Alpha 0.13.0a1 supports Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install --upgrade 'hol-cigar==0.12.0'
+python3.14 -m pip install /absolute/path/to/hol_cigar-0.13.0a1-py3-none-macosx_11_0_arm64.whl
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
+python3.14 -m cigar_sdk.examples.shared_views
 ```
 
-PyPI selects the native wheel for your supported platform; no Rust compiler or
-separate worker installation is required.
+This is a local macOS ARM64 test candidate, not a published PyPI version. Install
+the exact wheel from its comparison report. It bundles its matching native worker;
+no Rust compiler or separate worker installation is required. Other platforms have
+not yet received alpha qualification.
 See the bundled [changelog](CHANGELOG.md) for migration details. The supported
 protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
 compile; `demo` runs the complete workflow. Add `--json` for machine-readable results.
 
-## Improvements from 0.11.0
+## Five agents sharing one graph (new in 0.13 alpha)
+
+The trusted host creates one graph and gives each cooperating agent a scoped view:
+
+```python
+from cigar_sdk import LocalContextGraph
+
+with LocalContextGraph("run-unique-domain") as graph:
+    view = graph.create_view({
+        "id": "agent-1", "allowed_sources": ["shared-policy", "agent-1"],
+        "writable_sources": ["agent-1"], "policy_revision": "host-policy-1",
+    })
+    view.replace_source("agent-1", [{"id": "task-1", "source": "agent-1", "text": "Retry once."}])
+    result = view.compile({"required": ["task-1"], "max_tokens": 512})
+    # Bind a draft to result["context"]["snapshot"]["id"], obtain independent reviews,
+    # then call view.check_answer(result["context"], draft, reviews).
+```
+
+Import `LocalContextGraph` as shown below. Create five views on the same graph;
+each stores only its scope definition. The packaged `shared_views` example runs
+five concurrent scripted agents, checks citations/budgets and tests reviewed release
+and missing-review abstention without a model provider.
+
+`allowed` in a view request can only narrow the host's source scope. Empty sources
+deny all; writable sources must also be readable. Source replacement rejects ID
+collisions with other sources. `graph.revoke_view(id)` or redefining the view
+invalidates old handles. Changes anywhere in its readable sources/edges require a
+new review; updates strictly outside the scope leave the review valid. The returned
+`checked_graph_revision` records when assessment occurred, not permission for a
+later external action. The host must coordinate revalidation with effect execution.
+
+Keep the root graph, view definitions and reviewer verdicts outside agent control.
+Views are logical host scopes, not a sandbox or authenticated capability. Sharing
+one process is appropriate only inside a trusted application/privacy domain. Use
+a host-owned broker for agents in separate processes; never share Python objects
+through `fork()`. This alpha provides no broker or durable restart/resume protocol.
+Use a fresh graph domain and fresh reviews for each run. Calls remain serialized.
+HUMIDOR remains responsible for scheduling and recovery; its Honey integration has
+not been upgraded or qualified by this local SDK alpha.
+
+Existing root methods retain their exact 0.12 behavior, including conservative
+global-revision stale-review rejection. New view methods require a worker advertising
+`context_views.v1`; unsupported workers fail with `IncompatibleWorker`.
+
+## Previous improvements from 0.11.0 to 0.12.0
 
 Version 0.12.0 strengthens integrity checks and worker lifecycle handling while
 reducing Python startup cost. Existing valid bundle IDs, context snapshots,
@@ -107,15 +154,15 @@ the parent's worker. Create a new graph in the child; use a spawn-based process
 pool where possible. `close()` is idempotent and preserves ordinary primary errors.
 If OS cleanup fails, `cleanup_complete` remains false and another close retries.
 
-The 0.12.0 wheel matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with glibc 2.28+
-or musl 1.2+, and Windows x64. The release checks require every advertised wheel
-before publication. Each platform wheel contains its worker and needs no Rust compiler.
+The existing platform inventory covers macOS, Linux glibc/musl and Windows x64.
+Only macOS ARM64 is qualified for this local alpha. The seven-platform qualification
+and independent reproducibility gates remain required before a stable release.
 
 Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
 `pip install --no-binary hol-cigar` source installs. These builds retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.12.0 Rust source using Rust 1.92+:
+0.13.0-alpha.1 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker

@@ -58,3 +58,17 @@ export type LocalGraphStats = Readonly<{
   documents: number; revision: number;
   cache: Readonly<{hits: number; misses: number; entries: number; text_bytes: number}>;
 }>;
+
+/** Host-owned source scope. Keep definition and root graph access outside agent control. */
+export type LocalViewSpec = Readonly<{
+  id: string; allowed_sources: readonly string[]; writable_sources?: readonly string[]; policy_revision: string;
+}>;
+/** Session-local routing identity, not a bearer credential or signed capability. */
+export type LocalViewHandle = Readonly<{id: string; generation: number}>;
+export type LocalViewContext = Readonly<{
+  id: string; view: LocalViewHandle; request: LocalContextRequest; scope_id: string; snapshot: LocalContextSnapshot;
+}>;
+export type LocalViewResult = Readonly<{context: LocalViewContext; rendered: string}>;
+export type LocalViewAssessment = Readonly<{
+  context_id: string; checked_graph_revision: number; assessment: LocalAnswerAssessment;
+}>;

@@ -1,6 +1,6 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.12.0",
+  "version": "0.13.0-alpha.1",
   "description": "Local context graphs, exact token budgets, citations and answer review. No HOL service required.",
   "license": "Apache-2.0",
   "repository": {
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "latest"
+    "tag": "alpha"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",
@@ -30,6 +30,10 @@
     "./context": {
       "types": "./dist/context-api.d.ts",
       "import": "./dist/context-api.js"
+    },
+    "./examples/shared-views": {
+      "types": "./dist/examples/shared-views.d.ts",
+      "import": "./dist/examples/shared-views.js"
     },
     "./examples/local-workflow": {
       "types": "./dist/examples/local-workflow.d.ts",

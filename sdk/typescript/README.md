@@ -6,22 +6,55 @@ CIGAR owns a Rust graph in a persistent local worker process.
 
 ## Install and check
 
-Version 0.12.0 is an unpublished candidate for ESM on Node.js `>=24.10.0 <25`:
+Version 0.13.0-alpha.1 is a local alpha for ESM on Node.js `>=24.10.0 <25`:
 
 ```text
-npm install --save-exact /absolute/path/to/hol-org-cigar-0.12.0.tgz
+npm install --save-exact /absolute/path/to/hol-org-cigar-0.13.0-alpha.1.tgz
 npx --no-install cigar-context doctor
 npx --no-install cigar-context demo
 ```
 
 Install the exact archive from the candidate's qualification report. Public default
 installs remain on 0.11.0 until a separate publication decision. This candidate
-includes the canonical-CBOR union decoding repair and bounded worker hashing.
+retains the canonical-CBOR union decoding repair and bounded worker hashing.
+Only macOS ARM64 has been qualified for this alpha; its archive bundles that worker.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
 citations, cache reuse, trusted fixture reviews, source updates and stale-review
 rejection. Add `--json` for machine-readable results. Both run without a model provider.
 The package has no install script and downloads no worker at runtime.
+
+## Five agents sharing one graph
+
+Run the packaged offline example after installation:
+
+```sh
+node --input-type=module -e 'import {runSharedViews} from "@hol-org/cigar/examples/shared-views"; console.log(await runSharedViews());'
+```
+
+The example runs five concurrent scripted agents through one worker/index. A trusted
+host creates each view with `await graph.createView({id: "agent-1", allowed_sources:
+["shared-policy", "agent-1"], writable_sources: ["agent-1"], policy_revision: "host-policy-1"})`.
+Use `view.replaceSource(source, documents)` and `view.compile(request)`. Bind claims
+to `result.context.snapshot.id`, obtain independently trusted `view.reviewKeys(draft)`
+verdicts, and call `view.checkAnswer(result.context, draft, reviews)` before release.
+
+Request `allowed` may only narrow the host's scope. Empty source lists deny all;
+writable sources must be readable. ID collisions across sources are rejected.
+Redefining or `await graph.revokeView(id)` invalidates the old handle. Any change
+inside the readable sources/edges, even unselected evidence, requires fresh reviews.
+Updates strictly outside the scope leave existing reviews valid. The assessment's
+`checked_graph_revision` identifies a check point, not authority for a later effect.
+
+Keep root graph access, scope configuration and reviews outside agent control.
+These are logical scopes inside a trusted host/privacy domain, not authenticated
+capabilities or an OS sandbox. A separate-process agent needs a host-owned broker;
+this alpha does not supply one. Views have no durable restart/resume contract; use
+a fresh run domain and fresh reviews after restart. Calls remain serialized in the
+worker. HUMIDOR retains scheduling and recovery; its Honey integration is unchanged.
+
+All 0.12 root APIs retain their behavior. New view methods require the worker's
+`context_views.v1` capability and fail with `IncompatibleWorker` if it is absent.
 
 ## Local Rust context graph
 
@@ -52,12 +85,12 @@ selected text block and short citation handles. Retain its citation map and full
 the expected authorized snapshot. A separate exact budget fails without truncating evidence.
 Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
 
-The 0.12.0 distribution matrix includes macOS 11+ ARM64/x64, Linux x64/ARM64 with
-glibc 2.28+ or musl 1.2+, and Windows x64. The release checks require every advertised
-worker before publication. Browser, edge runtimes that prohibit subprocesses, and
+The platform inventory covers macOS, Linux glibc/musl and Windows x64. Only macOS
+ARM64 is qualified for this local alpha; a stable release still requires the complete
+seven-platform matrix. Browser, edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
-the matching Rust 0.12.0 source. There is no install script, runtime download, PATH
+the matching Rust 0.13.0-alpha.1 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize

@@ -12,23 +12,24 @@ from typing import Literal, TypedDict
 from cigar_sdk.native_platforms import NATIVE_PLATFORMS
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.12.0"
+LOCAL_CONTEXT_CORE_VERSION = "0.13.0-alpha.1"
 
 _GUIDANCE = {
     "WorkerUnavailable": (
         "The local worker is missing or cannot execute. Install the wheel for this platform, or supply an absolute "
-        "trusted worker_path built from matching 0.12.0 sources. HOL services and API keys are not required."
+        f"trusted worker_path built from matching {LOCAL_CONTEXT_CORE_VERSION} sources. "
+        "HOL services and API keys are not required."
     ),
     "UnsupportedPlatform": (
         "This runtime has no bundled local worker. Use a supported Python platform, or supply an absolute trusted "
-        "worker_path built from matching 0.12.0 sources. HOL services are not required."
+        f"worker_path built from matching {LOCAL_CONTEXT_CORE_VERSION} sources. HOL services are not required."
     ),
     "WorkerIntegrity": (
         "The bundled worker does not match its versioned manifest. Reinstall the verified wheel; "
         "do not bypass the integrity check."
     ),
     "IncompatibleWorker": (
-        "The executable does not implement the matching 0.12.0 worker protocol. "
+        f"The executable does not implement the matching {LOCAL_CONTEXT_CORE_VERSION} worker protocol. "
         "Use the worker shipped with this package or build the matching source."
     ),
 }
@@ -128,7 +129,7 @@ def get_local_context_capabilities(*, worker_path: str | Path | None = None) -> 
     except LocalContextError as error:
         failure = error
     return {
-        "package_version": LOCAL_CONTEXT_CORE_VERSION,
+        "package_version": LOCAL_CONTEXT_CORE_VERSION.replace("-alpha.", "a"),
         "core_version": LOCAL_CONTEXT_CORE_VERSION,
         "protocol": LOCAL_CONTEXT_PROTOCOL,
         "runtime": f"python {platform.python_version()}",

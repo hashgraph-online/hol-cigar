@@ -36,6 +36,7 @@ from release_lib import (
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY = load_json(ROOT / "sdk/local-context-release.v1.json")
 VERSION = IDENTITY["core_version"]
+PYTHON_VERSION = IDENTITY["versions"]["python"]
 PROTOCOL = IDENTITY["protocol"]
 MAX_FILE = 64 * 1024 * 1024
 MAX_TOTAL = 512 * 1024 * 1024
@@ -74,9 +75,9 @@ def artifact_names(platform_ids: set[str]) -> set[str]:
     return {
         f"cigar-context-{VERSION}.crate",
         f"hol-org-cigar-{VERSION}.tgz",
-        f"hol_cigar-{VERSION}.tar.gz",
+        f"hol_cigar-{PYTHON_VERSION}.tar.gz",
         *(
-            f"hol_cigar-{VERSION}-py3-none-{platforms[key]['wheel_tag']}.whl"
+            f"hol_cigar-{PYTHON_VERSION}-py3-none-{platforms[key]['wheel_tag']}.whl"
             for key in platform_ids
         ),
     }
@@ -294,7 +295,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         == {
             "access": "public",
             "registry": "https://registry.npmjs.org/",
-            "tag": "latest",
+            "tag": "alpha" if IDENTITY["channel"] == "alpha" else "latest",
         },
         "npm publication target mismatch",
     )
@@ -314,7 +315,12 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         package["bin"] == {"cigar-context": "./dist/local-cli.js"},
         "npm diagnostic entrypoint missing",
     )
-    for export in (".", "./context", "./examples/local-workflow"):
+    for export in (
+        ".",
+        "./context",
+        "./examples/local-workflow",
+        "./examples/shared-views",
+    ):
         for target in package["exports"][export].values():
             require(
                 "package/" + target.removeprefix("./") in npm,
@@ -349,11 +355,11 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
     worker_files(npm, "package/native/", set(workers))
     for key in workers:
         tag = "py3-none-" + platforms[key]["wheel_tag"]
-        wheel = archive_files(artifacts / f"hol_cigar-{VERSION}-{tag}.whl")
-        info = f"hol_cigar-{VERSION}.dist-info/"
+        wheel = archive_files(artifacts / f"hol_cigar-{PYTHON_VERSION}-{tag}.whl")
+        info = f"hol_cigar-{PYTHON_VERSION}.dist-info/"
         metadata = BytesParser().parsebytes(wheel[info + "METADATA"])
         require(
-            metadata["Name"] == "hol-cigar" and metadata["Version"] == VERSION,
+            metadata["Name"] == "hol-cigar" and metadata["Version"] == PYTHON_VERSION,
             "wheel identity mismatch",
         )
         require(
@@ -390,6 +396,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
             "llms.txt",
             "local_cli.py",
             "examples/local_workflow.py",
+            "examples/shared_views.py",
         ):
             require(
                 bool(wheel.get("cigar_sdk/" + name)),
@@ -416,7 +423,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
                     "wheel RECORD hash mismatch",
                 )
         worker_files(wheel, "cigar_sdk/_native/", {key})
-    sdist = archive_files(artifacts / f"hol_cigar-{VERSION}.tar.gz")
+    sdist = archive_files(artifacts / f"hol_cigar-{PYTHON_VERSION}.tar.gz")
     require(
         not any("/_native/" in name for name in sdist),
         "portable sdist must not contain a host-specific worker",
@@ -431,9 +438,11 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         "llms.txt",
         "hatch_build.py",
         "src/cigar_sdk/examples/local_workflow.py",
+        "src/cigar_sdk/examples/shared_views.py",
     ):
         require(
-            f"hol_cigar-{VERSION}/{name}" in sdist, "sdist standalone asset missing"
+            f"hol_cigar-{PYTHON_VERSION}/{name}" in sdist,
+            "sdist standalone asset missing",
         )
     source_hash = file_record(artifacts / f"cigar-context-{VERSION}.crate")["sha256"]
     require(

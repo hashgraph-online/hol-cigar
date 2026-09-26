@@ -33,8 +33,13 @@ class DistributionBoundaryTests(unittest.TestCase):
         files = distribution.artifact_names(set(platforms))
         self.assertEqual(len(files), 10)
         self.assertEqual(sum(name.endswith(".whl") for name in files), 7)
-        self.assertIn("hol_cigar-0.12.0-py3-none-win_amd64.whl", files)
-        self.assertIn("hol_cigar-0.12.0-py3-none-musllinux_1_2_aarch64.whl", files)
+        self.assertIn(
+            f"hol_cigar-{distribution.PYTHON_VERSION}-py3-none-win_amd64.whl", files
+        )
+        self.assertIn(
+            f"hol_cigar-{distribution.PYTHON_VERSION}-py3-none-musllinux_1_2_aarch64.whl",
+            files,
+        )
         with self.assertRaises(ReleaseError):
             distribution.artifact_names({"freebsd-x64"})
 
@@ -47,7 +52,7 @@ class DistributionBoundaryTests(unittest.TestCase):
     def test_diagnostic_and_incomplete_candidates_cannot_qualify_a_release(self):
         candidate = {
             "schema": "cigar.context-distribution-candidate.v1",
-            "release": "0.12.0",
+            "release": distribution.VERSION,
             "source_binding": {"clean": True},
             "diagnostic": True,
             "platforms": ["darwin-arm64"],

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { NATIVE_PLATFORMS } from "./native-platforms.js";
 
 export const LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1" as const;
-export const LOCAL_CONTEXT_CORE_VERSION = "0.12.0" as const;
+export const LOCAL_CONTEXT_CORE_VERSION = "0.13.0-alpha.1" as const;
 
 /** Local process ABI, including the Linux C library. No executable or service is contacted. */
 export function localPlatform(): string {
@@ -16,10 +16,10 @@ export function localPlatform(): string {
 }
 
 const GUIDANCE: Readonly<Record<string, string>> = {
-  WorkerUnavailable: "The local worker is missing or cannot execute. Reinstall the package for this platform, or supply an absolute trusted workerPath built from matching 0.12.0 sources. HOL services and API keys are not required.",
-  UnsupportedPlatform: "This runtime has no bundled local worker. Use a supported Node.js platform, or supply an absolute trusted workerPath built from matching 0.12.0 sources. HOL services are not required.",
+  WorkerUnavailable: `The local worker is missing or cannot execute. Reinstall the package for this platform, or supply an absolute trusted workerPath built from matching ${LOCAL_CONTEXT_CORE_VERSION} sources. HOL services and API keys are not required.`,
+  UnsupportedPlatform: `This runtime has no bundled local worker. Use a supported Node.js platform, or supply an absolute trusted workerPath built from matching ${LOCAL_CONTEXT_CORE_VERSION} sources. HOL services are not required.`,
   WorkerIntegrity: "The bundled worker does not match its versioned manifest. Reinstall the verified package; do not bypass the integrity check.",
-  IncompatibleWorker: "The executable does not implement the matching 0.12.0 worker protocol. Use the worker shipped with this package or build the matching source.",
+  IncompatibleWorker: `The executable does not implement the matching ${LOCAL_CONTEXT_CORE_VERSION} worker protocol. Use the worker shipped with this package or build the matching source.`,
 };
 
 export class LocalContextError extends Error {

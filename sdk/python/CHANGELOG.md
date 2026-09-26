@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0a1 — local alpha
+
+- Add host-scoped `LocalContextView` handles on one shared graph/index. Source
+  reads and atomic replacements respect host-defined readable/writable scopes.
+- Preserve reviews across outside-scope updates. Changes to any readable evidence,
+  graph edge or view definition require fresh reviews; revocation rejects old handles.
+- Bind scope commitments into existing snapshot/review identities and retain all
+  0.12 exports, signatures, canonical fixtures and root-method freshness semantics.
+- Include an offline five-agent example and paired 0.12 comparison harness.
+- Local macOS ARM64 evaluation only. Calls are serialized; views are host-owned
+  logical scopes, not authentication, durable recovery or an effect authority.
+  HUMIDOR scheduling and its separate Honey integration are unchanged.
+
 ## 0.12.0 — 2026-09-25
 
 - Reject non-string and Unicode-normalization-colliding mapping keys before

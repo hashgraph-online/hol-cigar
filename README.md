@@ -11,6 +11,28 @@ Use `LocalContextGraph` from Python's `cigar_sdk` or npm's `@hol-org/cigar/conte
 Both packages run a bundled Rust worker locally; their separate `CigarClient`
 APIs connect to a caller-selected CIGAR server.
 
+## 0.13.0 alpha: five agents, one local graph
+
+This branch adds **host-scoped context views** to one shared worker and document
+index. Five cooperating agents can each read their authorized sources and replace
+their own writable sources. Updating an unrelated agent's source no longer forces
+every other agent to discard its reviewed answer. Changes inside a view, including
+unselected evidence, still require a fresh review. Source citations, exact budgets,
+snapshot verification and the existing 0.12 APIs remain available.
+
+The test candidate is `0.13.0-alpha.1` (`hol-cigar==0.13.0a1` in Python).
+It is a local macOS ARM64 alpha, not a registry default or a seven-platform release.
+Install its exact archives using the [Python](sdk/python/README.md) or
+[npm](sdk/typescript/README.md) instructions and run the packaged five-agent example.
+The stable installation instructions below continue to describe 0.12/0.11.
+
+One trusted host owns the graph and routes requests to views. View handles are
+logical scopes, not authenticated credentials or OS sandboxes. Calls still execute
+serially inside the worker; this alpha adds safe sharing, not parallel Rust execution.
+HUMIDOR retains scheduling, retries and workflow recovery. Durable handoffs/effects,
+multi-host sharing and upgrading HUMIDOR's Honey integration require separate work.
+See the [alpha contract and test plan](docs/release/context-sdk-0.13.0-alpha.1-notes.md).
+
 [0.12 improvements](#improvements-in-0120) · [Local Python quickstart](#local-python-quickstart) ·
 [Local npm quickstart](#local-npm-quickstart) · [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·
 [0.9.4 candidate](#cigar-honey-094-candidate) · [Candidate evidence](#094-candidate-evidence) ·

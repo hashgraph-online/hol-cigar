@@ -1,10 +1,19 @@
-# cigar-context 0.11.0
+# cigar-context 0.13.0-alpha.1
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
-or external graph builder is required. Version 0.11.0 adds a bounded answer-review contract
-and offline quality evaluation, retaining 0.10.1's common-term scoring and incremental source
-updates. The source crate is prepared separately from registry publication.
+or external graph builder is required. This alpha adds `ContextViews` over one
+`ContextGraph`: a trusted host defines readable/writable source scopes, compiles
+scope-bound snapshots and checks reviews without invalidation from outside-scope
+writes. All existing root methods and their exact freshness semantics remain.
+The source crate is prepared separately from registry publication.
+
+Views are logical host scopes, not authentication or an OS sandbox. Keep root graph,
+scope definitions and review authority outside agent control. Any readable document
+or edge change, even unselected evidence, requires a fresh review. Revocation and
+redefinition invalidate handles. Views have no durable restart/resume contract;
+use fresh run domains and reviews. The SDK worker still serializes calls. Scheduling,
+durable handoffs and effect execution remain application/HUMIDOR responsibilities.
 
 ```rust
 use cigar_context::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter};

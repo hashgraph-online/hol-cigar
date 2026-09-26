@@ -21,8 +21,13 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     identity = json.loads((root / "sdk/local-context-release.v1.json").read_bytes())
     version = identity["core_version"]
     assert expected is None or version == expected, "unexpected local SDK release"
-    assert re.fullmatch(r"0\.\d+\.\d+", version), "invalid local SDK version"
-    assert identity["versions"] == {"python": version, "typescript": version}, (
+    assert re.fullmatch(r"0\.\d+\.\d+(?:-alpha\.[1-9]\d*)?", version), (
+        "invalid local SDK version"
+    )
+    python_version = version.replace("-alpha.", "a")
+    channel = "alpha" if "-alpha." in version else "stable"
+    assert identity["channel"] == channel, "release channel drift"
+    assert identity["versions"] == {"python": python_version, "typescript": version}, (
         "SDK identity drift"
     )
     python = tomllib.loads((root / "sdk/python/pyproject.toml").read_text())
@@ -30,11 +35,12 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     cargo = tomllib.loads((root / "crates/cigar-context/Cargo.toml").read_text())
     lock = tomllib.loads((root / "Cargo.lock").read_text())
     assert (
-        python["project"]["version"]
-        == node["version"]
-        == cargo["package"]["version"]
-        == version
+        node["version"] == cargo["package"]["version"] == version
+        and python["project"]["version"] == python_version
     ), "package version drift"
+    assert node["publishConfig"]["tag"] == (
+        "alpha" if channel == "alpha" else "latest"
+    ), "npm tag drift"
     assert [
         item["version"] for item in lock["package"] if item["name"] == "cigar-context"
     ] == [version], "Cargo lock drift"
@@ -43,9 +49,12 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
         "sdk/typescript/release.json",
     ):
         release = json.loads((root / path).read_bytes())
-        assert release["version"] == release["local_context_core_version"] == version, (
-            path
-        )
+        package_version = python_version if "/python/" in path else version
+        assert (
+            release["version"] == package_version
+            and release["local_context_core_version"] == version
+        ), path
+        assert release["channel"] == channel, path
         assert release["local_context_protocol"] == identity["protocol"], path
         assert (
             release["context_abi"] == identity["context_abi"] == "cigar.context.v1"

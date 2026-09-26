@@ -36,7 +36,7 @@ test("every advertised platform selects its own worker and rejects a wrong targe
       const directory = join(sample.root, "native", id);
       mkdirSync(directory, {recursive: true});
       const bytes = Buffer.from(`fixture bytes for ${id}`);
-      const manifest = {protocol: "cigar.context-worker.v1", core_version: "0.12.0",
+      const manifest = {protocol: "cigar.context-worker.v1", core_version: sample.runtime.LOCAL_CONTEXT_CORE_VERSION,
         target: metadata.target, sha256: createHash("sha256").update(bytes).digest("hex")};
       writeFileSync(join(directory, metadata.executable), bytes);
       writeFileSync(join(directory, "manifest.json"), JSON.stringify(manifest));

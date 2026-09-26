@@ -1,5 +1,7 @@
 //! Claim review is a host trust boundary, not model self-certification.
-use crate::{ContextError, ContextGraph, ContextRequest, EdgeKind, TokenCounter, digest};
+use crate::{
+    ContextError, ContextGraph, ContextRequest, ContextSnapshot, EdgeKind, TokenCounter, digest,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -216,27 +218,33 @@ impl ContextGraph {
         policy: &AnswerPolicy,
         tokenizer: &impl TokenCounter,
     ) -> Result<AnswerAssessment, ContextError> {
-        if !(1..=4).contains(&policy.min_sources)
-            || policy.high_confidence_bps > 10000
-            || reviews.len() > 128
-        {
-            return Err(ContextError::InvalidInput);
-        }
-        let keys = draft.review_keys()?;
-        let mut review_map = BTreeMap::new();
-        for review in reviews {
-            if !keys.contains(&review.claim_key)
-                || review.reviewed_counterevidence.len() > 4096
-                || review
-                    .reviewed_counterevidence
-                    .iter()
-                    .any(|id| !crate::graph::valid_id(id))
-                || review_map.insert(&review.claim_key, review).is_some()
-            {
-                return Err(ContextError::InvalidInput);
-            }
-        }
+        let (keys, review_map) = prepare_reviews(draft, reviews, policy)?;
         let snapshot = self.compile(request, tokenizer)?;
+        self.assess_snapshot(&snapshot, draft, reviews, policy, (keys, review_map))
+    }
+
+    // Only call after freshly proving that this snapshot's complete authorized scope,
+    // request, evidence and policy still match the current graph. A digest is not authority.
+    pub(crate) fn check_view_snapshot(
+        &self,
+        snapshot: &ContextSnapshot,
+        draft: &AnswerDraft,
+        reviews: &[ClaimReview],
+        policy: &AnswerPolicy,
+    ) -> Result<AnswerAssessment, ContextError> {
+        let (keys, review_map) = prepare_reviews(draft, reviews, policy)?;
+        self.assess_snapshot(snapshot, draft, reviews, policy, (keys, review_map))
+    }
+
+    fn assess_snapshot(
+        &self,
+        snapshot: &ContextSnapshot,
+        draft: &AnswerDraft,
+        reviews: &[ClaimReview],
+        policy: &AnswerPolicy,
+        prepared: PreparedReviews<'_>,
+    ) -> Result<AnswerAssessment, ContextError> {
+        let (keys, review_map) = prepared;
         if snapshot.id() != draft.snapshot_id {
             return Err(ContextError::BaseMismatch);
         }
@@ -371,6 +379,36 @@ impl ContextGraph {
         }
         counterevidence
     }
+}
+
+type PreparedReviews<'a> = (Vec<String>, BTreeMap<&'a String, &'a ClaimReview>);
+
+fn prepare_reviews<'a>(
+    draft: &AnswerDraft,
+    reviews: &'a [ClaimReview],
+    policy: &AnswerPolicy,
+) -> Result<PreparedReviews<'a>, ContextError> {
+    if !(1..=4).contains(&policy.min_sources)
+        || policy.high_confidence_bps > 10000
+        || reviews.len() > 128
+    {
+        return Err(ContextError::InvalidInput);
+    }
+    let keys = draft.review_keys()?;
+    let mut review_map = BTreeMap::new();
+    for review in reviews {
+        if !keys.contains(&review.claim_key)
+            || review.reviewed_counterevidence.len() > 4096
+            || review
+                .reviewed_counterevidence
+                .iter()
+                .any(|id| !crate::graph::valid_id(id))
+            || review_map.insert(&review.claim_key, review).is_some()
+        {
+            return Err(ContextError::InvalidInput);
+        }
+    }
+    Ok((keys, review_map))
 }
 
 fn valid_digest(value: &str) -> bool {

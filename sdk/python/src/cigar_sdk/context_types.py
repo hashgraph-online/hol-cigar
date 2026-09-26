@@ -33,8 +33,18 @@ class LocalAnswerPolicy(TypedDict, total=False):
 class LocalClaimAssessment(TypedDict):
     claim_key: str
     independent_sources: int
-    issues: list[Literal["uncited", "invalid_citation", "insufficient_sources", "unreviewed",
-                         "unsupported", "contradicted", "unknown", "unreviewed_counterevidence"]]
+    issues: list[
+        Literal[
+            "uncited",
+            "invalid_citation",
+            "insufficient_sources",
+            "unreviewed",
+            "unsupported",
+            "contradicted",
+            "unknown",
+            "unreviewed_counterevidence",
+        ]
+    ]
 
 
 class LocalAnswerAssessment(TypedDict):
@@ -160,3 +170,38 @@ class LocalGraphStats(TypedDict):
     documents: int
     revision: int
     cache: LocalTokenCacheStats
+
+
+class LocalViewSpec(TypedDict):
+    """Host-owned exact source scope; definition and root access stay outside agent control."""
+
+    id: str
+    allowed_sources: list[str]
+    writable_sources: NotRequired[list[str]]
+    policy_revision: str
+
+
+class LocalViewHandle(TypedDict):
+    """Session-local routing identity, not a bearer credential or signed capability."""
+
+    id: str
+    generation: int
+
+
+class LocalViewContext(TypedDict):
+    id: str
+    view: LocalViewHandle
+    request: LocalContextRequest
+    scope_id: str
+    snapshot: LocalContextSnapshot
+
+
+class LocalViewResult(TypedDict):
+    context: LocalViewContext
+    rendered: str
+
+
+class LocalViewAssessment(TypedDict):
+    context_id: str
+    checked_graph_revision: int
+    assessment: LocalAnswerAssessment

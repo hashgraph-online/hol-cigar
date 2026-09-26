@@ -14,7 +14,7 @@ Run `npx --no-install cigar-context doctor --json` in the npm consumer, or
 compiles synthetic context locally and reports the selected platform and version.
 
 If `/context` is not exported, inspect the installed npm version: the old 0.9.4
-service SDK lacks that API. Use the 0.12.0 distribution. If a worker is unavailable,
+service SDK lacks that API. Use a local-context distribution. If a worker is unavailable,
 inspect the diagnostic's platform and error code. Reinstall the matching distribution
 or explicitly supply a trusted matching worker. Do not infer that HOL services or
 credentials are required from either error. Never silently fall back to a server.
@@ -22,6 +22,8 @@ credentials are required from either error. Never silently fall back to a server
 The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
+The 0.13.0-alpha.1 candidate is currently qualified only on macOS ARM64. Its platform
+inventory describes build targets, not completed alpha qualification.
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
 
@@ -116,6 +118,24 @@ that a draft includes every assertion. Evaluate the reviewer and answer complete
 separately. The examples' known-fixture reviews cannot establish real-model quality.
 
 ## Refresh, synchronize and measure
+
+### Sharing one worker in the 0.13 alpha
+
+One trusted host can create five `createView` / `create_view` handles over one graph.
+Host-owned `allowed_sources`, `writable_sources` and `policy_revision` define each
+scope. View requests cannot widen it. Compile returns `{rendered, context}`; retain
+the entire context and bind drafts to `context.snapshot.id`. Obtain independent
+reviews and call the view's `checkAnswer(context, draft, reviews)` / `check_answer`.
+An outside-scope update preserves reviews. Every inside-scope document/edge update,
+including unselected evidence, requires new reviews. Revocation/redefinition rejects
+old handles. Root methods keep their existing global-revision behavior.
+
+Views share one index and serialized worker. They are not authentication, a sandbox,
+a durable workflow or an effect permission. Keep root graph and review authority in
+the host. Use fresh run domains and reviews after restart; remote agents need a
+host-owned broker. HUMIDOR owns scheduling and recovery; this alpha does not replace
+or qualify its separate Honey runtime integration. No HOL services are needed for
+the local shared-view example in either SDK.
 
 Use `replaceSource` / `replace_source` for edits and an empty document list for
 withdrawal. Check cache hits/misses and graph revision with `stats`. Use `clearCache`

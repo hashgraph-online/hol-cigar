@@ -9,6 +9,7 @@ import type {
   LocalAnswerAssessment, LocalAnswerDraft, LocalAnswerPolicy, LocalClaimReview,
   LocalCitation, LocalContextDelta, LocalContextLimits, LocalContextPrompt, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
   LocalDocument, LocalEdgeKind, LocalGraphStats, LocalSourceUpdate,
+  LocalViewSpec, LocalViewHandle, LocalViewContext, LocalViewResult, LocalViewAssessment,
 } from "./context-types.js";
 
 const MAX_FRAME = 32 * 1024 * 1024;
@@ -45,6 +46,7 @@ export class LocalContextGraph implements AsyncDisposable {
   private pending: Pending | undefined;
   private fragments: Buffer[] = [];
   private received = 0;
+  private supportsViews = false;
 
   private constructor(options: LocalContextOptions) {
     this.timeoutMs = options.timeoutMs ?? 30_000;
@@ -71,6 +73,11 @@ export class LocalContextGraph implements AsyncDisposable {
           hello.max_frame_bytes !== MAX_FRAME || hello.max_response_bytes !== MAX_RESPONSE) {
         throw new LocalContextError("IncompatibleWorker");
       }
+      const capabilities: unknown = hello.capabilities ?? [];
+      if (!Array.isArray(capabilities) || capabilities.some((value: unknown) => typeof value !== "string")) {
+        throw new LocalContextError("IncompatibleWorker");
+      }
+      graph.supportsViews = capabilities.includes("context_views.v1");
       return graph;
     } catch (error) { await graph.close(); throw error; }
   }
@@ -140,6 +147,18 @@ export class LocalContextGraph implements AsyncDisposable {
   }
 
   upsert(document: LocalDocument): Promise<boolean> { return this.call({op: "upsert", document}); }
+  private viewCall<T>(command: Record<string, unknown>): Promise<T> {
+    if (!this.supportsViews) return Promise.reject(new LocalContextError("IncompatibleWorker"));
+    return this.call(command);
+  }
+  /** Define/replace a host-owned source scope. Replacing revokes its old handles.
+   * This is logical partitioning in a trusted application, not a sandbox or service capability. */
+  async createView(spec: LocalViewSpec): Promise<LocalContextView> {
+    const handle = await this.viewCall<LocalViewHandle>({op: "define_view", spec});
+    return new LocalContextView(handle, <T>(command: Record<string, unknown>) => this.viewCall<T>(command));
+  }
+  /** Revoke view access without deleting shared documents. */
+  revokeView(viewId: string): Promise<boolean> { return this.viewCall({op: "revoke_view", view_id: viewId}); }
   /** Atomic; [] withdraws a source. Hard edges remain and fail closed until explicitly repaired. */
   replaceSource(source: string, documents: readonly LocalDocument[]): Promise<LocalSourceUpdate> {
     return this.call({op: "replace_source", source, documents});
@@ -185,4 +204,31 @@ export class LocalContextGraph implements AsyncDisposable {
   clearCache(): Promise<null> { return this.call({op: "clear_cache"}); }
   async close(): Promise<void> { this.fail("Closed"); await this.exited; }
   async [Symbol.asyncDispose](): Promise<void> { await this.close(); }
+}
+
+/** One scoped facade sharing the owner's worker, index and bounded call queue.
+ * Keep root access, worker pipes and review authority outside untrusted agent control.
+ * Worker failure closes every view; this facade does not retry or restart mutations. */
+export class LocalContextView {
+  readonly #handle: LocalViewHandle;
+  readonly #call: <T>(command: Record<string, unknown>) => Promise<T>;
+  constructor(handle: LocalViewHandle, call: <T>(command: Record<string, unknown>) => Promise<T>) {
+    this.#handle = Object.freeze({...handle});
+    this.#call = call;
+  }
+  /** Request access may narrow, but never widen, the host-defined view. */
+  compile(request: LocalContextRequest): Promise<LocalViewResult> {
+    return this.#call({op: "compile_view", view: this.#handle, request});
+  }
+  replaceSource(source: string, documents: readonly LocalDocument[]): Promise<LocalSourceUpdate> {
+    return this.#call({op: "replace_view_source", view: this.#handle, source, documents});
+  }
+  /** Draft snapshot_id is context.snapshot.id; existing review identities remain unchanged. */
+  reviewKeys(draft: LocalAnswerDraft): Promise<readonly string[]> { return this.#call({op: "review_keys", draft}); }
+  /** Freshly recompile and recheck the whole readable scope. Unrelated outside writes are allowed;
+   * any authorized source/edge change invalidates. This grants no external effect authority. */
+  checkAnswer(context: LocalViewContext, draft: LocalAnswerDraft, reviews: readonly LocalClaimReview[],
+    policy: LocalAnswerPolicy = {}): Promise<LocalViewAssessment> {
+    return this.#call({op: "check_view_answer", view: this.#handle, context, draft, reviews, policy});
+  }
 }

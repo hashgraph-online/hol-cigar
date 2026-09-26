@@ -1,4 +1,4 @@
-"""Compatibility with the real published 0.11.0 Python installation."""
+"""Compatibility with the real published Python installations; additive methods are allowed."""
 
 import json
 import subprocess
@@ -9,15 +9,22 @@ from api_snapshot import snapshot
 
 
 def test_public_api_retains_published_exports_signatures_and_types():
-    baseline = json.loads((Path(__file__).parent / "fixtures/public-api-0.11.0.json").read_text())
     current = snapshot()
-    assert current["abi"] == baseline["abi"]
-    for name, expected in baseline["exports"].items():
-        assert current["exports"][name] == expected, name
+    for version in ("0.11.0", "0.12.0"):
+        baseline = json.loads((Path(__file__).parent / f"fixtures/public-api-{version}.json").read_text())
+        assert current["abi"] == baseline["abi"]
+        for name, expected in baseline["exports"].items():
+            actual = current["exports"][name]
+            for field, value in expected.items():
+                if field == "methods":
+                    for method, signature in value.items():
+                        assert actual[field][method] == signature, (version, name, method)
+                else:
+                    assert actual[field] == value, (version, name, field)
 
 
 def test_fresh_import_is_lazy_and_all_access_paths_resolve():
-    code = '''
+    code = """
 import sys
 import cigar_sdk
 assert not {"cigar_sdk.client", "cigar_sdk.context", "cigar_sdk.generated.models",
@@ -37,5 +44,5 @@ except AttributeError:
     pass
 else:
     raise AssertionError("unknown attribute accepted")
-'''
+"""
     subprocess.run([sys.executable, "-c", code], check=True, timeout=30)

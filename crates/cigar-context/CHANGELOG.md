@@ -1,4 +1,16 @@
-# 0.10.1 — incremental retrieval performance
+# Changelog
+
+## 0.13.0-alpha.1
+
+- Add bounded host-scoped views on one graph/index, source write limits and revocation.
+- Bind the complete readable scope into snapshot/review identities; retain reviews
+  across outside writes while requiring fresh reviews after inside-scope changes.
+- Preserve root API freshness, canonical snapshots, answer rules and the v1 protocol.
+- Add Rust/Python/TypeScript five-agent regressions and installed offline examples.
+- Local alpha only: no durable recovery, scheduler, new effect authority or parallel
+  worker execution. MacOS ARM64 qualification does not qualify other platforms.
+
+## 0.10.1 — incremental retrieval performance
 
 ## 0.11.0
 

@@ -39,7 +39,7 @@ class CustomBuildHook(BuildHookInterface):
             manifest.get("target") != metadata["target"]
             or manifest.get("core_version") != release["local_context_core_version"]
             or manifest.get("protocol") != release["local_context_protocol"]
-            or manifest.get("sdk_release") != release["version"]
+            or manifest.get("sdk_release") != release["local_context_core_version"]
         ):
             raise ValueError("native worker platform/version/protocol mismatch")
         worker = manifests[0].parent / metadata["executable"]
