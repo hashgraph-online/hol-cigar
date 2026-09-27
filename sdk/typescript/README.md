@@ -4,25 +4,25 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Node.js applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This checkout also contains the v0.14 development broker for independent agent
+This 0.14.0 candidate contains a broker for independent agent
 processes. See the [broker guide](../LOCAL_BROKER_GUIDE.md) for host/client authority,
 provenance, reviews and failure semantics. No v0.14 archive is qualified yet;
-the alpha installation and compatibility examples below retain their own scope.
+final installed qualification and the 24-hour soak remain release gates.
 
 ## Install and check
 
-Version 0.13.0-alpha.1 is a local alpha for ESM on Node.js `>=24.10.0 <25`:
+The 0.14.0 candidate is for ESM on Node.js `>=24.10.0 <25`:
 
 ```text
-npm install --save-exact /absolute/path/to/hol-org-cigar-0.13.0-alpha.1.tgz
+npm install --save-exact /absolute/path/to/hol-org-cigar-0.14.0.tgz
 npx --no-install cigar-context doctor
 npx --no-install cigar-context demo
 ```
 
-Install the exact archive from the candidate's qualification report. Public default
-installs remain on 0.11.0 until a separate publication decision. This candidate
-retains the canonical-CBOR union decoding repair and bounded worker hashing.
-Only macOS ARM64 has been qualified for this alpha; its archive bundles that worker.
+Install the exact archive with its matching qualification receipt. This candidate
+is not a registry release. It retains the canonical-CBOR union decoding repair,
+bounded worker hashing and seven native build targets; final installed platform
+qualification remains pending.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
 citations, cache reuse, trusted fixture reviews, source updates and stale-review
@@ -95,7 +95,7 @@ ARM64 is qualified for this local alpha; a stable release still requires the com
 seven-platform matrix. Browser, edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
-the matching Rust 0.13.0-alpha.1 source. There is no install script, runtime download, PATH
+the matching Rust 0.14.0 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize

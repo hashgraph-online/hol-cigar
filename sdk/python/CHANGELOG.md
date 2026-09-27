@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.14.0 — candidate, qualification in progress
+
+- Add `LocalContextBroker` and authenticated `LocalContextClient` for independent
+  agent processes sharing one graph. The host owns grants, provenance admission,
+  reviewer labels and execution policy; agents can submit bounded proposals.
+- Add source revision conflict checks, per-agent quotas/fair admission, expiring
+  tickets, grant revocation and optional SQLite recovery with a fresh authority epoch.
+- Add transactional source batches, selected-evidence explanations, live feature
+  discovery and reviewed context bindings for Honey effects without blind retries.
+- Preserve 0.12 APIs and valid fixture IDs; reject inconsistent representation and
+  transform receipts during semantic integrity verification.
+- Reduce measured RPC compile latency by 6.48% versus 0.12 on the comparison host.
+  Three startup comparisons exceed their original limits and were explicitly
+  accepted: local API import adds about 2.36 ms and worker hashing about 0.51 ms
+  versus 0.12. Hash verification still runs on every launch. Other compared
+  latency/RSS guardrails pass; no blanket no-regression claim is made.
+- Retain optional retrieval adapters with published costs and weaker results than
+  the flat BM25 control on SciFact. No model-provider evaluation was performed.
+- Release promotion still requires final installed platform tests, the 24-hour
+  soak and the remaining checklist evidence. No registry publication is claimed.
+
 ## 0.13.0a1 — local alpha
 
 - Add host-scoped `LocalContextView` handles on one shared graph/index. Source

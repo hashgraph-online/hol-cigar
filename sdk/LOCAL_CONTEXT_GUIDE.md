@@ -27,9 +27,10 @@ credentials are required from either error. Never silently fall back to a server
 The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
-The 0.13.0-alpha.1 candidate is currently qualified only on macOS ARM64. Its platform
-inventory describes build targets, not completed alpha qualification.
-The 0.14 development branch remains unqualified until its release evidence is complete.
+The 0.14.0 candidate retains these seven targets. Development native workers have
+passed two independent builds on all seven; the final versioned installed matrix
+and continuous soak remain release gates. The platform inventory alone does not
+certify qualification. See the current release notes and execution checklist.
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
 

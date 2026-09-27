@@ -12,7 +12,7 @@ from typing import Literal, TypedDict
 from cigar_sdk.native_platforms import NATIVE_PLATFORMS
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.13.0-alpha.1"
+LOCAL_CONTEXT_CORE_VERSION = "0.14.0"
 
 _GUIDANCE = {
     "WorkerUnavailable": (

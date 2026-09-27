@@ -1,6 +1,6 @@
 [project]
 name = "hol-cigar"
-version = "0.13.0a1"
+version = "0.14.0"
 description = "Local context graphs, exact token budgets, citations and answer review. No HOL service required."
 readme = "README.md"
 license = "Apache-2.0"
@@ -9,7 +9,7 @@ requires-python = ">=3.14,<3.15"
 dependencies = ["protobuf>=6.33.5,<8"]
 keywords = ["context", "rag", "graph", "citations", "tokens", "llm"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",

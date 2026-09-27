@@ -1,7 +1,8 @@
 # Installed comparisons: 0.14 development
 
 Latest status: compatibility passes and 112/115 performance guardrails pass in
-the second study. Three startup guardrails remain failed. Neither study qualifies
+the second study. Three startup guardrails remain failed; the user accepted these
+specific startup costs as release exceptions on September 27, 2026. Neither study qualifies
 the candidate for promotion. The first study and all its failures remain below.
 
 The frozen study is `installed-regression-01` under the local development evidence

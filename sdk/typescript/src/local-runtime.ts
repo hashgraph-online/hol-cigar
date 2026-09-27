@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { NATIVE_PLATFORMS } from "./native-platforms.js";
 
 export const LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1" as const;
-export const LOCAL_CONTEXT_CORE_VERSION = "0.13.0-alpha.1" as const;
+export const LOCAL_CONTEXT_CORE_VERSION = "0.14.0" as const;
 
 /** Local process ABI, including the Linux C library. No executable or service is contacted. */
 export function localPlatform(): string {

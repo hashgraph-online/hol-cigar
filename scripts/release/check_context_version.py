@@ -106,6 +106,21 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
             )
             checked += 1
     assert checked, "no reviewed installer pins found"
+    if channel == "stable":
+        for workflow, section in (
+            ("context-sdk-release.yml", ""),
+            ("context-registry-readback.yml", ""),
+            ("publish-hol-cigar.yml", "  verify-stable-bytes:"),
+            ("stage-hol-cigar-npm.yml", "  verify-stable:"),
+        ):
+            source = (root / ".github/workflows" / workflow).read_text()
+            if section:
+                assert section in source, f"missing stable gate: {workflow}"
+                source = source.split(section, 1)[1]
+            tags = re.findall(r"refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)(?![\w.-])", source)
+            assert tags and set(tags) == {version}, (
+                f"stable workflow version drift: {workflow}"
+            )
     for path in ("fast-ci.yml", "publish-hol-cigar.yml"):
         source = (root / ".github/workflows" / path).read_text()
         if path == "publish-hol-cigar.yml":

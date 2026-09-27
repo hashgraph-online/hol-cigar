@@ -318,7 +318,7 @@ class RegistryReadbackTests(unittest.TestCase):
         metadata = {
             "name": "@hol-org/cigar",
             "dist-tags": {"latest": "0.9.4"},
-            "versions": {"0.12.0": {}},
+            "versions": {distribution.VERSION: {}},
         }
         with mock.patch.object(registry, "metadata", return_value=metadata):
             with self.assertRaisesRegex(ReleaseError, "default install"):
@@ -339,7 +339,7 @@ class RegistryReadbackTests(unittest.TestCase):
                 )
 
     def test_partial_pypi_publication_cannot_pass(self):
-        info = {"name": "hol-cigar", "version": "0.12.0"}
+        info = {"name": "hol-cigar", "version": distribution.PYTHON_VERSION}
         with mock.patch.object(
             registry, "metadata", return_value={"info": info, "urls": []}
         ):

@@ -4,33 +4,33 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Python applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This checkout also contains the v0.14 development broker for independent agent
+This 0.14.0 candidate contains a broker for independent agent
 processes. See the [broker guide](../LOCAL_BROKER_GUIDE.md) for host/client authority,
 provenance, reviews and failure semantics. No v0.14 archive is qualified yet;
-the alpha installation and compatibility examples below retain their own scope.
+final installed qualification and the 24-hour soak remain release gates.
 
 ## Install and check
 
-Alpha 0.13.0a1 supports Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
+The 0.14.0 candidate targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install /absolute/path/to/hol_cigar-0.13.0a1-py3-none-macosx_11_0_arm64.whl
+python3.14 -m pip install /absolute/path/to/hol_cigar-0.14.0-py3-none-macosx_11_0_arm64.whl
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 python3.14 -m cigar_sdk.examples.shared_views
 ```
 
-This is a local macOS ARM64 test candidate, not a published PyPI version. Install
-the exact wheel from its comparison report. It bundles its matching native worker;
-no Rust compiler or separate worker installation is required. Other platforms have
-not yet received alpha qualification.
+Install the exact wheel and matching qualification receipt for your platform.
+The example filename is for macOS ARM64; seven native targets are planned. This
+candidate is not a published PyPI release. Each native wheel bundles its worker;
+no Rust compiler or separate worker installation is required.
 See the bundled [changelog](CHANGELOG.md) for migration details. The supported
 protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
 compile; `demo` runs the complete workflow. Add `--json` for machine-readable results.
 
-## Five agents sharing one graph (new in 0.13 alpha)
+## Five agents sharing one graph in one host
 
 The trusted host creates one graph and gives each cooperating agent a scoped view:
 
@@ -167,7 +167,7 @@ Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
 `pip install --no-binary hol-cigar` source installs. These builds retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.13.0-alpha.1 Rust source using Rust 1.92+:
+0.14.0 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker

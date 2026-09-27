@@ -1,6 +1,6 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.13.0-alpha.1",
+  "version": "0.14.0",
   "description": "Local context graphs, exact token budgets, citations and answer review. No HOL service required.",
   "license": "Apache-2.0",
   "repository": {
@@ -15,7 +15,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "alpha"
+    "tag": "latest"
   },
   "type": "module",
   "packageManager": "pnpm@10.34.5",

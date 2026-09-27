@@ -16,11 +16,11 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 
 | ID | Requirement | Evidence required | Status |
 | --- | --- | --- | --- |
-| S1 | Bind filesystem symlink admission to alias and resolved-target policy | Direct exclusion/ignore/identity regressions, legitimate symlink controls, catalog checks | Implemented; macOS verified; hosted platform checks pending |
-| S2 | Reject special files without retaining blocking discovery capacity | Bounded FIFO/type-substitution/control-file tests and permit recovery; platform qualification | Implemented; macOS verified; hosted platform checks pending |
+| S1 | Bind filesystem symlink admission to alias and resolved-target policy | Direct exclusion/ignore/identity regressions, legitimate symlink controls, catalog checks | Implemented; hosted catalog/protocol checks pass on Linux/macOS/Windows and daemon boundaries pass on Linux/macOS |
+| S2 | Reject special files without retaining blocking discovery capacity | Bounded FIFO/type-substitution/control-file tests and permit recovery; platform qualification | Implemented; hosted Unix special-file/permit checks and three-platform catalog qualification pass |
 | S3 | Preserve TypeScript canonical map members and own-key semantics | Shared special-key vectors through public encoders/decoders and typed clients, unchanged valid bytes | Implemented; complete SDK suite passed locally |
 | S4 | Enforce Python representation/transform-receipt semantics | Shared eight-case matrix across verifier, delta and model paths; unchanged valid fixture IDs | Implemented; complete SDK suite passed locally |
-| S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
+| S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Hosted Linux/macOS CLI/daemon suites pass; Linux systemd/container filesystem smoke and negative controls pass; no full production-cluster claim |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
@@ -33,7 +33,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS contract checks pass |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
-| Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Second installed study preserves contracts and passes 112/115 guardrails; local API loading and two hashing comparisons remain failed; original study retained |
+| Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Second study preserves contracts and passes 112/115 guardrails; user accepted the three measured startup exceptions on September 27; final versioned qualification pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Development native matrix passes all 14 jobs with matching payload bytes; final versioned SDK archives and installed matrix pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
 
@@ -688,3 +688,26 @@ only when their exercised behavior covers the corresponding requirement above.
   visibility, and requires failure when that CA input is absent. Fixtures are
   inert generated bytes. These checks do not start a production daemon, perform
   TLS handshakes or qualify a live Kubernetes cluster; hosted results are pending.
+- The user explicitly accepted and requested documentation of the measured
+  startup exceptions from `installed-regression-02`: local API loading versus
+  0.12 (+35.18%, about 2.36 ms), worker hashing versus 0.12 (+16.19%, about 0.51 ms)
+  and worker hashing versus alpha (+13.48%). Their original failed guardrail
+  results remain unchanged. This is not blanket permission for additional
+  regressions or a no-degradation claim. Every other promotion gate remains.
+- [Project-boundary run 36341546561](https://github.com/hashgraph-online/hol-cigar/actions/runs/36341546561)
+  passes all three operating systems at `8817ad48505b4650d55e3c5e3592ab1a62101ede`.
+  Linux executes the actual systemd filesystem directives and Kubernetes init
+  command/volume policy: success/control exit statuses are 0/30 for checkpoint
+  writes and 0/1 for present/missing telemetry CA input. Downloaded report SHA-256
+  is `b02f82ffdad1f8e4a687b7368421775e00f191342f0e6ae028456d8136670dc4`;
+  its parsed source fixture hash is independently verified. This closes the S5
+  filesystem smoke requirement, not production daemon/cluster qualification.
+- Prepared the 0.14.0 SDK/core identity, stable/latest publication selectors and
+  dynamic registry readback. The remote/Honey workspace remains 0.9.4, published
+  remains false, and no tag or registry action has occurred. Version validation
+  now rejects stale stable-workflow tag references before native builds. Candidate
+  docs retain open gates and the accepted startup costs. All 21 stable/distribution
+  tests and 49 handoff/source/native/policy tests pass; generators and workflow
+  lint pass. Local handoff tests require the existing OpenSSL 3 binary, and the
+  client generator requires the pinned Go formatter; initial missing/old-tool
+  invocations failed without changing package behavior.

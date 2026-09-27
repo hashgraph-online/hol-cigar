@@ -11,30 +11,35 @@ Use `LocalContextGraph` from Python's `cigar_sdk` or npm's `@hol-org/cigar/conte
 Both packages run a bundled Rust worker locally; their separate `CigarClient`
 APIs connect to a caller-selected CIGAR server.
 
-## 0.13.0 alpha: five agents, one local graph
+## 0.14.0 candidate: shared context for independent agents
 
-This branch adds **host-scoped context views** to one shared worker and document
-index. Five cooperating agents can each read their authorized sources and replace
-their own writable sources. Updating an unrelated agent's source no longer forces
-every other agent to discard its reviewed answer. Changes inside a view, including
-unselected evidence, still require a fresh review. Source citations, exact budgets,
-snapshot verification and the existing 0.12 APIs remain available.
+One local broker can serve independent Python and Node agent processes with
+host-issued, authenticated source scopes. The host controls evidence admission,
+reviewer verdicts and execution authority. Per-agent quotas, fair admission,
+source revision conflicts and expiring tickets bound shared work. Optional SQLite
+persistence restores admitted context with a fresh authority epoch after restart.
+Existing graphs, scoped views, source citations, budgets and 0.12 APIs remain.
 
-The test candidate is `0.13.0-alpha.1` (`hol-cigar==0.13.0a1` in Python).
-It is a local macOS ARM64 alpha, not a registry default or a seven-platform release.
-Install its exact archives using the [Python](sdk/python/README.md) or
-[npm](sdk/typescript/README.md) instructions and run the packaged five-agent example.
-The stable installation instructions below continue to describe 0.12/0.11.
+The development load matrix passes 2,379,985 cycles at 1/5/12 processes; the fault
+matrix passes 3,879 checks. On the installed comparison host, compile latency is
+6.48% lower than 0.12. Three startup costs are accepted exceptions: local API
+loading adds about 2.36 ms and worker hashing about 0.51 ms versus 0.12; hashing
+also exceeds the original limit versus alpha. All other compared guardrails pass.
+These are offline measurements, not a real-model hallucination claim.
 
-One trusted host owns the graph and routes requests to views. View handles are
-logical scopes, not authenticated credentials or OS sandboxes. Calls still execute
-serially inside the worker; this alpha adds safe sharing, not parallel Rust execution.
-HUMIDOR retains scheduling, retries and workflow recovery. Durable handoffs/effects,
-multi-host sharing and upgrading HUMIDOR's Honey integration require separate work.
-See the [alpha contract and test plan](docs/release/context-sdk-0.13.0-alpha.1-notes.md).
-The [0.12 versus alpha comparison](docs/release/context-sdk-0.13.0-alpha.1-comparison.md)
-records 78–79% lower worker RSS than five private graphs, identical legacy fixture
-outputs, measured costs and the remaining qualification limits.
+**0.14.0 remains a candidate.** Final versioned installed qualification, the
+24-hour twelve-agent soak and remaining task evidence are still open. No 0.14
+registry publication is claimed. The stable quickstarts below retain their
+published-version scope. See the [candidate notes](docs/release/context-sdk-0.14.0-notes.md),
+[full comparison](docs/release/context-sdk-0.14.0-installed-comparison.md),
+[release checklist](docs/release/context-sdk-0.14.0-execution.md), and
+[broker guide](sdk/LOCAL_BROKER_GUIDE.md).
+
+The broker authenticates loopback clients; it is not an OS sandbox or encrypted
+multi-host service. A trusted host retains policy and review authority. HUMIDOR
+continues to own orchestration. Retrieval adapters remain optional: the independent
+SciFact comparison preserves default behavior and records a stronger flat BM25
+control, added latency and precision trade-offs.
 
 [0.12 improvements](#improvements-in-0120) · [Local Python quickstart](#local-python-quickstart) ·
 [Local npm quickstart](#local-npm-quickstart) · [Why CIGAR?](#why-cigar) · [Get started](#get-started) · [How it works](#how-it-works) ·

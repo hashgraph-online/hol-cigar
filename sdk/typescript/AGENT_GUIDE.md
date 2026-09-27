@@ -27,9 +27,10 @@ credentials are required from either error. Never silently fall back to a server
 The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
-The 0.13.0-alpha.1 candidate is currently qualified only on macOS ARM64. Its platform
-inventory describes build targets, not completed alpha qualification.
-The 0.14 development branch remains unqualified until its release evidence is complete.
+The 0.14.0 candidate retains these seven targets. Development native workers have
+passed two independent builds on all seven; the final versioned installed matrix
+and continuous soak remain release gates. The platform inventory alone does not
+certify qualification. See the current release notes and execution checklist.
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
 
@@ -93,6 +94,11 @@ Full text is the default. Query-window excerpts are opt-in; required evidence re
 its full hard dependency closure. Optional `semantic_candidates` can supply ranked
 IDs from your existing retrieval index without introducing a CIGAR model-service
 dependency. Lexical coverage is not a probability that an answer is true.
+The [retrieval adapter guide](RETRIEVAL_ADAPTERS.md) includes a bounded offline
+Python reference ranker, an explicit callback contract and Node integration.
+Scope text and corpus statistics before indexing or invoking a ranker, and rebuild
+the index after source/policy changes. The current graph/view/grant remains the
+final authorization boundary; optional ranks never grant access.
 
 Keep the complete snapshot. `promptView` / `prompt_view` can produce a compact
 rendering with short citation handles. Keep its citation map and verify it against

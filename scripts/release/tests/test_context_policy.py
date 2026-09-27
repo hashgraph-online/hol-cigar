@@ -98,6 +98,24 @@ class PolicyTests(unittest.TestCase):
                 with self.subTest(path=path), self.assertRaises(AssertionError):
                     versions.validate(root)
                 target.write_bytes(original)
+            if identity["channel"] == "stable":
+                for name in (
+                    "context-sdk-release.yml",
+                    "context-registry-readback.yml",
+                    "publish-hol-cigar.yml",
+                    "stage-hol-cigar-npm.yml",
+                ):
+                    target = root / ".github/workflows" / name
+                    original = target.read_text()
+                    target.write_text(
+                        original.replace(f"refs/tags/v{current}", "refs/tags/v0.0.0")
+                    )
+                    with (
+                        self.subTest(workflow=name),
+                        self.assertRaisesRegex(AssertionError, "version drift"),
+                    ):
+                        versions.validate(root)
+                    target.write_text(original)
 
     def test_wheel_without_native_requires_explicit_source_build_opt_in(self):
         # Load the actual hook with only Hatch's base interface replaced. The
