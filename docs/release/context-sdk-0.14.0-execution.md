@@ -821,7 +821,10 @@ only when their exercised behavior covers the corresponding requirement above.
   separately corrected formatting check. Final-source distribution remains open.
 - Prepared a distinct installed-gateway test entrypoint. It starts with an empty
   Honey effect store, exposes the real prepare operation, and reads the resulting
-  effect through the service before allowing the application to continue. It
+  effect through the service before allowing the application to continue. A
+  separate native reader checks the registered connector, operation, target,
+  argument/result-schema digests, source references, capability, retry policy and
+  expiry against fixed task expectations. It
   requires one prepare, one authorization, bounded dispatch/reconciliation counts
   and independent terminal SQLite state after driver shutdown. Existing source
   SDK and prepared-effect application paths remain separate. This is test-only

@@ -7,6 +7,7 @@ use cigar_api::{
     ResponseEnvelope, ServiceFacade, ServiceFuture, ServiceKernel, TransportConfig, http_router,
 };
 use serde_json::{Value, json};
+use sha2::Digest as _;
 use std::io::{BufRead as _, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -372,6 +373,58 @@ async fn read_status(
     )?)
 }
 
+fn assert_gateway_intent(intent: &EffectIntent, now: UtcTimestamp) -> TestResult {
+    let content_digest = |value: &[u8]| -> TestResult<ContentDigest> {
+        Ok(ContentDigest::new(format!("1220{:x}", Sha256::digest(value)))?)
+    };
+    // The expected task is fixed by this independent reader, not supplied by the application.
+    // The protected blob is a reference-store fixture, so this does not qualify encryption.
+    let arguments = br#"{"message":"inert"}"#;
+    let result_schema = concat!(
+        "{\"additionalProperties\":false,",
+        "\"properties\":{\"status\":{\"maxLength\":64,\"type\":\"string\"}},",
+        "\"required\":[\"status\"],\"type\":\"object\"}"
+    );
+    assert_eq!(intent.connector, "test.connector");
+    assert_eq!(intent.operation, "send");
+    assert_eq!(intent.target, "inert-target");
+    assert_eq!(intent.arguments_digest, content_digest(arguments)?);
+    assert_eq!(intent.encrypted_arguments.digest, intent.arguments_digest);
+    assert_eq!(
+        intent.encrypted_arguments.size_bytes,
+        u64::try_from(arguments.len())?
+    );
+    assert_eq!(
+        intent.encrypted_arguments.media_type.as_str(),
+        "application/json"
+    );
+    assert_eq!(
+        intent.result_schema_digest,
+        content_digest(result_schema.as_bytes())?
+    );
+    assert_eq!(intent.risk, RiskLevel::Low);
+    assert_eq!(intent.required_capability, Capability::InvokeTool);
+    assert_eq!(intent.retry_policy, RetryPolicy::Never);
+    assert_eq!(intent.idempotency_scope, "offline:context-gateway");
+    assert_eq!(
+        intent.source_decision_id.as_str(),
+        content_digest(b"offline-fixture-decision")?.as_str()
+    );
+    assert_eq!(
+        intent.bundle_id.as_str(),
+        content_digest(b"offline-fixture-remote-bundle-reference")?.as_str()
+    );
+    assert_eq!(intent.created_at, now);
+    assert_eq!(
+        intent.expires_at.unix_nanos(),
+        now.unix_nanos() + 30_000_000_000
+    );
+    assert!(intent.preconditions.is_empty());
+    assert!(intent.compensation.is_none());
+    assert!(intent.extensions.is_empty());
+    Ok(())
+}
+
 async fn exercise(
     executable: &Path,
     script: &Path,
@@ -476,6 +529,11 @@ async fn exercise(
             assert_eq!(retained.state, EffectState::Prepared);
             assert_eq!(retained.attempt_count, 0);
             assert_eq!(retained.reconciliation_count, 0);
+            let preparation_reader = EffectEngine::new(
+                store.clone(),
+                AccessContext::new(record(10)?, "gateway-preparation-oracle")?,
+            );
+            assert_gateway_intent(&preparation_reader.get(&effect_id)?.intent, now)?;
             assert_eq!(
                 prepared.get("intent_digest"),
                 Some(&json!(retained.intent_digest.as_str()))
