@@ -33,7 +33,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS contract checks pass |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
-| Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
+| Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | First installed study preserves contracts and passes 110/115 guardrails; five startup regressions are under investigation |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Development native matrix passes all 14 jobs with matching payload bytes; final versioned SDK archives and installed matrix pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
 
@@ -640,3 +640,12 @@ only when their exercised behavior covers the corresponding requirement above.
   checks, complete-output parity, cohort-level intervals and explicit guardrails.
   All 45 benchmark harness tests pass. Measurements have not started in this
   record; source commits and worker commits are bound separately where needed.
+- Completed `installed-regression-01`: all 172 complete compile results and 160
+  answer-review outcomes agree across the exact 0.12, alpha and development wheels.
+  All shared-client latency/total-RSS guardrails pass at 1/5/12 clients. Five
+  startup comparisons fail: hashing +43–45%, local API loading +41% versus 0.12,
+  and base import approximately +11% versus both references. RPC compile/update
+  medians remain within limits. The [initial report](context-sdk-0.14.0-installed-comparison.md)
+  retains all failures, absolute timings, artifact identities and sharing tradeoffs.
+  Investigating the native build profile and Python facade before another frozen
+  comparison; the initial study remains unchanged and does not close Q1.

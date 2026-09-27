@@ -22,6 +22,12 @@ CONTEXT = "cigar-context"
 ADAPTER = "cigar-windows-ipc"
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 MAX_BYTES = 64 * 1024 * 1024
+RELEASE_PROFILE = {
+    "codegen-units": 1,
+    "lto": "thin",
+    "panic": "abort",
+    "strip": "symbols",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -35,6 +41,10 @@ def sha256(payload: bytes) -> str:
 
 def versions(root: Path) -> dict[str, str]:
     workspace = tomllib.loads((root / "Cargo.toml").read_text())
+    require(
+        workspace["profile"]["release"] == RELEASE_PROFILE,
+        "native release profile differs from reviewed workspace policy",
+    )
     result = {}
     for name in (CONTEXT, ADAPTER):
         manifest = tomllib.loads((root / "crates" / name / "Cargo.toml").read_text())
@@ -158,6 +168,10 @@ def inspect(sources: Path, releases: dict[str, str]) -> tuple[dict, dict, bytes,
         + " = { path = "
         + json.dumps(f"../{ADAPTER}-{releases[ADAPTER]}")
         + " }\n"
+        + "\n[profile.release]\n"
+        + "".join(
+            f"{key} = {json.dumps(value)}\n" for key, value in RELEASE_PROFILE.items()
+        )
     ).encode()
     receipt = {
         "schema": "cigar.native-source-closure.v1",
@@ -165,6 +179,7 @@ def inspect(sources: Path, releases: dict[str, str]) -> tuple[dict, dict, bytes,
         "original_lock_sha256": sha256(original),
         "effective_lock_sha256": sha256(lock),
         "cargo_config_sha256": sha256(config),
+        "release_profile": RELEASE_PROFILE,
         "adaptation": "Windows adapter registry identity replaced by its verified sibling archive; no dependency version or edge changes.",
     }
     return receipt, files, lock, config

@@ -77,6 +77,8 @@ class NativeSourceTests(unittest.TestCase):
             config["patch"]["crates-io"][sources.ADAPTER]["path"],
             "../cigar-windows-ipc-0.9.4",
         )
+        self.assertEqual(config["profile"]["release"], sources.RELEASE_PROFILE)
+        self.assertEqual(receipt["release_profile"], sources.RELEASE_PROFILE)
         with self.assertRaises(FileExistsError):
             sources.prepare(self.root, self.root / "unpacked", self.versions)
 
@@ -85,6 +87,14 @@ class NativeSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ReleaseError, "source archive"):
             sources.prepare(self.root, self.root / "unpacked", self.versions)
         self.assertFalse((self.root / "unpacked").exists())
+
+    def test_workspace_profile_drift_requires_explicit_review(self):
+        (self.root / "Cargo.toml").write_text(
+            '[profile.release]\ncodegen-units = 16\nlto = false\n'
+            'panic = "unwind"\nstrip = "none"\n'
+        )
+        with self.assertRaisesRegex(ReleaseError, "profile differs"):
+            sources.versions(self.root)
 
     def test_substituted_adapter_cannot_match_the_context_lock(self):
         self.contents[sources.ADAPTER]["src/lib.rs"] = b"// substituted adapter\n"

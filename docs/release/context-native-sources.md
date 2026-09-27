@@ -20,6 +20,14 @@ and checksum fields. Every dependency version and edge, including all other
 registry checksums, must remain identical. Compilation, native tests and metadata
 resolution still require `--locked`.
 
+The generated configuration also carries the reviewed workspace release profile
+(`codegen-units = 1`, thin LTO, abort on panic and symbol stripping). Cargo package
+normalization omits the workspace manifest, so those settings otherwise disappear
+from the standalone build. The helper rejects profile drift, and the receipt
+binds the effective profile. This preserves the repository's declared worker
+build policy; performance and two-builder reproducibility must still be measured.
+See the [Cargo profile rules](https://doc.rust-lang.org/cargo/reference/profiles.html).
+
 `source-closure.json` records the archive hashes and the original/effective lock
 and Cargo configuration hashes. The worker manifest binds both archives. The
 distribution verifier independently reconstructs this receipt, verifies it inside
