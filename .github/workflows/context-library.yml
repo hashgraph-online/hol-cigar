@@ -111,8 +111,9 @@ jobs:
           CIGAR_TEST_WORKER: ${{ github.workspace }}/target/debug/cigar-context-worker
           CIGAR_TEST_CONTEXT_EFFECT_NODE: ${{ github.workspace }}/sdk/typescript/dist/tests/context-effect-consumer.js
         run: |
-          export CIGAR_TEST_PYTHON="${GITHUB_WORKSPACE}/sdk/python/.venv/bin/python"
-          export CIGAR_TEST_NODE="$(command -v node)"
+          CIGAR_TEST_PYTHON="${GITHUB_WORKSPACE}/sdk/python/.venv/bin/python"
+          CIGAR_TEST_NODE="$(command -v node)"
+          export CIGAR_TEST_PYTHON CIGAR_TEST_NODE
           cargo test --locked -p cigar-daemon --lib checked_context_sdk_honey_terminal_outcomes -- --ignored --nocapture --test-threads=1
       - name: Verify the standalone packages
         run: cargo package --locked -p cigar-windows-ipc -p cigar-context --features cigar-context/bpe,cigar-context/broker-persistence

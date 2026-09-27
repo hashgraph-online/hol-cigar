@@ -18,15 +18,16 @@ use windows_sys::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
 use windows_sys::Win32::Security::{
-    GetTokenInformation, IsValidSid, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
-    TOKEN_USER, TokenUser,
+    GetTokenInformation, IsValidSid, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
+    TOKEN_INFORMATION_CLASS, TOKEN_OWNER, TOKEN_QUERY, TOKEN_USER, TokenOwner as TOKEN_OWNER_CLASS,
+    TokenUser as TOKEN_USER_CLASS,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateDirectoryW, CreateFileW,
     FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-    FILE_SHARE_READ, FILE_SHARE_WRITE, GetDriveTypeW, GetFileInformationByHandle,
-    GetVolumeInformationByHandleW, OPEN_EXISTING, READ_CONTROL,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH, FILE_LIST_DIRECTORY,
+    FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetDriveTypeW,
+    GetFileInformationByHandle, GetVolumeInformationByHandleW, OPEN_EXISTING, READ_CONTROL,
 };
 use windows_sys::Win32::System::SystemServices::FILE_PERSISTENT_ACLS;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -48,6 +49,7 @@ pub struct StorageFileIdentity {
 pub struct PrivateStorageDirectory {
     path: PathBuf,
     owner: String,
+    allow_admin_owner: bool,
     directories: Vec<File>,
 }
 
@@ -58,6 +60,7 @@ impl PrivateStorageDirectory {
     pub fn open(path: &Path, create: bool) -> io::Result<Self> {
         validate_path(path)?;
         let owner = process_owner_sid()?;
+        let allow_admin_owner = process_token_sid(TOKEN_OWNER_CLASS)? == "S-1-5-32-544";
         let mut ancestors: Vec<_> = path.ancestors().map(Path::to_path_buf).collect();
         ancestors.reverse();
         let mut directories = Vec::new();
@@ -84,6 +87,7 @@ impl PrivateStorageDirectory {
         let result = Self {
             path: path.canonicalize()?,
             owner,
+            allow_admin_owner,
             directories,
         };
         result.verify()?;
@@ -187,7 +191,14 @@ impl PrivateStorageDirectory {
     }
 
     fn validate_file(&self, file: &File) -> io::Result<StorageFileIdentity> {
-        validate_owner_acl(file, &self.owner, true, AclPolicy::StorageFile)?;
+        validate_owner_acl(
+            file,
+            &self.owner,
+            true,
+            AclPolicy::StorageFile {
+                allow_admin_owner: self.allow_admin_owner,
+            },
+        )?;
         let info = information(file)?;
         if info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
             return Err(unsafe_credential_acl());
@@ -258,7 +269,9 @@ fn open_directory(path: &Path) -> io::Result<File> {
     let handle = unsafe {
         CreateFileW(
             wide.as_ptr(),
-            READ_CONTROL | FILE_READ_ATTRIBUTES,
+            // Attribute-only handles do not participate in Windows share-access checks.
+            // A directory-data read makes the no-write/no-delete sharing exclusion effective.
+            READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY,
             FILE_SHARE_READ,
             std::ptr::null(),
             OPEN_EXISTING,
@@ -364,6 +377,15 @@ fn create_directory(path: &Path, owner: &str) -> io::Result<()> {
 }
 
 fn process_owner_sid() -> io::Result<String> {
+    process_token_sid(TOKEN_USER_CLASS)
+}
+
+fn process_token_sid(class: TOKEN_INFORMATION_CLASS) -> io::Result<String> {
+    let header_bytes = match class {
+        TOKEN_USER_CLASS => std::mem::size_of::<TOKEN_USER>(),
+        TOKEN_OWNER_CLASS => std::mem::size_of::<TOKEN_OWNER>(),
+        _ => return Err(unsafe_credential_acl()),
+    };
     let mut token = null_mut();
     // SAFETY: GetCurrentProcess yields a valid borrowed pseudo-handle; output receives a new
     // token handle with query-only access. No impersonation/privilege changes are performed.
@@ -375,22 +397,22 @@ fn process_owner_sid() -> io::Result<String> {
     let mut size = 0;
     // SAFETY: a null/zero buffer requests only the required size, through a valid scalar output.
     let result =
-        unsafe { GetTokenInformation(token.as_raw_handle(), TokenUser, null_mut(), 0, &mut size) };
+        unsafe { GetTokenInformation(token.as_raw_handle(), class, null_mut(), 0, &mut size) };
     if result != 0
         || io::Error::last_os_error().raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32)
         || size as usize > 16 * 1024
-        || (size as usize) < std::mem::size_of::<TOKEN_USER>()
+        || (size as usize) < header_bytes
     {
         return Err(unsafe_credential_acl());
     }
     let mut buffer = vec![0_usize; (size as usize).div_ceil(std::mem::size_of::<usize>())];
     let mut written = size;
-    // SAFETY: the initialized usize buffer is correctly aligned for TOKEN_USER and has at least
+    // SAFETY: the initialized usize buffer is aligned for either token header and has at least
     // size bytes. Windows writes only that capacity and returns the actual required length.
     if unsafe {
         GetTokenInformation(
             token.as_raw_handle(),
-            TokenUser,
+            class,
             buffer.as_mut_ptr().cast::<c_void>(),
             size,
             &mut written,
@@ -399,12 +421,16 @@ fn process_owner_sid() -> io::Result<String> {
     {
         return Err(io::Error::last_os_error());
     }
-    if written > size || (written as usize) < std::mem::size_of::<TOKEN_USER>() {
+    if written > size || (written as usize) < header_bytes {
         return Err(unsafe_credential_acl());
     }
-    // SAFETY: successful TokenUser query initializes this aligned fixed header inside the buffer.
-    let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-    let offset = (user.User.Sid as usize)
+    // SAFETY: the matching query initialized this aligned header, whose full size was checked.
+    let sid = match class {
+        TOKEN_USER_CLASS => unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() }.User.Sid,
+        TOKEN_OWNER_CLASS => unsafe { &*buffer.as_ptr().cast::<TOKEN_OWNER>() }.Owner,
+        _ => return Err(unsafe_credential_acl()),
+    };
+    let offset = (sid as usize)
         .checked_sub(buffer.as_ptr() as usize)
         .ok_or_else(unsafe_credential_acl)?;
     if offset
@@ -414,7 +440,7 @@ fn process_owner_sid() -> io::Result<String> {
         return Err(unsafe_credential_acl());
     }
     // SAFETY: the previous range check proves the full fixed SID header exists in this buffer.
-    let count = usize::from(unsafe { *user.User.Sid.cast::<u8>().add(1) });
+    let count = usize::from(unsafe { *sid.cast::<u8>().add(1) });
     if offset
         .checked_add(8 + 4 * count)
         .is_none_or(|end| end > written as usize)
@@ -422,9 +448,9 @@ fn process_owner_sid() -> io::Result<String> {
         return Err(unsafe_credential_acl());
     }
     // SAFETY: the complete variable-length SID lies inside the initialized token buffer.
-    if unsafe { IsValidSid(user.User.Sid) } == 0 {
+    if unsafe { IsValidSid(sid) } == 0 {
         return Err(unsafe_credential_acl());
     }
     // The full SID was range-checked and remains live until conversion finishes.
-    sid_to_string(user.User.Sid)
+    sid_to_string(sid)
 }

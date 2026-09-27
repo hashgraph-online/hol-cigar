@@ -198,11 +198,19 @@ release path. Core graph use retains its existing dependency and I/O behavior.
 Explicit `create_directory` can create only a final private directory component;
 existing permissions are never repaired. The Windows adapter uses a protected
 inheritable owner-only DACL, checks local fixed NTFS storage and pins every
-directory component without write/delete sharing. Database handles prevent
+directory component with directory-data read access and without write/delete
+sharing. Attribute-only handles do not enforce that exclusion. Database handles prevent
 replacement; sidecars must retain one owner ACE and a regular single-link identity.
 It rejects UNC paths, reparse points and alternative streams. Windows raw APIs
 remain inside `cigar-windows-ipc`; disabling its named-pipe feature keeps Tokio out
-of the standalone worker dependency closure. Windows runtime tests are pending.
+of the standalone worker dependency closure. An inherited sidecar may be owned
+by the local Administrators group only if that is the launching process token's
+default owner; its sole full-access DACL entry must still identify the exact
+process user. Other group owners or added ACL subjects are rejected. This keeps
+the existing trust boundary excluding privileged administrators, without changing
+the credential-file ACL policy. Windows assigns new-object ownership from
+[TOKEN_OWNER](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_owner)
+and inherits a default file ACL from its parent. Windows runtime tests are pending.
 No persistence capability is advertised by an ordinary memory-only broker.
 
 No success response is emitted before a committed mutation is durable. A failed

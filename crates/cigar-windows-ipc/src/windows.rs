@@ -419,7 +419,7 @@ fn validate_owner_only_handle(
 enum AclPolicy {
     Credential,
     StorageDirectory,
-    StorageFile,
+    StorageFile { allow_admin_owner: bool },
 }
 
 fn validate_owner_acl(
@@ -467,10 +467,20 @@ fn validate_owner_acl(
     }
     // SAFETY: both SIDs are non-null and remain inside live LocalAlloc buffers. Windows validates
     // their structure before the equality comparison.
-    if unsafe { IsValidSid(owner) } == 0
-        || unsafe { IsValidSid(expected_sid.as_ptr()) } == 0
-        || unsafe { EqualSid(owner, expected_sid.as_ptr()) } == 0
-    {
+    if unsafe { IsValidSid(owner) } == 0 || unsafe { IsValidSid(expected_sid.as_ptr()) } == 0 {
+        return Err(unsafe_credential_acl());
+    }
+    // Elevated Windows tokens can create inherited SQLite sidecars owned by the local
+    // Administrators group. Permit that owner only when it is this process token's default;
+    // the sole DACL subject must still be the exact process user. Other group owners fail.
+    let administrative_owner = matches!(
+        policy,
+        AclPolicy::StorageFile {
+            allow_admin_owner: true
+        }
+    ) && sid_to_string(owner)? == "S-1-5-32-544";
+    // SAFETY: both complete SIDs were validated above and remain in live owning buffers.
+    if unsafe { EqualSid(owner, expected_sid.as_ptr()) } == 0 && !administrative_owner {
         return Err(unsafe_credential_acl());
     }
 
@@ -480,7 +490,7 @@ fn validate_owner_acl(
     // live. Both scalar outputs point to initialized local storage.
     if unsafe { GetSecurityDescriptorControl(descriptor.as_ptr(), &mut control, &mut revision) }
         == 0
-        || (policy != AclPolicy::StorageFile && control & SE_DACL_PROTECTED == 0)
+        || (!matches!(policy, AclPolicy::StorageFile { .. }) && control & SE_DACL_PROTECTED == 0)
     {
         return Err(unsafe_credential_acl());
     }
@@ -522,7 +532,7 @@ fn validate_owner_acl(
             AclPolicy::StorageDirectory => {
                 u32::from(header.AceFlags) != (CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE)
             }
-            AclPolicy::StorageFile => {
+            AclPolicy::StorageFile { .. } => {
                 header.AceFlags != 0 && u32::from(header.AceFlags) != INHERITED_ACE
             }
         }
@@ -547,8 +557,10 @@ fn validate_owner_acl(
     }
     // SAFETY: the typed ACE layout places the variable-length SID at `SidStart`; the ACL and
     // descriptor are still live, and the bounded length calculation proves the entire SID lies
-    // within the ACE. A valid SID is required before comparing it with the owner.
-    if unsafe { IsValidSid(ace_sid) } == 0 || unsafe { EqualSid(ace_sid, owner) } == 0 {
+    // within the ACE. A valid SID is required before comparing it with the expected user.
+    if unsafe { IsValidSid(ace_sid) } == 0
+        || unsafe { EqualSid(ace_sid, expected_sid.as_ptr()) } == 0
+    {
         return Err(unsafe_credential_acl());
     }
     let mut information = BY_HANDLE_FILE_INFORMATION::default();

@@ -1,5 +1,8 @@
-use super::{PrivateStorageDirectory, process_owner_sid, validate_path};
-use crate::windows::{LocalAllocation, create_or_validate_owner_only_directory, null_terminated};
+use super::{PrivateStorageDirectory, process_owner_sid, process_token_sid, validate_path};
+use crate::windows::{
+    AclPolicy, LocalAllocation, create_or_validate_owner_only_directory, file_owner_sid,
+    null_terminated, validate_owner_acl,
+};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Write as _};
@@ -12,7 +15,7 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-    SetFileSecurityW,
+    SetFileSecurityW, TokenOwner,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
@@ -119,6 +122,22 @@ fn storage_sidecars_inherit_private_access_and_files_are_never_truncated() -> io
     assert_eq!(directory.inspect_file("broker.sqlite3")?, (identity, 8));
     let journal = path.join("broker.sqlite3-journal");
     fs::write(&journal, b"private journal")?;
+    // The OS uses TokenOwner for inherited files; elevated tokens may differ from TokenUser.
+    let default_owner = process_token_sid(TokenOwner)?;
+    assert_eq!(file_owner_sid(&journal)?, default_owner);
+    if default_owner == "S-1-5-32-544" && default_owner != process_owner_sid()? {
+        assert!(
+            validate_owner_acl(
+                &fs::File::open(&journal)?,
+                &process_owner_sid()?,
+                true,
+                AclPolicy::StorageFile {
+                    allow_admin_owner: false
+                },
+            )
+            .is_err()
+        );
+    }
     assert_eq!(directory.inspect_file("broker.sqlite3-journal")?.1, 15);
     fs::remove_file(&journal)?;
     drop((second, file, directory));
@@ -147,6 +166,12 @@ fn held_directories_and_database_cannot_be_replaced_or_opened_for_reparse_writes
     directory.verify()?;
     drop(file);
     drop(directory);
+    let writable = fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(parent.path())?;
+    assert!(PrivateStorageDirectory::open(&path, false).is_err());
+    drop(writable);
     fs::rename(&path, parent.path().join("replacement"))?;
     Ok(())
 }
@@ -159,7 +184,7 @@ fn ambient_or_noninheritable_directories_are_rejected_without_acl_repair() -> io
     for create in [false, true] {
         assert!(PrivateStorageDirectory::open(&ambient, create).is_err());
     }
-    let credential_directory = parent.path().join("credential-directory");
+    let credential_directory = parent.path().canonicalize()?.join("credential-directory");
     create_or_validate_owner_only_directory(&credential_directory)?;
     assert!(PrivateStorageDirectory::open(&credential_directory, false).is_err());
     let private = parent.path().join("private");

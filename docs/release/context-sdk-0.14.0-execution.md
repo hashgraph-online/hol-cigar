@@ -32,7 +32,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
-| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell Python/Node/mixed memory/SQLite fault matrix passes 3,879 checks; corrected repeated load study running; hosted faults and 24-hour soak pending |
+| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted faults and 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
@@ -539,3 +539,21 @@ only when their exercised behavior covers the corresponding requirement above.
   tests return `Unavailable`; a staged SQLite interoperability test and earlier
   Windows adapter checks will locate that failure. No Windows storage qualification
   is claimed while this remains unresolved.
+- The corrected load study completed all 288 cells and its retained-data verifier
+  passed all 36 configuration groups. All 2,379,985 compile/forget cycles succeeded;
+  worst client p95/p99 were 12.388/48.254 ms and minimum same-runtime completion
+  ratio was 0.9786. At 12 mixed clients, four in-flight calls bring only 2.02%/1.56%
+  mean paired memory/SQLite throughput increases while substantially increasing
+  latency. The report preserves that tradeoff, total process RSS and every group.
+  This does not establish version-wide nonregression, task efficacy or a long soak.
+- The [second hosted run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36331924667)
+  passes the complete Linux/macOS source jobs, including independent SDK fault
+  schedules and the macOS Honey HTTP/SQLite integration. Windows adapter tests
+  expose attribute-only handles that do not enforce the claimed write-sharing
+  exclusion, and inherited sidecars whose owner can differ from the process user.
+  The candidate now requests directory-data read access and permits an inherited
+  Administrators owner only when it matches the process token's default owner;
+  the sole DACL entry remains the exact process user. The credential ACL policy
+  is unchanged. Tests retain broadened-ACL rejection, pinning/reparse denial and
+  default-owner checks. Both Windows feature configurations pass local target
+  compilation and strict Clippy; actual Windows runtime verification remains required.
