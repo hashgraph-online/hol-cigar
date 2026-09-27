@@ -29,7 +29,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
-| R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer and ordered-scope lookup improvements measured locally; transactional ingestion and full throughput qualification pending |
+| R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
@@ -496,3 +496,25 @@ only when their exercised behavior covers the corresponding requirement above.
   limitations. All 47 common-evaluation and seven answer-metric tests pass,
   including thirteen new Hiero cases; lint/format pass. Prospective independent
   task oracles and the E2 release comparison remain outstanding.
+- Added bounded host-only source transactions and Python/Node iterable convenience
+  APIs. Old evidence remains current during staging; one commit rechecks existing
+  source CAS, ownership, provenance, derivation and graph limits. Four expiring
+  staging slots share existing retention bounds. Invalid batches never publish
+  partial input; pending stages are absent from checkpoints and cannot survive
+  a new authority epoch. Durable failure keeps the existing unknown-outcome
+  shutdown contract. Both SDKs preserve the original error and never retry a write.
+- A 34 MiB source plus a probe (137 documents) now crosses the unchanged host
+  frame limit using 35 batches. Both SDKs reject the complete-list request before
+  dispatch and successfully commit batches; Node verifies every document's text
+  and citations before and after recovery. Eight paired ingestion cohorts retain
+  96 observations. At 8 MiB, sampled total RSS falls 23.7% in memory mode and
+  19.3% with SQLite, with median latency increases of 1.6% and 0.7%. A 74.970 ms
+  1 MiB SQLite outlier remains reported; there is no general speed or tail claim.
+  [The batch report](context-sdk-0.14.0-batch-ingestion.md) records bounds, hashes,
+  rejected initial diagnostic configurations and the full measurement limitations.
+- Batch validation passes 140 all-feature native tests, one doctest, 57 core-only
+  invocations, strict Clippy/formatting, 480 Python tests plus 39 subtests and all
+  164 Node tests. Coverage is 93.60% statements / 86.80% branches overall, with all
+  critical-module gates met; broker/effect modules remain 100% / 100%. Sixteen
+  benchmark tests, strict typing, changed-file lint/format and both generator
+  checks pass. R2/Q1 still require full workload and hosted/platform qualification.

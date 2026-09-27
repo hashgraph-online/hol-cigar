@@ -93,7 +93,7 @@ pub struct BrokerLimits {
     pub max_tickets: usize,
     /// Maximum retained proposals and completion receipts across all grants.
     pub max_proposals: usize,
-    /// Aggregate encoded bytes of retained tickets, drafts, proposals and receipts.
+    /// Aggregate retention charge of tickets, drafts, proposals, receipts and host source staging.
     /// This is a deterministic admission bound, not a measurement of Rust heap usage.
     pub max_retained_bytes: usize,
     /// Aggregate encoded source provenance bytes, including withdrawn source metadata.

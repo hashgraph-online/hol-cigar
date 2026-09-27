@@ -95,6 +95,135 @@ fn grant(broker: &mut ContextBroker) -> cigar_context::broker::BrokerCredential 
 }
 
 #[test]
+fn source_batches_write_one_committed_image_and_restore_no_pending_staging() {
+    use super::super::Persistence;
+    use cigar_context::broker::protocol::HostCommand;
+    let directory = private_directory();
+    let mut opts = options(&directory);
+    opts.max_journal_records = 16;
+    let start = || {
+        Persistence::open(
+            "durable-test".into(),
+            GraphLimits::default(),
+            BrokerLimits::default(),
+            Some(opts.clone()),
+        )
+        .unwrap()
+    };
+    let (mut broker, mut persistence, _) = start();
+    let original = change(&mut broker, "old committed evidence");
+    persistence.commit(&broker, original).unwrap();
+    let source = broker.host_source_revision("docs").unwrap();
+    let begin = HostCommand::BeginSourceReplace {
+        source: "docs".into(),
+        expected: source.clone(),
+        provenance: provenance(),
+        lease_ms: 60_000,
+    };
+    assert!(persistence.prepare(&broker, &begin).unwrap().is_none());
+    let pending = broker
+        .host_begin_source_replace("docs", &source, provenance(), 60_000)
+        .unwrap();
+    let before = fs::read(&persistence.store.as_ref().unwrap().path.database).unwrap();
+    let append = HostCommand::AppendSourceDocuments {
+        transaction: pending.clone(),
+        documents: vec![Document::new("fact", "docs", "STAGED_NOT_COMMITTED")],
+    };
+    assert!(persistence.prepare(&broker, &append).unwrap().is_none());
+    broker
+        .host_append_source_documents(
+            &pending,
+            vec![Document::new("fact", "docs", "STAGED_NOT_COMMITTED")],
+        )
+        .unwrap();
+    assert_eq!(
+        fs::read(&persistence.store.as_ref().unwrap().path.database).unwrap(),
+        before
+    );
+    drop(persistence);
+    drop(broker);
+
+    let (mut broker, mut persistence, restored) = start();
+    assert!(restored);
+    assert_eq!(
+        broker.host_commit_source_replace(&pending),
+        Err(BrokerError::Stale)
+    );
+    assert_eq!(
+        broker.host_source_revision("docs").unwrap().version,
+        source.version
+    );
+    let credential = grant(&mut broker);
+    let request = ContextRequest {
+        query: "evidence".into(),
+        required: BTreeSet::from(["fact".into()]),
+        ..Default::default()
+    };
+    assert!(
+        broker
+            .compile(&credential, &request, &Utf8ByteCounter)
+            .unwrap()
+            .rendered
+            .contains("old committed evidence")
+    );
+    let source = broker.host_source_revision("docs").unwrap();
+    let transaction = broker
+        .host_begin_source_replace("docs", &source, provenance(), 60_000)
+        .unwrap();
+    broker
+        .host_append_source_documents(
+            &transaction,
+            vec![Document::new("fact", "docs", "new committed evidence")],
+        )
+        .unwrap();
+    let before: i64 = persistence
+        .store
+        .as_ref()
+        .unwrap()
+        .connection
+        .query_row("SELECT count(*) FROM broker_journal", [], |row| row.get(0))
+        .unwrap();
+    let event = persistence
+        .prepare(
+            &broker,
+            &HostCommand::CommitSourceReplace {
+                transaction: transaction.clone(),
+            },
+        )
+        .unwrap()
+        .unwrap();
+    let receipt = broker.host_commit_source_replace(&transaction).unwrap();
+    persistence.commit(&broker, event).unwrap();
+    let after: i64 = persistence
+        .store
+        .as_ref()
+        .unwrap()
+        .connection
+        .query_row("SELECT count(*) FROM broker_journal", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(after, before + 1);
+    drop(persistence);
+    drop(broker);
+    let (mut broker, _persistence, _) = start();
+    assert_eq!(
+        broker.host_source_revision("docs").unwrap().version,
+        receipt.revision.version
+    );
+    assert_eq!(
+        broker.host_commit_source_replace(&transaction),
+        Err(BrokerError::Stale)
+    );
+    let credential = grant(&mut broker);
+    assert!(
+        broker
+            .compile(&credential, &request, &Utf8ByteCounter)
+            .unwrap()
+            .rendered
+            .contains("new committed evidence")
+    );
+}
+
+#[test]
 fn private_directory_creation_is_explicit_and_never_creates_missing_parents() {
     let parent = tempfile::tempdir().unwrap();
     let directory = parent.path().join("store");

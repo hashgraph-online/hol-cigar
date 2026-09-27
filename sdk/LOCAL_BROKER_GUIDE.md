@@ -1,9 +1,10 @@
 # Sharing one CIGAR graph across agent processes
 
 Status: v0.14 development source. Python and Node SDK tests cover independent
-1/5/12-agent processes on macOS ARM64, including mixed-language clients. Durable
-restart, installed artifacts, other platforms and sustained load qualification
-are still pending. This guide does not describe a published v0.14 package.
+1/5/12-agent processes on macOS ARM64, including mixed-language clients. Local
+durable restart and transactional source replacement are also tested. Installed
+artifacts, other platforms and sustained load qualification are still pending.
+This guide does not describe a published v0.14 package.
 
 One trusted application owns a `LocalContextBroker`. Each agent receives its own
 `LocalContextClient`, bound to sources and limits chosen by that application.
@@ -149,6 +150,74 @@ For reviewed output:
 CIGAR verifies bindings, freshness and review coverage. It does not determine
 semantic truth or remove the need for a trustworthy reviewer. Model-generated
 review labels must not be treated as an independent correctness oracle.
+
+## Replace a source across bounded batches
+
+The development worker advertises `source_batches.v1`. The trusted host can
+replace a source that does not fit one 32 MiB request while preserving one atomic
+visibility point. The ordinary `replace_source` / `replaceSource` API remains
+available. Neither interface reads files or invokes a parser/model automatically.
+
+```python
+expected = host.source_revision(source)
+receipt = host.replace_source_batches(
+    source, expected, document_batches, provenance, lease_ms=60_000
+)
+```
+
+```ts
+const expected = await host.sourceRevision(source);
+const receipt = await host.replaceSourceBatches(
+  source, expected, documentBatches, provenance, {leaseMs: 60_000},
+);
+```
+
+Supply an iterable of nonempty document lists; Node also accepts an async
+iterable. Generate bounded batches incrementally to avoid keeping the entire
+source in the caller. An empty iterable withdraws the source. An empty batch
+inside an iterable is an error. Documents must have unique IDs, the same source
+locator and valid text/line bounds. Each complete document must still fit its
+configured document limit; batching does not split a document.
+
+The host stages the input privately. Existing context remains current during
+staging, subject to normal grant, freshness and resource checks. Commit rechecks
+the expected source revision, document ownership, provenance, derivation inputs
+and graph limits. A competing source update therefore fails the commit with
+`Conflict` and preserves the competing update. A validation failure publishes no
+partial replacement. Commit consumes its handle even on definite validation
+failure; obtain a new revision and start a new transaction when appropriate.
+
+Applications needing explicit interleaving can use these host-only methods:
+
+| Python | Node | Result |
+| --- | --- | --- |
+| `begin_source_replace(...)` | `beginSourceReplace(...)` | Expiring transaction handle |
+| `append_source_documents(handle, documents)` | `appendSourceDocuments(handle, documents)` | Total staged document count |
+| `commit_source_replace(handle)` | `commitSourceReplace(handle)` | Existing source replacement receipt |
+| `abort_source_replace(handle)` | `abortSourceReplace(handle)` | Whether staging was discarded |
+
+At most four staged replacements coexist. Leases default to one minute and may
+be set from 1 to 300,000 milliseconds; appending does not extend the lease. Staged
+input shares `retention.max_retained_bytes` with tickets and proposals. Reserve
+sufficient capacity for active readers. The retention charge counts encoded
+metadata/batches plus per-document overhead; it is not an exact heap bound or a
+memory-zeroization guarantee. Source count, text, frame and graph bounds remain
+enforced independently.
+
+Durable mode writes one existing replacement checkpoint and receipt at commit;
+staging is absent from recovery. The complete resulting graph must fit the
+checkpoint bound, not just this source. `max_database_bytes` must be at least
+twice `max_checkpoint_bytes` plus 65,536 bytes, with additional rollback-journal
+disk space available. Batching does not eliminate full-checkpoint cost or stream
+staged text to disk.
+
+The convenience method attempts to abort on an input/append/commit error and
+preserves the original exception if cleanup also fails. It never retries a
+write. An unknown commit outcome still closes the owner; reconcile restored
+source state before choosing a subsequent action. Expiry, consumption and restart
+make old handles stale. A missing worker capability is rejected before consuming
+the iterable or sending a batch command. Agents cannot use these host methods or
+promote an unreviewed proposal by presenting a transaction handle.
 
 ## Bind context to an exact execution intent
 

@@ -34,6 +34,8 @@ export type LocalBrokerConnectionConfig = Readonly<{
 }>;
 /** Canonical decimal string preserves every native u64 revision. */
 export type LocalBrokerSourceRevision = Readonly<{epoch: string; version: string}>;
+/** Opaque, expiring host staging handle; neither evidence nor agent/execution authority. */
+export type LocalBrokerSourceTransaction = Readonly<{epoch: string; id: string}>;
 export type LocalBrokerSourceDependency = Readonly<{source: string; revision: LocalBrokerSourceRevision}>;
 /** Host declarations, not signatures or semantic truth guarantees. */
 export type LocalBrokerSourceProvenance = Readonly<{

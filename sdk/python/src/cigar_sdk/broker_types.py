@@ -87,6 +87,13 @@ class LocalBrokerSourceRevision(TypedDict):
     version: str
 
 
+class LocalBrokerSourceTransaction(TypedDict):
+    """Opaque, expiring host staging handle. Not evidence, agent authority or durable state."""
+
+    epoch: str
+    id: str
+
+
 class LocalBrokerSourceDependency(TypedDict):
     source: str
     revision: LocalBrokerSourceRevision

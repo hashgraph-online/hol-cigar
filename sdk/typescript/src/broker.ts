@@ -13,7 +13,7 @@ import type {
 import type {
   LocalBrokerAgentLimits, LocalBrokerAgentQueueLimits, LocalBrokerCapabilities, LocalBrokerConnectionConfig,
   LocalBrokerContext, LocalBrokerOptions, LocalBrokerProposal, LocalBrokerProposalStatus,
-  LocalBrokerSourceProvenance, LocalBrokerSourceReceipt, LocalBrokerSourceRevision, LocalBrokerSubmission,
+  LocalBrokerSourceProvenance, LocalBrokerSourceReceipt, LocalBrokerSourceRevision, LocalBrokerSourceTransaction, LocalBrokerSubmission,
   LocalBrokerExecutionBinding, LocalBrokerExecutionHandoff, LocalBrokerExecutionReview,
 } from "./broker-types.js";
 
@@ -143,6 +143,46 @@ export class LocalContextBroker implements AsyncDisposable {
   replaceSource(source: string, expected: LocalBrokerSourceRevision, documents: readonly LocalDocument[],
     provenance: LocalBrokerSourceProvenance): Promise<LocalBrokerSourceReceipt> {
     return this.call({op: "replace_source", source, expected, documents, provenance});
+  }
+  /** Stage privately; current evidence remains visible until the one atomic commit. */
+  async beginSourceReplace(source: string, expected: LocalBrokerSourceRevision, provenance: LocalBrokerSourceProvenance,
+    options: Readonly<{leaseMs?: number}> = {}): Promise<LocalBrokerSourceTransaction> {
+    this.requireSourceBatches();
+    return this.call({op: "begin_source_replace", source, expected, provenance, lease_ms: options.leaseMs ?? 60_000});
+  }
+  /** Append a nonempty batch atomically, returning the total staged document count. */
+  async appendSourceDocuments(transaction: LocalBrokerSourceTransaction, documents: readonly LocalDocument[]): Promise<number> {
+    this.requireSourceBatches();
+    return this.call({op: "append_source_documents", transaction, documents});
+  }
+  /** Consume staging and recheck source CAS/provenance before one atomic replacement. */
+  async commitSourceReplace(transaction: LocalBrokerSourceTransaction): Promise<LocalBrokerSourceReceipt> {
+    this.requireSourceBatches();
+    return this.call({op: "commit_source_replace", transaction});
+  }
+  /** Discard staging without changing evidence; absent/wrong-epoch handles return false. */
+  async abortSourceReplace(transaction: LocalBrokerSourceTransaction): Promise<boolean> {
+    this.requireSourceBatches();
+    return this.call({op: "abort_source_replace", transaction});
+  }
+  /** Consume supplied batches then commit once. An empty iterable withdraws the source.
+   * Staging shares retention with tickets/proposals and expires within five minutes.
+   * Cleanup preserves the primary error. No operation is retried after a lost acknowledgement. */
+  async replaceSourceBatches(source: string, expected: LocalBrokerSourceRevision,
+    batches: Iterable<readonly LocalDocument[]> | AsyncIterable<readonly LocalDocument[]>, provenance: LocalBrokerSourceProvenance,
+    options: Readonly<{leaseMs?: number}> = {}): Promise<LocalBrokerSourceReceipt> {
+    const transaction = await this.beginSourceReplace(source, expected, provenance, options);
+    try {
+      for await (const documents of batches) await this.appendSourceDocuments(transaction, documents);
+      return await this.commitSourceReplace(transaction);
+    } catch (error) {
+      try { await this.abortSourceReplace(transaction); }
+      catch { /* Cleanup must never mask a caller failure or uncertain commit outcome. */ }
+      throw error;
+    }
+  }
+  private requireSourceBatches(): void {
+    if (!this.capabilities().capabilities.includes("source_batches.v1")) throw new LocalBrokerError("IncompatibleWorker");
   }
   provenance(source: string): Promise<LocalBrokerSourceProvenance | null> { return this.call({op: "provenance", source}); }
   /** Host-only preprocessing; source admission and provenance remain explicit. */

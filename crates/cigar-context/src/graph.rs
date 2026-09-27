@@ -23,6 +23,31 @@ const fn first_line() -> usize {
 }
 
 impl Document {
+    pub(crate) fn validate_shape(&self) -> Result<(), ContextError> {
+        if !valid_id(&self.id)
+            || self.source.is_empty()
+            || self.source.len() > 2048
+            || self.source.chars().any(char::is_control)
+            || self.text.trim().is_empty()
+            || self.start_line == 0
+        {
+            return Err(ContextError::InvalidInput);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_bounds(&self, max_document_bytes: usize) -> Result<(), ContextError> {
+        if self.text.len() > max_document_bytes
+            || self
+                .start_line
+                .checked_add(self.text.lines().count().saturating_sub(1))
+                .is_none()
+        {
+            return Err(ContextError::LimitExceeded);
+        }
+        Ok(())
+    }
+
     /// Constructs an input document. The graph validates bounds before indexing.
     pub fn new(id: impl Into<String>, source: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
@@ -350,15 +375,7 @@ impl ContextGraph {
 
     /// Inserts or replaces one source and updates only its term postings. Returns whether changed.
     pub fn upsert(&mut self, document: Document) -> Result<bool, ContextError> {
-        if !valid_id(&document.id)
-            || document.source.is_empty()
-            || document.source.len() > 2048
-            || document.source.chars().any(char::is_control)
-            || document.text.trim().is_empty()
-            || document.start_line == 0
-        {
-            return Err(ContextError::InvalidInput);
-        }
+        document.validate_shape()?;
         let old = self.documents.get(&document.id);
         if old.is_some_and(|value| value.document == document) {
             return Ok(false);
@@ -374,13 +391,7 @@ impl ContextGraph {
         {
             return Err(ContextError::LimitExceeded);
         }
-        if document
-            .start_line
-            .checked_add(document.text.lines().count().saturating_sub(1))
-            .is_none()
-        {
-            return Err(ContextError::LimitExceeded);
-        }
+        document.validate_bounds(self.limits.max_document_bytes)?;
         let revision = self
             .revision
             .checked_add(1)

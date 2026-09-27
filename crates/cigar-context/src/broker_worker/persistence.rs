@@ -93,6 +93,13 @@ impl Persistence {
                 BTreeMap::from([(source.clone(), expected.clone())]),
             ),
             HostCommand::SetEdge { expected, .. } => (Operation::SetEdge, expected.clone()),
+            HostCommand::CommitSourceReplace { transaction } => {
+                let (source, expected, _) = broker.host_staged_source(transaction)?;
+                (
+                    Operation::ReplaceSource,
+                    BTreeMap::from([(source.into(), expected.clone())]),
+                )
+            }
             HostCommand::AdmitProposal { proposal_id, .. } => {
                 let (source, expected, _) = broker.host_proposal(proposal_id)?;
                 (

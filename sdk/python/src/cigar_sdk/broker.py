@@ -12,6 +12,7 @@ import secrets
 import socket
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self, cast
@@ -32,6 +33,7 @@ from cigar_sdk.broker_types import (
     LocalBrokerSourceProvenance,
     LocalBrokerSourceReceipt,
     LocalBrokerSourceRevision,
+    LocalBrokerSourceTransaction,
     LocalBrokerStorageOptions,
     LocalBrokerSubmission,
     LocalBrokerTransportLimits,
@@ -315,6 +317,79 @@ class LocalContextBroker(_WorkerChannel):
                 }
             ),
         )
+
+    def begin_source_replace(
+        self,
+        source: str,
+        expected: LocalBrokerSourceRevision,
+        provenance: LocalBrokerSourceProvenance,
+        *,
+        lease_ms: int = 60_000,
+    ) -> LocalBrokerSourceTransaction:
+        """Stage an atomic replacement privately; old evidence remains visible until commit."""
+        self._require_source_batches()
+        return cast(
+            LocalBrokerSourceTransaction,
+            self._call(
+                {
+                    "op": "begin_source_replace",
+                    "source": source,
+                    "expected": expected,
+                    "provenance": provenance,
+                    "lease_ms": lease_ms,
+                }
+            ),
+        )
+
+    def append_source_documents(self, transaction: LocalBrokerSourceTransaction, documents: list[LocalDocument]) -> int:
+        """Append a nonempty batch atomically; return the total staged document count."""
+        self._require_source_batches()
+        return cast(
+            int,
+            self._call({"op": "append_source_documents", "transaction": transaction, "documents": documents}),
+        )
+
+    def commit_source_replace(self, transaction: LocalBrokerSourceTransaction) -> LocalBrokerSourceReceipt:
+        """Consume staging and recheck source CAS/provenance before one atomic replacement."""
+        self._require_source_batches()
+        return cast(LocalBrokerSourceReceipt, self._call({"op": "commit_source_replace", "transaction": transaction}))
+
+    def abort_source_replace(self, transaction: LocalBrokerSourceTransaction) -> bool:
+        """Discard staging without changing evidence. An absent or wrong-epoch handle returns False."""
+        self._require_source_batches()
+        return cast(bool, self._call({"op": "abort_source_replace", "transaction": transaction}))
+
+    def replace_source_batches(
+        self,
+        source: str,
+        expected: LocalBrokerSourceRevision,
+        batches: Iterable[list[LocalDocument]],
+        provenance: LocalBrokerSourceProvenance,
+        *,
+        lease_ms: int = 60_000,
+    ) -> LocalBrokerSourceReceipt:
+        """Consume bounded batches then commit once. An empty iterable withdraws the source.
+
+        Staging shares retention with tickets/proposals and expires within five minutes.
+        On failure, best-effort abort preserves the primary exception. No automatic retry;
+        a lost commit acknowledgement still has an unknown outcome and closes the owner.
+        """
+        transaction = self.begin_source_replace(source, expected, provenance, lease_ms=lease_ms)
+        try:
+            for batch in batches:
+                self.append_source_documents(transaction, batch)
+            return self.commit_source_replace(transaction)
+        except BaseException:
+            try:
+                self.abort_source_replace(transaction)
+            except BaseException:
+                # Cleanup must never mask a caller failure or an uncertain commit outcome.
+                pass
+            raise
+
+    def _require_source_batches(self) -> None:
+        if "source_batches.v1" not in self.capabilities()["capabilities"]:
+            raise LocalBrokerError("IncompatibleWorker")
 
     def provenance(self, source: str) -> LocalBrokerSourceProvenance | None:
         return cast(LocalBrokerSourceProvenance | None, self._call({"op": "provenance", "source": source}))

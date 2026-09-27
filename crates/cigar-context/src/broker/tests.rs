@@ -5,7 +5,7 @@ use crate::{
     AnswerClaim, AnswerDecision, ClaimIssue, ClaimVerdict, ContextViewSpec, Utf8ByteCounter,
 };
 
-fn broker() -> ContextBroker {
+pub(super) fn broker() -> ContextBroker {
     ContextBroker::new(
         "test-private-domain",
         GraphLimits::default(),
@@ -14,7 +14,7 @@ fn broker() -> ContextBroker {
     .unwrap()
 }
 
-fn spec(agent: &str, sources: &[&str], writable: &[&str]) -> AgentGrantSpec {
+pub(super) fn spec(agent: &str, sources: &[&str], writable: &[&str]) -> AgentGrantSpec {
     AgentGrantSpec {
         view: ContextViewSpec {
             id: agent.into(),
@@ -27,7 +27,7 @@ fn spec(agent: &str, sources: &[&str], writable: &[&str]) -> AgentGrantSpec {
     }
 }
 
-fn provenance(version: &str) -> SourceProvenance {
+pub(super) fn provenance(version: &str) -> SourceProvenance {
     SourceProvenance {
         authority: "trusted-fixture-host".into(),
         upstream_revision: version.into(),
@@ -38,7 +38,12 @@ fn provenance(version: &str) -> SourceProvenance {
     }
 }
 
-fn ingest(broker: &mut ContextBroker, source: &str, id: &str, text: &str) -> SourceReceipt {
+pub(super) fn ingest(
+    broker: &mut ContextBroker,
+    source: &str,
+    id: &str,
+    text: &str,
+) -> SourceReceipt {
     let revision = broker.host_source_revision(source).unwrap();
     broker
         .host_replace_source(
@@ -57,7 +62,7 @@ fn request() -> ContextRequest {
     }
 }
 
-fn compile(broker: &mut ContextBroker, credential: &BrokerCredential) -> BrokerContext {
+pub(super) fn compile(broker: &mut ContextBroker, credential: &BrokerCredential) -> BrokerContext {
     broker
         .compile(credential, &request(), &Utf8ByteCounter)
         .unwrap()

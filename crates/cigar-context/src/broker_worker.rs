@@ -215,7 +215,8 @@ impl Runtime {
             "execution": "single-owner-fair-dispatch", "requires_hol_services": false,
             "capabilities": ["broker_scopes.v1", "source_cas.v1", "proposal_admission.v1",
                 "provenance_freshness.v1", "exact_answer_review.v1", "fair_admission.v1",
-                "mutual_grant_proof.v1", "execution_handoff.v1", "selection_explanation.v1", "document_boundaries.v1"],
+                "mutual_grant_proof.v1", "execution_handoff.v1", "selection_explanation.v1", "document_boundaries.v1",
+                "source_batches.v1"],
             "transport_limits": transport,
             "storage": {"mode": if persistence.active() { "sqlite-checkpoint.v1" } else { "memory" },
                 "restored": restored},
@@ -548,6 +549,26 @@ fn execute_host(
         } => Ok(json!(broker.host_replace_source(
             &source, &expected, documents, provenance
         )?)),
+        HostCommand::BeginSourceReplace {
+            source,
+            expected,
+            provenance,
+            lease_ms,
+        } => Ok(json!(broker.host_begin_source_replace(
+            &source, &expected, provenance, lease_ms
+        )?)),
+        HostCommand::AppendSourceDocuments {
+            transaction,
+            documents,
+        } => Ok(json!(
+            broker.host_append_source_documents(&transaction, documents)?
+        )),
+        HostCommand::CommitSourceReplace { transaction } => {
+            Ok(json!(broker.host_commit_source_replace(&transaction)?))
+        }
+        HostCommand::AbortSourceReplace { transaction } => {
+            Ok(json!(broker.host_abort_source_replace(&transaction)))
+        }
         HostCommand::ChunksAtLines { document, starts } => {
             Ok(json!(document.chunks_at_lines(&starts)?))
         }

@@ -7,7 +7,7 @@
 use super::scheduler::{AgentQueueLimits, QueueLimits};
 use super::{
     AgentGrantSpec, BrokerError, BrokerLimits, ExecutionBinding, ExecutionReview, SourceProvenance,
-    SourceRevision,
+    SourceRevision, SourceTransaction,
 };
 use crate::{
     AnswerDraft, AnswerPolicy, ClaimReview, ContextError, ContextRequest, Document, EdgeKind,
@@ -187,6 +187,34 @@ pub enum HostCommand {
         documents: Vec<Document>,
         /// Host-declared acquisition and derivation records.
         provenance: SourceProvenance,
+    },
+    /// Start a private bounded replacement without changing the live graph.
+    BeginSourceReplace {
+        /// Exact host-selected source.
+        source: String,
+        /// Expected authority at commit, rechecked after all batches arrive.
+        expected: SourceRevision,
+        /// Host-owned acquisition and derivation declarations.
+        provenance: SourceProvenance,
+        /// Staging lease, 1..=300000 milliseconds.
+        lease_ms: u64,
+    },
+    /// Append a nonempty validated batch to host-only transient staging.
+    AppendSourceDocuments {
+        /// Current-epoch host staging handle.
+        transaction: SourceTransaction,
+        /// Complete documents within the existing host frame/retention bounds.
+        documents: Vec<Document>,
+    },
+    /// Consume staging and atomically commit one source through existing CAS/provenance checks.
+    CommitSourceReplace {
+        /// Current-epoch host staging handle.
+        transaction: SourceTransaction,
+    },
+    /// Discard staging without changing evidence or authority.
+    AbortSourceReplace {
+        /// Current-epoch host staging handle.
+        transaction: SourceTransaction,
     },
     /// Partition host-supplied source without reading files, changing evidence or granting access.
     ChunksAtLines {
@@ -608,6 +636,27 @@ mod tests {
             decode_agent(&valid).unwrap().command,
             AgentCommand::Compile { .. }
         ));
+    }
+
+    #[test]
+    fn source_batch_frames_are_valid_only_on_the_private_host_channel() {
+        let transaction = json!({"epoch":"e".repeat(64), "id":"a".repeat(64)});
+        for command in [
+            json!({"op":"begin_source_replace", "source":"docs", "expected":{"epoch":"e".repeat(64),"version":"0"},
+                "provenance":{"authority":"host","upstream_revision":"v1","observed_at_ms":1,"valid_until_ms":null,"origin":"host","derived_from":[]},"lease_ms":60000}),
+            json!({"op":"append_source_documents","transaction":transaction,"documents":[{"id":"a","source":"docs","text":"evidence"}]}),
+            json!({"op":"commit_source_replace","transaction":transaction}),
+            json!({"op":"abort_source_replace","transaction":transaction}),
+        ] {
+            assert!(
+                decode_host(&serde_json::to_vec(&json!({"id":1,"command":command})).unwrap())
+                    .is_ok()
+            );
+            assert_eq!(
+                decode_agent(&serde_json::to_vec(&envelope(command)).unwrap()).err(),
+                Some(ErrorCode::InvalidInput)
+            );
+        }
     }
 
     #[test]

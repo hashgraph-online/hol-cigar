@@ -10,10 +10,12 @@ mod types;
 pub use types::*;
 pub mod authentication;
 mod execution;
+mod ingestion;
 pub mod protocol;
 mod recovery;
 pub mod scheduler;
 pub use execution::{ExecutionBinding, ExecutionHandoff, ExecutionReview};
+pub use ingestion::SourceTransaction;
 pub use recovery::BrokerCheckpoint;
 
 use crate::{
@@ -85,6 +87,7 @@ pub struct ContextBroker {
     edge_nodes: BTreeMap<String, EdgeNode>,
     tickets: BTreeMap<String, Ticket>,
     proposals: BTreeMap<String, Proposal>,
+    staged_sources: BTreeMap<String, ingestion::StagedSource>,
 }
 
 impl ContextBroker {
@@ -121,6 +124,7 @@ impl ContextBroker {
             edge_nodes: BTreeMap::new(),
             tickets: BTreeMap::new(),
             proposals: BTreeMap::new(),
+            staged_sources: BTreeMap::new(),
         })
     }
 
@@ -992,7 +996,7 @@ impl ContextBroker {
                 )
             },
         );
-        if total - replacing + bytes > self.limits.max_retained_bytes
+        if total - replacing + bytes + self.staged_bytes() > self.limits.max_retained_bytes
             || own - replacing + bytes > grant.spec.limits.max_retained_bytes
         {
             return Err(BrokerError::Quota);
@@ -1020,6 +1024,7 @@ impl ContextBroker {
         }
         self.tickets.retain(|_, ticket| ticket.expires > now);
         self.proposals.retain(|_, proposal| proposal.expires > now);
+        self.staged_sources.retain(|_, source| source.expires > now);
     }
 }
 
