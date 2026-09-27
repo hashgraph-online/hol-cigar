@@ -32,6 +32,7 @@ EXACT_INPUTS = (
     "scripts/release/context_sdk_inputs.py",
     "scripts/release/context_platforms.py",
     "scripts/release/build_context_worker.py",
+    "scripts/release/context_native_sources.py",
     "scripts/release/context_distribution.py",
     "scripts/release/context_distribution_release.py",
     "scripts/release/context_dependency_evidence.py",
@@ -65,7 +66,12 @@ EXACT_INPUTS = (
     ".github/workflows/npm-sdk-readiness.yml",
     ".github/workflows/fast-ci.yml",
 )
-SOURCE_DIRECTORIES = ("crates/cigar-context", "sdk/python", "sdk/typescript")
+SOURCE_DIRECTORIES = (
+    "crates/cigar-context",
+    "crates/cigar-windows-ipc",
+    "sdk/python",
+    "sdk/typescript",
+)
 SOURCE_SUFFIXES = {
     ".rs",
     ".py",

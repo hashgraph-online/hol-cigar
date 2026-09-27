@@ -349,12 +349,13 @@ class RegistryReadbackTests(unittest.TestCase):
 
 class IndependentBuildTests(unittest.TestCase):
     def test_all_platforms_are_required_by_public_release_profile(self):
-        self.assertEqual(len(release.PROFILE.payloads), 14)
+        self.assertEqual(len(release.PROFILE.payloads), 15)
         self.assertEqual(
             sum(name.endswith(".whl") for name in release.PROFILE.payloads), 7
         )
         self.assertIn(
-            "hol_cigar-0.12.0-py3-none-win_amd64.whl", release.PROFILE.payloads
+            f"hol_cigar-{release.distribution.PYTHON_VERSION}-py3-none-win_amd64.whl",
+            release.PROFILE.payloads,
         )
 
     def test_same_build_cannot_be_its_own_comparison(self):

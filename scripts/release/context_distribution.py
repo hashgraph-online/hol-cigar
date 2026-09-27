@@ -24,6 +24,7 @@ import tarfile
 import time
 import zipfile
 
+import context_native_sources
 import context_platforms
 import context_sdk_inputs
 from release_lib import (
@@ -38,6 +39,7 @@ IDENTITY = load_json(ROOT / "sdk/local-context-release.v1.json")
 VERSION = IDENTITY["core_version"]
 PYTHON_VERSION = IDENTITY["versions"]["python"]
 PROTOCOL = IDENTITY["protocol"]
+SOURCE_VERSIONS = context_native_sources.versions(ROOT)
 MAX_FILE = 64 * 1024 * 1024
 MAX_TOTAL = 512 * 1024 * 1024
 
@@ -73,7 +75,7 @@ def artifact_names(platform_ids: set[str]) -> set[str]:
         bool(platform_ids) and platform_ids <= platforms.keys(), "invalid platform set"
     )
     return {
-        f"cigar-context-{VERSION}.crate",
+        *context_native_sources.archive_names(SOURCE_VERSIONS),
         f"hol-org-cigar-{VERSION}.tgz",
         f"hol_cigar-{PYTHON_VERSION}.tar.gz",
         *(
@@ -160,7 +162,7 @@ def validate_native(
         core_inputs = {
             name: value
             for name, value in binding["files"].items()
-            if name.startswith("crates/cigar-context/")
+            if name.startswith(("crates/cigar-context/", "crates/cigar-windows-ipc/"))
             or name in {"Cargo.toml", "Cargo.lock"}
         }
         require(
@@ -182,6 +184,7 @@ def validate_native(
         "package",
         "build",
         "core-tests",
+        "adapter-tests",
         "worker-version",
         "worker-compile",
         "dependencies",
@@ -240,6 +243,14 @@ def validate_native(
         == manifest["source_archive_sha256"],
         "native source archive mismatch",
     )
+    closure, _, _, _ = context_native_sources.inspect(
+        directory / "source", SOURCE_VERSIONS
+    )
+    require(
+        load_json(native / "source-closure.json") == closure
+        and manifest.get("source_archives_sha256") == closure["archives"],
+        "native source closure mismatch",
+    )
     require(
         context_platforms.inspect_binary(native / metadata["executable"], platform_id)
         == report["binary"],
@@ -254,6 +265,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         set(inventory(artifacts)) == artifact_names(set(workers)),
         "archive inventory does not match the platform set",
     )
+    closure, _, _, _ = context_native_sources.inspect(artifacts, SOURCE_VERSIONS)
 
     def worker_files(files: dict, prefix: str, expected: set[str]) -> None:
         actual = {
@@ -282,6 +294,10 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
                 files[f"{prefix}{key}/THIRD_PARTY_NOTICES.txt"]
                 and files[f"{prefix}{key}/dependencies.json"],
                 "native dependency notices are missing",
+            )
+            require(
+                json.loads(files[f"{prefix}{key}/source-closure.json"]) == closure,
+                "packaged native source closure differs from distributed archives",
             )
 
     npm = archive_files(artifacts / f"hol-org-cigar-{VERSION}.tgz")
@@ -444,10 +460,11 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
             f"hol_cigar-{PYTHON_VERSION}/{name}" in sdist,
             "sdist standalone asset missing",
         )
-    source_hash = file_record(artifacts / f"cigar-context-{VERSION}.crate")["sha256"]
+    source_hash = closure["archives"][f"cigar-context-{VERSION}.crate"]
     require(
         all(
             row["worker"]["source_archive_sha256"] == source_hash
+            and row["worker"].get("source_archives_sha256") == closure["archives"]
             for row in workers.values()
         ),
         "workers were not built from the distributed source archive",
@@ -639,10 +656,8 @@ def build(args) -> None:
             cwd=stage,
         )
     first = next(iter(directories))
-    shutil.copyfile(
-        workers / first / f"source/cigar-context-{VERSION}.crate",
-        packed / f"cigar-context-{VERSION}.crate",
-    )
+    for name in sorted(context_native_sources.archive_names(SOURCE_VERSIONS)):
+        shutil.copyfile(workers / first / "source" / name, packed / name)
     artifacts = output / "artifacts"
     artifacts.mkdir()
     require(

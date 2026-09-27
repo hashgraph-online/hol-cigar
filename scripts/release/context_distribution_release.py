@@ -563,6 +563,7 @@ def assemble(args) -> None:
                 "build.json",
                 "checks.json",
                 f"native/{key}/manifest.json",
+                f"native/{key}/source-closure.json",
                 f"native/{key}/dependencies.json",
                 f"native/{key}/THIRD_PARTY_NOTICES.txt",
             ):

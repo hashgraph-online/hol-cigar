@@ -18,9 +18,9 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-import tarfile
 import time
 
+import context_native_sources
 import context_platforms
 import context_sdk_inputs
 from release_lib import ReleaseError, canonical_json_bytes, reject_evidence_directory
@@ -156,19 +156,26 @@ def main() -> None:
             "--locked",
             "--no-verify",
             "-p",
+            "cigar-windows-ipc",
+            "-p",
             "cigar-context",
             *(["--allow-dirty"] if args.allow_dirty else []),
         ],
     )
+    source_versions = context_native_sources.versions(ROOT)
+    for name in sorted(context_native_sources.archive_names(source_versions)):
+        shutil.copyfile(target_dir / "package" / name, sources / name)
     archive = sources / f"cigar-context-{version}.crate"
-    shutil.copyfile(target_dir / "package" / archive.name, archive)
     unpacked = output / "unpacked"
-    unpacked.mkdir()
-    with tarfile.open(archive) as package:
-        package.extractall(unpacked, filter="data")
-    crate = unpacked / f"cigar-context-{version}"
+    crates, source_closure = context_native_sources.prepare(
+        sources, unpacked, source_versions
+    )
+    crate = crates[context_native_sources.CONTEXT]
+    adapter = crates[context_native_sources.ADAPTER]
+    (native / "source-closure.json").write_bytes(canonical_json_bytes(source_closure))
     flags = [
         f"--remap-path-prefix={crate}=/cigar/native",
+        f"--remap-path-prefix={adapter}=/cigar/windows-ipc",
         f"--remap-path-prefix={ROOT}=/cigar/source",
     ]
     windows_flags = []
@@ -228,6 +235,18 @@ def main() -> None:
             metadata["target"],
         ],
         cwd=crate,
+    )
+    run(
+        "adapter-tests",
+        [
+            cargo,
+            "test",
+            "--locked",
+            "--no-default-features",
+            "--target",
+            metadata["target"],
+        ],
+        cwd=adapter,
     )
     run(
         "core-tests",
@@ -362,6 +381,7 @@ def main() -> None:
         "target": metadata["target"],
         "sha256": digest(worker),
         "source_archive_sha256": digest(archive),
+        "source_archives_sha256": source_closure["archives"],
     }
     (native / "manifest.json").write_bytes(canonical_json_bytes(manifest))
     files = {}

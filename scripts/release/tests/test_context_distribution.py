@@ -27,11 +27,15 @@ class DistributionBoundaryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
 
-    def test_complete_platform_inventory_requires_ten_archives(self):
+    def test_complete_platform_inventory_requires_eleven_archives(self):
         platforms = context_platforms.platforms()
         self.assertEqual(len(platforms), 7)
         files = distribution.artifact_names(set(platforms))
-        self.assertEqual(len(files), 10)
+        self.assertEqual(len(files), 11)
+        self.assertIn(
+            f"cigar-windows-ipc-{distribution.SOURCE_VERSIONS['cigar-windows-ipc']}.crate",
+            files,
+        )
         self.assertEqual(sum(name.endswith(".whl") for name in files), 7)
         self.assertIn(
             f"hol_cigar-{distribution.PYTHON_VERSION}-py3-none-win_amd64.whl", files
