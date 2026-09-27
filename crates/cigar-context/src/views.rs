@@ -1,7 +1,8 @@
 //! Host-scoped views over one graph/index. No scheduler, authentication service or new effect journal.
 use crate::{
     AnswerAssessment, AnswerDraft, AnswerPolicy, ClaimReview, ContextError, ContextGraph,
-    ContextRequest, ContextSnapshot, Document, SourceUpdate, TokenCounter, digest,
+    ContextRequest, ContextSnapshot, Document, SelectionExplanation, SelectionStep, SourceUpdate,
+    TokenCounter, digest,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -172,6 +173,19 @@ impl ContextViews {
         tokenizer: &impl TokenCounter,
         authority: Option<&str>,
     ) -> Result<ContextView, ContextError> {
+        self.compile_traced(graph, handle, request, tokenizer, authority, None)
+    }
+
+    #[allow(clippy::too_many_arguments)] // Optional observation of the unchanged selection path.
+    fn compile_traced(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        request: &ContextRequest,
+        tokenizer: &impl TokenCounter,
+        authority: Option<&str>,
+        trace: Option<&mut Vec<SelectionStep>>,
+    ) -> Result<ContextView, ContextError> {
         let entry = self.entry(handle)?;
         let authorized = authorized_nodes(graph, &entry.spec);
         let mut scope_id = scope_id(graph, entry, &authorized)?;
@@ -179,7 +193,7 @@ impl ContextViews {
             scope_id = digest("cigar.context-view-authority.v1", &(&scope_id, authority))?;
         }
         let scoped = scoped_request(request, &scope_id, &authorized);
-        let snapshot = graph.compile(&scoped, tokenizer)?;
+        let snapshot = graph.compile_traced(&scoped, tokenizer, trace)?;
         let mut context = ContextView {
             id: String::new(),
             view: handle.clone(),
@@ -257,6 +271,57 @@ impl ContextViews {
         tokenizer: &impl TokenCounter,
         authority: Option<&str>,
     ) -> Result<(), ContextError> {
+        self.revalidate_traced(graph, handle, context, tokenizer, authority, None)
+    }
+
+    /// Reconstruct only successful selection steps after checking the current whole scope.
+    /// Revocation and any in-scope change invalidate the explanation, including unselected data.
+    pub fn explain(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        context: &ContextView,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<SelectionExplanation, ContextError> {
+        self.explain_bound(graph, handle, context, tokenizer, None)
+    }
+
+    pub(crate) fn explain_bound(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        context: &ContextView,
+        tokenizer: &impl TokenCounter,
+        authority: Option<&str>,
+    ) -> Result<SelectionExplanation, ContextError> {
+        let mut steps = Vec::new();
+        self.revalidate_traced(
+            graph,
+            handle,
+            context,
+            tokenizer,
+            authority,
+            Some(&mut steps),
+        )?;
+        SelectionExplanation::new(
+            &context.snapshot,
+            &context.request,
+            graph.revision(),
+            tokenizer,
+            steps,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)] // Current-state checks plus an optional trace observer.
+    fn revalidate_traced(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        context: &ContextView,
+        tokenizer: &impl TokenCounter,
+        authority: Option<&str>,
+        trace: Option<&mut Vec<SelectionStep>>,
+    ) -> Result<(), ContextError> {
         self.entry(handle)?;
         if context.view != *handle {
             return Err(ContextError::BaseMismatch);
@@ -265,7 +330,8 @@ impl ContextViews {
         if context.id != context.commitment()? {
             return Err(ContextError::Integrity);
         }
-        let current = self.compile_bound(graph, handle, &context.request, tokenizer, authority)?;
+        let current =
+            self.compile_traced(graph, handle, &context.request, tokenizer, authority, trace)?;
         if context.scope_id != current.scope_id
             || !context.snapshot.same_view_evidence(&current.snapshot)
         {

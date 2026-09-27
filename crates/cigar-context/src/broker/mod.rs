@@ -19,7 +19,7 @@ pub use recovery::BrokerCheckpoint;
 use crate::{
     AnswerDraft, AnswerPolicy, Citation, ClaimReview, ContextGraph, ContextRequest, ContextView,
     ContextViewAssessment, ContextViewHandle, ContextViews, Document, EdgeKind, GraphLimits,
-    TokenCounter, digest,
+    SelectionExplanation, TokenCounter, digest,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -430,6 +430,25 @@ impl ContextBroker {
     ) -> Result<(), BrokerError> {
         let (owner, _) = self.authorize(credential)?;
         self.current_ticket(&owner, ticket, tokenizer).map(|_| ())
+    }
+
+    /// Explain selected evidence only after current owner, grant, provenance and scope checks.
+    /// Agents cannot substitute a request/snapshot or inspect another caller's ticket.
+    pub fn explain(
+        &self,
+        credential: &BrokerCredential,
+        ticket: &str,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<SelectionExplanation, BrokerError> {
+        let (owner, _) = self.authorize(credential)?;
+        let (ticket, grant, authority) = self.ticket_authority(&owner, ticket)?;
+        Ok(self.views.explain_bound(
+            &self.graph,
+            &grant.handle,
+            &ticket.context,
+            tokenizer,
+            Some(&authority),
+        )?)
     }
 
     /// Resolve a selected node's citation only after current ticket/owner validation.
@@ -899,6 +918,22 @@ impl ContextBroker {
         id: &str,
         tokenizer: &impl TokenCounter,
     ) -> Result<&Ticket, BrokerError> {
+        let (ticket, grant, authority) = self.ticket_authority(owner, id)?;
+        self.views.revalidate_bound(
+            &self.graph,
+            &grant.handle,
+            &ticket.context,
+            tokenizer,
+            Some(&authority),
+        )?;
+        Ok(ticket)
+    }
+
+    fn ticket_authority(
+        &self,
+        owner: &str,
+        id: &str,
+    ) -> Result<(&Ticket, &Grant, String), BrokerError> {
         let grant = self.live_grant(owner)?;
         let ticket = self
             .tickets
@@ -913,14 +948,7 @@ impl ContextBroker {
             "cigar.broker-source-authority.v1",
             &(&self.epoch, &ticket.versions),
         )?;
-        self.views.revalidate_bound(
-            &self.graph,
-            &grant.handle,
-            &ticket.context,
-            tokenizer,
-            Some(&authority),
-        )?;
-        Ok(ticket)
+        Ok((ticket, grant, authority))
     }
 
     fn pending_proposal(&self, id: &str) -> Result<&Proposal, BrokerError> {

@@ -7,7 +7,7 @@ import type { LocalWorkerCapabilities } from "./local-runtime.js";
 import type {
   LocalAnswerAssessment, LocalAnswerDraft, LocalAnswerPolicy, LocalClaimReview,
   LocalCitation, LocalContextDelta, LocalContextLimits, LocalContextPrompt, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
-  LocalDocument, LocalEdgeKind, LocalGraphStats, LocalSourceUpdate,
+  LocalDocument, LocalEdgeKind, LocalGraphStats, LocalSelectionExplanation, LocalSourceUpdate,
   LocalViewSpec, LocalViewHandle, LocalViewContext, LocalViewResult, LocalViewAssessment,
 } from "./context-types.js";
 
@@ -82,6 +82,9 @@ export class LocalContextGraph implements AsyncDisposable {
   }
   private viewCall<T>(command: Record<string, unknown>): Promise<T> {
     if (!this.supportsViews) return Promise.reject(new LocalContextError("IncompatibleWorker"));
+    if (command.op === "explain_view" && !this.workerFeatures.includes("selection_explanation.v1")) {
+      return Promise.reject(new LocalContextError("IncompatibleWorker"));
+    }
     return this.call(command);
   }
   /** Define/replace a host-owned source scope. Replacing revokes its old handles.
@@ -101,6 +104,13 @@ export class LocalContextGraph implements AsyncDisposable {
   unlink(from: string, to: string, kind: LocalEdgeKind): Promise<boolean> { return this.call({op: "unlink", from, to, kind}); }
   /** Rust-rendered context is ordinary data, not an instruction or authorization grant. */
   compile(request: LocalContextRequest): Promise<LocalContextResult> { return this.call({op: "compile", request}); }
+  /** Recompile an exact current snapshot; retrieval signals are not truth probabilities. */
+  explain(request: LocalContextRequest, snapshot: LocalContextSnapshot): Promise<LocalSelectionExplanation> {
+    if (!this.workerFeatures.includes("selection_explanation.v1")) {
+      return Promise.reject(new LocalContextError("IncompatibleWorker"));
+    }
+    return this.call({op: "explain", request, snapshot});
+  }
   chunks(document: LocalDocument, maxLines: number, overlapLines = 0): Promise<LocalDocument[]> {
     return this.call({op: "chunks", document, max_lines: maxLines, overlap_lines: overlapLines});
   }
@@ -152,6 +162,10 @@ export class LocalContextView {
   /** Request access may narrow, but never widen, the host-defined view. */
   compile(request: LocalContextRequest): Promise<LocalViewResult> {
     return this.#call({op: "compile_view", view: this.#handle, request});
+  }
+  /** Revalidate this whole view, then explain only selected evidence. */
+  explain(context: LocalViewContext): Promise<LocalSelectionExplanation> {
+    return this.#call({op: "explain_view", view: this.#handle, context});
   }
   replaceSource(source: string, documents: readonly LocalDocument[]): Promise<LocalSourceUpdate> {
     return this.#call({op: "replace_view_source", view: this.#handle, source, documents});

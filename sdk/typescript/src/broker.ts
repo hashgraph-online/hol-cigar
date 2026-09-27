@@ -8,7 +8,7 @@ import type { WorkerReply } from "./local-worker.js";
 import { assertUniqueJsonKeys } from "./strict-json.js";
 import type {
   LocalAnswerDraft, LocalAnswerPolicy, LocalCitation, LocalClaimReview, LocalContextRequest,
-  LocalDocument, LocalEdgeKind, LocalViewAssessment, LocalViewSpec,
+  LocalDocument, LocalEdgeKind, LocalSelectionExplanation, LocalViewAssessment, LocalViewSpec,
 } from "./context-types.js";
 import type {
   LocalBrokerAgentLimits, LocalBrokerAgentQueueLimits, LocalBrokerCapabilities, LocalBrokerConnectionConfig,
@@ -263,6 +263,8 @@ export class LocalContextClient {
   }
 
   compile(request: LocalContextRequest): Promise<LocalBrokerContext> { return this.call({op: "compile", request}); }
+  /** Explain own selected evidence after current grant, provenance and ticket checks. */
+  explain(ticket: string): Promise<LocalSelectionExplanation> { return this.call({op: "explain", ticket}); }
   async revalidate(ticket: string): Promise<void> { await this.call({op: "revalidate", ticket}); }
   citations(ticket: string, nodeId: string): Promise<readonly LocalCitation[]> { return this.call({op: "citations", ticket, node_id: nodeId}); }
   sourceRevision(source: string): Promise<LocalBrokerSourceRevision> { return this.call({op: "source_revision", source}); }

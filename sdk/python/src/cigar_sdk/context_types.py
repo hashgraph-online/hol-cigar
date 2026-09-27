@@ -142,6 +142,28 @@ class LocalContextResult(TypedDict):
     rendered: str
 
 
+LocalSelectionSignal = Literal[
+    "required", "lexical_match", "declaration_match", "semantic_candidate", "graph_expansion"
+]
+
+
+class LocalSelectionStep(TypedDict):
+    root_id: str
+    added_ids: list[str]
+    signals: list[LocalSelectionSignal]
+
+
+class LocalSelectionExplanation(TypedDict):
+    """Current selection trace, not truth confidence or execution authority. Contains selected IDs."""
+
+    schema: Literal["cigar.context-selection-explanation.v1"]
+    snapshot_id: str
+    request_id: str
+    checked_graph_revision: int
+    tokenizer: str
+    steps: list[LocalSelectionStep]
+
+
 class LocalContextDelta(TypedDict):
     base_id: str
     target_id: str

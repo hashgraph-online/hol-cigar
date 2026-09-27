@@ -59,6 +59,10 @@ enum Command {
     Compile {
         request: ContextRequest,
     },
+    Explain {
+        request: ContextRequest,
+        snapshot: ContextSnapshot,
+    },
     ReviewKeys {
         draft: AnswerDraft,
     },
@@ -109,6 +113,10 @@ enum Command {
     CompileView {
         view: ContextViewHandle,
         request: ContextRequest,
+    },
+    ExplainView {
+        view: ContextViewHandle,
+        context: ContextView,
     },
     ReplaceViewSource {
         view: ContextViewHandle,
@@ -185,6 +193,11 @@ impl Session {
             Command::Compile { request } => {
                 self.rendered(self.graph.compile(&request, &self.tokenizer)?)
             }
+            Command::Explain { request, snapshot } => Ok(json!(self.graph.explain(
+                &request,
+                &snapshot,
+                &self.tokenizer
+            )?)),
             Command::ReviewKeys { draft } => Ok(json!(draft.review_keys()?)),
             Command::CheckAnswer {
                 request,
@@ -247,6 +260,12 @@ impl Session {
                     .compile(&self.graph, &view, &request, &self.tokenizer)?;
                 Ok(json!({"rendered": context.snapshot().render(), "context": context}))
             }
+            Command::ExplainView { view, context } => Ok(json!(self.views.explain(
+                &self.graph,
+                &view,
+                &context,
+                &self.tokenizer,
+            )?)),
             Command::ReplaceViewSource {
                 view,
                 source,
@@ -286,7 +305,7 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
         "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
         "max_response_bytes": MAX_RESPONSE, "capabilities": [
             "context_graph.v1", "source_replace.v1", "snapshot_integrity.v1",
-            "answer_review.v1", "context_views.v1"
+            "answer_review.v1", "context_views.v1", "selection_explanation.v1"
         ]});
         *session = Some(value);
         Ok(reply)

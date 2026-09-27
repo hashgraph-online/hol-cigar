@@ -9,6 +9,7 @@
 mod answer;
 #[cfg(feature = "broker")]
 pub mod broker;
+mod explain;
 mod graph;
 mod prompt;
 mod select;
@@ -20,6 +21,7 @@ pub use answer::{
     AnswerAssessment, AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimAssessment,
     ClaimIssue, ClaimReview, ClaimVerdict,
 };
+pub use explain::{SelectionExplanation, SelectionSignal, SelectionStep};
 pub use graph::{ContextGraph, Document, EdgeKind, GraphLimits, SourceUpdate};
 pub use prompt::ContextPrompt;
 pub use select::{ContextRequest, ExcerptMode, SelectionStats};

@@ -64,6 +64,73 @@ fn compile(broker: &mut ContextBroker, credential: &BrokerCredential) -> BrokerC
 }
 
 #[test]
+fn explanations_preserve_ticket_authority_provenance_and_selected_only_disclosure() {
+    let mut broker = broker();
+    ingest(&mut broker, "shared", "fact", "meaningful evidence");
+    ingest(
+        &mut broker,
+        "private",
+        "PRIVATE_ID",
+        "meaningful SECRET evidence",
+    );
+    let a = broker.host_grant(spec("a", &["shared"], &[])).unwrap();
+    let b = broker
+        .host_grant(spec("b", &["shared", "private"], &[]))
+        .unwrap();
+    let request = ContextRequest {
+        semantic_candidates: vec!["PRIVATE_ID".into()],
+        ..request()
+    };
+    let context = broker.compile(&a, &request, &Utf8ByteCounter).unwrap();
+    let explanation = broker
+        .explain(&a, &context.ticket, &Utf8ByteCounter)
+        .unwrap();
+    assert_eq!(explanation.snapshot_id, context.context.snapshot().id());
+    assert_eq!(explanation.steps[0].added_ids, ["fact"]);
+    assert!(
+        !serde_json::to_string(&explanation)
+            .unwrap()
+            .contains("PRIVATE_ID")
+    );
+    assert_eq!(
+        broker.explain(&b, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+    ingest(&mut broker, "private", "PRIVATE_ID", "Changed PRIVATE_TEXT");
+    assert_eq!(
+        broker
+            .explain(&a, &context.ticket, &Utf8ByteCounter)
+            .unwrap()
+            .steps,
+        explanation.steps
+    );
+    let revision = broker.host_source_revision("shared").unwrap();
+    broker
+        .host_replace_source(
+            "shared",
+            &revision,
+            vec![Document::new("fact", "shared", "meaningful evidence")],
+            provenance("v2"),
+        )
+        .unwrap();
+    assert_eq!(
+        broker.explain(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::Stale)
+    );
+    let fresh = compile(&mut broker, &a);
+    broker.tickets.get_mut(&fresh.ticket).unwrap().expires = Instant::now();
+    assert_eq!(
+        broker.explain(&a, &fresh.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+    broker.host_revoke("a");
+    assert_eq!(
+        broker.explain(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+}
+
+#[test]
 fn five_and_twelve_agents_share_one_graph_without_sharing_scopes_or_tickets() {
     for agents in [5, 12] {
         let mut broker = broker();

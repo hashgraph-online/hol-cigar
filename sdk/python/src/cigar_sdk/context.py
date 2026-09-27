@@ -28,6 +28,7 @@ from cigar_sdk.context_types import (
     LocalDocument,
     LocalEdgeKind,
     LocalGraphStats,
+    LocalSelectionExplanation,
     LocalSourceUpdate,
     LocalViewAssessment,
     LocalViewContext,
@@ -326,7 +327,13 @@ class LocalContextGraph(_WorkerChannel):
     def _view_call(self, command: dict[str, Any]) -> Any:
         if not self._supports_views:
             raise LocalContextError("IncompatibleWorker")
+        if command["op"] == "explain_view":
+            self._require_explanation()
         return self._call(command)
+
+    def _require_explanation(self) -> None:
+        if "selection_explanation.v1" not in self.capabilities()["features"]:
+            raise LocalContextError("IncompatibleWorker")
 
     def create_view(self, spec: LocalViewSpec) -> LocalContextView:
         """Define/replace a host-owned view over this graph. Replacing revokes its old handles.
@@ -357,6 +364,11 @@ class LocalContextGraph(_WorkerChannel):
     def compile(self, request: LocalContextRequest) -> LocalContextResult:
         """Return a verified snapshot and Rust-rendered data-role context (not instructions)."""
         return cast(LocalContextResult, self._call({"op": "compile", "request": request}))
+
+    def explain(self, request: LocalContextRequest, snapshot: LocalContextSnapshot) -> LocalSelectionExplanation:
+        """Recompile and explain an exact current snapshot. No rejected IDs or truth probabilities."""
+        self._require_explanation()
+        return cast(LocalSelectionExplanation, self._call({"op": "explain", "request": request, "snapshot": snapshot}))
 
     def chunks(self, document: LocalDocument, max_lines: int, overlap_lines: int = 0) -> list[LocalDocument]:
         return cast(
@@ -437,6 +449,13 @@ class LocalContextView:
         return cast(
             LocalViewResult,
             self._graph._view_call({"op": "compile_view", "view": self._handle, "request": request}),
+        )
+
+    def explain(self, context: LocalViewContext) -> LocalSelectionExplanation:
+        """Explain selected IDs only after revalidating this view and all its readable evidence."""
+        return cast(
+            LocalSelectionExplanation,
+            self._graph._view_call({"op": "explain_view", "view": self._handle, "context": context}),
         )
 
     def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:

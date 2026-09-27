@@ -215,7 +215,7 @@ impl Runtime {
             "execution": "single-owner-fair-dispatch", "requires_hol_services": false,
             "capabilities": ["broker_scopes.v1", "source_cas.v1", "proposal_admission.v1",
                 "provenance_freshness.v1", "exact_answer_review.v1", "fair_admission.v1",
-                "mutual_grant_proof.v1", "execution_handoff.v1"],
+                "mutual_grant_proof.v1", "execution_handoff.v1", "selection_explanation.v1"],
             "transport_limits": transport,
             "storage": {"mode": if persistence.active() { "sqlite-checkpoint.v1" } else { "memory" },
                 "restored": restored},
@@ -621,6 +621,9 @@ fn execute_agent(
         AgentCommand::Revalidate { ticket } => {
             broker.revalidate(credential, &ticket, tokenizer)?;
             Ok(Value::Null)
+        }
+        AgentCommand::Explain { ticket } => {
+            Ok(json!(broker.explain(credential, &ticket, tokenizer)?))
         }
         AgentCommand::Citations { ticket, node_id } => Ok(json!(
             broker.citations(credential, &ticket, &node_id, tokenizer)?

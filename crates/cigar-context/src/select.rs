@@ -1,6 +1,7 @@
 use crate::graph::term_counts;
 use crate::{
-    Citation, ContextError, ContextGraph, ContextSnapshot, EdgeKind, EvidenceBlock, TokenCounter,
+    Citation, ContextError, ContextGraph, ContextSnapshot, EdgeKind, EvidenceBlock,
+    SelectionExplanation, SelectionSignal, SelectionStep, TokenCounter,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -238,6 +239,32 @@ impl ContextGraph {
         request: &ContextRequest,
         tokenizer: &impl TokenCounter,
     ) -> Result<ContextSnapshot, ContextError> {
+        self.compile_traced(request, tokenizer, None)
+    }
+
+    /// Reconstruct the selector's successful steps for an exact current snapshot/request.
+    /// Stale, substituted or differently scoped snapshots fail before a trace is returned.
+    /// This opt-in operation recompiles; ordinary compilation allocates no selection trace.
+    pub fn explain(
+        &self,
+        request: &ContextRequest,
+        snapshot: &ContextSnapshot,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<SelectionExplanation, ContextError> {
+        let mut steps = Vec::new();
+        let current = self.compile_traced(request, tokenizer, Some(&mut steps))?;
+        if snapshot != &current {
+            return Err(ContextError::BaseMismatch);
+        }
+        SelectionExplanation::new(snapshot, request, self.revision(), tokenizer, steps)
+    }
+
+    pub(crate) fn compile_traced(
+        &self,
+        request: &ContextRequest,
+        tokenizer: &impl TokenCounter,
+        mut trace: Option<&mut Vec<SelectionStep>>,
+    ) -> Result<ContextSnapshot, ContextError> {
         validate(request, tokenizer)?;
         let available = request.max_tokens - request.reserve_tokens;
         let terms = query_terms(&request.query);
@@ -317,6 +344,15 @@ impl ContextGraph {
             }
             let additions = self.blocks_for(&closure, &selected, &terms, None)?;
             append_coalesced(&mut blocks, additions);
+            if let Some(steps) = trace.as_deref_mut()
+                && !closure.is_subset(&selected)
+            {
+                steps.push(SelectionStep {
+                    root_id: id.clone(),
+                    added_ids: closure.difference(&selected).cloned().collect(),
+                    signals: vec![SelectionSignal::Required],
+                });
+            }
             selected.extend(closure);
             if blocks.len() > request.max_blocks {
                 return Err(ContextError::BudgetUnsatisfiable);
@@ -460,7 +496,7 @@ impl ContextGraph {
             let Some((index, _, _, _)) = best else {
                 break;
             };
-            let (_, closure, additions, _, _) = prepared.remove(index);
+            let (root, closure, additions, _, _) = prepared.remove(index);
             let mut proposed = blocks.clone();
             append_coalesced(
                 &mut proposed,
@@ -479,6 +515,30 @@ impl ContextGraph {
             {
                 budget_rejected += 1;
                 continue;
+            }
+            if let Some(steps) = trace.as_deref_mut() {
+                let mut signals = Vec::new();
+                if self
+                    .documents
+                    .get(root.id)
+                    .is_some_and(|node| terms.iter().any(|term| node.terms.contains_key(term)))
+                {
+                    signals.push(SelectionSignal::LexicalMatch);
+                }
+                if root.declarations > 0 {
+                    signals.push(SelectionSignal::DeclarationMatch);
+                }
+                if root.semantic {
+                    signals.push(SelectionSignal::SemanticCandidate);
+                }
+                if root.depth > 0 {
+                    signals.push(SelectionSignal::GraphExpansion);
+                }
+                steps.push(SelectionStep {
+                    root_id: root.id.to_owned(),
+                    added_ids: closure.difference(&selected).cloned().collect(),
+                    signals,
+                });
             }
             blocks = proposed;
             selected.extend(closure);

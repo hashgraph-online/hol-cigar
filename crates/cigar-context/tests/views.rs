@@ -115,6 +115,64 @@ fn five_views_share_one_index_and_narrow_access() {
 }
 
 #[test]
+fn explanation_revalidates_whole_scope_and_retains_original_snapshot_identity() {
+    let (mut graph, mut views, handles) = fixture();
+    let context = views
+        .compile(&graph, &handles[0], &request("agent-0"), &Utf8ByteCounter)
+        .unwrap();
+    let before = views
+        .explain(&graph, &handles[0], &context, &Utf8ByteCounter)
+        .unwrap();
+    let ids = before
+        .steps
+        .iter()
+        .flat_map(|step| step.added_ids.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(ids, BTreeSet::from(["agent-0".into(), "policy".into()]));
+    assert_eq!(
+        views.explain(&graph, &handles[1], &context, &Utf8ByteCounter),
+        Err(ContextError::BaseMismatch)
+    );
+    let mut altered = serde_json::to_value(&context).unwrap();
+    altered["request"]["query"] = "tampered".into();
+    let altered = serde_json::from_value(altered).unwrap();
+    assert_eq!(
+        views.explain(&graph, &handles[0], &altered, &Utf8ByteCounter),
+        Err(ContextError::Integrity)
+    );
+    graph
+        .upsert(Document::new(
+            "agent-1",
+            "agent-1",
+            "Unrelated secret change.",
+        ))
+        .unwrap();
+    let after = views
+        .explain(&graph, &handles[0], &context, &Utf8ByteCounter)
+        .unwrap();
+    assert_eq!(after.snapshot_id, context.snapshot().id());
+    assert_eq!(after.steps, before.steps);
+    assert!(after.checked_graph_revision > before.checked_graph_revision);
+    graph
+        .upsert(Document::new(
+            "unselected",
+            "agent-0",
+            "NEW_UNSELECTED_EVIDENCE",
+        ))
+        .unwrap();
+    assert_eq!(
+        views.explain(&graph, &handles[0], &context, &Utf8ByteCounter),
+        Err(ContextError::BaseMismatch)
+    );
+    views.revoke("agent-0");
+    assert_eq!(
+        views.explain(&graph, &handles[0], &context, &Utf8ByteCounter),
+        Err(ContextError::RequiredUnavailable)
+    );
+}
+
+#[test]
 fn unrelated_updates_insertions_and_removals_preserve_original_reviews() {
     let (mut graph, views, handles) = fixture();
     let handle = &handles[0];

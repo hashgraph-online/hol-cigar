@@ -42,6 +42,17 @@ export type LocalContextSnapshot = Readonly<{
   blocks: readonly LocalEvidenceBlock[]; stats: LocalSelectionStats;
 }>;
 export type LocalContextResult = Readonly<{snapshot: LocalContextSnapshot; rendered: string}>;
+export type LocalSelectionSignal = "required" | "lexical_match" | "declaration_match" |
+  "semantic_candidate" | "graph_expansion";
+export type LocalSelectionStep = Readonly<{
+  root_id: string; added_ids: readonly string[]; signals: readonly LocalSelectionSignal[];
+}>;
+/** Current selection trace, not truth confidence or execution authority. Contains selected IDs. */
+export type LocalSelectionExplanation = Readonly<{
+  schema: "cigar.context-selection-explanation.v1";
+  snapshot_id: string; request_id: string; checked_graph_revision: number; tokenizer: string;
+  steps: readonly LocalSelectionStep[];
+}>;
 export type LocalContextPrompt = Readonly<{
   schema: "cigar.context-prompt.v1"; id: string; snapshot_id: string; tokenizer: string;
   rendered: string; rendered_tokens: number; max_tokens: number;

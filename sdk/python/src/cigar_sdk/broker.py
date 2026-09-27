@@ -46,6 +46,7 @@ from cigar_sdk.context_types import (
     LocalContextRequest,
     LocalDocument,
     LocalEdgeKind,
+    LocalSelectionExplanation,
     LocalViewAssessment,
     LocalViewSpec,
 )
@@ -507,6 +508,10 @@ class LocalContextClient:
 
     def revalidate(self, ticket: str) -> None:
         self._call({"op": "revalidate", "ticket": ticket})
+
+    def explain(self, ticket: str) -> LocalSelectionExplanation:
+        """Explain own selected evidence after current grant, provenance and ticket checks."""
+        return cast(LocalSelectionExplanation, self._call({"op": "explain", "ticket": ticket}))
 
     def citations(self, ticket: str, node_id: str) -> list[LocalCitation]:
         return cast(list[LocalCitation], self._call({"op": "citations", "ticket": ticket, "node_id": node_id}))

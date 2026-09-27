@@ -28,7 +28,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
-| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
+| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation implemented; broader adapters and held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
@@ -404,3 +404,28 @@ only when their exercised behavior covers the corresponding requirement above.
   both 100% / 100%. The new module has a mandatory 95% / 90% gate. Coverage-policy
   tests, changed-file lint/format and local-asset checks pass. Regression logs and
   coverage use `context-effect-adapter-` under the development evidence directory.
+- HUMIDOR adoption has a concrete dependency boundary: the current Core
+  `services/cigar_sdk_identity.py` and `config/cigar-composition.v1.json` require
+  the exact 0.9.4 SDK and artifact hashes. CEDAR's product authority also excludes
+  Context Graph from the HOL-Cluster profile. Do not disable either check or
+  enable that profile to make a test pass. Qualify a separate generic HUMIDOR
+  composition against frozen candidate artifacts and record its packet receipt
+  before claiming adoption. The existing Core/CEDAR working changes were left
+  untouched. Native and SDK Honey integration does not close this requirement.
+- Added opt-in current-state selection explanations to the native graph, views
+  and broker, with Python and Node facades. The original request/snapshot shapes
+  and selector are unchanged; an observer records only successful selection
+  steps, complete added IDs and retrieval signals. Explanations name the exact
+  tokenizer and original snapshot, recheck whole-scope freshness/provenance, and
+  disclose no rejected IDs or source/query text. Selected IDs remain sensitive.
+  This provides inspectability, not a semantic truth judgment or efficacy gain.
+- Local explanation validation passes 128 all-feature native tests, one doctest
+  and 53 core-only test/doctest invocations, with formatting and strict Clippy.
+  All 459 Python tests plus 39 subtests and all 153 Node tests pass. Independent
+  1/5/12-agent and mixed-language consumers now also compare the explanation's
+  added IDs to their selected citation IDs. Full coverage is 93.45% statements /
+  86.64% branches; the broker and effect adapter remain 100% / 100%. Strict typing,
+  changed-file Python formatting/lint and generated local assets pass. Evidence
+  uses `selection-explanation-` under the development evidence directory. Hosted
+  execution, independent task-quality comparisons and full performance gates
+  remain pending; this does not close R1.

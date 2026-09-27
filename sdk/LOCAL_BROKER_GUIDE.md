@@ -96,6 +96,13 @@ const context = await client.compile({query: "retry policy", max_tokens: 512});
 await client.revalidate(context.ticket);
 ```
 
+Workers advertising `selection_explanation.v1` also support
+`client.explain(context["ticket"])` in Python and `client.explain(context.ticket)`
+in Node. This revalidates the ticket's current authority and returns only selected
+IDs and retrieval signals, with the original snapshot and exact tokenizer identity.
+It is not truth confidence or permission for an effect. See
+[selection explanations](SELECTION_EXPLANATIONS.md) for the record and cost.
+
 Each operation uses a fresh authenticated connection to literal `127.0.0.1`.
 There is no name lookup, remote service, credential discovery or worker download.
 Both peers prove possession of the grant secret before context is transferred;

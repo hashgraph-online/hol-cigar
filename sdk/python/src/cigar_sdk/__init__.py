@@ -73,7 +73,10 @@ if TYPE_CHECKING:
         LocalEdgeKind,
         LocalEvidenceBlock,
         LocalGraphStats,
+        LocalSelectionExplanation,
+        LocalSelectionSignal,
         LocalSelectionStats,
+        LocalSelectionStep,
         LocalSourceUpdate,
         LocalTokenCacheStats,
         LocalViewAssessment,
@@ -125,6 +128,9 @@ if TYPE_CHECKING:
 CONTEXT_ABI: Final = "cigar.context.v1"
 
 _EXPORTS: Final[dict[str, tuple[str, str | None]]] = {
+    "LocalSelectionExplanation": ("cigar_sdk.context_types", "LocalSelectionExplanation"),
+    "LocalSelectionSignal": ("cigar_sdk.context_types", "LocalSelectionSignal"),
+    "LocalSelectionStep": ("cigar_sdk.context_types", "LocalSelectionStep"),
     "ContextEffectClient": ("cigar_sdk.context_effects", "ContextEffectClient"),
     "ContextEffectDispatch": ("cigar_sdk.context_effects", "ContextEffectDispatch"),
     "ContextEffectDispatchUncertain": ("cigar_sdk.context_effects", "ContextEffectDispatchUncertain"),
@@ -302,7 +308,10 @@ __all__ = [
     "LocalEdgeKind",
     "LocalEvidenceBlock",
     "LocalGraphStats",
+    "LocalSelectionExplanation",
+    "LocalSelectionSignal",
     "LocalSelectionStats",
+    "LocalSelectionStep",
     "LocalSourceUpdate",
     "LocalTokenCacheStats",
     "LocalViewAssessment",

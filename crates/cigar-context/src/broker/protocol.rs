@@ -278,6 +278,11 @@ pub enum AgentCommand {
         /// Own ticket ID.
         ticket: String,
     },
+    /// Revalidate and explain only the caller's selected evidence; no arbitrary graph query.
+    Explain {
+        /// Own current ticket ID.
+        ticket: String,
+    },
     /// Resolve an exact selected node only after current authority validation.
     Citations {
         /// Own ticket ID.
