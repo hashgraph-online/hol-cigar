@@ -108,6 +108,36 @@ liveness samples and require complete elapsed duration with no unexplained gaps.
 A short run or a restarted timer cannot count as a completed soak. A materially
 changed worker requires another final-candidate qualification.
 
+The concrete continuous runner is `benchmarks/broker_soak.py`. Freeze the worker,
+successful native build receipt, both SDKs, runtime hashes, fixture, plan and
+harness into a new directory before execution. It uses twelve persistent
+processes (six Python, six Node), one durable SQLite graph, and one concurrent
+compile/forget round per second. This is a sustained correctness workload; the
+separate load matrix remains the throughput/fairness measurement authority.
+
+The registered 24-hour schedule replaces one rotating private source every
+60 seconds, resolves competing proposals every 300 seconds, explicitly revokes
+one rotating grant every 600 seconds, renews all grants every 120 seconds against
+300-second leases, and kills/restarts only the owned worker every hour. Source
+revisions, provenance, all admitted document bytes, old reviews, abandoned staged
+writes and old epochs are checked through those transitions. Actor processes
+must survive unchanged. Review labels come from the trusted fixture host.
+
+Every cycle and maintenance result is flushed to an append-only observation file
+with a consecutive sequence number. A missing actor, failed operation, scope or
+budget mismatch, unplanned worker exit, unexplained progress gap over five seconds,
+maintenance phase over thirty seconds, or sampled aggregate RSS over 2 GiB fails
+the run. The evidence file is bounded to 2 GiB; reaching its bound is a failure,
+not permission to discard observations. These size limits apply to this fixed
+fixture. Records are independently replayed to verify complete duration, scheduled
+transitions, checks, resource bounds and continuity before success is accepted.
+
+The runner's 60-second smoke mode compresses maintenance intervals to exercise
+every transition before the long run. It is always labeled `smoke-only`, even if
+it passes. Interrupted runs cannot resume or overwrite their observation files.
+No model-provider call, external service or credential discovery is part of either
+mode. Performance comparisons must not run concurrently with the soak.
+
 The source study reports its own evidence class. Final Q2 still requires exact
 installed artifacts, all advertised targets/runtimes, network-denied execution,
 reproducible builds and release attestations. E2 still requires independently

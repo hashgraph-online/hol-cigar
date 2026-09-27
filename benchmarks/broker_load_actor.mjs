@@ -111,6 +111,16 @@ class Actor {
         return {status:"ok",documents:documents.length,batch_digests:digests};
       }
       case "measure": return this.measure(command);
+      case "cycle": {
+        const [value,compile]=await observed(()=>this.compile());
+        let forget=null,rendered_sha256=null;
+        if(value!==null) {
+          const [context,digest]=value;
+          rendered_sha256=digest;
+          [,forget]=await observed(()=>this.client.forgetTicket(context.ticket));
+        }
+        return {status:"ok",compile,forget,rendered_sha256};
+      }
       case "warmup": {
         for(let i=0;i<command.cycles;i++) {const [context]=await this.compile(); await this.client.forgetTicket(context.ticket);}
         return {status:"ok"};

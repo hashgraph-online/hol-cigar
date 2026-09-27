@@ -280,6 +280,21 @@ class Actor:
             }
         if op == "measure":
             return self.measure(command)
+        if op == "cycle":
+            value, compilation = observed(self.compile)
+            forgotten = None
+            digest = None
+            if value is not None:
+                context, digest = value
+                _, forgotten = observed(
+                    lambda: self.client.forget_ticket(context["ticket"])
+                )
+            return {
+                "status": "ok",
+                "compile": compilation,
+                "forget": forgotten,
+                "rendered_sha256": digest,
+            }
         if op == "warmup":
             for _ in range(command["cycles"]):
                 context, _ = self.compile()

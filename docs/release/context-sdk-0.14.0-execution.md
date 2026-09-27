@@ -649,3 +649,25 @@ only when their exercised behavior covers the corresponding requirement above.
   retains all failures, absolute timings, artifact identities and sharing tradeoffs.
   Investigating the native build profile and Python facade before another frozen
   comparison; the initial study remains unchanged and does not close Q1.
+- The second installed comparison restores the root native release profile and
+  compacts the lazy Python export table. It preserves all compatibility outputs
+  and passes 112/115 performance guardrails. Compile latency is 6.48% lower than
+  0.12; local API resolution and worker hashing still exceed their startup gates.
+  Both frozen studies and their failures remain retained in the comparison report.
+- Added a continuous twelve-process SQLite soak runner and independent observation
+  replay. Six harness regressions pass. The first smoke stopped before measurement
+  on a harness-only missing PID attribute; `broker-soak-smoke-01` remains incomplete.
+  The corrected `broker-soak-smoke-02` passes 720 cycles in 60.000 seconds, eleven
+  source mutations, five proposal conflicts, three revocations, two complete grant
+  renewals and one durable worker restart. All twelve agent processes remain alive.
+  Plan SHA-256 is `72276962aa83c684fa7a1b2ca2a5f7e46ffe59b5b99952c8810c8ef82790dbdb`;
+  observation SHA-256 is `372e43f0504a221726af8fc17c74c8b0a1d0ed3d6b40cb6462f584920358e42a`.
+  The SDK/native source is `be0d3a8104f74e612f1d24bd4fa0f4f3637ae0da` with
+  exact frozen hashes. This is smoke evidence only; the 24-hour requirement is open.
+- The broader project-boundary workflow passes on macOS at `63a59cd2` and exposes
+  Linux/Windows compile failures outside the standalone worker. Corrected a
+  Windows-only missing import and platform-specific unused bindings/test helpers;
+  strict local Clippy and four production-effect tests pass. Hosted rerun
+  [36340597783](https://github.com/hashgraph-online/hol-cigar/actions/runs/36340597783)
+  checks `9f46336f`. The earlier failed run remains retained, and this does not yet
+  qualify Linux deployment or the Windows full daemon.
