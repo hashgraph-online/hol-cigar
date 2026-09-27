@@ -2018,6 +2018,7 @@ fn secure_sqlite_file_identity(
     })
 }
 
+#[cfg(unix)]
 fn sqlite_runtime_lock_path(database: &Path) -> Option<PathBuf> {
     if database == Path::new(":memory:") {
         return None;
