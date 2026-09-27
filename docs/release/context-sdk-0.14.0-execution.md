@@ -175,3 +175,13 @@ only when their exercised behavior covers the corresponding requirement above.
   Clippy passes. The existing three-OS `scripts/dev.py context` job already selects
   all Cargo features and will exercise these tests; hosted execution and actual
   independent-client queue-delay/fairness measurements remain pending.
+- Added host relationship mutation with exact affected-source CAS, symmetric
+  contradiction handling, version advancement on edge change-back and bounded
+  retained endpoint ownership. A different source cannot reuse an ID while old
+  relations still refer to it; explicit unlink works after withdrawal and frees
+  that ownership. Three additional regressions pass, including failed-admission
+  atomicity, required counterevidence and scope checks. The complete local
+  `scripts/dev.py context` gate passes formatting, strict Clippy, 79 all-feature
+  tests, the doctest and 48 core-only test/doctest invocations. Complete logs are
+  retained in `CIGAR/releases/cigar-0.14.0-development/broker-core-source-checks`.
+  These remain source-level invariants, not a broker transport/load qualification.

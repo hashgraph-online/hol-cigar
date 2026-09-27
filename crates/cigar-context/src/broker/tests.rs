@@ -879,3 +879,142 @@ fn credentials_errors_and_closed_data_shapes_do_not_echo_or_accept_authority_ove
         "reviews": [{"verdict": "supported"}]
     })).is_err());
 }
+
+#[test]
+fn host_relationships_use_cas_and_change_back_does_not_revive_context() {
+    let mut broker = broker();
+    ingest(&mut broker, "a", "a-id", "meaningful evidence a");
+    ingest(&mut broker, "b", "b-id", "meaningful evidence b");
+    ingest(
+        &mut broker,
+        "other",
+        "other-id",
+        "meaningful evidence independent",
+    );
+    let client = broker.host_grant(spec("reader", &["a", "b"], &[])).unwrap();
+    let unaffected = broker
+        .host_grant(spec("other-reader", &["other"], &[]))
+        .unwrap();
+    let before = compile(&mut broker, &client);
+    let stable = compile(&mut broker, &unaffected);
+    let expected = BTreeMap::from([("a".into(), broker.host_source_revision("a").unwrap())]);
+    let linked = broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Requires, true, &expected)
+        .unwrap();
+    assert_eq!(linked["a"].version, expected["a"].version + 1);
+    assert_eq!(
+        broker.host_set_edge("a-id", "b-id", EdgeKind::Requires, false, &expected),
+        Err(BrokerError::Conflict)
+    );
+    let unchanged = broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Requires, true, &linked)
+        .unwrap();
+    assert_eq!(unchanged, linked);
+    let removed = broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Requires, false, &linked)
+        .unwrap();
+    assert_eq!(removed["a"].version, expected["a"].version + 2);
+    assert_eq!(
+        broker.revalidate(&client, &before.ticket, &Utf8ByteCounter),
+        Err(BrokerError::Stale)
+    );
+    broker
+        .revalidate(&unaffected, &stable.ticket, &Utf8ByteCounter)
+        .unwrap();
+    assert!(broker.edge_nodes.is_empty());
+    let both = BTreeMap::from([
+        ("a".into(), broker.host_source_revision("a").unwrap()),
+        ("b".into(), broker.host_source_revision("b").unwrap()),
+    ]);
+    assert_eq!(
+        broker.host_set_edge("a-id", "b-id", EdgeKind::Contradicts, true, &removed),
+        Err(BrokerError::InvalidInput)
+    );
+    let conflict = broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Contradicts, true, &both)
+        .unwrap();
+    assert_eq!(conflict["a"].version, both["a"].version + 1);
+    assert_eq!(conflict["b"].version, both["b"].version + 1);
+    let request = ContextRequest {
+        required: BTreeSet::from(["a-id".into()]),
+        ..request()
+    };
+    let with_counterevidence = broker.compile(&client, &request, &Utf8ByteCounter).unwrap();
+    assert_eq!(with_counterevidence.context.snapshot().blocks().len(), 2);
+    let narrow = broker.host_grant(spec("narrow", &["a"], &[])).unwrap();
+    assert!(matches!(
+        broker.compile(&narrow, &request, &Utf8ByteCounter),
+        Err(BrokerError::Context(
+            crate::ContextError::RequiredUnavailable
+        ))
+    ));
+}
+
+#[test]
+fn dangling_edge_identity_cannot_be_rebound_through_another_source() {
+    let mut broker = broker();
+    ingest(&mut broker, "a", "a-id", "meaningful evidence a");
+    let original_b = ingest(&mut broker, "b", "b-id", "meaningful evidence b");
+    let expected = BTreeMap::from([("a".into(), broker.host_source_revision("a").unwrap())]);
+    let linked = broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Requires, true, &expected)
+        .unwrap();
+    broker
+        .host_replace_source(
+            "b",
+            &original_b.revision,
+            Vec::new(),
+            provenance("withdrawn"),
+        )
+        .unwrap();
+    let writer = broker.host_grant(spec("writer", &["c"], &["c"])).unwrap();
+    let empty = broker.source_revision(&writer, "c").unwrap();
+    let substitute = vec![Document::new(
+        "b-id",
+        "c",
+        "meaningful evidence substituted by another source",
+    )];
+    assert!(matches!(
+        broker.propose_source(&writer, "substitution", "c", &empty, substitute.clone()),
+        Err(BrokerError::AccessDenied)
+    ));
+    assert_eq!(
+        broker.host_replace_source("c", &empty, substitute.clone(), provenance("substitution")),
+        Err(BrokerError::AccessDenied)
+    );
+    assert_eq!(broker.edge_nodes["b-id"].source, "b");
+    broker
+        .host_set_edge("a-id", "b-id", EdgeKind::Requires, false, &linked)
+        .unwrap();
+    assert!(broker.edge_nodes.is_empty());
+    // Once the host explicitly removes the old relation, the unused ID has no dangling meaning.
+    broker
+        .propose_source(&writer, "after-explicit-unlink", "c", &empty, substitute)
+        .unwrap();
+    assert_eq!(broker.graph.len(), 1);
+}
+
+#[test]
+fn relation_identity_budget_rejects_before_graph_or_source_mutation() {
+    let mut broker = ContextBroker::new(
+        "bounded",
+        GraphLimits::default(),
+        BrokerLimits {
+            max_relation_bytes: RECORD_ALLOWANCE,
+            ..BrokerLimits::default()
+        },
+    )
+    .unwrap();
+    ingest(&mut broker, "a", "a-id", "meaningful evidence a");
+    ingest(&mut broker, "b", "b-id", "meaningful evidence b");
+    let expected = BTreeMap::from([("a".into(), broker.host_source_revision("a").unwrap())]);
+    let revision = broker.graph.revision();
+    assert_eq!(
+        broker.host_set_edge("a-id", "b-id", EdgeKind::Requires, true, &expected),
+        Err(BrokerError::Quota)
+    );
+    assert_eq!(broker.graph.revision(), revision);
+    assert_eq!(broker.host_source_revision("a").unwrap(), expected["a"]);
+    assert!(broker.edge_nodes.is_empty());
+    assert!(broker.graph.edges.is_empty());
+}

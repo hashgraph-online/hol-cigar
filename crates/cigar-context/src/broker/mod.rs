@@ -2,7 +2,8 @@
 //!
 //! The host keeps this object private. Only credential-requiring methods belong on an agent
 //! transport; `host_*` methods must stay on the host's private control channel. This module does
-//! not claim process isolation, durable storage, fair scheduling or semantic truth assessment.
+//! not itself provide transport, durable storage or semantic truth assessment. The separate
+//! scheduler provides bounded admission; a runtime must connect it to this authority correctly.
 //! It preserves the ordinary graph API and uses its exact selection and answer-review contracts.
 
 mod types;
@@ -11,8 +12,8 @@ pub mod scheduler;
 
 use crate::{
     AnswerDraft, AnswerPolicy, Citation, ClaimReview, ContextGraph, ContextRequest, ContextView,
-    ContextViewAssessment, ContextViewHandle, ContextViews, Document, GraphLimits, TokenCounter,
-    digest,
+    ContextViewAssessment, ContextViewHandle, ContextViews, Document, EdgeKind, GraphLimits,
+    TokenCounter, digest,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -36,6 +37,12 @@ struct SourceRecord {
     provenance: SourceProvenance,
     bytes: usize,
     expires: Option<Instant>,
+}
+
+struct EdgeNode {
+    source: String,
+    references: usize,
+    bytes: usize,
 }
 
 struct Ticket {
@@ -67,6 +74,8 @@ pub struct ContextBroker {
     limits: BrokerLimits,
     grants: BTreeMap<String, Grant>,
     sources: BTreeMap<String, SourceRecord>,
+    // Retain an endpoint's source while any edge refers to it, even after source withdrawal.
+    edge_nodes: BTreeMap<String, EdgeNode>,
     tickets: BTreeMap<String, Ticket>,
     proposals: BTreeMap<String, Proposal>,
 }
@@ -90,6 +99,8 @@ impl ContextBroker {
             || limits.max_retained_bytes > 1024 * 1024 * 1024
             || limits.max_provenance_bytes < RECORD_ALLOWANCE
             || limits.max_provenance_bytes > 256 * 1024 * 1024
+            || limits.max_relation_bytes < RECORD_ALLOWANCE
+            || limits.max_relation_bytes > 256 * 1024 * 1024
         {
             return Err(BrokerError::InvalidInput);
         }
@@ -100,6 +111,7 @@ impl ContextBroker {
             limits,
             grants: BTreeMap::new(),
             sources: BTreeMap::new(),
+            edge_nodes: BTreeMap::new(),
             tickets: BTreeMap::new(),
             proposals: BTreeMap::new(),
         })
@@ -192,6 +204,7 @@ impl ContextBroker {
         if !self.sources.contains_key(source) && self.sources.len() >= self.limits.max_sources {
             return Err(BrokerError::Quota);
         }
+        self.validate_document_owners(source, &documents)?;
         let (bytes, expires) = self.validate_provenance(source, &provenance)?;
         let previous = self.sources.get(source);
         let total_bytes = self
@@ -227,6 +240,97 @@ impl ContextBroker {
             removed: update.removed,
             unchanged: update.unchanged,
         })
+    }
+
+    /// Atomically add/remove a host-declared graph relation with source authority checks.
+    /// `expected` must name exactly the source of `from`, plus the source of `to` for a
+    /// symmetric contradiction. A changed edge advances those source versions, including
+    /// change-back. Unlinking remains possible after either endpoint was withdrawn.
+    pub fn host_set_edge(
+        &mut self,
+        from: &str,
+        to: &str,
+        kind: EdgeKind,
+        present: bool,
+        expected: &BTreeMap<String, SourceRevision>,
+    ) -> Result<BTreeMap<String, SourceRevision>, BrokerError> {
+        let endpoints = BTreeMap::from([
+            (from.to_owned(), self.node_source(from)?.to_owned()),
+            (to.to_owned(), self.node_source(to)?.to_owned()),
+        ]);
+        let from_source = self.node_source(from)?;
+        let mut affected = BTreeSet::from([from_source.to_owned()]);
+        if kind == EdgeKind::Contradicts {
+            affected.insert(self.node_source(to)?.to_owned());
+        }
+        if !affected.iter().eq(expected.keys()) {
+            return Err(BrokerError::InvalidInput);
+        }
+        let mut next = BTreeMap::new();
+        for source in &affected {
+            if expected.get(source) != Some(&self.revision(source)) {
+                return Err(BrokerError::Conflict);
+            }
+            let record = self.sources.get(source).ok_or(BrokerError::Unavailable)?;
+            next.insert(
+                source.clone(),
+                record.version.checked_add(1).ok_or(BrokerError::Quota)?,
+            );
+        }
+        let mut additions = BTreeMap::new();
+        if present {
+            for (id, source) in &endpoints {
+                if let Some(node) = self.edge_nodes.get(id) {
+                    node.references.checked_add(1).ok_or(BrokerError::Quota)?;
+                } else {
+                    additions.insert(id.clone(), measure(&(id, source), 8192)?);
+                }
+            }
+            let retained = self
+                .edge_nodes
+                .values()
+                .map(|node| node.bytes)
+                .sum::<usize>();
+            if retained + additions.values().sum::<usize>() > self.limits.max_relation_bytes {
+                return Err(BrokerError::Quota);
+            }
+        }
+        let changed = if present {
+            self.graph.link(from, to, kind)?
+        } else {
+            self.graph.unlink(from, to, kind)?
+        };
+        // All authority, counter, identity and graph validation completes before mutation.
+        if changed {
+            for (id, source) in endpoints {
+                if present {
+                    let bytes = additions.get(&id).copied().unwrap_or(0);
+                    let node = self.edge_nodes.entry(id).or_insert(EdgeNode {
+                        source,
+                        references: 0,
+                        bytes,
+                    });
+                    node.references += 1;
+                } else if let Some(node) = self.edge_nodes.get_mut(&id) {
+                    node.references -= 1;
+                    if node.references == 0 {
+                        self.edge_nodes.remove(&id);
+                    }
+                }
+            }
+            for (source, version) in next {
+                if let Some(record) = self.sources.get_mut(&source) {
+                    record.version = version;
+                }
+            }
+        }
+        Ok(affected
+            .into_iter()
+            .map(|source| {
+                let version = self.revision(&source);
+                (source, version)
+            })
+            .collect())
     }
 
     /// Read only a source assigned to this current agent; never reveals other sources' versions.
@@ -398,14 +502,7 @@ impl ContextBroker {
         }
         // Validate input against an isolated bounded graph. No pending proposal becomes evidence.
         // Reject cross-source collisions without exposing which other source owns an ID.
-        if documents.iter().any(|document| {
-            self.graph
-                .documents
-                .get(&document.id)
-                .is_some_and(|old| old.document.source != source)
-        }) {
-            return Err(BrokerError::AccessDenied);
-        }
+        self.validate_document_owners(source, &documents)?;
         let bytes = measure(
             &(&owner, request_key, source, expected, &documents),
             grant.spec.limits.max_proposal_bytes,
@@ -657,6 +754,29 @@ impl ContextBroker {
             epoch: self.epoch.clone(),
             version: self.sources.get(source).map_or(0, |record| record.version),
         }
+    }
+
+    fn node_source(&self, id: &str) -> Result<&str, BrokerError> {
+        self.graph
+            .documents
+            .get(id)
+            .map(|node| node.document.source.as_str())
+            .or_else(|| self.edge_nodes.get(id).map(|node| node.source.as_str()))
+            .ok_or(BrokerError::InvalidInput)
+    }
+
+    fn validate_document_owners(
+        &self,
+        source: &str,
+        documents: &[Document],
+    ) -> Result<(), BrokerError> {
+        if documents.iter().any(|document| {
+            self.node_source(&document.id)
+                .is_ok_and(|owner| owner != source)
+        }) {
+            return Err(BrokerError::AccessDenied);
+        }
+        Ok(())
     }
 
     fn validate_provenance(

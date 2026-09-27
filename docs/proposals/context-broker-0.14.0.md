@@ -1,7 +1,7 @@
 # Local context broker implementation contract
 
-Status: native authority core implemented behind the opt-in `broker` Cargo
-feature. Transport, scheduling, durable recovery and SDK facades are pending;
+Status: native authority and bounded scheduler implemented behind the opt-in
+`broker` Cargo feature. Transport, durable recovery and SDK facades are pending;
 this is not yet a shipped worker capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
 
@@ -96,6 +96,10 @@ source does not reset to revision zero. Admission compares the proposal's expect
 revision again immediately before commit. Exactly one competing replacement of
 the same revision can win. Identical source bytes and unchanged admission metadata
 may remain a no-op; changed provenance or policy must invalidate dependent work.
+Host-declared edge changes also use source CAS and advance affected source versions.
+An endpoint's source identity remains reserved while a relation still references
+it, so another source cannot substitute a withdrawn dependency node. The host can
+explicitly remove dangling relations; identity retention has its own byte bound.
 
 ## Durable recovery
 

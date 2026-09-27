@@ -52,6 +52,8 @@ pub struct BrokerLimits {
     pub max_retained_bytes: usize,
     /// Aggregate encoded source provenance bytes, including withdrawn source metadata.
     pub max_provenance_bytes: usize,
+    /// Encoded identity metadata for nodes still referenced by live or dangling graph edges.
+    pub max_relation_bytes: usize,
 }
 
 impl Default for BrokerLimits {
@@ -63,6 +65,7 @@ impl Default for BrokerLimits {
             max_proposals: 1024,
             max_retained_bytes: 128 * 1024 * 1024,
             max_provenance_bytes: 32 * 1024 * 1024,
+            max_relation_bytes: 32 * 1024 * 1024,
         }
     }
 }
