@@ -30,7 +30,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer and ordered-scope lookup improvements measured locally; transactional ingestion and full throughput qualification pending |
-| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier, shared-view and recorded-answer adapters implemented; Hiero producer adapter pending |
+| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
@@ -480,3 +480,19 @@ only when their exercised behavior covers the corresponding requirement above.
   tests plus 39 subtests and all 156 Node tests. Statement/branch coverage remains
   93.54%/86.74% overall; all critical-module coverage gates pass. Logs and coverage
   use `scope-intersection-` under the development evidence directory.
+- Added the offline Hiero campaign producer with distinct process completion,
+  declared context checks and terminal field-oracle outcomes. Complete readbacks
+  bind exact execution, task, target revision, oracle and reader identities;
+  missing/partial/synthetic readbacks remain unavailable. Raw iteration receipts
+  cannot be omitted, duplicated or reused. The importer executes no supplied
+  code and does not infer reader independence from its hash.
+- Reprocessed the retained 50-campaign v0.11/v0.12 archive after checking all
+  308 original Hiero source hashes. Both versions completed 20/25 campaigns;
+  all EVM campaigns stopped early. Independent terminal outcomes are unavailable
+  for every attempt. The 500-observation common report preserves those gaps and
+  reproduces byte-identical manifest/results from its copied originals. This is
+  historical invariant evidence, not a v0.14 quality or performance comparison.
+  [The evidence audit](context-sdk-0.14.0-hiero-evidence.md) records hashes and
+  limitations. All 47 common-evaluation and seven answer-metric tests pass,
+  including thirteen new Hiero cases; lint/format pass. Prospective independent
+  task oracles and the E2 release comparison remain outstanding.

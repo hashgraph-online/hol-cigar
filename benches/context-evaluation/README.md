@@ -125,7 +125,9 @@ plans explicitly disclose that they were assembled after the existing study.
 The adapter emits **performance** evidence only. Authored abstention/freshness
 events remain in the retained raw report. The two-cohort 12-client development
 smoke using retained 0.12/0.13 installations tests this pipeline; it is not a 0.14
-benefit or release qualification claim. The [answer producer](ANSWERS.md) now
+benefit or release qualification claim. The [answer producer](ANSWERS.md)
 preserves displayed text, explicit full-display annotations and measured artifact
-identities. A Hiero producer still needs its original terminal-oracle identities
-preserved; neither producer's presence establishes a release benefit.
+identities. The [Hiero producer](HIERO.md) retains original campaign/iteration
+receipts and distinguishes declared checks from outcomes recomputed against an
+explicit terminal-readback oracle. Missing or synthetic readbacks remain
+unavailable. Neither producer's presence establishes a release benefit.
