@@ -60,11 +60,13 @@ impl RequestAuthority for Authority {
 }
 
 struct Facade {
+    prepare: TypedUnaryAdapter<PrepareEffectOperation, EffectServiceHandlers<SqliteStore>>,
     get: TypedUnaryAdapter<GetEffectStatusOperation, EffectServiceHandlers<SqliteStore>>,
     authorize: TypedUnaryAdapter<AuthorizeEffectOperation, EffectServiceHandlers<SqliteStore>>,
     dispatch: TypedUnaryAdapter<DispatchEffectOperation, EffectServiceHandlers<SqliteStore>>,
     reconcile: TypedUnaryAdapter<ReconcileEffectOperation, EffectServiceHandlers<SqliteStore>>,
     errors: Arc<dyn FacadeErrorFactory>,
+    prepare_calls: AtomicUsize,
     authorize_calls: AtomicUsize,
     dispatch_calls: AtomicUsize,
     reconcile_calls: AtomicUsize,
@@ -79,6 +81,10 @@ impl ServiceFacade for Facade {
     ) -> ServiceFuture<'a, Result<ResponseEnvelope, ApiError>> {
         Box::pin(async move {
             match request.operation_id().as_str() {
+                "prepareEffect" => {
+                    self.prepare_calls.fetch_add(1, Ordering::SeqCst);
+                    self.prepare.call(context, request).await
+                }
                 "getEffectStatus" => self.get.call(context, request).await,
                 "authorizeEffect" => {
                     self.authorize_calls.fetch_add(1, Ordering::SeqCst);
@@ -130,6 +136,7 @@ struct Driver {
 enum Consumer {
     SourceSdk,
     InstalledApplication,
+    InstalledGateway,
 }
 
 impl Driver {
@@ -145,7 +152,7 @@ impl Driver {
             Consumer::SourceSdk => {
                 command.env("PYTHONPATH", root.join("sdk/python/src"));
             }
-            Consumer::InstalledApplication => {
+            Consumer::InstalledApplication | Consumer::InstalledGateway => {
                 // Downstream qualification must resolve its installed SDK. Its explicit driver
                 // is responsible for verifying that distribution and its own source inventory.
                 command.env_remove("PYTHONPATH");
@@ -332,6 +339,39 @@ async fn prepare_authorized(
     )?)
 }
 
+async fn read_status(
+    handlers: Arc<EffectServiceHandlers<SqliteStore>>,
+    authority: &Authority,
+    effect_id: &RecordId,
+) -> TestResult<EffectStatusResponse> {
+    let errors: Arc<dyn FacadeErrorFactory> = errors()?;
+    let get = TypedUnaryAdapter::<GetEffectStatusOperation, _>::new(handlers, errors);
+    let response = get
+        .call(
+            authority.context("getEffectStatus", CancellationToken::new())?,
+            RequestEnvelope::new_with_dry_run(
+                "getEffectStatus",
+                encode_operation_payload(
+                    &EffectIdRequest {
+                        effect_id: effect_id.clone(),
+                    },
+                    16 * 1024 * 1024,
+                )?,
+                false,
+                None,
+                None,
+                None,
+                None,
+                vec![PathParameter::new("effect_id", effect_id.as_str())?],
+            )?,
+        )
+        .await?;
+    Ok(decode_operation_payload(
+        response.payload_cbor(),
+        16 * 1024 * 1024,
+    )?)
+}
+
 async fn exercise(
     executable: &Path,
     script: &Path,
@@ -374,38 +414,80 @@ async fn exercise(
         connectors: vec![connector.clone()],
         errors: errors()?,
     })?);
-    let application = matches!(consumer, Consumer::InstalledApplication);
-    let initial = if application {
-        prepare(handlers.clone(), &authority).await?
+    let application = !matches!(consumer, Consumer::SourceSdk);
+    let gateway = matches!(consumer, Consumer::InstalledGateway);
+    let initial = if gateway {
+        None
+    } else if application {
+        Some(prepare(handlers.clone(), &authority).await?)
     } else {
-        prepare_authorized(handlers.clone(), &authority).await?
+        Some(prepare_authorized(handlers.clone(), &authority).await?)
     };
     let errors: Arc<dyn FacadeErrorFactory> = errors()?;
     let facade = Arc::new(Facade {
+        prepare: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
         get: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
         authorize: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
         dispatch: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
-        reconcile: TypedUnaryAdapter::new(handlers, errors.clone()),
+        reconcile: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
         errors,
+        prepare_calls: AtomicUsize::new(0),
         authorize_calls: AtomicUsize::new(0),
         dispatch_calls: AtomicUsize::new(0),
         reconcile_calls: AtomicUsize::new(0),
         lost_ack: scenario == "lost_ack",
     });
-    let kernel = ServiceKernel::new(facade.clone(), authority, TransportConfig::default());
+    let kernel = ServiceKernel::new(
+        facade.clone(),
+        authority.clone(),
+        TransportConfig::default(),
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let _server = Server(tokio::spawn(async move {
         axum::serve(listener, http_router(kernel)).await
     }));
     let mut driver = Driver::spawn(executable, script, root, consumer)?;
-    driver.send(
-        &json!({"base_url":format!("http://{address}"), "scenario":scenario,
-        "effect_id":initial.effect_id.as_str(), "intent_digest":initial.intent_digest.as_str(),
-        "initial_state":initial.state, "initial_version":initial.effect_version.to_string(),
-        "now_unix_ns":now.unix_nanos().to_string(),
-        "tenant_id":record(10)?.as_str(), "principal_id":record(11)?.as_str()}),
-    )?;
+    let config = json!({
+        "base_url": format!("http://{address}"),
+        "scenario": scenario,
+        "client_prepares": gateway,
+        "effect_id": initial.as_ref().map(|value| value.effect_id.as_str()),
+        "intent_digest": initial.as_ref().map(|value| value.intent_digest.as_str()),
+        "initial_state": initial.as_ref().map(|value| &value.state),
+        "initial_version": initial.as_ref().map(|value| value.effect_version.to_string()),
+        "now_unix_ns": now.unix_nanos().to_string(),
+        "tenant_id": record(10)?.as_str(),
+        "principal_id": record(11)?.as_str()
+    });
+    driver.send(&config)?;
+    let initial = match initial {
+        Some(value) => value,
+        None => {
+            let prepared = driver.receive()?;
+            assert_eq!(prepared.get("phase"), Some(&json!("prepared")));
+            let declared_id = prepared["effect_id"]
+                .as_str()
+                .ok_or("missing prepared effect ID")?;
+            let effect_id = RecordId::new(declared_id)?;
+            // Read the actual service repository before allowing dispatch. The application's
+            // prepared-status declaration alone cannot establish that an effect exists.
+            let retained = read_status(handlers.clone(), &authority, &effect_id).await?;
+            assert_eq!(retained.state, EffectState::Prepared);
+            assert_eq!(retained.attempt_count, 0);
+            assert_eq!(retained.reconciliation_count, 0);
+            assert_eq!(
+                prepared.get("intent_digest"),
+                Some(&json!(retained.intent_digest.as_str()))
+            );
+            assert_eq!(facade.prepare_calls.load(Ordering::SeqCst), 1);
+            assert_eq!(facade.authorize_calls.load(Ordering::SeqCst), 0);
+            assert_eq!(facade.dispatch_calls.load(Ordering::SeqCst), 0);
+            assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
+            driver.send(&json!({"action":"continue"}))?;
+            retained
+        }
+    };
     let first = driver.receive()?;
     assert_eq!(first.get("phase"), Some(&json!("dispatch")));
     assert_eq!(
@@ -426,6 +508,10 @@ async fn exercise(
         usize::from(!refused)
     );
     assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        facade.prepare_calls.load(Ordering::SeqCst),
+        usize::from(gateway)
+    );
     assert_eq!(
         facade.authorize_calls.load(Ordering::SeqCst),
         usize::from(application)
@@ -561,6 +647,10 @@ async fn exercise(
         facade.reconcile_calls.load(Ordering::SeqCst),
         usize::from(application && scenario == "unknown_reconcile")
     );
+    assert_eq!(
+        facade.prepare_calls.load(Ordering::SeqCst),
+        usize::from(gateway)
+    );
     let mut observation = json!({"schema":"cigar.context-effect-sdk-observation.v1",
         "language":language,"scenario":scenario,"outcome":outcome,
         "dispatch_calls":facade.dispatch_calls.load(Ordering::SeqCst),
@@ -569,6 +659,10 @@ async fn exercise(
         observation["schema"] = json!("cigar.context-effect-application-observation.v1");
         observation["authorize_calls"] = json!(facade.authorize_calls.load(Ordering::SeqCst));
         observation["reconcile_calls"] = json!(facade.reconcile_calls.load(Ordering::SeqCst));
+    }
+    if gateway {
+        observation["schema"] = json!("cigar.context-gateway-application-observation.v1");
+        observation["prepare_calls"] = json!(facade.prepare_calls.load(Ordering::SeqCst));
     }
     eprintln!("{observation}");
     Ok(())
@@ -647,6 +741,42 @@ async fn checked_context_application_honey_terminal_outcomes() -> TestResult {
             "installed-application",
             scenario,
             Consumer::InstalledApplication,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+/// The gateway lane starts with an empty effect store and requires application-owned preparation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "explicit installed gateway gate: requires CIGAR_TEST_APPLICATION_PYTHON, CIGAR_TEST_APPLICATION_GATEWAY_DRIVER and CIGAR_TEST_WORKER"]
+async fn checked_context_gateway_honey_terminal_outcomes() -> TestResult {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    let executable = PathBuf::from(std::env::var("CIGAR_TEST_APPLICATION_PYTHON")?);
+    let script = PathBuf::from(std::env::var("CIGAR_TEST_APPLICATION_GATEWAY_DRIVER")?);
+    let worker = PathBuf::from(std::env::var("CIGAR_TEST_WORKER")?);
+    for path in [&executable, &script, &worker] {
+        if !path.is_absolute() || !path.is_file() {
+            return Err("missing exact gateway integration input".into());
+        }
+    }
+    for scenario in [
+        "success",
+        "lost_ack",
+        "stale_context",
+        "intent_substitution",
+        "worker_revoked",
+        "unknown_reconcile",
+    ] {
+        exercise(
+            &executable,
+            &script,
+            &root,
+            "installed-gateway",
+            scenario,
+            Consumer::InstalledGateway,
         )
         .await?;
     }

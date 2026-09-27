@@ -813,3 +813,20 @@ only when their exercised behavior covers the corresponding requirement above.
   logs and small diagnostic artifacts are retained under the `ea763af4` identity;
   corrected hosted qualification is required. Formatting is corrected from the
   hosted formatter's exact diff, without running local checks during the soak.
+- [Source run 36348301499](https://github.com/hashgraph-online/hol-cigar/actions/runs/36348301499)
+  passes at `4ea58edca26f3f6ac26f2b7a0993ccdef441e8e7`, including the three
+  operating systems, independent broker/fault checks and both SDKs' Honey HTTP
+  terminal-outcome scenarios. The preceding `8ef225d6` also passes all fourteen
+  native builds and matching SDK archive builds; its legacy path still fails the
+  separately corrected formatting check. Final-source distribution remains open.
+- Prepared a distinct installed-gateway test entrypoint. It starts with an empty
+  Honey effect store, exposes the real prepare operation, and reads the resulting
+  effect through the service before allowing the application to continue. It
+  requires one prepare, one authorization, bounded dispatch/reconciliation counts
+  and independent terminal SQLite state after driver shutdown. Existing source
+  SDK and prepared-effect application paths remain separate. This is test-only
+  infrastructure; the private Core gateway driver and composition are unqualified.
+  Its intended scope is preview/prepare, low-risk policy authorization and the
+  real wakeup worker, using reference protected-value/scheduling stores. It does
+  not establish encryption, human-approval policy, PostgreSQL durability or
+  production deployment. No local test/build ran during the active soak.
