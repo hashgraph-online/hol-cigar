@@ -913,13 +913,14 @@ fn effect_list(
 ) -> Result<(Value, Option<String>), CliError> {
     require_no_positionals(invocation)?;
     let config = production_configuration(configuration)?;
+    let database = legacy_metadata_database(&config)?;
     let authority_bytes =
         read_bounded_regular(&config.production.authority_file, MAX_ADMIN_INPUT_BYTES)
             .map_err(|_error| CliError::state_unavailable())?;
     let authority = cigar_daemon::ProductionAuthorityConfiguration::from_json(&authority_bytes)
         .map_err(|_error| CliError::state_corrupt())?;
     let repository = cigar_store::SqliteStore::open_with_capacity_profile(
-        &config.production.metadata_database,
+        database,
         config.local_sqlite_capacity_profile,
     )
     .map_err(|_error| CliError::state_unavailable())?;
@@ -1775,9 +1776,20 @@ fn gc_plan_identity_trusted(
 }
 
 fn validate_backup_source(configuration: &cigar_daemon::DaemonConfig) -> Result<(), CliError> {
-    validate_existing_regular(&configuration.production.metadata_database)?;
+    validate_existing_regular(legacy_metadata_database(configuration)?)?;
     let _blob_root = canonical_directory(&configuration.production.blob_directory)?;
     Ok(())
+}
+
+fn legacy_metadata_database(configuration: &cigar_daemon::DaemonConfig) -> Result<&Path, CliError> {
+    // The configured legacy path intentionally remains the retained v4 source
+    // after v5 activation. It is no longer the daemon's authoritative repository.
+    // These maintenance surfaces have no v5 implementation and must never read,
+    // back up, or collect blobs against that stale database as if it were live.
+    if configuration.production.active_store_descriptor.is_some() {
+        return Err(CliError::unsupported_active_store());
+    }
+    Ok(&configuration.production.metadata_database)
 }
 
 fn validate_existing_regular(path: &Path) -> Result<(), CliError> {
@@ -2024,8 +2036,9 @@ fn migration_preflight(
     }
     let [source, backup, target] = exact_three(&invocation.positionals)?;
     let context = production_backup_context(configuration)?;
+    let database = legacy_metadata_database(&context.configuration)?;
     let paths = MigrationPathsV5::resolve(source, backup, target).map_err(map_store_error)?;
-    if paths.source() != context.configuration.production.metadata_database {
+    if paths.source() != database {
         return Err(CliError::invalid_configuration());
     }
     let verified = verify_backup_trusted(
@@ -2074,9 +2087,10 @@ fn migration_run(
     cancellation.checkpoint()?;
     let [source, backup, target] = exact_three(&invocation.positionals)?;
     let context = production_backup_context(configuration)?;
+    let database = legacy_metadata_database(&context.configuration)?;
     let receipt_signer = backup_creation_identity(&context)?;
     let paths = MigrationPathsV5::resolve(source, backup, target).map_err(map_store_error)?;
-    if paths.source() != context.configuration.production.metadata_database {
+    if paths.source() != database {
         return Err(CliError::invalid_configuration());
     }
     let verified = verify_backup_trusted(
@@ -2170,10 +2184,11 @@ fn migration_activate(
     cancellation.checkpoint()?;
     let [source, backup, target, receipt, descriptor] = exact_five(&invocation.positionals)?;
     let context = production_backup_context(configuration)?;
+    let database = legacy_metadata_database(&context.configuration)?;
     let receipt_signer = backup_creation_identity(&context)?;
     let paths = MigrationActivationPathsV5::resolve(source, backup, target, receipt, descriptor)
         .map_err(map_store_error)?;
-    if paths.source() != context.configuration.production.metadata_database {
+    if paths.source() != database {
         return Err(CliError::invalid_configuration());
     }
     let report = activate_v5_migration(
@@ -2220,9 +2235,10 @@ fn migration_cleanup(
     cancellation.checkpoint()?;
     let [source, backup, target, descriptor] = exact_four(&invocation.positionals)?;
     let context = production_backup_context(configuration)?;
+    let database = legacy_metadata_database(&context.configuration)?;
     let paths = MigrationCleanupPathsV5::resolve(source, backup, target, descriptor)
         .map_err(map_store_error)?;
-    if paths.source() != context.configuration.production.metadata_database {
+    if paths.source() != database {
         return Err(CliError::invalid_configuration());
     }
     let report =

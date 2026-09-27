@@ -53,6 +53,19 @@ projection, repairs an interrupted revision anchor if safe, reconciles encrypted
 then admits work. A missing, malformed, outside-state, non-v5, wrong-capacity, or locked target
 fails startup. Shared deployments reject this local descriptor setting.
 
+With an active descriptor configured, `backup create`, `gc plan`, `gc run`,
+`doctor --security`, `effect list`, and the v4 `migration` commands return
+`CLI_UNSUPPORTED_SURFACE`. These commands do not yet implement v5 maintenance;
+they must not treat the retained v4 database as the live store. Do not remove
+the descriptor from the live configuration to bypass this check. A new v5
+backup and blob-GC implementation is required before those operations can be
+used on the activated store.
+
+Verification and restore of an explicitly named, supported backup archive
+remain available, subject to the existing checkpoint and empty-target rules.
+Use `compaction status` and `integrity deep` for explicit v5 inspection, and
+the v5 compaction commands below for revision maintenance.
+
 ## Retention and revision compaction
 
 Compaction is separate from blob garbage collection. Preview binds the active descriptor, source,

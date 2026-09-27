@@ -42,6 +42,7 @@ spec:
               cp /raw-tls/tls.crt /prepared/tls.crt
               cp /raw-tls/tls.key /prepared/tls.key
               cp /raw-tls/ca.crt /prepared/client-ca.crt
+              cp /raw-telemetry-tls/ca.crt /prepared/telemetry-ca.pem
               cp /raw-postgres-tls/ca.crt /prepared-postgres-tls/postgres-ca.crt
               cp /raw-runtime/keystore.cigar /state/keystore.cigar
               cp /raw-runtime/cursor.key /state/cursor.key
@@ -70,6 +71,7 @@ spec:
           volumeMounts:
             - { name: raw-runtime, mountPath: /raw-runtime, readOnly: true }
             - { name: raw-tls, mountPath: /raw-tls, readOnly: true }
+            - { name: raw-telemetry-tls, mountPath: /raw-telemetry-tls, readOnly: true }
             - { name: raw-postgres-tls, mountPath: /raw-postgres-tls, readOnly: true }
             - { name: prepared-secrets, mountPath: /prepared }
             - { name: prepared-postgres-tls, mountPath: /prepared-postgres-tls }
@@ -122,6 +124,8 @@ spec:
           secret: { secretName: cigar-shared-runtime, defaultMode: 0440 }
         - name: raw-tls
           secret: { secretName: cigar-shared-tls, defaultMode: 0440 }
+        - name: raw-telemetry-tls
+          secret: { secretName: cigar-telemetry-tls, defaultMode: 0440 }
         - name: raw-postgres-tls
           secret: { secretName: cigar-postgres-tls, defaultMode: 0440 }
         - name: prepared-secrets

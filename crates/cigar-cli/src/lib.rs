@@ -857,6 +857,128 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn configured_active_store_never_falls_back_to_retained_legacy_database()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_directory, mut daemon) = embedded_daemon_fixture()?;
+        let (daemon_config, cli_config) = write_embedded_configuration(&daemon)?;
+        let config = cli_config.display().to_string();
+        let ready = run(
+            args(&["status", "--config", &config, "--output", "json"]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(ready.status, 0, "{}", ready.stderr);
+        let root = daemon
+            .state_directory
+            .parent()
+            .ok_or("missing fixture root")?;
+        let original_backup = root.join("original-backup").display().to_string();
+        let original_plan = root.join("original-gc-plan.json").display().to_string();
+        for command in [
+            vec!["backup", "create", &original_backup, "--yes"],
+            vec!["gc", "plan", &original_plan, "--yes"],
+        ] {
+            let mut command = args(&command);
+            command.extend(args(&["--config", &config, "--output", "json"]));
+            let result = run(command, TerminalContext::default()).await;
+            assert_eq!(result.status, 0, "{} {}", result.stdout, result.stderr);
+        }
+        let source = daemon.production.metadata_database.display().to_string();
+        let destination = root.join("must-not-be-created").display().to_string();
+        let target = daemon
+            .state_directory
+            .join("v5.sqlite3")
+            .display()
+            .to_string();
+        let receipt = root.join("receipt.json").display().to_string();
+        let descriptor = daemon.state_directory.join("active-store.json");
+        let descriptor_text = descriptor.display().to_string();
+        // Even a missing/corrupt descriptor must never fall back to the old DB.
+        restricted_write(&descriptor, b"invalid active descriptor sentinel")?;
+        daemon.production.active_store_descriptor = Some(descriptor.clone());
+        std::fs::write(&daemon_config, toml::to_string(&daemon)?)?;
+        let before = std::fs::read(&daemon.production.metadata_database)?;
+        let checkpoint = std::fs::read(&daemon.production.effect_checkpoint_file)?;
+        for command in [
+            vec!["effect", "list"],
+            vec!["doctor", "--security"],
+            vec!["backup", "create", &destination, "--dry-run"],
+            vec!["backup", "create", &destination, "--yes"],
+            vec!["gc", "plan", &destination, "--yes"],
+            vec!["gc", "run", &original_plan, "--dry-run"],
+            vec!["migration", "preflight", &source, &original_backup, &target],
+            vec![
+                "migration",
+                "run",
+                &source,
+                &original_backup,
+                &target,
+                "--yes",
+            ],
+            vec![
+                "migration",
+                "activate",
+                &source,
+                &original_backup,
+                &target,
+                &receipt,
+                &descriptor_text,
+                "--yes",
+            ],
+            vec![
+                "migration",
+                "cleanup",
+                &source,
+                &original_backup,
+                &target,
+                &descriptor_text,
+                "--yes",
+            ],
+        ] {
+            let mut invocation = args(&command);
+            invocation.extend(args(&["--config", &config, "--output", "json"]));
+            let result = run(invocation, TerminalContext::default()).await;
+            assert_eq!(
+                result.status, 69,
+                "{command:?}: {} {}",
+                result.stdout, result.stderr
+            );
+            assert!(result.stdout.contains("CLI_UNSUPPORTED_SURFACE"));
+        }
+        assert!(!std::path::Path::new(&destination).exists());
+        assert!(!std::path::Path::new(&target).exists());
+        assert_eq!(std::fs::read(&daemon.production.metadata_database)?, before);
+        assert_eq!(
+            std::fs::read(&daemon.production.effect_checkpoint_file)?,
+            checkpoint
+        );
+        assert_eq!(
+            std::fs::read(&descriptor)?,
+            b"invalid active descriptor sentinel"
+        );
+        // Offline verification of a named legacy backup remains available.
+        let verified = run(
+            args(&[
+                "backup",
+                "verify",
+                &original_backup,
+                "--config",
+                &config,
+                "--output",
+                "json",
+            ]),
+            TerminalContext::default(),
+        )
+        .await;
+        assert_eq!(
+            verified.status, 0,
+            "{} {}",
+            verified.stdout, verified.stderr
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn production_backup_restore_and_store_owned_gc_use_signed_durable_state()
     -> Result<(), Box<dyn std::error::Error>> {
         use cigar_crypto::{EncryptedDevelopmentKeystore, KeyProvider as _, SecretBytes};

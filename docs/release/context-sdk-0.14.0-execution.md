@@ -20,7 +20,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S2 | Reject special files without retaining blocking discovery capacity | Bounded FIFO/type-substitution/control-file tests and permit recovery; platform qualification | Implemented; macOS verified; hosted platform checks pending |
 | S3 | Preserve TypeScript canonical map members and own-key semantics | Shared special-key vectors through public encoders/decoders and typed clients, unchanged valid bytes | Implemented; complete SDK suite passed locally |
 | S4 | Enforce Python representation/transform-receipt semantics | Shared eight-case matrix across verifier, delta and model paths; unchanged valid fixture IDs | Implemented; complete SDK suite passed locally |
-| S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Pending |
+| S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Pending |
@@ -101,3 +101,13 @@ only when their exercised behavior covers the corresponding requirement above.
   Windows execution, efficacy/performance comparisons, installed artifacts and
   release qualification are still pending. No publication or efficacy gain is
   claimed by this stage.
+- Corrected the systemd checkpoint directory permission/writable-path contract
+  and Kubernetes telemetry CA preparation. Eight deployment contract tests pass.
+  CLI maintenance paths that only implement legacy v4 storage now reject an
+  active v5 descriptor instead of reading the retained v4 database. Named backup
+  verification/restore and explicit v5 maintenance remain available. The new
+  regression proves ten commands fail before creating outputs or modifying the
+  retained database, checkpoint or descriptor. All 46 CLI library tests and
+  strict daemon/CLI Clippy checks pass. This is an explicit unsupported-operation
+  boundary, not a new v5 backup implementation. Installed Linux deployment
+  smoke tests remain required.

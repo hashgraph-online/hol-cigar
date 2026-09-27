@@ -46,7 +46,7 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service @mount clone clone3 unshare setns pivot_root chroot
 SystemCallErrorNumber=EPERM
 
-ReadWritePaths=/var/lib/cigar /var/cache/cigar /run/cigar
+ReadWritePaths=/var/lib/cigar /var/lib/cigar-effect-checkpoints /var/cache/cigar /run/cigar
 
 [Install]
 WantedBy=multi-user.target

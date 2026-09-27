@@ -966,6 +966,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.0",
  "x509-parser",
+ "yaml_serde",
  "zeroize",
 ]
 

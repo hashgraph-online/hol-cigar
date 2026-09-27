@@ -46,6 +46,7 @@ Create these inputs without putting secret values on a command line:
 | `cigar-shared-backup` | `postgres-backup-url`, backup-object credentials, inventory-signing capability |
 | `cigar-shared-gc` | `postgres-gc-url`, live-object deletion credentials |
 | `cigar-shared-tls` | `tls.crt`, `tls.key`, `ca.crt` |
+| `cigar-telemetry-tls` | `ca.crt` (the CA that issued the configured OTLP collector certificate) |
 | `cigar-postgres-tls` | `ca.crt` (the private/public CA that issued the PostgreSQL server certificate) |
 | `cigar-shared-trusted` | `policy.json`, `authority.json`, `sources.json`, `effects.json`, `object-wrapping-keys.json` |
 
@@ -61,6 +62,11 @@ them into memory-backed owner-only files. Runtime credentials remain mode `0600`
 provisioned keystore and cursor key become immutable mode `0400`, as required by shared bootstrap.
 Failure to obtain the expected projected-volume group or immutable modes is a startup failure. The
 runtime Deployment never mounts `cigar-shared-migrator`.
+
+The init container copies the telemetry CA to `/run/secrets/cigar/telemetry-ca.pem`
+in the daemon's prepared secret mount, matching `telemetry.otlp_ca_certificate_file`.
+Provision this CA before starting the default profile, which enables HTTPS OTLP;
+the server's client-authentication CA is a separate trust input.
 
 The separately scheduled backup controller mounts only `cigar-shared-backup`; neither the runtime
 Deployment nor migration Job mounts it. Its PostgreSQL role is `NOSUPERUSER`, data-read-only,
