@@ -61,10 +61,18 @@ jobs:
           sdk/python/.venv/bin/ruff format --check scripts/release
           sdk/python/.venv/bin/mypy --config-file sdk/python/pyproject.toml sdk/python/src/cigar_sdk
           python3 -m unittest scripts.release.tests.test_context_distribution scripts.release.tests.test_context_sdk_inputs scripts.release.tests.test_context_distribution_release scripts.release.tests.test_context_sdk_release scripts.release.tests.test_context_policy
+      - name: Test Node SDK and independent broker consumers with the real worker
+        env:
+          CIGAR_TEST_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/native/linux-x64-gnu/cigar-context-worker
+          CIGAR_TEST_STALLED_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/oracle/stalled-worker
+        run: |
+          chmod +x "${CIGAR_TEST_WORKER}" "${CIGAR_TEST_STALLED_WORKER}"
+          pnpm --dir sdk/typescript test
       - name: Gate Python statement and branch coverage with the real worker
         env:
           CIGAR_TEST_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/native/linux-x64-gnu/cigar-context-worker
           CIGAR_TEST_STALLED_WORKER: ${{ runner.temp }}/workers/context-worker-linux-x64-gnu-${{ matrix.builder }}/oracle/stalled-worker
+          CIGAR_TEST_NODE_AGENT: ${{ github.workspace }}/sdk/typescript/dist/tests/broker-agent.js
           COVERAGE_FILE: ${{ runner.temp }}/python.coverage
         run: |
           chmod +x "${CIGAR_TEST_WORKER}" "${CIGAR_TEST_STALLED_WORKER}"

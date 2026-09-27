@@ -539,7 +539,9 @@ fn execute_host(
             Ok(Value::Null)
         }
         HostCommand::Submission { ticket } => {
-            Ok(json!(broker.host_submission(&ticket, tokenizer)?))
+            let submission = broker.host_submission(&ticket, tokenizer)?;
+            Ok(json!({"submission_id":submission.submission_id,
+                "draft":submission.draft,"review_keys":submission.draft.review_keys()?}))
         }
         HostCommand::CheckAnswer {
             ticket,

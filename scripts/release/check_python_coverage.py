@@ -14,6 +14,7 @@ def validate(document: dict) -> dict:
         "total": (90, 85),
         "digest.py": (98, 95),
         "context.py": (95, 90),
+        "broker.py": (95, 90),
         "local_runtime.py": (95, 90),
         "transport.py": (95, 90),
     }

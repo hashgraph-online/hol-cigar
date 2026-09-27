@@ -32,6 +32,7 @@ class PolicyTests(unittest.TestCase):
                 for name in (
                     "digest.py",
                     "context.py",
+                    "broker.py",
                     "local_runtime.py",
                     "transport.py",
                 )
@@ -52,7 +53,11 @@ class PolicyTests(unittest.TestCase):
             coverage.validate(document)
 
     def test_version_and_tool_drift_fail_before_native_build(self):
-        self.assertEqual(versions.validate(expected="0.12.0")["status"], "passed")
+        identity = json.loads(
+            (versions.ROOT / "sdk/local-context-release.v1.json").read_bytes()
+        )
+        current = identity["core_version"]
+        self.assertEqual(versions.validate(expected=current)["status"], "passed")
         with self.assertRaises(AssertionError):
             versions.validate(expected="0.11.0")
         paths = [
@@ -65,7 +70,7 @@ class PolicyTests(unittest.TestCase):
             "sdk/typescript/release.json",
             "sdk/python/src/cigar_sdk/local_runtime.py",
             "sdk/typescript/src/local-runtime.ts",
-            "docs/release/context-sdk-0.12.0-notes.md",
+            f"docs/release/context-sdk-{current}-notes.md",
             "sdk/context-toolchain.v1.json",
             "scripts/release/containers/context-consumer.Dockerfile",
         ]

@@ -1,10 +1,12 @@
 # Local context broker implementation contract
 
 Status: native authority, bounded scheduler and the explicit `--broker` worker
-transport are implemented behind the opt-in `broker` Cargo feature. Durable
-recovery, SDK facades and installed-distribution qualification are pending;
-this is not yet a shipped SDK capability.
+transport are implemented behind the opt-in `broker` Cargo feature. Python and
+Node host/client facades have local source tests with independent 1/5/12-agent
+processes, including mixed-language clients. Durable recovery and installed
+distribution qualification are pending; this is not yet a shipped capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
+See the [development SDK guide](../../sdk/LOCAL_BROKER_GUIDE.md).
 
 ## Ownership and transport
 

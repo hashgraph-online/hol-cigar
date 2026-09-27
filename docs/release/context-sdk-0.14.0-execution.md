@@ -23,16 +23,16 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
-| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and mutually authenticated loopback worker implemented and locally tested; SDK facades and independent processes pending |
+| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
-| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission and transitive invalidation implemented; SDK and durable integration pending |
-| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native exact-submission review port implemented; execution handoff pending |
+| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; durable integration pending |
+| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK exact-submission review port implemented; execution handoff pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
-| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Pending |
+| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
@@ -216,3 +216,37 @@ only when their exercised behavior covers the corresponding requirement above.
   Those clients are Rust driver threads, not independent installed Python/Node
   agent processes. SDK facades, durable recovery, hosted platform execution,
   performance/fairness measurements and the 24-hour soak remain pending.
+- Added public Python and Node `LocalContextBroker`, `LocalContextClient`, grant
+  connection and wire types. Both SDKs reuse their existing worker lifecycle and
+  keep legacy graph constructors/behavior. Connection exports require explicit
+  protected IPC; ordinary representation is redacted. Clients authenticate the
+  server before disclosing context, enforce a total deadline and bounded pending
+  calls, and preserve definite versus unknown dispatch outcomes without retries.
+- Independent 1/5/12-agent process tests now run in Python, Node and mixed-language
+  configurations. They check shared/private scopes, cross-owner ticket denial,
+  stale versus unaffected work, proposal admission/CAS, exact submission review,
+  grant revocation and invalid-client isolation. Fault tests cover malformed host
+  replies, incompatible workers, impersonating peers, partial/oversized frames,
+  lost post-dispatch replies and cleanup. A new partial-prefix test exposed Node
+  reader starvation of timeout callbacks; consuming partial bytes before waiting
+  fixes it, with valid fragmented-response and deadline regressions.
+- Full local SDK validation: 394 Python tests plus 39 subtests, and 102 Node tests
+  pass. Python coverage is 93.21% statements and 86.32% branches; the new broker
+  module is 100% on both and has a mandatory 95%/90% gate. Existing critical-module
+  thresholds pass. Strict Python typing, changed-file lint and local-asset drift
+  checks pass. Twenty-one release distribution/input/policy tests pass after
+  replacing the policy test's stale 0.12 literal with the release identity.
+- Native validation again passes formatting, strict Clippy, 99 all-feature tests,
+  one doctest and 48 core-only test/doctest invocations. Logs are retained under
+  `CIGAR/releases/cigar-0.14.0-development/broker-sdk-native-source-checks`; Python
+  coverage is retained alongside them. Native distribution builds now select
+  `bpe,broker`, and distribution CI runs Node before mixed-language Python tests.
+  The SDK guide documents authority, provenance, review limits and uncertainty.
+  No new artifact, cross-platform, performance, durability or release claim is
+  implied by these source tests.
+- Generated-client drift checks pass using the retained local Go formatter.
+  Expanding the release tests to all five distribution modules exposed older
+  version coupling: eight legacy stable tests reject the current alpha identity
+  through the explicit handoff allowlist, and one platform-inventory assertion
+  still names a 0.12 wheel. The other 33 tests pass. These remain Q2/Q3 release
+  tooling work; the allowlist has not been weakened to label an alpha as stable.

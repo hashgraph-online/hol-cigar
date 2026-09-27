@@ -120,7 +120,7 @@ def main() -> None:
             "cigar-context",
             "--all-targets",
             "--features",
-            "bpe",
+            "bpe,broker",
             "--",
             "-D",
             "warnings",
@@ -135,7 +135,7 @@ def main() -> None:
             "-p",
             "cigar-context",
             "--features",
-            "bpe",
+            "bpe,broker",
             "--",
             "--test-threads=1",
         ],
@@ -180,7 +180,15 @@ def main() -> None:
     )
     run(
         "native-build-from-package",
-        [args.cargo, "build", "--locked", "--release", "--features", "bpe", "--bins"],
+        [
+            args.cargo,
+            "build",
+            "--locked",
+            "--release",
+            "--features",
+            "bpe,broker",
+            "--bins",
+        ],
         native_root,
     )
     worker = args.target_dir / "release/cigar-context-worker"
@@ -209,7 +217,7 @@ def main() -> None:
                 "--format-version",
                 "1",
                 "--features",
-                "bpe",
+                "bpe,broker",
             ],
             native_root,
         )

@@ -64,23 +64,17 @@ _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
 
 
-class LocalContextGraph:
-    """One graph, privacy domain, and bounded cache per worker process.
+class _WorkerChannel:
+    """Private serialized worker transport shared by the graph and broker host.
 
-    Use a context manager or close(). ``worker_path`` is an explicit trusted executable;
-    it is never searched in PATH. Calls are serialized. The timeout includes lock wait
-    and pipe I/O. A lock-wait timeout does not interrupt another caller's operation.
-    A transport timeout closes this graph, because mutation outcome may be unknown.
-    Instances belong to the creating process; create a new graph after fork().
+    Owns process/PID/deadline/cleanup behavior; subclasses select only the reply codec.
     """
 
     def __init__(
         self,
-        domain: str,
-        *,
-        limits: LocalContextLimits | None = None,
-        worker_path: str | Path | None = None,
-        timeout: float = 30.0,
+        worker_path: str | Path | None,
+        timeout: float,
+        arguments: tuple[str, ...],
     ) -> None:
         if not math.isfinite(timeout) or timeout <= 0 or timeout > threading.TIMEOUT_MAX:
             raise LocalContextError("InvalidInput")
@@ -97,7 +91,7 @@ class LocalContextGraph:
         self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
             self._process = subprocess.Popen(
-                [str(binary)],
+                [str(binary), *arguments],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -108,20 +102,6 @@ class LocalContextGraph:
             raise LocalContextError("WorkerUnavailable") from None
         try:
             self._thread.start()
-            hello = self._call({"op": "init", "domain": domain, "limits": limits or {}})
-            if (
-                not isinstance(hello, dict)
-                or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
-                or hello.get("core_version") != LOCAL_CONTEXT_CORE_VERSION
-                or hello.get("max_frame_bytes") != _MAX_FRAME
-                or hello.get("max_response_bytes") != _MAX_RESPONSE
-            ):
-                raise LocalContextError("IncompatibleWorker")
-            capabilities = hello.get("capabilities", [])
-            if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
-                raise LocalContextError("IncompatibleWorker")
-            self._worker_features = tuple(sorted(set(capabilities)))
-            self._supports_views = "context_views.v1" in capabilities
         except BaseException:
             self.close()
             raise
@@ -197,30 +177,131 @@ class LocalContextGraph:
                 self.close()
                 raise LocalContextError("Transport")
             try:
-                reply = json.loads(value)
-                if not isinstance(reply, dict) or type(reply.get("ok")) is not bool:
-                    raise ValueError
-                if reply.get("id") != self._next_id:
-                    raise ValueError
-                if reply["ok"]:
-                    return reply["result"]
-                code = reply["error"]
-                if code not in {
-                    "InvalidInput",
-                    "LimitExceeded",
-                    "RequiredUnavailable",
-                    "BudgetUnsatisfiable",
-                    "Tokenizer",
-                    "Integrity",
-                    "BaseMismatch",
-                }:
-                    raise ValueError
+                return self._decode_reply(self._load_reply(value), self._next_id)
             except ValueError, TypeError, KeyError, RecursionError:
                 self.close()
                 raise LocalContextError("Transport") from None
-            raise LocalContextError(code)
         finally:
             self._lock.release()
+
+    def _load_reply(self, value: bytes) -> Any:
+        return json.loads(value)
+
+    def _decode_reply(self, reply: Any, request_id: int) -> Any:
+        if not isinstance(reply, dict) or type(reply.get("ok")) is not bool:
+            raise ValueError
+        if reply.get("id") != request_id:
+            raise ValueError
+        if reply["ok"]:
+            return reply["result"]
+        code = reply["error"]
+        if code not in {
+            "InvalidInput",
+            "LimitExceeded",
+            "RequiredUnavailable",
+            "BudgetUnsatisfiable",
+            "Tokenizer",
+            "Integrity",
+            "BaseMismatch",
+        }:
+            raise ValueError
+        raise LocalContextError(code)
+
+    def close(self) -> None:
+        """Stop accepting work and attempt bounded cleanup without masking errors.
+
+        If OS-level failures prevent completion, ``cleanup_complete`` stays false
+        and another close() retries. Never operates on an inherited instance.
+        """
+        self._ensure_process_owner()
+        with self._close_lock:
+            if self._cleanup_complete:
+                return
+            self._closed = True
+            self._stop.set()
+            deadline = time.monotonic() + 5.0
+            try:
+                self._process.kill()
+            except OSError:
+                pass
+            try:
+                self._jobs.put_nowait(None)
+            except queue.Full:
+                pass
+            try:
+                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except OSError, subprocess.TimeoutExpired:
+                # Keep reaping retryable; cleanup must not replace the API error.
+                pass
+            if self._thread.ident is not None:
+                self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            else:
+                # Thread creation failed; no thread can own these buffers.
+                for pipe in (self._process.stdin, self._process.stdout):
+                    if pipe is None:
+                        continue
+                    try:
+                        pipe.close()
+                    except OSError, ValueError:
+                        pass
+            try:
+                self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
+            except OSError:
+                self._cleanup_complete = False
+
+    @property
+    def cleanup_complete(self) -> bool:
+        """Whether close has reaped the worker and joined its I/O thread."""
+        self._ensure_process_owner()
+        return self._cleanup_complete
+
+    def __enter__(self) -> Self:
+        self._ensure_process_owner()
+        return self
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        self.close()
+
+
+class LocalContextGraph(_WorkerChannel):
+    """One graph, privacy domain, and bounded cache per worker process.
+
+    Use a context manager or close(). ``worker_path`` is an explicit trusted executable;
+    it is never searched in PATH. Calls are serialized. The timeout includes lock wait
+    and pipe I/O. A lock-wait timeout does not interrupt another caller's operation.
+    A transport timeout closes this graph, because mutation outcome may be unknown.
+    Instances belong to the creating process; create a new graph after fork().
+    """
+
+    def __init__(
+        self,
+        domain: str,
+        *,
+        limits: LocalContextLimits | None = None,
+        worker_path: str | Path | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        super().__init__(worker_path, timeout, ())
+        try:
+            hello = self._call({"op": "init", "domain": domain, "limits": limits or {}})
+            if (
+                not isinstance(hello, dict)
+                or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
+                or hello.get("core_version") != LOCAL_CONTEXT_CORE_VERSION
+                or hello.get("max_frame_bytes") != _MAX_FRAME
+                or hello.get("max_response_bytes") != _MAX_RESPONSE
+            ):
+                raise LocalContextError("IncompatibleWorker")
+            capabilities = hello.get("capabilities", [])
+            if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
+                raise LocalContextError("IncompatibleWorker")
+            self._worker_features = tuple(sorted(set(capabilities)))
+            self._supports_views = "context_views.v1" in capabilities
+        except BaseException:
+            self.close()
+            raise
 
     def upsert(self, document: LocalDocument) -> bool:
         return cast(bool, self._call({"op": "upsert", "document": document}))
@@ -337,63 +418,6 @@ class LocalContextGraph:
 
     def clear_cache(self) -> None:
         self._call({"op": "clear_cache"})
-
-    def close(self) -> None:
-        """Stop accepting work and attempt bounded cleanup without masking errors.
-
-        If OS-level failures prevent completion, ``cleanup_complete`` stays false
-        and another close() retries. Never operates on an inherited instance.
-        """
-        self._ensure_process_owner()
-        with self._close_lock:
-            if self._cleanup_complete:
-                return
-            self._closed = True
-            self._stop.set()
-            deadline = time.monotonic() + 5.0
-            try:
-                self._process.kill()
-            except OSError:
-                pass
-            try:
-                self._jobs.put_nowait(None)
-            except queue.Full:
-                pass
-            try:
-                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
-            except OSError, subprocess.TimeoutExpired:
-                # Keep reaping retryable; cleanup must not replace the API error.
-                pass
-            if self._thread.ident is not None:
-                self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
-            else:
-                # Thread creation failed; no thread can own these buffers.
-                for pipe in (self._process.stdin, self._process.stdout):
-                    if pipe is None:
-                        continue
-                    try:
-                        pipe.close()
-                    except OSError, ValueError:
-                        pass
-            try:
-                self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
-            except OSError:
-                self._cleanup_complete = False
-
-    @property
-    def cleanup_complete(self) -> bool:
-        """Whether close has reaped the worker and joined its I/O thread."""
-        self._ensure_process_owner()
-        return self._cleanup_complete
-
-    def __enter__(self) -> Self:
-        self._ensure_process_owner()
-        return self
-
-    def __exit__(
-        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
-    ) -> None:
-        self.close()
 
 
 class LocalContextView:

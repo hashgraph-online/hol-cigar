@@ -4,6 +4,11 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Node.js applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
+This checkout also contains the v0.14 development broker for independent agent
+processes. See the [broker guide](../LOCAL_BROKER_GUIDE.md) for host/client authority,
+provenance, reviews and failure semantics. No v0.14 archive is qualified yet;
+the alpha installation and compatibility examples below retain their own scope.
+
 ## Install and check
 
 Version 0.13.0-alpha.1 is a local alpha for ESM on Node.js `>=24.10.0 <25`:
