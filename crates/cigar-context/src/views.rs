@@ -159,9 +159,25 @@ impl ContextViews {
         request: &ContextRequest,
         tokenizer: &impl TokenCounter,
     ) -> Result<ContextView, ContextError> {
+        self.compile_bound(graph, handle, request, tokenizer, None)
+    }
+
+    // The broker binds epoch and source authority into the existing snapshot/review chain.
+    // None preserves ordinary view identities and serialized shapes byte-for-byte.
+    pub(crate) fn compile_bound(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        request: &ContextRequest,
+        tokenizer: &impl TokenCounter,
+        authority: Option<&str>,
+    ) -> Result<ContextView, ContextError> {
         let entry = self.entry(handle)?;
         let authorized = authorized_nodes(graph, &entry.spec);
-        let scope_id = scope_id(graph, entry, &authorized)?;
+        let mut scope_id = scope_id(graph, entry, &authorized)?;
+        if let Some(authority) = authority {
+            scope_id = digest("cigar.context-view-authority.v1", &(&scope_id, authority))?;
+        }
         let scoped = scoped_request(request, &scope_id, &authorized);
         let snapshot = graph.compile(&scoped, tokenizer)?;
         let mut context = ContextView {
@@ -212,6 +228,35 @@ impl ContextViews {
         policy: &AnswerPolicy,
         tokenizer: &impl TokenCounter,
     ) -> Result<ContextViewAssessment, ContextError> {
+        self.revalidate(graph, handle, context, tokenizer)?;
+        let assessment = graph.check_view_snapshot(&context.snapshot, draft, reviews, policy)?;
+        Ok(ContextViewAssessment {
+            context_id: context.id.clone(),
+            checked_graph_revision: graph.revision(),
+            assessment,
+        })
+    }
+
+    // Shared freshness check for the ordinary trusted-host view and the opt-in broker.
+    // Never substitute snapshot integrity alone for current authorization and evidence.
+    pub(crate) fn revalidate(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        context: &ContextView,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<(), ContextError> {
+        self.revalidate_bound(graph, handle, context, tokenizer, None)
+    }
+
+    pub(crate) fn revalidate_bound(
+        &self,
+        graph: &ContextGraph,
+        handle: &ContextViewHandle,
+        context: &ContextView,
+        tokenizer: &impl TokenCounter,
+        authority: Option<&str>,
+    ) -> Result<(), ContextError> {
         self.entry(handle)?;
         if context.view != *handle {
             return Err(ContextError::BaseMismatch);
@@ -220,18 +265,13 @@ impl ContextViews {
         if context.id != context.commitment()? {
             return Err(ContextError::Integrity);
         }
-        let current = self.compile(graph, handle, &context.request, tokenizer)?;
+        let current = self.compile_bound(graph, handle, &context.request, tokenizer, authority)?;
         if context.scope_id != current.scope_id
             || !context.snapshot.same_view_evidence(&current.snapshot)
         {
             return Err(ContextError::BaseMismatch);
         }
-        let assessment = graph.check_view_snapshot(&context.snapshot, draft, reviews, policy)?;
-        Ok(ContextViewAssessment {
-            context_id: context.id.clone(),
-            checked_graph_revision: graph.revision(),
-            assessment,
-        })
+        Ok(())
     }
 }
 

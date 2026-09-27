@@ -1,6 +1,8 @@
 # Local context broker implementation contract
 
-Status: implementation contract for B1–B3/P1–P2; not a shipped capability.
+Status: native authority core implemented behind the opt-in `broker` Cargo
+feature. Transport, scheduling, durable recovery and SDK facades are pending;
+this is not yet a shipped worker capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
 
 ## Ownership and transport
@@ -58,6 +60,15 @@ authorization check. The broker retains their view/source bindings. Revalidation
 checks scope/policy, source versions including unselected authorized evidence,
 revocation, expiry and epoch. Unrelated out-of-scope changes preserve valid work.
 Source locators and hashes are provenance links, not signatures or truth labels.
+The broker additionally binds its epoch and source revisions into the snapshot's
+policy commitment. This keeps the existing claim-review keys tied to current
+provenance, including when the document bytes themselves did not change.
+
+The native core rejects stale or expired derivations conservatively: if a readable
+source has a changed/withdrawn/expired transitive input, compilation and ticket
+revalidation fail until the host refreshes or withdraws the derived source. The
+agent does not receive hidden dependency locators through this failure. Declared
+lineage is host metadata; the library cannot detect an omitted dependency.
 
 ## Scheduling, quotas and write conflicts
 

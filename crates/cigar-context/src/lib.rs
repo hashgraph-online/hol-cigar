@@ -7,6 +7,8 @@
 #![doc = include_str!("../README.md")]
 
 mod answer;
+#[cfg(feature = "broker")]
+pub mod broker;
 mod graph;
 mod prompt;
 mod select;

@@ -23,11 +23,11 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
-| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Implementation contract recorded; implementation pending |
-| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Pending |
+| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority core implemented; transport, SDK facades and independent processes pending |
+| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Retention/token quotas and source CAS implemented; scheduler/transport semantics pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
-| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Pending |
-| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Pending |
+| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission and transitive invalidation implemented; SDK and durable integration pending |
+| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native exact-submission review port implemented; execution handoff pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
@@ -149,3 +149,18 @@ only when their exercised behavior covers the corresponding requirement above.
   recovery epoch and review/effect integration contract in
   `docs/proposals/context-broker-0.14.0.md`. This remains implementation work;
   the capability report does not advertise a broker yet.
+- Added the opt-in native `broker` feature with fresh random epochs/credentials,
+  server-owned scopes, bounded expiring tickets, proposal-only agent writes,
+  host admission, monotonic source CAS and retained proposal receipts. Source
+  withdrawal/change-back cannot reset versions. Host provenance changes and
+  expired/stale transitive inputs invalidate dependent evidence. Broker source
+  authority is bound into the existing snapshot/review-key chain, so metadata-only
+  changes and restart epochs cannot reuse old reviews. Ordinary view IDs/shapes
+  retain their existing path. Exact answer submissions cannot supply reviews or
+  append unchecked prose through this API.
+  Fifteen native broker regressions pass, including five/twelve scoped callers,
+  competing proposals, invalid-input atomicity, cross-owner tickets, revocation,
+  expiry, quotas, change-back, derivation cycles and old-review replay. The full
+  context crate has 70 passing tests plus its doctest with `bpe,broker`; strict
+  all-target Clippy passes. This is a single-owner core, not independent-process
+  qualification: no listener, scheduler, journal or SDK broker is shipped yet.
