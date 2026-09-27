@@ -17,10 +17,16 @@ export type LocalBrokerAgentLimits = Readonly<Partial<{
   max_proposal_bytes: number; max_proposal_documents: number; ticket_lifetime_ms: number; proposal_lifetime_ms: number;
 }>>;
 export type LocalBrokerAgentQueueLimits = Readonly<Partial<{max_jobs: number; max_bytes: number}>>;
+/** Existing private host directory; only evidence is retained across restarts. */
+export type LocalBrokerStorageOptions = Readonly<{
+  directory: string; max_checkpoint_bytes?: number; max_database_bytes?: number; max_journal_records?: number;
+}>;
+export type LocalBrokerStorageStatus = Readonly<{mode: "memory" | "sqlite-checkpoint.v1"; restored: boolean}>;
 export type LocalBrokerOptions = Readonly<{
   workerPath?: string; timeoutMs?: number; maxPending?: number;
   graph?: LocalContextLimits; retention?: LocalBrokerLimits; queues?: LocalBrokerQueueLimits;
   transport?: LocalBrokerTransportLimits;
+  storage?: LocalBrokerStorageOptions;
 }>;
 /** Sensitive export for protected IPC. Never log or put in argv/environment. */
 export type LocalBrokerConnectionConfig = Readonly<{
@@ -55,4 +61,5 @@ export type LocalBrokerCapabilities = Readonly<{
   host_max_frame_bytes: number; host_max_response_bytes: number;
   execution: "single-owner-fair-dispatch"; requires_hol_services: false;
   capabilities: readonly string[]; transport_limits: LocalBrokerTransportLimits;
+  storage?: LocalBrokerStorageStatus;
 }>;

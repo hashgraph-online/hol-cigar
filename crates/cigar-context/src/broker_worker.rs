@@ -17,6 +17,9 @@ use std::sync::{Arc, Condvar, Mutex, Weak, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+mod persistence;
+use persistence::Persistence;
+
 struct Budget {
     limit: usize,
     used: AtomicUsize,
@@ -184,6 +187,7 @@ impl Runtime {
             retention,
             queues,
             transport,
+            storage,
         } = command
         else {
             return Err(ErrorCode::InvalidInput);
@@ -192,8 +196,9 @@ impl Runtime {
         if retention.max_agents != queues.max_agents {
             return Err(ErrorCode::InvalidInput);
         }
-        let broker =
-            ContextBroker::new(domain, graph.graph_limits(), retention).map_err(ErrorCode::from)?;
+        let (broker, persistence, restored) =
+            Persistence::open(domain, graph.graph_limits(), retention, storage)
+                .map_err(ErrorCode::from)?;
         let tokenizer = O200kTokenizer::with_cache_limits(graph.cache_limits())
             .map_err(|error| ErrorCode::from(BrokerError::from(error)))?;
         let scheduler = BrokerScheduler::new(broker.epoch(), queues).map_err(ErrorCode::from)?;
@@ -212,6 +217,8 @@ impl Runtime {
                 "provenance_freshness.v1", "exact_answer_review.v1", "fair_admission.v1",
                 "mutual_grant_proof.v1"],
             "transport_limits": transport,
+            "storage": {"mode": if persistence.active() { "sqlite-checkpoint.v1" } else { "memory" },
+                "restored": restored},
         });
         let shared = Arc::new(Shared {
             queue: Mutex::new(scheduler),
@@ -227,7 +234,7 @@ impl Runtime {
         let owner = Arc::clone(&shared);
         let actor = std::thread::Builder::new()
             .name("cigar-broker-owner".into())
-            .spawn(move || own(broker, tokenizer, &owner))
+            .spawn(move || own(broker, persistence, tokenizer, &owner))
             .map_err(|_| ErrorCode::Unavailable)?;
         let incoming = Arc::clone(&shared);
         let listener = match std::thread::Builder::new()
@@ -394,7 +401,12 @@ fn next_job(shared: &Shared) -> Option<Scheduled<Job>> {
     }
 }
 
-fn own(mut broker: ContextBroker, tokenizer: O200kTokenizer, shared: &Shared) {
+fn own(
+    mut broker: ContextBroker,
+    mut persistence: Persistence,
+    tokenizer: O200kTokenizer,
+    shared: &Shared,
+) {
     while let Some(mut scheduled) = next_job(shared) {
         match scheduled.status() {
             DispatchStatus::Expired => {
@@ -419,12 +431,32 @@ fn own(mut broker: ContextBroker, tokenizer: O200kTokenizer, shared: &Shared) {
                 ..
             })
         );
-        let result = match job.work {
-            Work::Host(request) => execute_host(&mut broker, &tokenizer, shared, request.command),
-            Work::Agent {
-                credential,
-                request,
-            } => execute_agent(&mut broker, &tokenizer, &credential, request),
+        let pending = match &job.work {
+            Work::Host(request) => persistence.prepare(&broker, &request.command),
+            Work::Agent { .. } => Ok(None),
+        };
+        let result = match pending {
+            Err(error) => Err(error),
+            Ok(event) => {
+                let result = match job.work {
+                    Work::Host(request) => {
+                        execute_host(&mut broker, &tokenizer, shared, request.command)
+                    }
+                    Work::Agent {
+                        credential,
+                        request,
+                    } => execute_agent(&mut broker, &tokenizer, &credential, request),
+                };
+                if result.is_ok()
+                    && let Some(event) = event
+                    && persistence.commit(&broker, event).is_err()
+                {
+                    // Mutation outcome is uncertain. Drop this reply and stop all authority;
+                    // a dispatched storage failure cannot be reported as a safe-to-retry error.
+                    break;
+                }
+                result
+            }
         };
         let outcome = match result {
             Ok(result) => Outcome::Ok { result },

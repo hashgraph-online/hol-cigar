@@ -898,9 +898,12 @@ version = "0.13.0-alpha.1"
 dependencies = [
  "getrandom 0.4.3",
  "hmac 0.13.0",
+ "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "tempfile",
  "tiktoken-rs",
  "zeroize",
 ]

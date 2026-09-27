@@ -1,8 +1,22 @@
 """Typed native broker contracts; source revisions are lossless decimal strings."""
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from cigar_sdk.context_types import LocalAnswerDraft, LocalDocument, LocalViewContext
+
+
+class LocalBrokerStorageOptions(TypedDict):
+    """Existing private host directory; only evidence is retained across restarts."""
+
+    directory: str
+    max_checkpoint_bytes: NotRequired[int]
+    max_database_bytes: NotRequired[int]
+    max_journal_records: NotRequired[int]
+
+
+class LocalBrokerStorageStatus(TypedDict):
+    mode: Literal["memory", "sqlite-checkpoint.v1"]
+    restored: bool
 
 
 class LocalBrokerLimits(TypedDict, total=False):
@@ -143,3 +157,4 @@ class LocalBrokerCapabilities(TypedDict):
     requires_hol_services: Literal[False]
     capabilities: list[str]
     transport_limits: LocalBrokerTransportLimits
+    storage: NotRequired[LocalBrokerStorageStatus]

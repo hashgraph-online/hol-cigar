@@ -25,8 +25,8 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
-| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Evidence checkpoint codec and fresh-authority restore implemented; atomic journal/storage, process restart and SDK integration pending |
-| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; durable integration pending |
+| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix opt-in atomic store, bounded receipt chain and SDK restart implemented; Windows protection, hosted fault qualification and performance acceptance pending |
+| P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK exact-submission review port implemented; execution handoff pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
@@ -268,3 +268,42 @@ only when their exercised behavior covers the corresponding requirement above.
   are retained in `broker-checkpoint-source-checks` under the development evidence
   directory. Existing Python/Node behavior is unaffected by this Rust-only codec;
   neither SDK advertises a persistence capability yet.
+- Implemented opt-in Unix evidence storage behind `broker-persistence`, using the
+  already-pinned embedded SQLite dependency. An exclusive writer commits the
+  bounded checkpoint and rolling, hash-chained revision receipt together before
+  acknowledging source replacement, proposal admission or relationship changes.
+  Effective durability/resource settings are verified, and each restart records
+  a fresh epoch before exposing a listener. Grants, proposals, tickets, drafts,
+  reviews and execution permissions remain transient.
+- The store requires a private host-owned directory, protected ancestry, regular
+  single-link database files and safe sidecars. It rejects path replacement,
+  unsafe permissions, unknown schemas, corrupted chains and oversized records.
+  It never repairs these conditions by resetting the graph. Failed durability
+  after memory mutation terminates the owner without a success or definite-failure
+  receipt. Both SDKs expose explicit storage options and reject a worker that
+  silently ignores requested persistence.
+- Seven native storage regressions cover exclusive ownership, bounded receipt
+  retention, withdrawal, corrupt stores, full/over-limit writes, path aliasing,
+  maximum escaped source locators and exhausted forged sequence numbers. The
+  crash parent invokes its otherwise-ignored child at four transaction boundaries,
+  forcing dirty-page spill and abrupt process exit. Recovery returns the old
+  committed state before commit and the new complete state after commit. These
+  are process-crash tests, not power-loss qualification.
+- Complete local validation passes 401 Python tests plus 39 subtests, all 104
+  Node tests, and the native context gate with 114 all-feature tests, one doctest
+  and 48 core-only test/doctest invocations. The seven Python and two Node storage
+  cases were rerun against the final bounded native implementation; they include
+  killed-worker recovery, old grant/ticket/review rejection, admitted proposals,
+  edges, withdrawal, owner exclusion and uncertain-write closure. Python coverage
+  is 93.23% statements/86.38% branches overall and 100%/100% for the broker facade.
+  Strict typing, lint/format, generators, current-version consistency, all-target
+  Clippy with and without storage, and 21 distribution/input/policy tests pass.
+  Final native logs are in `broker-durable-bounds-source-checks`; SDK logs and
+  coverage use the `broker-durable-` prefix in the development evidence directory.
+- Windows storage is deliberately unavailable until its private-directory and
+  file-identity boundary is implemented and qualified. The full-image storage
+  prototype still needs paired CPU/RSS/disk/latency profiling and hosted filesystem
+  fault tests. Defaults remain in memory, ordinary graph behavior is unchanged,
+  and no performance, independent efficacy, platform or release qualification is
+  claimed. The earlier release-profile test failures remain Q2/Q3 work. Source
+  versions remain at the development alpha identity; no v0.14 publication occurs.

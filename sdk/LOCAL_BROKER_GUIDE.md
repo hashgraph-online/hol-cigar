@@ -167,5 +167,52 @@ This is a same-host application boundary. It does not encrypt traffic or sandbox
 code with access to host memory, pipes or credentials. Separate unrelated hostile
 tenants using OS/container isolation and distinct brokers. HUMIDOR owns model
 routing and orchestration; its Honey execution integration remains separate.
-Until durable recovery is qualified, a broker restart requires rebuilding the
-graph, reissuing grants, recompiling context and obtaining fresh reviews.
+
+## Experimental evidence persistence
+
+The v0.14 development worker can retain admitted evidence in an explicitly selected
+local directory when built with `broker-persistence`. The current prototype is
+Unix-only; Windows requests fail explicitly. Hosted platform, power-loss and
+performance qualification are pending. The default broker remains in memory.
+
+Create a private directory owned by the host (mode 0700), then pass its absolute
+path on the host channel:
+
+```python
+with LocalContextBroker("project", storage={"directory": "/absolute/private/cigar"}) as broker:
+    print(broker.capabilities()["storage"])
+    # {"mode": "sqlite-checkpoint.v1", "restored": False} on first initialization
+```
+
+```ts
+await using broker = await LocalContextBroker.create("project", {
+  storage: {directory: "/absolute/private/cigar"},
+});
+```
+
+Reopen the same directory and domain to restore committed source versions,
+provenance, relations and withdrawal tombstones. Each evidence write commits its
+checkpoint and revision receipt before success is returned. Concurrent owners,
+wrong domains, unsupported schemas and inconsistent data are rejected. The SDK
+checks the active storage mode so a worker cannot silently ignore this request.
+
+Every restart creates a fresh authority epoch. Reissue grants, recompile context
+and obtain fresh reviews. Agent credentials, proposals, context tickets, drafts,
+review verdicts and execution permissions are never recovered. A storage failure
+after a dispatched write closes the broker with an unknown outcome; inspect the
+restored source revision before deciding what to do next. The SDK does not retry.
+
+Options `max_checkpoint_bytes`, `max_database_bytes` and `max_journal_records`
+default to 64 MiB, 256 MiB and 1,024 receipts. The database limit excludes its
+temporary rollback journal: allow approximately another database's worth of disk
+space. Receipts retain a bounded suffix and its chain anchor. The prototype writes
+the full evidence image per mutation; its cost at large graph sizes is still under
+evaluation. A too-small limit fails closed and may require reopening with larger
+bounds. Preserve all database sidecars after a crash so SQLite can recover them.
+
+Stored checkpoints contain private source text. Their hashes detect inconsistent
+bytes; they provide neither encryption nor protection against replacing the whole
+store with an older valid copy. Use a protected local filesystem and a trustworthy
+host clock. Withdrawal removes current evidence but does not promise physical
+erasure from storage devices or backups. An existing empty or malformed store
+requires host investigation; it is never automatically replaced by an empty graph.

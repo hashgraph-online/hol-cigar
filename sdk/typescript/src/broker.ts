@@ -95,7 +95,8 @@ export class LocalContextBroker implements AsyncDisposable {
     catch (error) { throw asBrokerError(error, false); }
     try {
       const hello = await broker.call<unknown>({op: "init", domain, graph: options.graph ?? {},
-        retention: options.retention ?? {}, queues: options.queues ?? {}, transport: options.transport ?? {}});
+        retention: options.retention ?? {}, queues: options.queues ?? {}, transport: options.transport ?? {},
+        ...(options.storage === undefined ? {} : {storage: options.storage})});
       if (!record(hello) || hello.protocol !== PROTOCOL || hello.core_version !== LOCAL_CONTEXT_CORE_VERSION ||
           hello.host !== "127.0.0.1" || typeof hello.port !== "number" || !Number.isInteger(hello.port) ||
           hello.port < 1 || hello.port > 65535 || !hex(hello.epoch) || hello.max_frame_bytes !== MAX_FRAME ||
@@ -106,6 +107,10 @@ export class LocalContextBroker implements AsyncDisposable {
         throw new LocalBrokerError("IncompatibleWorker", null);
       }
       broker.#hello = structuredClone(hello) as LocalBrokerCapabilities;
+      if (options.storage !== undefined && (!record(hello.storage) || !keys(hello.storage, ["mode", "restored"]) ||
+          hello.storage.mode !== "sqlite-checkpoint.v1" || typeof hello.storage.restored !== "boolean")) {
+        throw new LocalBrokerError("IncompatibleWorker", null);
+      }
       return broker;
     } catch (error) { await broker.close(); throw error; }
   }

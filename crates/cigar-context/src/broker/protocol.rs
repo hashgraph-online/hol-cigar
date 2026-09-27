@@ -152,6 +152,9 @@ pub enum HostCommand {
         /// Explicit socket/frame/reply resource bounds.
         #[serde(default)]
         transport: TransportLimits,
+        /// Explicit host-owned local storage; absent means no persistence.
+        #[serde(default)]
+        storage: Option<super::BrokerStorageOptions>,
     },
     /// Issue/replace one agent's authority and queue allowance.
     Grant {

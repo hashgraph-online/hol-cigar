@@ -29,6 +29,7 @@ from cigar_sdk.broker_types import (
     LocalBrokerSourceProvenance,
     LocalBrokerSourceReceipt,
     LocalBrokerSourceRevision,
+    LocalBrokerStorageOptions,
     LocalBrokerSubmission,
     LocalBrokerTransportLimits,
 )
@@ -186,6 +187,7 @@ class LocalContextBroker(_WorkerChannel):
         retention: LocalBrokerLimits | None = None,
         queues: LocalBrokerQueueLimits | None = None,
         transport: LocalBrokerTransportLimits | None = None,
+        storage: LocalBrokerStorageOptions | None = None,
     ) -> None:
         try:
             super().__init__(worker_path, timeout, ("--broker",))
@@ -200,6 +202,7 @@ class LocalContextBroker(_WorkerChannel):
                     "retention": retention or {},
                     "queues": queues or {},
                     "transport": transport or {},
+                    **({"storage": storage} if storage is not None else {}),
                 }
             )
             if (
@@ -226,6 +229,15 @@ class LocalContextBroker(_WorkerChannel):
             ):
                 raise LocalBrokerError("IncompatibleWorker", dispatched=None)
             self._hello = cast(LocalBrokerCapabilities, copy.deepcopy(hello))
+            if storage is not None:
+                stored = hello.get("storage")
+                if (
+                    not isinstance(stored, dict)
+                    or set(stored) != {"mode", "restored"}
+                    or stored["mode"] != "sqlite-checkpoint.v1"
+                    or type(stored["restored"]) is not bool
+                ):
+                    raise LocalBrokerError("IncompatibleWorker", dispatched=None)
         except BaseException:
             self.close()
             raise

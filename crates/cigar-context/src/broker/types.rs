@@ -35,6 +35,47 @@ impl std::fmt::Display for BrokerError {
 
 impl std::error::Error for BrokerError {}
 
+/// Opt-in evidence storage. The directory must already exist and be private to the host.
+/// This stores source text, not agent credentials, reviews or execution authority.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BrokerStorageOptions {
+    /// Absolute existing host-owned directory. No path discovery or automatic migration.
+    pub directory: std::path::PathBuf,
+    /// Maximum canonical checkpoint size (1 KiB..=512 MiB).
+    #[serde(default = "default_checkpoint_bytes")]
+    pub max_checkpoint_bytes: usize,
+    /// Maximum SQLite database size. Rollback journaling needs additional disk space.
+    #[serde(default = "default_database_bytes")]
+    pub max_database_bytes: usize,
+    /// Maximum retained hash-chained mutation receipts (1..=4096).
+    #[serde(default = "default_journal_records")]
+    pub max_journal_records: usize,
+}
+
+const fn default_checkpoint_bytes() -> usize {
+    64 * 1024 * 1024
+}
+const fn default_database_bytes() -> usize {
+    256 * 1024 * 1024
+}
+const fn default_journal_records() -> usize {
+    1024
+}
+
+impl BrokerStorageOptions {
+    /// Construct conservative default bounds around an explicit directory.
+    #[must_use]
+    pub fn new(directory: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            directory: directory.into(),
+            max_checkpoint_bytes: default_checkpoint_bytes(),
+            max_database_bytes: default_database_bytes(),
+            max_journal_records: default_journal_records(),
+        }
+    }
+}
+
 /// Explicit process-wide retention bounds; graph and transport limits apply separately.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

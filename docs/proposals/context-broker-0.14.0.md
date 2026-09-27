@@ -3,7 +3,8 @@
 Status: native authority, bounded scheduler and the explicit `--broker` worker
 transport are implemented behind the opt-in `broker` Cargo feature. Python and
 Node host/client facades have local source tests with independent 1/5/12-agent
-processes, including mixed-language clients. Durable recovery and installed
+processes, including mixed-language clients. Durable storage is implemented as a
+Unix-only opt-in prototype; platform/performance qualification and installed
 distribution qualification are pending; this is not yet a shipped capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
 See the [development SDK guide](../../sdk/LOCAL_BROKER_GUIDE.md).
@@ -166,8 +167,8 @@ declared lineage. It rebinds internal lineage to a fresh random authority epoch.
 No grant, ticket, proposal, answer draft, review or effect permission is restored.
 Expired evidence remains stale. Saved monotonic remaining life caps each source's
 new deadline, and a wall clock preceding capture is rejected. Correct time still
-depends on the host's clock. The codec performs no filesystem writes and does not
-yet establish a durable commit or a supported SDK restart path.
+depends on the host's clock. The codec performs no filesystem writes. The worker
+now owns an optional persistent store, exposed through both SDKs' host options.
 
 Persistence is explicit and host-owned. Reuse existing storage/locking primitives
 where their contracts fit; do not create a competing Honey authority format.
@@ -176,16 +177,27 @@ expected/result revisions with bounded records, a sequence and hash chain. It
 needs an exclusive writer lock, durable commit markers and atomic checkpoints.
 Credentials and release permissions are never serialized as reusable authority.
 
-The next storage prototype should reuse the repository's embedded SQLite
-transaction approach under an optional broker persistence feature. Use a private
-host-selected directory, verified single-writer locking, bounded records and a
-transaction committing journal and checkpoint together. SQLite documents
+The `broker-persistence` feature reuses the repository's pinned embedded SQLite.
+The Unix prototype requires an existing absolute host-owned directory with mode
+0700, protected ancestor directories, a regular single-link database with mode
+0600, and verified sidecar identity.
+It refuses symlinks, unexpected WAL sidecars, unsupported schemas and empty
+existing stores; it does not chmod or reset them. An EXCLUSIVE connection retains
+the acquired writer lock. Each transaction stores a whole bounded checkpoint plus
+an expected/result source-revision receipt. Receipts use sequence numbers and a
+hash chain, with an explicit rolling anchor when the configured history is pruned.
+SQLite documents
 [exclusive connection locking and durability settings](https://www.sqlite.org/pragma.html#pragma_locking_mode)
 and its [atomic commit assumptions](https://www.sqlite.org/atomiccommit.html).
-The prototype must read back effective settings and prove crash behavior on the
-advertised platforms; choosing SQLite is not itself qualification. Profile full
+The worker reads back locking, DELETE journaling, EXTRA synchronization,
+fullfsync, page-size and resource settings. Process-crash fixtures exercise before
+write, between journal/checkpoint updates, before commit, and after commit. Power
+loss and advertised-platform qualification remain required. Profile full
 checkpoint rewrites against bounded source/document updates before selecting the
-release path. Core graph use must retain its existing dependency and I/O behavior.
+release path. Core graph use retains its existing dependency and I/O behavior.
+Windows requests currently fail explicitly: private-directory and filesystem
+identity enforcement must be implemented and qualified before enabling storage.
+No persistence capability is advertised by an ordinary memory-only broker.
 
 No success response is emitted before a committed mutation is durable. A failed
 durability step after in-memory mutation closes the broker rather than serving
