@@ -23,14 +23,14 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
-| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Pending |
+| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Implementation contract recorded; implementation pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
-| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Pending |
+| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
@@ -122,3 +122,30 @@ only when their exercised behavior covers the corresponding requirement above.
   pass. The normal strict mypy command exposed generated dictionary expansion
   errors; the generator now emits typed named arguments with identical operation
   values. Strict mypy passes all 20 handwritten source files with their imports.
+- Added the closed `cigar.context-evaluation-*.v1` evidence contract and verifier.
+  It binds artifact, corpus, task, oracle, harness and evaluator bytes; recomputes
+  metrics from paired raw observations; preserves missing/unsupported/failed
+  outcomes; handles zero denominators; and resamples declared clusters instead
+  of individual repeated calls. Reports retain strata and separate authored
+  invariants, replay, model-output, executable-task and performance evidence.
+  Twenty-two regression tests pass, including changed artifacts/evaluator,
+  malformed data, package mismatch, unpaired observations, rate denominators,
+  repeated-call weighting and hidden stratum regressions. CI now runs this
+  stdlib-only contract suite on three operating systems; hosted runs are pending.
+- Extended the existing shared-view harness to 1/5/12 scoped clients and retained
+  raw timings/outcomes plus simultaneous host-and-worker RSS samples. Local
+  1/5/12-client smoke studies ran against the retained installed 0.12/0.13 alpha
+  environments. In the 12-client run, views preserved all 66 unaffected releases
+  and rejected six stale contexts. The shared-root control invalidated those 66
+  unaffected contexts; private graphs preserved them. Both legacy root paths
+  retained identical output hashes. These are authored, single-host pipeline
+  smoke results, not 0.14 benefit or independent-process qualification claims.
+  The adapter verified the installed source/worker bytes against the supplied
+  wheels and recomputed 1,940 observations across eight operations. Two cohorts
+  are insufficient for a performance interval. Evidence is outside the source
+  worktree under `CIGAR/releases/cigar-0.14.0-development`.
+- Recorded the broker's ownership, authenticated loopback transport, per-agent
+  quotas/fair dispatch, proposal-only model writes, source revision conflicts,
+  recovery epoch and review/effect integration contract in
+  `docs/proposals/context-broker-0.14.0.md`. This remains implementation work;
+  the capability report does not advertise a broker yet.

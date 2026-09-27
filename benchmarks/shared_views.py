@@ -1,4 +1,4 @@
-"""Offline, paired fresh-process comparison of root APIs and five-agent context sharing.
+"""Offline, paired fresh-process comparison of root APIs and scoped context sharing.
 
 Run with --baseline-python and --candidate-python pointing to installed environments.
 No model, HTTP client or credential discovery is used. The scheduled write interleaving
@@ -12,12 +12,26 @@ import ctypes
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 import statistics
 import subprocess
 import sys
 import time
+
+
+def package_source_identity(entries):
+    """Commit to package code/data, excluding bytecode and separately bound workers."""
+    rows = []
+    for name, payload in entries:
+        parts = name.split("/")
+        if "_native" in parts or "__pycache__" in parts or name.endswith(".pyc"):
+            continue
+        rows.append([name, hashlib.sha256(payload).hexdigest()])
+    return hashlib.sha256(
+        json.dumps(sorted(rows), separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def quantiles(values):
@@ -34,11 +48,20 @@ def child(args):
     start = time.perf_counter_ns()
     from cigar_sdk import LocalContextError, LocalContextGraph
     from cigar_sdk.local_runtime import bundled_worker
+    import cigar_sdk
 
     import_ms = (time.perf_counter_ns() - start) / 1e6
     worker = Path(args.worker) if args.worker else bundled_worker()
     with worker.open("rb") as stream:
         worker_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+    package_root = Path(cigar_sdk.__file__).parent
+    sdk_hash = package_source_identity(
+        (path.relative_to(package_root).as_posix(), path.read_bytes())
+        for path in package_root.rglob("*")
+        if path.is_file()
+        and "_native" not in path.parts
+        and "__pycache__" not in path.parts
+    )
     graphs = []
     views = []
     timings = {name: [] for name in ("compile", "verify", "review", "replace")}
@@ -53,8 +76,10 @@ def child(args):
             "confident_wrong_abstained",
         )
     }
-    revisions = [0] * 5
+    revisions = [0] * args.agents
     sampled_rss = []
+    sampled_total_rss = []
+    outcomes = []
     output_hash = hashlib.sha256()
 
     def timed(name, fn):
@@ -94,33 +119,39 @@ def child(args):
                 ctypes.c_int,
             ]
             libproc.proc_pidinfo.restype = ctypes.c_int
-            total = 0
-            for graph in graphs:
+            resident = []
+            for pid in [g._process.pid for g in graphs] + [os.getpid()]:
                 info = TaskInfo()
                 size = ctypes.sizeof(info)
-                if (
-                    libproc.proc_pidinfo(
-                        graph._process.pid, 4, 0, ctypes.byref(info), size
-                    )
-                    != size
-                ):
+                if libproc.proc_pidinfo(pid, 4, 0, ctypes.byref(info), size) != size:
                     raise OSError(
                         ctypes.get_errno(), "cannot read benchmark worker RSS"
                     )
-                total += info.wide[1]
-            sampled_rss.append(total)
+                resident.append(info.wide[1])
+            sampled_rss.append(sum(resident[:-1]))
+            sampled_total_rss.append(sum(resident))
             return
-        pids = ",".join(str(g._process.pid) for g in graphs)
-        result = subprocess.run(
-            ["ps", "-o", "rss=", "-p", pids], check=True, text=True, capture_output=True
+        pids = ",".join(
+            str(pid) for pid in [g._process.pid for g in graphs] + [os.getpid()]
         )
-        rows = result.stdout.split()
-        assert len(rows) == len(graphs)
-        sampled_rss.append(sum(int(row) for row in rows) * 1024)
+        result = subprocess.run(
+            ["ps", "-o", "pid=,rss=", "-p", pids],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        resident = {
+            int(pid): int(rss) * 1024
+            for pid, rss in (line.split() for line in result.stdout.splitlines())
+        }
+        assert set(resident) == {g._process.pid for g in graphs} | {os.getpid()}
+        total = sum(resident.values())
+        sampled_total_rss.append(total)
+        sampled_rss.append(total - resident[os.getpid()])
 
     try:
         begin = time.perf_counter_ns()
-        for _ in range(5 if args.mode == "private" else 1):
+        for _ in range(args.agents if args.mode == "private" else 1):
             graphs.append(
                 LocalContextGraph("paired-alpha-benchmark", worker_path=worker)
             )
@@ -128,7 +159,7 @@ def child(args):
         begin = time.perf_counter_ns()
         for graph in graphs:
             graph.replace_source("shared", docs("shared"))
-        for i in range(5):
+        for i in range(args.agents):
             graph = graphs[i] if args.mode == "private" else graphs[0]
             graph.replace_source(f"agent-{i}", docs(f"agent-{i}"))
             graph.link(f"agent-{i}-0", "shared-0", "requires")
@@ -203,23 +234,31 @@ def child(args):
             return result["assessment"] if args.mode == "views" else result
 
         # Warm the process; these calls are excluded from measured per-call cohorts.
-        for i in range(5):
+        for i in range(args.agents):
             compile_one(i)
         for values in timings.values():
             values.clear()
         sample_rss()
         if args.mode == "legacy":
             for turn in range(args.rounds):
-                data = compile_one(turn % 5)
-                assert check(turn % 5, data)["decision"] == "release"
+                data = compile_one(turn % args.agents)
+                assert check(turn % args.agents, data)["decision"] == "release"
                 output_hash.update(
                     json.dumps(data[1], sort_keys=True, separators=(",", ":")).encode()
                 )
                 totals["released"] += 1
+                outcomes.append(
+                    {
+                        "phase": "legacy",
+                        "round": turn,
+                        "agent": turn % args.agents,
+                        "outcome": "released",
+                    }
+                )
         else:
             for turn in range(args.rounds):
-                compiled = [compile_one(i) for i in range(5)]
-                changed = turn % 5
+                compiled = [compile_one(i) for i in range(args.agents)]
+                changed = turn % args.agents
                 revisions[changed] += 1
                 source = f"agent-{changed}"
                 client = (
@@ -238,19 +277,37 @@ def child(args):
                         assessed = check(i, data)
                     except LocalContextError as error:
                         assert error.code == "BaseMismatch", error.code
-                        totals[
+                        outcome = (
                             "stale_expected" if i == changed else "stale_unrelated"
-                        ] += 1
+                        )
+                        totals[outcome] += 1
                     else:
                         assert assessed["decision"] == "release"
-                        totals["stale_accepted" if i == changed else "released"] += 1
+                        outcome = "stale_accepted" if i == changed else "released"
+                        totals[outcome] += 1
+                    outcomes.append(
+                        {
+                            "phase": "refresh",
+                            "round": turn,
+                            "agent": i,
+                            "outcome": outcome,
+                        }
+                    )
                 assert totals["stale_accepted"] == 0
                 if turn % 10 == 0:
                     sample_rss()
-        for i in range(5):
+        for i in range(args.agents):
             data = compile_one(i)
             assert check(i, data, [])["decision"] == "abstain"
             totals["missing_review_abstained"] += 1
+            outcomes.append(
+                {
+                    "phase": "missing-review",
+                    "round": 0,
+                    "agent": i,
+                    "outcome": "missing_review_abstained",
+                }
+            )
             # Deliberately falsify the known revision; the host's independent fixture
             # oracle supplies a contradiction verdict bound to the altered claim.
             client, context, draft, _ = data
@@ -273,6 +330,14 @@ def child(args):
                 and assessed["confident_failures"] == 1
             )
             totals["confident_wrong_abstained"] += 1
+            outcomes.append(
+                {
+                    "phase": "wrong-claim",
+                    "round": 0,
+                    "agent": i,
+                    "outcome": "confident_wrong_abstained",
+                }
+            )
         sample_rss()
         return {
             "mode": args.mode,
@@ -280,12 +345,18 @@ def child(args):
             "protobuf": importlib.metadata.version("protobuf"),
             "python": platform.python_version(),
             "worker_sha256": worker_hash,
+            "sdk_source_sha256": sdk_hash,
             "import_ms": import_ms,
             "startup_ms": startup_ms,
             "setup_ms": setup_ms,
             "workers": len(graphs),
             "indexed_documents": sum(g.stats()["documents"] for g in graphs),
             "worker_rss_sampled_max_bytes": max(sampled_rss),
+            "host_and_worker_rss_sampled_max_bytes": max(sampled_total_rss),
+            "raw_timing_ms": timings,
+            "raw_worker_rss_bytes": sampled_rss,
+            "raw_host_and_worker_rss_bytes": sampled_total_rss,
+            "raw_outcomes": outcomes,
             "timing_ms": {name: quantiles(v) for name, v in timings.items() if v},
             "counts": totals,
             "legacy_output_sha256": output_hash.hexdigest()
@@ -300,6 +371,7 @@ def child(args):
 
 
 def compare(args):
+    harness_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     variants = [
         ("012-legacy", args.baseline_python, args.baseline_worker, "legacy"),
         ("013-legacy", args.candidate_python, args.candidate_worker, "legacy"),
@@ -320,6 +392,8 @@ def compare(args):
                 str(args.rounds),
                 "--documents",
                 str(args.documents),
+                "--agents",
+                str(args.agents),
             ]
             if worker:
                 command.extend(["--worker", worker])
@@ -350,6 +424,9 @@ def compare(args):
             "worker_rss_sampled_max_bytes_median": statistics.median(
                 r["worker_rss_sampled_max_bytes"] for r in group
             ),
+            "host_and_worker_rss_sampled_max_bytes_median": statistics.median(
+                r["host_and_worker_rss_sampled_max_bytes"] for r in group
+            ),
             "compile_p50_ms_median": statistics.median(
                 r["timing_ms"]["compile"]["p50"] for r in group
             ),
@@ -367,20 +444,27 @@ def compare(args):
         }
     report = {
         "schema": "cigar.shared-views-comparison.v1",
+        "harness_sha256": harness_hash,
         "host": platform.platform(),
         "cohorts": args.cohorts,
         "rounds_per_cohort": args.rounds,
         "documents_per_source": args.documents,
-        "agents": 5,
+        "agents": args.agents,
+        "agent_execution": "scoped clients in one trusted host; not independent broker processes",
         "reviewer": "scripted-fixture",
         "legacy_outputs_equal": True,
         "method": "Alternating paired fresh processes; deterministic write between compile and review. "
         "RSS is maximum sampled sum of worker resident bytes, not peak allocation or PSS. "
+        "A separate host-and-worker total includes the SDK host at each sample. "
         "Call quantiles within a process are descriptive, not independent statistical samples.",
         "summary": summary,
         "samples": rows,
     }
-    args.output.write_text(json.dumps(report, indent=2) + "\n")
+    assert hashlib.sha256(Path(__file__).read_bytes()).hexdigest() == harness_hash, (
+        "benchmark source changed during study"
+    )
+    with args.output.open("x") as stream:
+        stream.write(json.dumps(report, indent=2) + "\n")
 
 
 if __name__ == "__main__":
@@ -394,6 +478,7 @@ if __name__ == "__main__":
     parser.add_argument("--cohorts", type=int, default=8)
     parser.add_argument("--rounds", type=int, default=50)
     parser.add_argument("--documents", type=int, default=64)
+    parser.add_argument("--agents", type=int, choices=(1, 5, 12), default=5)
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
     if (
