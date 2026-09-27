@@ -246,7 +246,9 @@ async fn checked_context_application_compensation_and_revision_fences() -> TestR
     ));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
-    let _server = Server(tokio::spawn(async move { axum::serve(listener, router).await }));
+    let _server = Server(tokio::spawn(
+        async move { axum::serve(listener, router).await },
+    ));
     let mut driver = Driver::spawn(&executable, &script, &root, Consumer::InstalledApplication)?;
     driver.send(&json!({
         "base_url":format!("http://{address}"),
@@ -291,11 +293,20 @@ async fn checked_context_application_compensation_and_revision_fences() -> TestR
     assert_eq!(linked.effect_version, succeeded.effect_version + 1);
     assert_eq!(authorized_child.state, EffectState::Authorized);
     assert!(authorized_child.attempts.is_empty());
-    let link = linked.compensation_link.as_ref().ok_or("missing child link")?;
+    let link = linked
+        .compensation_link
+        .as_ref()
+        .ok_or("missing child link")?;
     assert_eq!(link.compensation_effect_id, child.effect_id);
     assert_eq!(link.compensation_spec_digest, spec_digest);
     assert_eq!(connector.0.calls.load(Ordering::SeqCst), 1);
-    assert!(queue.jobs.lock().map_err(|_error| "queue poisoned")?.is_empty());
+    assert!(
+        queue
+            .jobs
+            .lock()
+            .map_err(|_error| "queue poisoned")?
+            .is_empty()
+    );
 
     driver.send(&json!({"action":"dispatch_child"}))?;
     assert_phase(&driver, "child_dispatch")?;
@@ -303,12 +314,8 @@ async fn checked_context_application_compensation_and_revision_fences() -> TestR
     assert_eq!(child_claim.state, EffectState::Dispatching);
     assert_eq!(child_claim.attempts.len(), 1);
     assert_eq!(connector.0.calls.load(Ordering::SeqCst), 1);
-    let authorization = worker_authority.authorize(
-        &record(10)?,
-        EffectWorkerAction::Dispatch,
-        &linked,
-        now,
-    )?;
+    let authorization =
+        worker_authority.authorize(&record(10)?, EffectWorkerAction::Dispatch, &linked, now)?;
     // The native owner, not the application facade, owns these two separate transitions.
     let compensating = reader.begin_compensation(
         &parent.effect_id,
@@ -355,7 +362,9 @@ async fn checked_context_application_compensation_and_revision_fences() -> TestR
     assert_eq!(inner.authorize_calls.load(Ordering::SeqCst), 3);
     assert_eq!(inner.dispatch_calls.load(Ordering::SeqCst), 2);
     assert_eq!(inner.reconcile_calls.load(Ordering::SeqCst), 1);
-    let missing = missing.lock().map_err(|_error| "missing-revision observations poisoned")?;
+    let missing = missing
+        .lock()
+        .map_err(|_error| "missing-revision observations poisoned")?;
     assert_eq!(
         missing.as_slice(),
         [
@@ -364,14 +373,21 @@ async fn checked_context_application_compensation_and_revision_fences() -> TestR
             ("compensateEffect".to_owned(), 400),
         ]
     );
-    let mutations = facade.mutations.lock().map_err(|_error| "mutations poisoned")?;
+    let mutations = facade
+        .mutations
+        .lock()
+        .map_err(|_error| "mutations poisoned")?;
     let expected = [
         ("authorizeEffect", parent.effect_version, None),
         ("authorizeEffect", 0, Some(ErrorCode::RevisionConflict)),
         ("dispatchEffect", parent_claim.effect_version - 1, None),
         ("reconcileEffect", 0, Some(ErrorCode::RevisionConflict)),
         ("compensateEffect", 0, Some(ErrorCode::RevisionConflict)),
-        ("compensateEffect", succeeded.effect_version, Some(ErrorCode::PolicyDenied)),
+        (
+            "compensateEffect",
+            succeeded.effect_version,
+            Some(ErrorCode::PolicyDenied),
+        ),
         ("authorizeEffect", child.effect_version, None),
         ("compensateEffect", succeeded.effect_version, None),
         ("dispatchEffect", authorized_child.effect_version, None),
