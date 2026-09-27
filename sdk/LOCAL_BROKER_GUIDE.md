@@ -178,8 +178,67 @@ idempotency and reconciliation checks. If a reply or send outcome is uncertain,
 inspect/reconcile that existing effect; do not invent a new effect or retry blindly.
 The handoff proves a context check at consumption time. It is not a signature,
 execution grant, durable send receipt or lock spanning another system's send.
-The concrete Honey/HUMIDOR adapter and its end-to-end qualification remain P2
-work; this primitive does not enable a HUMIDOR deployment profile.
+
+The optional Python `dispatch_context_effect` / Node `dispatchContextEffect`
+adapter connects this primitive to an explicitly configured `CigarClient`:
+
+```python
+from cigar_sdk import dispatch_context_effect, ContextEffectDispatchUncertain
+
+# effect_client is the application's existing authorized Honey/CIGAR client.
+# Its prepare/authorize steps have already produced the exact bound effect.
+try:
+    result = dispatch_context_effect(
+        host,
+        effect_client,
+        binding,
+        resolve_current_trusted_review,
+        idempotency_key=existing_dispatch_key,
+    )
+    # Often "dispatching": this is not yet a successful tool result.
+    status = result.response.payload
+except ContextEffectDispatchUncertain as error:
+    # Retain this identity and use the existing status/reconciliation workflow.
+    exact_effect = error.handoff["binding"]["effect_id"]
+```
+
+```ts
+import { dispatchContextEffect } from "@hol-org/cigar";
+
+const result = await dispatchContextEffect(
+  host, effectClient, binding, resolveCurrentTrustedReview,
+  {idempotencyKey: existingDispatchKey},
+);
+const status = result.response.payload;
+```
+
+The adapter reads the existing effect, verifies its ID/intent and authorized
+state, resolves current trusted review, consumes the native handoff, then calls
+the frozen `dispatchEffect` operation with the exact observed revision and supplied
+key. Both HTTP calls use one attempt. A concurrent effect change fails Honey's
+revision check; a context/reviewer change fails the native take. Every failure
+after consumption preserves the handoff through `ContextEffectDispatchUncertain`;
+no error makes that binding reusable. The adapter does not prepare, authorize,
+poll, reconcile or retry automatically. An `authorized_for_retry` effect is only
+eligible after Honey has separately established that state and the caller starts
+a new explicitly reviewed context handoff for the same intent.
+
+The resolver belongs to the trusted host and can be asynchronous in Node. It must
+obtain current verdicts and reviewer authority, including all displayed claims;
+an agent-provided verdict map is not a reviewer. The adapter accepts only the
+existing generated effect port (`ContextEffectClient`), allowing an orchestrator
+to pass its configured client without a new execution journal or service lookup.
+Python's adapter is synchronous. Each HTTP call has a separate bounded timeout;
+the host resolver and native channel retain their own deadlines.
+
+This check occurs before admission to Honey's dispatch queue. A remote worker may
+send later, so execution-critical freshness requirements must also be represented
+in the effect's existing preconditions and enforced by the execution authority.
+A local snapshot ID is not a governed remote bundle ID. The host must validate
+the relationship between the reviewed claims and the prepared operation; this
+helper does not infer it. The optional bridge needs the application's existing
+effect service; all standalone context APIs remain service-free. This addition
+does not enable HUMIDOR's excluded ContextGraph deployment profile.
 
 ## Limits, failures and shutdown
 

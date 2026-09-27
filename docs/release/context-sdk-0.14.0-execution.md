@@ -27,7 +27,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
-| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK review/consumable intent binding implemented; Honey/HUMIDOR adapter and end-to-end qualification pending |
+| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
@@ -371,3 +371,36 @@ only when their exercised behavior covers the corresponding requirement above.
   and local asset checks pass. Logs use the `broker-execution-` prefix under the
   development evidence directory. This completes a context-side primitive, not
   P2's Honey/HUMIDOR integration or the final cross-platform/release gates.
+- Added an opt-in SDK bridge using only the existing `getEffectStatus` and
+  `dispatchEffect` operations. It validates exact effect/intent identity and
+  authorized state, resolves current host review after the read, consumes the
+  native binding, and sends with the exact observed u64 revision and supplied
+  idempotency key. Each call has one attempt. Post-consumption failures retain a
+  content-safe uncertainty error with explicit access to the handoff; no alternate
+  effect, approval, polling loop or retry journal is created.
+- Both generated clients now exercise the actual Honey HTTP handlers, SQLite
+  effect engine and worker through separate native context processes. Twelve
+  local scenarios cover success, a lost acknowledgement after durable claim,
+  stale context, intent substitution, worker authorization revocation and an
+  ambiguous connector observation followed by reconciliation. Rejected cases
+  make no dispatch call; accepted cases make one; reconciliation makes no second
+  connector send. Independent SQLite connections verify the retained outcome.
+  The connector and trusted authority are deterministic fixtures, so this proves
+  execution-path invariants rather than independent task efficacy or production
+  deployment policy. Full logs are in `context-effect-honey-integration-02.log`
+  under the development evidence directory. The first run's expired fixture
+  clock failure is retained in `-01.log`; production timeout checks were unchanged.
+- Context is checked before Honey queue admission, without a lock across later
+  worker execution. Execution-critical source freshness must also be enforced by
+  the effect's existing preconditions. HUMIDOR must explicitly adopt the bridge
+  through its existing generated-client boundary; its excluded ContextGraph
+  profile has not been enabled. P2 and final release qualification remain open.
+- Full regression validation for this bridge passes 452 Python tests plus 39
+  subtests, all 146 Node tests and 192 ordinary daemon library tests. The two
+  default-ignored Rust entries were exercised separately: the special-file helper
+  by its bounded parent and the new SDK test explicitly with all twelve scenarios.
+  Strict daemon Clippy and Python typing pass. Python coverage is 93.42%
+  statements / 86.57% branches overall; `context_effects.py` and `broker.py` are
+  both 100% / 100%. The new module has a mandatory 95% / 90% gate. Coverage-policy
+  tests, changed-file lint/format and local-asset checks pass. Regression logs and
+  coverage use `context-effect-adapter-` under the development evidence directory.

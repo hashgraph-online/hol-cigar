@@ -49,6 +49,12 @@ if TYPE_CHECKING:
         LocalWorkerCapabilities,
         get_local_context_capabilities,
     )
+    from cigar_sdk.context_effects import (
+        ContextEffectClient,
+        ContextEffectDispatch,
+        ContextEffectDispatchUncertain,
+        dispatch_context_effect,
+    )
     from cigar_sdk.context_types import (
         LocalAnswerAssessment,
         LocalAnswerClaim,
@@ -119,6 +125,10 @@ if TYPE_CHECKING:
 CONTEXT_ABI: Final = "cigar.context.v1"
 
 _EXPORTS: Final[dict[str, tuple[str, str | None]]] = {
+    "ContextEffectClient": ("cigar_sdk.context_effects", "ContextEffectClient"),
+    "ContextEffectDispatch": ("cigar_sdk.context_effects", "ContextEffectDispatch"),
+    "ContextEffectDispatchUncertain": ("cigar_sdk.context_effects", "ContextEffectDispatchUncertain"),
+    "dispatch_context_effect": ("cigar_sdk.context_effects", "dispatch_context_effect"),
     "LocalBrokerConnection": ("cigar_sdk.broker", "LocalBrokerConnection"),
     "LocalBrokerError": ("cigar_sdk.broker", "LocalBrokerError"),
     "LocalContextBroker": ("cigar_sdk.broker", "LocalContextBroker"),
@@ -241,6 +251,9 @@ __all__ = [
     "CigarError",
     "CigarTimeoutError",
     "CompatibilityError",
+    "ContextEffectClient",
+    "ContextEffectDispatch",
+    "ContextEffectDispatchUncertain",
     "LocalAnswerAssessment",
     "LocalAnswerClaim",
     "LocalAnswerDraft",
@@ -323,6 +336,7 @@ __all__ = [
     "bundle_id",
     "create_idempotency_key",
     "delta_digest",
+    "dispatch_context_effect",
     "get_local_context_capabilities",
     "models",
     "validate_idempotency_key",

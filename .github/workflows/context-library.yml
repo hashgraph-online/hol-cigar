@@ -77,9 +77,22 @@ jobs:
           cargo build --locked -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
           corepack pnpm install --frozen-lockfile --ignore-scripts
           corepack pnpm --dir sdk/typescript run build
-          node --test sdk/typescript/dist/tests/broker*.test.js
+          node --test sdk/typescript/dist/tests/broker*.test.js sdk/typescript/dist/tests/context-effects.test.js
           uv sync --project sdk/python --frozen
-          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py
+          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py
+      - name: Install the pinned compiler for the native Honey integration
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/setup-protoc
+      - name: Exercise both SDKs through Honey HTTP and durable terminal outcomes
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CIGAR_TEST_WORKER: ${{ github.workspace }}/target/debug/cigar-context-worker
+          CIGAR_TEST_CONTEXT_EFFECT_NODE: ${{ github.workspace }}/sdk/typescript/dist/tests/context-effect-consumer.js
+        run: |
+          export CIGAR_TEST_PYTHON="${GITHUB_WORKSPACE}/sdk/python/.venv/bin/python"
+          export CIGAR_TEST_NODE="$(command -v node)"
+          cargo test --locked -p cigar-daemon --lib checked_context_sdk_honey_terminal_outcomes -- --ignored --nocapture --test-threads=1
       - name: Verify the standalone packages
         run: cargo package --locked -p cigar-windows-ipc -p cigar-context --features cigar-context/bpe,cigar-context/broker-persistence
 

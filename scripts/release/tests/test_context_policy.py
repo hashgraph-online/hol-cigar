@@ -33,6 +33,7 @@ class PolicyTests(unittest.TestCase):
                     "digest.py",
                     "context.py",
                     "broker.py",
+                    "context_effects.py",
                     "local_runtime.py",
                     "transport.py",
                 )
