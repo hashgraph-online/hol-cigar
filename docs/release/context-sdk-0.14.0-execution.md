@@ -25,14 +25,14 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
-| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
+| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix and Windows source/runtime checks pass; installed qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation, parser-boundary ingestion and bounded offline ranking recipe implemented; held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
-| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
+| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS contract checks pass |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
-| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted faults and 24-hour soak pending |
+| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
@@ -567,3 +567,21 @@ only when their exercised behavior covers the corresponding requirement above.
   guide documents Python and Node integration and the callback trust boundary.
   Default retrieval and public APIs remain unchanged; independent efficacy
   measurements are registered but have not yet run.
+- The [Windows source job at a1aa0b95](https://github.com/hashgraph-online/hol-cigar/actions/runs/36332889565/job/108658103363)
+  passes both platform-adapter feature configurations, the full context gate,
+  SDK independent-client/crash-recovery tests and standalone package checks.
+  The hardlink fixture now constructs malformed storage before acquiring the
+  directory pin, and separately checks that creating a live link under the pin
+  is denied. The stronger production sharing policy is retained. This resolves
+  the earlier Windows source failures; installed release bytes and the full
+  seven-platform distribution matrix are still unqualified.
+- Refreshed the Go SDK and recorded-workflow demo to gRPC 1.83.2, including its
+  required x/net 0.58.0, x/sys 0.47.0 and x/text 0.41.0 module versions.
+  [GHSA-2v4p-qf9q-27wj](https://github.com/grpc/grpc-go/security/advisories/GHSA-2v4p-qf9q-27wj)
+  affects the xDS server routing path; no `xds.NewGRPCServer` use is present in
+  this repository's Go code. The dependency update removes the affected pin
+  without claiming that this server vulnerability was reachable through CIGAR.
+  The complete Go SDK tests pass; the demo builds and executes its five recorded
+  in-memory gRPC operations, preserving its expected bundle identity. Independent
+  verification passes all 363 canonical vectors and 100,000 differential records.
+  The demo contains no standalone test files. No model or external API was called.
