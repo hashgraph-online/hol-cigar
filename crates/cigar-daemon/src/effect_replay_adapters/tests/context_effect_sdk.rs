@@ -3,8 +3,8 @@
 
 use super::*;
 use cigar_api::{
-    ApiError, ContextInput, FacadeEventStream, RequestAuthority, ResponseEnvelope, ServiceFacade,
-    ServiceFuture, ServiceKernel, TransportConfig, http_router,
+    ApiError, ContextInput, FacadeEventStream, ReconcileEffectOperation, RequestAuthority,
+    ResponseEnvelope, ServiceFacade, ServiceFuture, ServiceKernel, TransportConfig, http_router,
 };
 use serde_json::{Value, json};
 use std::io::{BufRead as _, Read as _, Write as _};
@@ -61,9 +61,13 @@ impl RequestAuthority for Authority {
 
 struct Facade {
     get: TypedUnaryAdapter<GetEffectStatusOperation, EffectServiceHandlers<SqliteStore>>,
+    authorize: TypedUnaryAdapter<AuthorizeEffectOperation, EffectServiceHandlers<SqliteStore>>,
     dispatch: TypedUnaryAdapter<DispatchEffectOperation, EffectServiceHandlers<SqliteStore>>,
+    reconcile: TypedUnaryAdapter<ReconcileEffectOperation, EffectServiceHandlers<SqliteStore>>,
     errors: Arc<dyn FacadeErrorFactory>,
+    authorize_calls: AtomicUsize,
     dispatch_calls: AtomicUsize,
+    reconcile_calls: AtomicUsize,
     lost_ack: bool,
 }
 
@@ -76,6 +80,14 @@ impl ServiceFacade for Facade {
         Box::pin(async move {
             match request.operation_id().as_str() {
                 "getEffectStatus" => self.get.call(context, request).await,
+                "authorizeEffect" => {
+                    self.authorize_calls.fetch_add(1, Ordering::SeqCst);
+                    self.authorize.call(context, request).await
+                }
+                "reconcileEffect" => {
+                    self.reconcile_calls.fetch_add(1, Ordering::SeqCst);
+                    self.reconcile.call(context, request).await
+                }
                 "dispatchEffect" => {
                     self.dispatch_calls.fetch_add(1, Ordering::SeqCst);
                     let result = self.dispatch.call(context, request).await?;
@@ -114,11 +126,33 @@ struct Driver {
     output: mpsc::Receiver<Result<Value, String>>,
 }
 
+#[derive(Clone, Copy)]
+enum Consumer {
+    SourceSdk,
+    InstalledApplication,
+}
+
 impl Driver {
-    fn spawn(executable: &Path, script: &Path, root: &Path) -> TestResult<Self> {
-        let mut child = Command::new(executable)
-            .arg(script)
-            .env("PYTHONPATH", root.join("sdk/python/src"))
+    fn spawn(
+        executable: &Path,
+        script: &Path,
+        root: &Path,
+        consumer: Consumer,
+    ) -> TestResult<Self> {
+        let mut command = Command::new(executable);
+        command.arg(script);
+        match consumer {
+            Consumer::SourceSdk => {
+                command.env("PYTHONPATH", root.join("sdk/python/src"));
+            }
+            Consumer::InstalledApplication => {
+                // Downstream qualification must resolve its installed SDK. Its explicit driver
+                // is responsible for verifying that distribution and its own source inventory.
+                command.env_remove("PYTHONPATH");
+                command.env("PYTHONNOUSERSITE", "1");
+            }
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -234,13 +268,12 @@ fn observe(driver: &mut Driver, expected: &cigar_effects::DurableEffectRecord) -
     Ok(())
 }
 
-async fn prepare_authorized(
+async fn prepare(
     handlers: Arc<EffectServiceHandlers<SqliteStore>>,
     authority: &Authority,
 ) -> TestResult<EffectStatusResponse> {
     let errors: Arc<dyn FacadeErrorFactory> = errors()?;
-    let prepare =
-        TypedUnaryAdapter::<PrepareEffectOperation, _>::new(handlers.clone(), errors.clone());
+    let prepare = TypedUnaryAdapter::<PrepareEffectOperation, _>::new(handlers, errors);
     let response = prepare
         .call(
             authority.context("prepareEffect", CancellationToken::new())?,
@@ -256,8 +289,18 @@ async fn prepare_authorized(
             )?,
         )
         .await?;
-    let prepared: EffectStatusResponse =
-        decode_operation_payload(response.payload_cbor(), 16 * 1024 * 1024)?;
+    Ok(decode_operation_payload(
+        response.payload_cbor(),
+        16 * 1024 * 1024,
+    )?)
+}
+
+async fn prepare_authorized(
+    handlers: Arc<EffectServiceHandlers<SqliteStore>>,
+    authority: &Authority,
+) -> TestResult<EffectStatusResponse> {
+    let prepared = prepare(handlers.clone(), authority).await?;
+    let errors: Arc<dyn FacadeErrorFactory> = errors()?;
     let authorize = TypedUnaryAdapter::<AuthorizeEffectOperation, _>::new(handlers, errors);
     let response = authorize
         .call(
@@ -295,6 +338,7 @@ async fn exercise(
     root: &Path,
     language: &str,
     scenario: &str,
+    consumer: Consumer,
 ) -> TestResult {
     let directory = tempfile::tempdir()?;
     let database = directory.path().join("honey-effects.sqlite3");
@@ -330,13 +374,22 @@ async fn exercise(
         connectors: vec![connector.clone()],
         errors: errors()?,
     })?);
-    let authorized = prepare_authorized(handlers.clone(), &authority).await?;
+    let application = matches!(consumer, Consumer::InstalledApplication);
+    let initial = if application {
+        prepare(handlers.clone(), &authority).await?
+    } else {
+        prepare_authorized(handlers.clone(), &authority).await?
+    };
     let errors: Arc<dyn FacadeErrorFactory> = errors()?;
     let facade = Arc::new(Facade {
         get: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
-        dispatch: TypedUnaryAdapter::new(handlers, errors.clone()),
+        authorize: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
+        dispatch: TypedUnaryAdapter::new(handlers.clone(), errors.clone()),
+        reconcile: TypedUnaryAdapter::new(handlers, errors.clone()),
         errors,
+        authorize_calls: AtomicUsize::new(0),
         dispatch_calls: AtomicUsize::new(0),
+        reconcile_calls: AtomicUsize::new(0),
         lost_ack: scenario == "lost_ack",
     });
     let kernel = ServiceKernel::new(facade.clone(), authority, TransportConfig::default());
@@ -345,14 +398,17 @@ async fn exercise(
     let _server = Server(tokio::spawn(async move {
         axum::serve(listener, http_router(kernel)).await
     }));
-    let mut driver = Driver::spawn(executable, script, root)?;
+    let mut driver = Driver::spawn(executable, script, root, consumer)?;
     driver.send(&json!({"base_url":format!("http://{address}"), "scenario":scenario,
-        "effect_id":authorized.effect_id.as_str(), "intent_digest":authorized.intent_digest.as_str()}))?;
+        "effect_id":initial.effect_id.as_str(), "intent_digest":initial.intent_digest.as_str(),
+        "initial_state":initial.state, "initial_version":initial.effect_version.to_string(),
+        "now_unix_ns":now.unix_nanos().to_string(),
+        "tenant_id":record(10)?.as_str(), "principal_id":record(11)?.as_str()}))?;
     let first = driver.receive()?;
     assert_eq!(first.get("phase"), Some(&json!("dispatch")));
     assert_eq!(
         first.get("effect_id"),
-        Some(&json!(authorized.effect_id.as_str()))
+        Some(&json!(initial.effect_id.as_str()))
     );
     let refused = matches!(scenario, "stale_context" | "intent_substitution");
     let outcome = if refused {
@@ -368,6 +424,10 @@ async fn exercise(
         usize::from(!refused)
     );
     assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        facade.authorize_calls.load(Ordering::SeqCst),
+        usize::from(application)
+    );
 
     let verification = EffectEngine::new(
         store.clone(),
@@ -382,13 +442,13 @@ async fn exercise(
                 .map_err(|_error| "queue poisoned")?
                 .is_empty()
         );
-        let retained = verification.get(&authorized.effect_id)?;
+        let retained = verification.get(&initial.effect_id)?;
         assert_eq!(retained.state, EffectState::Authorized);
         assert!(retained.attempts.is_empty());
         observe(&mut driver, &retained)?;
     } else {
         let queued = queue.pop()?;
-        let claimed = verification.get(&authorized.effect_id)?;
+        let claimed = verification.get(&initial.effect_id)?;
         assert_eq!(claimed.state, EffectState::Dispatching);
         assert_eq!(claimed.attempts.len(), 1);
         let authority = Arc::new(WorkerAuthority::allowed(record(12)?));
@@ -417,7 +477,7 @@ async fn exercise(
             worker.process_job(WorkerKind::Outbox, &queued)?,
             EffectWorkerOutcome::Advanced
         );
-        let mut retained = verification.get(&authorized.effect_id)?;
+        let mut retained = verification.get(&initial.effect_id)?;
         let expected = match scenario {
             "worker_revoked" => EffectState::Failed,
             "unknown_reconcile" => EffectState::Unknown,
@@ -431,14 +491,24 @@ async fn exercise(
         );
         observe(&mut driver, &retained)?;
         if scenario == "unknown_reconcile" {
-            assert_eq!(
-                worker.process_reconciliation(&record(10)?, &authorized.effect_id, None)?,
-                EffectWorkerOutcome::Advanced
-            );
-            retained = verification.get(&authorized.effect_id)?;
+            if application {
+                driver.send(&json!({"action":"reconcile"}))?;
+                let result = driver.receive()?;
+                assert_eq!(result.get("phase"), Some(&json!("reconciled")));
+                assert_eq!(result.get("state"), Some(&json!("succeeded")));
+            } else {
+                assert_eq!(
+                    worker.process_reconciliation(&record(10)?, &initial.effect_id, None)?,
+                    EffectWorkerOutcome::Advanced
+                );
+            }
+            retained = verification.get(&initial.effect_id)?;
             assert_eq!(retained.state, EffectState::Succeeded);
             assert_eq!(retained.reconciliations.len(), 1);
-            assert_eq!(ambiguous.reconciliations.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                ambiguous.reconciliations.load(Ordering::SeqCst),
+                usize::from(!application)
+            );
             assert_eq!(connector.calls.load(Ordering::SeqCst), 1);
             observe(&mut driver, &retained)?;
         }
@@ -447,29 +517,58 @@ async fn exercise(
             EffectWorkerOutcome::AlreadyComplete
         );
         assert_eq!(retained.attempts.len(), 1);
-        // Read exact durable records through an independent SQLite connection, not handler state.
-        let reopened = EffectEngine::new(
-            Arc::new(SqliteStore::open(&database)?),
-            AccessContext::new(record(10)?, "reopened-oracle")?,
-        );
-        reopened.register_connector(connector.clone())?;
-        let persisted = reopened.get(&authorized.effect_id)?;
-        assert_eq!(persisted.state, retained.state);
-        assert_eq!(persisted.effect_version, retained.effect_version);
-        assert_eq!(persisted.intent_digest, authorized.intent_digest);
-        assert_eq!(persisted.attempts.len(), 1);
     }
     driver.finish()?;
+    // Include refused cases and verify after application shutdown, so the driver cannot send
+    // again during cleanup without invalidating the independent terminal observation.
+    let retained = verification.get(&initial.effect_id)?;
+    let reopened = EffectEngine::new(
+        Arc::new(SqliteStore::open(&database)?),
+        AccessContext::new(record(10)?, "reopened-oracle")?,
+    );
+    reopened.register_connector(connector.clone())?;
+    let persisted = reopened.get(&initial.effect_id)?;
+    let expected_state = if refused {
+        EffectState::Authorized
+    } else if scenario == "worker_revoked" {
+        EffectState::Failed
+    } else {
+        EffectState::Succeeded
+    };
+    assert_eq!(persisted.state, expected_state);
+    assert_eq!(persisted.effect_version, retained.effect_version);
+    assert_eq!(persisted.intent_digest, initial.intent_digest);
+    assert_eq!(persisted.attempts.len(), usize::from(!refused));
+    assert_eq!(
+        persisted.reconciliations.len(),
+        usize::from(scenario == "unknown_reconcile")
+    );
+    assert_eq!(
+        connector.calls.load(Ordering::SeqCst),
+        usize::from(!refused && scenario != "worker_revoked")
+    );
+    assert_eq!(
+        facade.authorize_calls.load(Ordering::SeqCst),
+        usize::from(application)
+    );
     assert_eq!(
         facade.dispatch_calls.load(Ordering::SeqCst),
         usize::from(!refused)
     );
-    eprintln!(
-        "{}",
-        json!({"schema":"cigar.context-effect-sdk-observation.v1","language":language,"scenario":scenario,
-        "outcome":outcome,"dispatch_calls":facade.dispatch_calls.load(Ordering::SeqCst),
-        "connector_calls":connector.calls.load(Ordering::SeqCst),"passed":true})
+    assert_eq!(
+        facade.reconcile_calls.load(Ordering::SeqCst),
+        usize::from(application && scenario == "unknown_reconcile")
     );
+    let mut observation = json!({"schema":"cigar.context-effect-sdk-observation.v1",
+        "language":language,"scenario":scenario,"outcome":outcome,
+        "dispatch_calls":facade.dispatch_calls.load(Ordering::SeqCst),
+        "connector_calls":connector.calls.load(Ordering::SeqCst),"passed":true});
+    if application {
+        observation["schema"] = json!("cigar.context-effect-application-observation.v1");
+        observation["authorize_calls"] = json!(facade.authorize_calls.load(Ordering::SeqCst));
+        observation["reconcile_calls"] = json!(facade.reconcile_calls.load(Ordering::SeqCst));
+    }
+    eprintln!("{observation}");
     Ok(())
 }
 
@@ -501,8 +600,53 @@ async fn checked_context_sdk_honey_terminal_outcomes() -> TestResult {
             "worker_revoked",
             "unknown_reconcile",
         ] {
-            exercise(&executable, &script, &root, language, scenario).await?;
+            exercise(
+                &executable,
+                &script,
+                &root,
+                language,
+                scenario,
+                Consumer::SourceSdk,
+            )
+            .await?;
         }
+    }
+    Ok(())
+}
+
+/// Separate from SDK qualification: the explicit downstream driver owns its application checks.
+/// Honey still independently checks real HTTP call counts and terminal SQLite state here.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "explicit installed application gate: requires CIGAR_TEST_APPLICATION_PYTHON, CIGAR_TEST_APPLICATION_DRIVER and CIGAR_TEST_WORKER"]
+async fn checked_context_application_honey_terminal_outcomes() -> TestResult {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    let executable = PathBuf::from(std::env::var("CIGAR_TEST_APPLICATION_PYTHON")?);
+    let script = PathBuf::from(std::env::var("CIGAR_TEST_APPLICATION_DRIVER")?);
+    let worker = PathBuf::from(std::env::var("CIGAR_TEST_WORKER")?);
+    for path in [&executable, &script, &worker] {
+        if !path.is_absolute() || !path.is_file() {
+            return Err("missing exact application integration input".into());
+        }
+    }
+    for scenario in [
+        "success",
+        "lost_ack",
+        "stale_context",
+        "intent_substitution",
+        "worker_revoked",
+        "unknown_reconcile",
+    ] {
+        exercise(
+            &executable,
+            &script,
+            &root,
+            "installed-application",
+            scenario,
+            Consumer::InstalledApplication,
+        )
+        .await?;
     }
     Ok(())
 }

@@ -21,8 +21,8 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S3 | Preserve TypeScript canonical map members and own-key semantics | Shared special-key vectors through public encoders/decoders and typed clients, unchanged valid bytes | Implemented; complete SDK suite passed locally |
 | S4 | Enforce Python representation/transform-receipt semantics | Shared eight-case matrix across verifier, delta and model paths; unchanged valid fixture IDs | Implemented; complete SDK suite passed locally |
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Hosted Linux/macOS CLI/daemon suites pass; Linux systemd/container filesystem smoke and negative controls pass; no full production-cluster claim |
-| A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
-| A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
+| A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live capabilities and packaged guides implemented; de4febf0 passes all fourteen installed platform/runtime cells and network-denied examples |
+| A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; de4febf0 installed and legacy compatibility qualification passes |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix and Windows source/runtime checks pass; installed qualification and performance acceptance pending |
@@ -34,7 +34,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; installed 24-hour soak started September 27, with completion and independent replay pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Second study preserves contracts and passes 112/115 guardrails; user accepted the three measured startup exceptions on September 27; final versioned qualification pending |
-| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | At 484d07ae, fourteen native builds, two matching SDK builds, all fourteen installed platform/runtime cells and legacy qualification pass; final assembly found a stale offline-check inventory, now corrected with hosted rerun pending |
+| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | de4febf0 passes fourteen native builds, two matching SDK builds, fourteen installed platform/runtime cells, legacy qualification and final assembly; final-source requalification and publication attestations remain pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
 
 ## Implementation order
@@ -781,3 +781,22 @@ only when their exercised behavior covers the corresponding requirement above.
   the same documents. These documentation/package-input changes do not change the
   native or SDK runtime implementation. Hosted artifact qualification is pending;
   no local build or test was run concurrently with the soak.
+- [Release run 36345540175](https://github.com/hashgraph-online/hol-cigar/actions/runs/36345540175)
+  succeeds at `de4febf0524fbe74b8d97b0d9fc827a4db4ff9c4`, including all fourteen
+  native builds, two byte-identical SDK archive sets, fourteen installed cells,
+  legacy compatibility and final assembly. The corrected fifteen-check verifier
+  and its negative regressions pass in the hosted SDK builds. Source and boundary
+  workflows pass at the same commit. The retained assembly log is
+  `release-de4febf0-assemble.log`. Assembled artifact ID `10941155860` has ZIP
+  SHA-256 `ef89b0faa4532d57554246076fd888dc8bed453c4a37dc0b5ba7d14c939fd474`.
+  Attestation/publication is skipped on this candidate branch. This closes that
+  commit's distribution assembly gate, not the remaining roadmap or publication.
+- Prepared a separate installed-application Honey test entrypoint. It removes the
+  source-SDK import override, exposes real authorization/reconciliation adapters,
+  and requires the downstream driver to authorize the prepared effect and handle
+  an unknown result through HTTP. Both lanes retain independent connector counts
+  and SQLite terminal readback, now also after driver shutdown and for refused
+  contexts. The ordinary SDK observation schema and existing twelve scenarios are
+  preserved. This test change has not run locally during the soak. The private
+  downstream driver and composition qualification remain separate, unpublished
+  work; no HUMIDOR adoption result is claimed.
