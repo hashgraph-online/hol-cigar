@@ -31,7 +31,9 @@ jobs:
         with:
           python-version: "3.14.7"
       - name: Install the pinned Rust toolchain
-        run: rustup toolchain install 1.92.0 --profile minimal --component clippy
+        run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
+      - name: Check Rust formatting before native compilation
+        run: cargo fmt --all -- --check
       - uses: ./.github/actions/setup-protoc
       - name: Check catalog policy, filesystem admission and frozen protocol
         run: cargo test --locked -p cigar-catalog -p cigar-protocol -- --test-threads=1
