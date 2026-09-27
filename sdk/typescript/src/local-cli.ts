@@ -30,6 +30,7 @@ if (command === "--help" || command === "-h" || !command) {
       console.log(JSON.stringify(report, null, json ? undefined : 2));
     } else {
       const graph = await LocalContextGraph.create("cigar-doctor", options);
+      const workerCapabilities = graph.capabilities();
       let tokens: number;
       try {
         await graph.upsert({id: "doctor", source: "cigar:doctor", text: "Local context compilation works."});
@@ -39,6 +40,7 @@ if (command === "--help" || command === "-h" || !command) {
         tokens = compiled.snapshot.stats.rendered_tokens;
       } finally { await graph.close(); }
       const report = {schema: "cigar.local-diagnostics.v1", status: "ready", capabilities,
+        worker_capabilities: workerCapabilities,
         compile_verified: true, rendered_tokens: tokens};
       console.log(json ? JSON.stringify(report) :
         `CIGAR ${capabilities.package_version}: ready on ${capabilities.platform} (${capabilities.runtime}).\n` +

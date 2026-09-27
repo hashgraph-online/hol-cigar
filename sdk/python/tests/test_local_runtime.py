@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from cigar_sdk import get_local_context_capabilities
+from cigar_sdk import LocalContextError, LocalContextGraph, get_local_context_capabilities
 from cigar_sdk import local_runtime as runtime
 from cigar_sdk.examples.local_workflow import run_local_workflow
 from cigar_sdk.native_platforms import NATIVE_PLATFORMS
@@ -89,6 +89,7 @@ class LocalRuntimeTests(unittest.TestCase):
         failure = json.loads(missing.stdout)
         self.assertEqual(failure["error_code"], "WorkerUnavailable")
         self.assertFalse(failure["compile_verified"])
+        self.assertNotIn("worker_capabilities", failure)
         self.assertNotIn("relative-private-path", missing.stdout)
         worker = os.environ.get("CIGAR_TEST_WORKER")
         result = self.command("doctor", "--json", *(["--worker", worker] if worker else []))
@@ -96,7 +97,28 @@ class LocalRuntimeTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertTrue(report["compile_verified"])
         self.assertFalse(report["capabilities"]["requires_hol_services"])
+        self.assertEqual(report["worker_capabilities"]["schema"], "cigar.local-worker-capabilities.v1")
+        self.assertIn("context_views.v1", report["worker_capabilities"]["features"])
+        self.assertNotIn("qualified", json.dumps(report["worker_capabilities"]))
         self.assertLessEqual(report["rendered_tokens"], 256)
+
+    def test_handshake_capabilities_are_copy_safe_and_stop_at_close(self):
+        with LocalContextGraph("capabilities", worker_path=os.environ.get("CIGAR_TEST_WORKER")) as graph:
+            first = graph.capabilities()
+            self.assertEqual(first["features"], sorted(first["features"]))
+            self.assertIn("context_graph.v1", first["features"])
+            self.assertIn("source_replace.v1", first["features"])
+            first["features"].clear()
+            self.assertIn("context_views.v1", graph.capabilities()["features"])
+            self.assertEqual(graph.capabilities()["authority"], "trusted-host")
+        with self.assertRaises(LocalContextError) as raised:
+            graph.capabilities()
+        self.assertEqual(raised.exception.code, "Closed")
+
+    @unittest.skipUnless(os.environ.get("CIGAR_TEST_STALLED_WORKER"), "requires legacy hello fixture")
+    def test_a_legacy_hello_does_not_claim_new_features(self):
+        with LocalContextGraph("capabilities", worker_path=os.environ["CIGAR_TEST_STALLED_WORKER"]) as graph:
+            self.assertEqual(graph.capabilities()["features"], [])
 
     def test_example_and_cli_exercise_reviewed_release_abstention_and_refresh(self):
         worker = os.environ.get("CIGAR_TEST_WORKER")

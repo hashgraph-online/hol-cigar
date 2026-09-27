@@ -280,8 +280,11 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
     if let Command::Init { domain, limits } = command {
         let value = Session::new(domain, limits)?;
         let reply = json!({"protocol": PROTOCOL, "core_version": env!("CARGO_PKG_VERSION"),
-            "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
-            "max_response_bytes": MAX_RESPONSE, "capabilities": ["context_views.v1"]});
+        "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
+        "max_response_bytes": MAX_RESPONSE, "capabilities": [
+            "context_graph.v1", "source_replace.v1", "snapshot_integrity.v1",
+            "answer_review.v1", "context_views.v1"
+        ]});
         *session = Some(value);
         Ok(reply)
     } else {

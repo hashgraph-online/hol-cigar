@@ -21,8 +21,8 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S3 | Preserve TypeScript canonical map members and own-key semantics | Shared special-key vectors through public encoders/decoders and typed clients, unchanged valid bytes | Implemented; complete SDK suite passed locally |
 | S4 | Enforce Python representation/transform-receipt semantics | Shared eight-case matrix across verifier, delta and model paths; unchanged valid fixture IDs | Implemented; complete SDK suite passed locally |
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
-| A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Pending |
-| A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Pending |
+| A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
+| A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
@@ -111,3 +111,14 @@ only when their exercised behavior covers the corresponding requirement above.
   strict daemon/CLI Clippy checks pass. This is an explicit unsupported-operation
   boundary, not a new v5 backup implementation. Installed Linux deployment
   smoke tests remain required.
+- Added a copy-safe, versioned `graph.capabilities()` handshake report in both
+  SDKs. Doctor reports live features separately from worker-file inspection and
+  successful compilation. A legacy hello cannot imply unsupported features;
+  closed graphs cannot report themselves as live. Packaged agent guidance now
+  explains these distinctions and avoids the stale version in its title.
+  Eight Python tests plus seven platform subtests, seven TypeScript tests and
+  three native worker protocol tests pass. Published Python API snapshots retain
+  every existing field/signature. Changed-file lint/format and generator checks
+  pass. The normal strict mypy command exposed generated dictionary expansion
+  errors; the generator now emits typed named arguments with identical operation
+  values. Strict mypy passes all 20 handwritten source files with their imports.

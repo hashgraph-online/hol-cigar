@@ -58,6 +58,20 @@ class LocalContextCapabilities(TypedDict):
     requires_hol_services: Literal[False]
 
 
+class LocalWorkerCapabilities(TypedDict):
+    """Observed worker handshake, separate from file availability and qualification."""
+
+    schema: Literal["cigar.local-worker-capabilities.v1"]
+    protocol: str
+    core_version: str
+    features: list[str]
+    max_frame_bytes: int
+    max_response_bytes: int
+    execution: Literal["isolated-process-serialized"]
+    authority: Literal["trusted-host"]
+    requires_hol_services: Literal[False]
+
+
 def local_platform() -> str:
     """Determine the process ABI without executing programs or contacting services."""
     machine = platform.machine().lower()

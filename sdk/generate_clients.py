@@ -844,7 +844,8 @@ def generate_python(items: list[dict[str, Any]]) -> None:
                 if field["source"] == "path"
             ),
         }
-        rows.append(f"    {item['operation_id']!r}: OperationDefinition(**{row!r}),")
+        arguments = ", ".join(f"{key}={value!r}" for key, value in row.items())
+        rows.append(f"    {item['operation_id']!r}: OperationDefinition({arguments}),")
         if item["stream_kind"] == "server_stream":
             async_methods.append(
                 f"    def {name}(self, request: TypedOperationRequest[{item['request_schema']}], *, options: CallOptions | None = None) -> TypedAsyncEventStream[{item['event_schema']}]:\n"

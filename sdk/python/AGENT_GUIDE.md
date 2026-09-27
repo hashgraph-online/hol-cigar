@@ -12,6 +12,11 @@ For Python 3.14, import it from `cigar_sdk` or `cigar_sdk.context`.
 Run `npx --no-install cigar-context doctor --json` in the npm consumer, or
 `python -m cigar_sdk.local_cli doctor --json` in the Python environment. The diagnostic
 compiles synthetic context locally and reports the selected platform and version.
+Its `capabilities` field describes inspected worker-file availability;
+`worker_capabilities` contains features negotiated with the running worker.
+Applications can obtain the same handshake report from `graph.capabilities()`.
+`compile_verified` means the diagnostic actually compiled and verified a snapshot.
+Neither file inspection nor a platform inventory certifies a release's qualification.
 
 If `/context` is not exported, inspect the installed npm version: the old 0.9.4
 service SDK lacks that API. Use a local-context distribution. If a worker is unavailable,
@@ -24,6 +29,7 @@ Windows x64. The npm archive includes platform workers; each Python wheel includ
 one platform worker. A source installation needs an explicit matching worker.
 The 0.13.0-alpha.1 candidate is currently qualified only on macOS ARM64. Its platform
 inventory describes build targets, not completed alpha qualification.
+The 0.14 development branch remains unqualified until its release evidence is complete.
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
 

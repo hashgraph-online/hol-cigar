@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { getLocalContextCapabilities } from "../context-api.js";
+import { LocalContextError, LocalContextGraph, getLocalContextCapabilities } from "../context-api.js";
 import { NATIVE_PLATFORMS } from "../native-platforms.js";
 import { runLocalWorkflow } from "../examples/local-workflow.js";
 
@@ -85,6 +85,7 @@ test("doctor distinguishes capability inspection from a verified compile and rep
   const failure = JSON.parse(missing.stdout);
   assert.equal(failure.error_code, "WorkerUnavailable");
   assert.equal(failure.compile_verified, false);
+  assert.equal(failure.worker_capabilities, undefined);
   assert.equal(missing.stdout.includes("relative-private-path"), false);
   const workerPath = process.env.CIGAR_TEST_WORKER;
   const result = spawnSync(process.execPath, [cli, "doctor", "--json",
@@ -94,7 +95,30 @@ test("doctor distinguishes capability inspection from a verified compile and rep
   assert.equal(report.status, "ready");
   assert.equal(report.compile_verified, true);
   assert.equal(report.capabilities.requires_hol_services, false);
+  assert.equal(report.worker_capabilities.schema, "cigar.local-worker-capabilities.v1");
+  assert.ok(report.worker_capabilities.features.includes("context_views.v1"));
+  assert.equal(JSON.stringify(report.worker_capabilities).includes("qualified"), false);
   assert.ok(report.rendered_tokens <= 256);
+});
+
+test("negotiated features are copy safe and unavailable after close", async () => {
+  const workerPath = process.env.CIGAR_TEST_WORKER;
+  const graph = await LocalContextGraph.create("capabilities", workerPath ? {workerPath} : {});
+  try {
+    const first = graph.capabilities();
+    assert.deepEqual(first.features, [...first.features].sort());
+    assert.ok(first.features.includes("context_graph.v1"));
+    assert.ok(first.features.includes("source_replace.v1"));
+    (first.features as string[]).length = 0;
+    assert.ok(graph.capabilities().features.includes("context_views.v1"));
+    assert.equal(graph.capabilities().authority, "trusted-host");
+  } finally { await graph.close(); }
+  assert.throws(() => graph.capabilities(), (error: unknown) => error instanceof LocalContextError && error.code === "Closed");
+});
+
+test("legacy handshake does not imply new features", {skip: !process.env.CIGAR_TEST_STALLED_WORKER}, async () => {
+  await using graph = await LocalContextGraph.create("capabilities", {workerPath: process.env.CIGAR_TEST_STALLED_WORKER!});
+  assert.deepEqual(graph.capabilities().features, []);
 });
 
 test("the packaged workflow exercises reviewed release, abstention and source refresh", async () => {

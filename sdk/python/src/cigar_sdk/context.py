@@ -48,6 +48,9 @@ from cigar_sdk.local_runtime import (
     LocalContextError as LocalContextError,
 )
 from cigar_sdk.local_runtime import (
+    LocalWorkerCapabilities as LocalWorkerCapabilities,
+)
+from cigar_sdk.local_runtime import (
     bundled_worker as _bundled_worker,
 )
 from cigar_sdk.local_runtime import (
@@ -117,6 +120,7 @@ class LocalContextGraph:
             capabilities = hello.get("capabilities", [])
             if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
                 raise LocalContextError("IncompatibleWorker")
+            self._worker_features = tuple(sorted(set(capabilities)))
             self._supports_views = "context_views.v1" in capabilities
         except BaseException:
             self.close()
@@ -220,6 +224,23 @@ class LocalContextGraph:
 
     def upsert(self, document: LocalDocument) -> bool:
         return cast(bool, self._call({"op": "upsert", "document": document}))
+
+    def capabilities(self) -> LocalWorkerCapabilities:
+        """Return negotiated features; this is not a release qualification claim."""
+        self._ensure_process_owner()
+        if self._closed:
+            raise LocalContextError("Closed")
+        return {
+            "schema": "cigar.local-worker-capabilities.v1",
+            "protocol": LOCAL_CONTEXT_PROTOCOL,
+            "core_version": LOCAL_CONTEXT_CORE_VERSION,
+            "features": list(self._worker_features),
+            "max_frame_bytes": _MAX_FRAME,
+            "max_response_bytes": _MAX_RESPONSE,
+            "execution": "isolated-process-serialized",
+            "authority": "trusted-host",
+            "requires_hol_services": False,
+        }
 
     def _view_call(self, command: dict[str, Any]) -> Any:
         if not self._supports_views:

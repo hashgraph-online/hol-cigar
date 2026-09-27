@@ -4,7 +4,8 @@ import type { Readable, Writable } from "node:stream";
 import { LocalContextError, LOCAL_CONTEXT_PROTOCOL, LOCAL_CONTEXT_CORE_VERSION, resolveLocalWorker } from "./local-runtime.js";
 export { LocalContextError, LOCAL_CONTEXT_PROTOCOL, LOCAL_CONTEXT_CORE_VERSION,
   getLocalContextCapabilities } from "./local-runtime.js";
-export type { LocalContextCapabilities } from "./local-runtime.js";
+export type { LocalContextCapabilities, LocalWorkerCapabilities } from "./local-runtime.js";
+import type { LocalWorkerCapabilities } from "./local-runtime.js";
 import type {
   LocalAnswerAssessment, LocalAnswerDraft, LocalAnswerPolicy, LocalClaimReview,
   LocalCitation, LocalContextDelta, LocalContextLimits, LocalContextPrompt, LocalContextRequest, LocalContextResult, LocalContextSnapshot,
@@ -47,6 +48,7 @@ export class LocalContextGraph implements AsyncDisposable {
   private fragments: Buffer[] = [];
   private received = 0;
   private supportsViews = false;
+  private workerFeatures: readonly string[] = [];
 
   private constructor(options: LocalContextOptions) {
     this.timeoutMs = options.timeoutMs ?? 30_000;
@@ -78,6 +80,7 @@ export class LocalContextGraph implements AsyncDisposable {
         throw new LocalContextError("IncompatibleWorker");
       }
       graph.supportsViews = capabilities.includes("context_views.v1");
+      graph.workerFeatures = [...new Set(capabilities as string[])].sort();
       return graph;
     } catch (error) { await graph.close(); throw error; }
   }
@@ -147,6 +150,21 @@ export class LocalContextGraph implements AsyncDisposable {
   }
 
   upsert(document: LocalDocument): Promise<boolean> { return this.call({op: "upsert", document}); }
+  /** Negotiated features of this live worker; not a release qualification claim. */
+  capabilities(): LocalWorkerCapabilities {
+    if (this.closed) throw new LocalContextError("Closed");
+    return {
+      schema: "cigar.local-worker-capabilities.v1",
+      protocol: LOCAL_CONTEXT_PROTOCOL,
+      core_version: LOCAL_CONTEXT_CORE_VERSION,
+      features: [...this.workerFeatures],
+      max_frame_bytes: MAX_FRAME,
+      max_response_bytes: MAX_RESPONSE,
+      execution: "isolated-process-serialized",
+      authority: "trusted-host",
+      requires_hol_services: false,
+    };
+  }
   private viewCall<T>(command: Record<string, unknown>): Promise<T> {
     if (!this.supportsViews) return Promise.reject(new LocalContextError("IncompatibleWorker"));
     return this.call(command);

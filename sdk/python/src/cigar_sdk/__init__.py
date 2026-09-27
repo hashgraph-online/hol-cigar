@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         LocalContextError,
         LocalContextGraph,
         LocalContextView,
+        LocalWorkerCapabilities,
         get_local_context_capabilities,
     )
     from cigar_sdk.context_types import (
@@ -96,6 +97,7 @@ _EXPORTS: Final[dict[str, tuple[str, str | None]]] = {
     "LocalContextError": ("cigar_sdk.context", "LocalContextError"),
     "LocalContextGraph": ("cigar_sdk.context", "LocalContextGraph"),
     "LocalContextView": ("cigar_sdk.context", "LocalContextView"),
+    "LocalWorkerCapabilities": ("cigar_sdk.context", "LocalWorkerCapabilities"),
     "LocalViewAssessment": ("cigar_sdk.context_types", "LocalViewAssessment"),
     "LocalViewContext": ("cigar_sdk.context_types", "LocalViewContext"),
     "LocalViewHandle": ("cigar_sdk.context_types", "LocalViewHandle"),
@@ -210,6 +212,7 @@ __all__ = [
     "LocalViewHandle",
     "LocalViewResult",
     "LocalViewSpec",
+    "LocalWorkerCapabilities",
     "OperationEvent",
     "OperationRequest",
     "OperationResponse",

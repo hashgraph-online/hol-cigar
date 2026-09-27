@@ -43,6 +43,19 @@ export type LocalContextCapabilities = Readonly<{
   requires_hol_services: false;
 }>;
 
+/** Observed worker handshake; file availability and release qualification are separate. */
+export type LocalWorkerCapabilities = Readonly<{
+  schema: "cigar.local-worker-capabilities.v1";
+  protocol: string;
+  core_version: string;
+  features: readonly string[];
+  max_frame_bytes: number;
+  max_response_bytes: number;
+  execution: "isolated-process-serialized";
+  authority: "trusted-host";
+  requires_hol_services: false;
+}>;
+
 /** Reverify every launch without allocating the complete executable. */
 function sha256File(path: URL): string {
   const descriptor = openSync(path, "r");

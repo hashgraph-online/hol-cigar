@@ -21,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(run_local_workflow(worker_path=args.worker), indent=None if args.json else 2))
             return 0
         with LocalContextGraph("cigar-doctor", worker_path=args.worker, timeout=5.0) as graph:
+            worker_capabilities = graph.capabilities()
             graph.upsert({"id": "doctor", "source": "cigar:doctor", "text": "Local context compilation works."})
             compiled = graph.compile({"required": ["doctor"], "allowed": ["doctor"], "max_tokens": 256})
             if graph.verify(compiled["snapshot"]) != compiled or compiled["snapshot"]["stats"]["rendered_tokens"] > 256:
@@ -30,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
             "schema": "cigar.local-diagnostics.v1",
             "status": "ready",
             "capabilities": capabilities,
+            "worker_capabilities": worker_capabilities,
             "compile_verified": True,
             "rendered_tokens": tokens,
         }
