@@ -1,8 +1,8 @@
-# Installed comparison: first 0.14 development study
+# Installed comparisons: 0.14 development
 
-Status: compatibility passes; five startup guardrails fail. This study does not
-qualify the candidate for promotion. Its results remain retained while startup
-changes are investigated.
+Latest status: compatibility passes and 112/115 performance guardrails pass in
+the second study. Three startup guardrails remain failed. Neither study qualifies
+the candidate for promotion. The first study and all its failures remain below.
 
 The frozen study is `installed-regression-01` under the local development evidence
 directory. Its plan SHA-256 is
@@ -87,9 +87,57 @@ are not a measured model hallucination rate or evidence of a new semantic judge.
 
 ## Follow-up
 
-Native archive builds omit the workspace release profile. The next experiment
-will retain its symbol-stripping and link-time optimization settings in the
-packaged build configuration, preserving full SHA-256 verification on every
-launch. A compact lazy-export table will preserve all 110 export targets while
-reducing Python source parsing. Neither change is considered successful until a
-new frozen installed comparison passes; this study is never overwritten.
+The first study found that native archive builds omitted the workspace release
+profile. Commit `be0d3a8104f74e612f1d24bd4fa0f4f3637ae0da` retains the reviewed
+symbol-stripping, thin LTO, single codegen unit and abort-on-panic settings in the
+packaged build configuration. Full SHA-256 verification still runs on every
+launch. Its compact lazy-export table preserves all 110 export targets.
+
+The [hosted native matrix](https://github.com/hashgraph-online/hol-cigar/actions/runs/36338269053)
+passed all fourteen jobs, with all 63 native/oracle/source payloads matching
+between independent builders across seven targets. The separate source matrix
+also passed on Linux, macOS and Windows. These are development checks, not the
+final installed SDK or publication qualification.
+
+## Second frozen study
+
+`installed-regression-02` repeats the original plan without changing its harness,
+baseline wheels, cohort counts, budgets or guardrails. It uses the same Python
+and protobuf versions, OS network denial and sequential measurements with no
+concurrent local build, test, benchmark or soak. The candidate SDK and native
+source both bind commit `be0d3a8104f74e612f1d24bd4fa0f4f3637ae0da`.
+
+| Identity | SHA-256 |
+| --- | --- |
+| Frozen plan | `7c9754f54dd2eeaa1c2b1e36cd686e3e59c9f2f21c15702274f46337b701556c` |
+| Summary | `c67bfd21a99ca0ff45112fbdbc1113f8188639eb284e691745161f4ee131d048` |
+| Candidate wheel | `5da019374dbb6b402fc5bb7e5e39853e937be94a3d1751b36e69efc9e2e48581` |
+| Installed SDK source | `d9dcd9c48c56424dfaba37c86f9e5375e54545f815b903d30e65827490077c76` |
+| Bundled worker | `75d67f6b95cc73c9feb39c48e3c9c2fb320b2a0dcad90703d637d5a9b603f935` |
+
+All 172 complete compilation results, 160 answer-review outcomes, valid semantic
+IDs, previous public exports and RPC identities still agree. All shared-client
+latency and total RSS comparisons pass. The worker is 8,449,936 bytes, 20.64%
+smaller than the first development build, but still 16.03% larger than 0.12.
+
+| Metric | Paired median change vs 0.12 | Paired median change vs alpha |
+| --- | ---: | ---: |
+| RPC compile | −6.48% | −6.08% |
+| Update/compile/delta/apply | −2.36% | −3.04% |
+| First graph | +2.40% | −1.62% |
+| Graph construction | −2.06% | −2.17% |
+| Base import | −2.12% | −4.04% |
+| Local API loading | **+35.18%** | +3.45% |
+| Worker integrity hashing | **+16.19%** | **+13.48%** |
+
+The compile change versus 0.12 has a descriptive paired 95% interval of
+−6.87% to −4.73%. The three failed startup comparisons have intervals of
+32.87–37.58%, 14.52–17.44%, and 11.23–15.73%, respectively. All outliers remain
+in the raw record, including the unusually slow candidate import cohort.
+
+Absolute medians for 0.12/alpha/development are 6.70/8.64/9.05 ms for local API
+loading, 3.15/3.20/3.66 ms for integrity hashing and 64.78/67.09/66.28 ms for
+first graph construction. The local API growth partly predates this release in
+the alpha's view API. The larger worker contains the broker and persistence
+implementation. These explain the remaining costs; they do not turn failed
+guardrails into passes or establish a blanket no-regression claim.
