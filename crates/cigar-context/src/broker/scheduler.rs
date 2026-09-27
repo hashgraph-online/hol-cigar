@@ -4,8 +4,8 @@
 //! work to a queue; the broker must recheck the current grant, scope and evidence at dispatch.
 //! Jobs are non-preemptive. Fairness is between dispatch opportunities, not equal CPU time.
 
+use super::authentication::{ClientHello, ClientProof, ServerKey, ServerProof, grant_id};
 use super::{BrokerCredential, BrokerError, MAX_LIFETIME_MS, deadline};
-use crate::digest;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
@@ -145,6 +145,7 @@ impl<T> Drop for Scheduled<T> {
 
 struct Lane<T> {
     agent: String,
+    key: ServerKey,
     limits: AgentQueueLimits,
     expires: Instant,
     jobs: VecDeque<Queued<T>>,
@@ -220,6 +221,7 @@ impl<T> BrokerScheduler<T> {
             return Err(BrokerError::InvalidInput);
         }
         let key = self.credential_key(credential)?;
+        let server_key = ServerKey::new(credential)?;
         let previous = self
             .lanes
             .iter()
@@ -236,6 +238,7 @@ impl<T> BrokerScheduler<T> {
             key,
             Lane {
                 agent: agent.into(),
+                key: server_key,
                 limits,
                 expires,
                 jobs: VecDeque::new(),
@@ -243,6 +246,40 @@ impl<T> BrokerScheduler<T> {
             },
         );
         Ok(cancelled)
+    }
+
+    /// Prove the current broker to a client before it transmits any context. The transport must
+    /// retain this exact proof for this connection and require a fresh client proof in response.
+    pub fn server_proof(&self, hello: &ClientHello) -> Result<ServerProof, BrokerError> {
+        self.handshake_lane(hello)?.key.prove(hello)
+    }
+
+    /// Complete this connection's challenge before reading its command body. Recheck revocation
+    /// and expiry; the resulting credential stays inside the broker, never on the agent wire.
+    pub fn authenticate_client(
+        &self,
+        hello: &ClientHello,
+        server: &ServerProof,
+        client: &ClientProof,
+    ) -> Result<BrokerCredential, BrokerError> {
+        let credential = self
+            .handshake_lane(hello)?
+            .key
+            .verify_client(hello, server, client)?;
+        if grant_id(&credential)? != hello.grant_id {
+            return Err(BrokerError::AccessDenied);
+        }
+        Ok(credential)
+    }
+
+    fn handshake_lane(&self, hello: &ClientHello) -> Result<&Lane<T>, BrokerError> {
+        if !hello.valid() || hello.epoch != self.epoch {
+            return Err(BrokerError::AccessDenied);
+        }
+        self.lanes
+            .get(&hello.grant_id)
+            .filter(|lane| lane.expires > Instant::now())
+            .ok_or(BrokerError::AccessDenied)
     }
 
     /// Revoke queue admission and return cancelled work for failure replies. The broker's grant
@@ -378,6 +415,22 @@ impl<T> BrokerScheduler<T> {
             .collect()
     }
 
+    /// Cancel all waiting jobs after the runtime has stopped admission. Return their payloads
+    /// for definitive failure replies; no returned operation has crossed the dispatch boundary.
+    pub fn host_drain(&mut self) -> Vec<Scheduled<T>> {
+        let keys = self.lanes.keys().cloned().collect::<Vec<_>>();
+        let mut cancelled = keys
+            .into_iter()
+            .flat_map(|key| self.remove_lane(&key))
+            .collect::<Vec<_>>();
+        while let Some(job) = self.host.pop_front() {
+            let _ = job.cancellation.cancel();
+            cancelled.push(dispatch(job));
+        }
+        self.host_bytes = 0;
+        cancelled
+    }
+
     fn validate_job(&self, bytes: usize, wait_ms: u64) -> Result<(), BrokerError> {
         if bytes == 0 || wait_ms == 0 || wait_ms > self.limits.max_wait_ms {
             return Err(BrokerError::InvalidInput);
@@ -386,16 +439,10 @@ impl<T> BrokerScheduler<T> {
     }
 
     fn credential_key(&self, credential: &BrokerCredential) -> Result<String, BrokerError> {
-        if credential.epoch != self.epoch
-            || credential.secret.len() != 64
-            || !credential
-                .secret
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
-        {
+        if credential.epoch != self.epoch {
             return Err(BrokerError::AccessDenied);
         }
-        Ok(digest("cigar.broker-queue-grant.v1", credential)?)
+        grant_id(credential)
     }
 
     fn remove_lane(&mut self, key: &str) -> Vec<Scheduled<T>> {
@@ -645,5 +692,42 @@ mod tests {
         let token = queue.enqueue_agent(&credential(1), (), 1, 30_000).unwrap();
         drop(queue);
         assert!(token.cancel());
+    }
+
+    #[test]
+    fn handshake_rechecks_expiry_revocation_and_grant_replacement() {
+        let mut queue = queue::<()>();
+        register(&mut queue, 1);
+        let hello = ClientHello::new(&credential(1)).unwrap();
+        let server = queue.server_proof(&hello).unwrap();
+        let client = hello.verify_server(&credential(1), &server).unwrap();
+        assert_eq!(
+            queue
+                .authenticate_client(&hello, &server, &client)
+                .unwrap()
+                .secret,
+            credential(1).secret
+        );
+        queue.lanes.get_mut(&hello.grant_id).unwrap().expires = Instant::now();
+        assert!(queue.server_proof(&hello).is_err());
+        assert!(queue.authenticate_client(&hello, &server, &client).is_err());
+        queue.host_revoke("agent-1");
+        assert!(queue.authenticate_client(&hello, &server, &client).is_err());
+        queue
+            .host_register(
+                "agent-1",
+                &credential(2),
+                AgentQueueLimits::default(),
+                60_000,
+            )
+            .unwrap();
+        assert!(queue.authenticate_client(&hello, &server, &client).is_err());
+        let next = ClientHello::new(&credential(2)).unwrap();
+        let server = queue.server_proof(&next).unwrap();
+        let client = next.verify_server(&credential(2), &server).unwrap();
+        assert!(queue.authenticate_client(&next, &server, &client).is_ok());
+        let other_epoch =
+            BrokerScheduler::<()>::new(&"a".repeat(64), QueueLimits::default()).unwrap();
+        assert!(other_epoch.server_proof(&next).is_err());
     }
 }

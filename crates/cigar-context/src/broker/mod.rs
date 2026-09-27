@@ -8,6 +8,7 @@
 
 mod types;
 pub use types::*;
+pub mod authentication;
 pub mod protocol;
 pub mod scheduler;
 

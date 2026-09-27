@@ -1,8 +1,9 @@
 # Local context broker implementation contract
 
-Status: native authority and bounded scheduler implemented behind the opt-in
-`broker` Cargo feature. Transport, durable recovery and SDK facades are pending;
-this is not yet a shipped worker capability.
+Status: native authority, bounded scheduler and the explicit `--broker` worker
+transport are implemented behind the opt-in `broker` Cargo feature. Durable
+recovery, SDK facades and installed-distribution qualification are pending;
+this is not yet a shipped SDK capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
 
 ## Ownership and transport
@@ -26,16 +27,42 @@ authenticated service; this transport does not invent a new remote TLS service.
 No HOL account or external service is needed for this same-host broker.
 
 The separate `cigar.context-broker.v1` agent envelope carries a positive u32
-request ID, current credential, requested queue deadline and a closed agent
-command. Host-only commands use a separate type and private channel. Agent
+request ID, requested queue deadline and a closed agent command. Its identity
+comes from the authenticated connection and cannot be supplied in the envelope.
+Host-only commands use a separate type and private channel. Agent
 frames are capped at 2 MiB before decode; replies at 8 MiB. Private host limits
 are 32/64 MiB. A malformed/truncated/oversized frame invalidates its connection;
 the transport never scans onward to guess where the next request begins.
 
 Each host-created grant binds a cryptographically random credential to one agent,
-one current view and explicit quotas. Requests carry the broker protocol, current
-authority epoch, credential, request ID and a closed command shape. Authentication
-is checked on every request; the server chooses the view from the grant. A client
+one current view and explicit quotas. The host distributes that credential through
+protected application IPC, never arguments, environment variables or logs.
+Each connection carries one command and begins with mutual HMAC-SHA256 proofs:
+
+1. The client sends the expected epoch, public grant digest and a fresh 256-bit
+   challenge. Each handshake message has a 1 KiB bound checked before allocation.
+2. The broker returns a fresh server challenge and a server proof bound to the
+   epoch, grant and both challenges. The client verifies it before sending any
+   command or context. A process that reuses a stopped broker's port cannot prove
+   possession of the former broker's grant secret.
+3. The client returns a proof using a separate domain. The broker checks current
+   grant expiry/revocation and the exact retained challenge before reading the
+   command. It checks admission and source authority again at dispatch.
+
+The grant secret never crosses the loopback connection. Fresh challenges reject
+cross-connection proof replay; separate proof domains reject reflection. The
+public test vector in `crates/cigar-context/fixtures/broker-authentication.v1.json`
+was checked independently with Python and Node standard cryptographic libraries.
+It fixes the exact transcript: lowercase 64-byte ASCII hex epoch, grant digest,
+client nonce and server nonce after the NUL-terminated role domain. The HMAC key
+is the raw 32-byte secret. The public grant digest is SHA-256 of
+`cigar.broker-grant-id.v1\0` followed by the ASCII epoch and secret; server/client
+proof domains are `cigar.broker-server-proof.v1\0` and
+`cigar.broker-client-proof.v1\0`. The `\0` denotes one zero byte.
+This same-host protocol does not provide encryption,
+TLS channel protection or a boundary against host-privileged packet interception.
+
+The server chooses the view from the authenticated grant. A client
 cannot supply a different principal, view, reviewer verdict or root operation.
 Return content-free errors and never log credentials or source/query text.
 Host configuration/revocation is available only on the private stdio connection.
@@ -85,6 +112,13 @@ admission capacity. Bound active connections, handshake time, frame bytes, queue
 bytes, jobs per caller, token budget, retained tickets, proposals and staged bytes.
 Limits are validated before queue admission, then authorization and expiry are
 checked again at dispatch. Existing graph/document/cache limits remain effective.
+The current transport defaults to 64 total connections, four authenticated
+connections per grant, and separate 32 MiB input/output reservations. Input uses
+one total deadline across handshake and command; slow partial writes cannot
+renew it. Reply writes also have a total deadline. The active grant-connection
+registry retains no idle grant records. Unauthenticated local connection flooding
+can still consume the bounded listener capacity; these limits preserve resource
+bounds and the private host channel, not availability against every local DoS.
 
 Operations are non-preemptive initially. Fairness guarantees a dispatch opportunity
 between bounded operations, not equal completion time for differently sized work.
@@ -96,6 +130,10 @@ dispatch, a broken connection or timeout can make a mutation's outcome unknown.
 Clients never automatically retry writes or restart the broker. A caller queries
 the retained proposal/receipt or reconciles through the host. A failed client
 connection must not by itself kill every other agent's graph.
+Clients keep the duplex socket open until the reply. A half-close, reset or extra
+request bytes cancel only that connection's queued work. Once dispatch has begun,
+the caller must treat a lost reply as uncertain. Closing host stdin or sending
+the private `close` command stops the owner and listener; no orphan service remains.
 
 Every admitted source replacement carries an expected source revision. Versions
 are monotonic for the epoch, including withdrawal and change-back (ABA); an empty
@@ -155,6 +193,11 @@ and overlapping scopes; both readable and unreadable source updates; malformed
 requests; identity/view spoofing; revoked grants; forged tickets; unreviewed
 proposals; stale/competing writes; queue saturation; disconnect before/after
 dispatch; killed worker; torn journal and checkpoint recovery; and old-epoch replay.
+Include an impersonating listener that fails the server proof, replayed and
+reflected proofs, mid-handshake revocation, and one grant saturating its connection
+allowance while another remains usable. The native worker tests exercise real
+TCP connections from Rust driver threads; they do not substitute for independent
+installed Python and Node agent processes.
 
 Short fault schedules precede a 24-hour 12-agent soak. A single scope leak, lost
 authorized update, stale authority acceptance, silent journal loss or blind effect

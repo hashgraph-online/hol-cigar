@@ -5,9 +5,7 @@
 //! These helpers perform no socket discovery, connection, retries or background work.
 
 use super::scheduler::{AgentQueueLimits, QueueLimits};
-use super::{
-    AgentGrantSpec, BrokerCredential, BrokerError, BrokerLimits, SourceProvenance, SourceRevision,
-};
+use super::{AgentGrantSpec, BrokerError, BrokerLimits, SourceProvenance, SourceRevision};
 use crate::{
     AnswerDraft, AnswerPolicy, ClaimReview, ContextError, ContextRequest, Document, EdgeKind,
     GraphLimits, TokenCacheLimits,
@@ -26,6 +24,64 @@ pub const MAX_AGENT_RESPONSE: usize = 8 * 1024 * 1024;
 pub const MAX_HOST_FRAME: usize = 32 * 1024 * 1024;
 /// Private host response ceiling.
 pub const MAX_HOST_RESPONSE: usize = 64 * 1024 * 1024;
+
+/// Explicit local transport resource bounds; there is never a configurable non-loopback bind.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TransportLimits {
+    /// Concurrent connection handlers, including unauthenticated frame readers.
+    pub max_connections: usize,
+    /// Authenticated connections per grant, across all of its agent processes.
+    pub max_connections_per_agent: usize,
+    /// Aggregate raw frame bytes being read/decoded before queue transfer.
+    pub max_inbound_bytes: usize,
+    /// Aggregate encoded agent replies awaiting/performing writes.
+    pub max_outbound_bytes: usize,
+    /// Total handshake-and-command receive deadline; not renewed by a slow stream.
+    pub frame_timeout_ms: u64,
+    /// Total response-write deadline, including prefix and body.
+    pub write_timeout_ms: u64,
+    /// Total owner response wait, including queue and service. Expiry never implies write failure.
+    pub response_timeout_ms: u64,
+}
+
+impl Default for TransportLimits {
+    fn default() -> Self {
+        Self {
+            max_connections: 64,
+            max_connections_per_agent: 4,
+            max_inbound_bytes: 32 * 1024 * 1024,
+            max_outbound_bytes: 32 * 1024 * 1024,
+            frame_timeout_ms: 5000,
+            write_timeout_ms: 5000,
+            response_timeout_ms: 60_000,
+        }
+    }
+}
+
+impl TransportLimits {
+    /// Validate resource bounds before opening any listener.
+    pub fn validate(&self) -> Result<(), BrokerError> {
+        if self.max_connections == 0
+            || self.max_connections > 128
+            || self.max_connections_per_agent == 0
+            || self.max_connections_per_agent > 128
+            || self.max_inbound_bytes < MAX_AGENT_FRAME
+            || self.max_inbound_bytes > 256 * 1024 * 1024
+            || self.max_outbound_bytes < MAX_AGENT_RESPONSE
+            || self.max_outbound_bytes > 256 * 1024 * 1024
+            || self.frame_timeout_ms == 0
+            || self.frame_timeout_ms > 30_000
+            || self.write_timeout_ms == 0
+            || self.write_timeout_ms > 30_000
+            || self.response_timeout_ms == 0
+            || self.response_timeout_ms > 300_000
+        {
+            return Err(BrokerError::InvalidInput);
+        }
+        Ok(())
+    }
+}
 
 /// Host-only native graph/cache options. Omitted values use existing graph defaults.
 #[derive(Default, Deserialize, Serialize)]
@@ -93,6 +149,9 @@ pub enum HostCommand {
         /// Queue admission limits.
         #[serde(default)]
         queues: QueueLimits,
+        /// Explicit socket/frame/reply resource bounds.
+        #[serde(default)]
+        transport: TransportLimits,
     },
     /// Issue/replace one agent's authority and queue allowance.
     Grant {
@@ -250,7 +309,8 @@ pub struct HostRequest {
     pub command: HostCommand,
 }
 
-/// Length-framed agent request. Authentication appears in every frame, never just a handshake.
+/// One length-framed request per mutually authenticated connection. The transport supplies the
+/// authenticated identity internally; a request cannot select or override its credential/view.
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentRequest {
@@ -258,8 +318,6 @@ pub struct AgentRequest {
     pub protocol: String,
     /// Positive u32 request identifier.
     pub id: u32,
-    /// Exact current per-agent bearer authority.
-    pub credential: BrokerCredential,
     /// Requested maximum queue wait. The host scheduler imposes an independent upper bound.
     pub wait_ms: u64,
     /// Closed agent surface.
@@ -484,7 +542,7 @@ mod tests {
     use serde_json::{Value, json};
 
     fn envelope(command: Value) -> Value {
-        json!({"protocol": BROKER_PROTOCOL, "id": 1, "credential": {"epoch": "e".repeat(64), "secret": "s".repeat(64)}, "wait_ms": 1000, "command": command})
+        json!({"protocol": BROKER_PROTOCOL, "id": 1, "wait_ms": 1000, "command": command})
     }
 
     #[test]
@@ -529,7 +587,7 @@ mod tests {
         changed["agent"] = json!("administrator");
         assert!(decode_agent(&serde_json::to_vec(&changed).unwrap()).is_err());
         let mut command = envelope(json!({"op":"compile","request":{}}));
-        command["credential"]["policy"] = json!("approved");
+        command["credential"] = json!({"epoch":"e".repeat(64),"secret":"a".repeat(64)});
         assert!(decode_agent(&serde_json::to_vec(&command).unwrap()).is_err());
     }
 

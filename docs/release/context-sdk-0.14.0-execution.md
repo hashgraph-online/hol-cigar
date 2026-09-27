@@ -23,8 +23,8 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | S5 | Correct deployment and effective-resource discrepancies | Kubernetes CA input, systemd checkpoint permission and active-store backup/migration tests; installed smoke | Implemented; local deployment contracts and CLI regression suite passed; Linux runtime smoke pending |
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
-| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority core implemented; transport, SDK facades and independent processes pending |
-| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS and fair queue/cancellation core implemented; transport integration and measurements pending |
+| B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and mutually authenticated loopback worker implemented and locally tested; SDK facades and independent processes pending |
+| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission and transitive invalidation implemented; SDK and durable integration pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native exact-submission review port implemented; execution handoff pending |
@@ -194,3 +194,25 @@ only when their exercised behavior covers the corresponding requirement above.
   replies and u64 version boundaries. All 30 broker/core/scheduler/protocol tests
   and all-feature/all-target strict Clippy pass locally. The transport still needs
   to connect these contracts to actual private stdio and loopback channels.
+- Connected the native authority/scheduler to an explicit `--broker` worker mode:
+  private host JSONL, literal IPv4 loopback, one length-framed agent request per
+  connection and one graph owner. Added total input/output deadlines, aggregate
+  byte reservations, per-grant/global connection limits, pre-dispatch disconnect
+  cancellation, host EOF/close cleanup and a lost-wakeup shutdown regression.
+  The ordinary worker mode still creates no listener.
+- Added mutual per-connection HMAC-SHA256 proofs before command transfer. Agent
+  credentials never appear in a loopback request; its authenticated identity is
+  supplied internally. Fresh client/server challenges reject replay and separate
+  proof domains reject reflection. Current grant authority is checked during
+  handshake, admission and dispatch. A fixed public vector agrees with Python
+  hashlib/hmac, Node crypto and the Rust implementation. These local peer proofs
+  are not encryption, remote TLS or a sandbox against host-privileged code.
+- The complete local context gate passes formatting, strict all-target Clippy,
+  99 all-feature tests, one doctest and 48 core-only test/doctest invocations.
+  Nine real worker/loopback tests include twelve scoped clients, competing
+  proposals, malformed/oversized frames, lost clients, shutdown, replay/reflection,
+  mid-handshake revocation and per-agent connection saturation. Logs are retained
+  under `CIGAR/releases/cigar-0.14.0-development/broker-authenticated-worker-source-checks`.
+  Those clients are Rust driver threads, not independent installed Python/Node
+  agent processes. SDK facades, durable recovery, hosted platform execution,
+  performance/fairness measurements and the 24-hour soak remain pending.

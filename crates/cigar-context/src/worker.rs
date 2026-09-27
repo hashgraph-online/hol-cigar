@@ -9,6 +9,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{BufRead, Read, Write};
 
+#[cfg(feature = "broker")]
+mod broker_worker;
+
 const PROTOCOL: &str = "cigar.context-worker.v1";
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_RESPONSE: usize = 64 * 1024 * 1024;
@@ -330,6 +333,10 @@ fn run(input: &mut impl BufRead, output: &mut impl Write) -> std::io::Result<()>
 
 fn main() -> std::io::Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    #[cfg(feature = "broker")]
+    if args.as_slice() == ["--broker"] {
+        return broker_worker::run();
+    }
     if args.as_slice() == ["--version"] {
         println!(
             "cigar-context-worker {} {PROTOCOL}",
