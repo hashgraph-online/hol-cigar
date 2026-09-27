@@ -453,9 +453,14 @@ impl LocalVectorSettings {
             ));
         }
         #[cfg(not(target_os = "macos"))]
-        return Err(ConfigError::new(
-            ConfigErrorCode::IncompleteProductionInputs,
-        ));
+        {
+            // Local vector storage is qualified only on macOS. Its path inputs
+            // are intentionally not interpreted on other platforms.
+            let _ = (state_directory, production);
+            Err(ConfigError::new(
+                ConfigErrorCode::IncompleteProductionInputs,
+            ))
+        }
 
         #[cfg(target_os = "macos")]
         {
