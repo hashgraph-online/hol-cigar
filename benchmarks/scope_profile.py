@@ -45,7 +45,7 @@ def child(args):
         "text": "Retry policy: stop after three attempts.",
     }
     request = {"query": "retry policy", "required": ["hot"], "max_tokens": 512}
-    timings, outputs = [], []
+    timings, outputs, full_outputs = [], [], []
     worker_hash = file_hash(args.worker)
     with LocalContextGraph(
         "scope-profile", worker_path=args.worker, timeout=120
@@ -86,7 +86,10 @@ def child(args):
                 raise RuntimeError(
                     "scope profiling changed selected evidence or budget"
                 )
-            return hashlib.sha256(result["rendered"].encode()).hexdigest()
+            return (
+                hashlib.sha256(result["rendered"].encode()).hexdigest(),
+                hashlib.sha256(encoded(result)).hexdigest(),
+            )
 
         for _ in range(5):
             compile_one()
@@ -97,7 +100,8 @@ def child(args):
                 start = time.perf_counter_ns()
                 output = compile_one()
                 timings.append((time.perf_counter_ns() - start) / 1e6)
-                outputs.append(output)
+                outputs.append(output[0])
+                full_outputs.append(output[1])
         finally:
             sampler.close()
         profiles = None
@@ -143,7 +147,11 @@ def child(args):
                 "python": {"file": python.name, "sha256": file_hash(python)},
                 "measured_calls_exclude_profiling": True,
             }
-    if not graph.cleanup_complete or len(set(outputs)) != 1:
+    if (
+        not graph.cleanup_complete
+        or len(set(outputs)) != 1
+        or len(set(full_outputs)) != 1
+    ):
         raise RuntimeError("cleanup or deterministic output failed")
     return {
         "status": "ok",
@@ -156,6 +164,7 @@ def child(args):
         "raw_ms": timings,
         "rss_samples": sampler.samples,
         "rendered_sha256": outputs[0],
+        "result_sha256": full_outputs[0],
         "profiles": profiles,
     }
 

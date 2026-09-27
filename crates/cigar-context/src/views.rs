@@ -378,9 +378,9 @@ fn scope_id(
     entry: &Entry,
     authorized: &BTreeSet<String>,
 ) -> Result<String, ContextError> {
-    let documents = authorized
-        .iter()
-        .filter_map(|id| graph.documents.get(id).map(|doc| (id, &doc.digest)))
+    let documents = graph
+        .authorized_documents(authorized)
+        .map(|(id, doc)| (id, &doc.digest))
         .collect::<Vec<_>>();
     let edges = authorized
         .iter()

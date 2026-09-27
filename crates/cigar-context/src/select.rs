@@ -272,11 +272,10 @@ impl ContextGraph {
             return Err(ContextError::LimitExceeded);
         }
         let allowed = |id: &str| request.allowed.as_ref().is_none_or(|ids| ids.contains(id));
-        let total = request.allowed.as_ref().map_or(self.len(), |ids| {
-            ids.iter()
-                .filter(|id| self.documents.contains_key(*id))
-                .count()
-        });
+        let total = request
+            .allowed
+            .as_ref()
+            .map_or(self.len(), |ids| self.authorized_documents(ids).count());
         let (weights, mut roots, lexical_matches) = self.scored_roots(request, &terms, total);
         let rank = |a: &Root<'_>, b: &Root<'_>| {
             b.declarations

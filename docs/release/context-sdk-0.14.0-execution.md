@@ -29,7 +29,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
-| R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
+| R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer and ordered-scope lookup improvements measured locally; transactional ingestion and full throughput qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier, shared-view and recorded-answer adapters implemented; Hiero producer adapter pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
@@ -461,3 +461,22 @@ only when their exercised behavior covers the corresponding requirement above.
   worktree. The existing three-OS evaluation job discovers these tests. Actual
   independent labeled answer studies and Hiero terminal-oracle import remain
   outstanding; E1/E2 and release efficacy gates are not complete.
+- Profiled root, one-source and full-scope compilation at 100/1,000/5,000 cold
+  documents. Native samples identify repeated ordered-tree lookups during scope
+  commitment and authorized-document counting. Dense scopes now merge ordered
+  collections; sparse scopes retain direct lookups. No authority is cached and
+  exact scope/snapshot identities remain unchanged. Native formatting and strict
+  Clippy pass with 132 all-feature tests, one doctest and 57 core-only invocations.
+- The paired before/after comparison retains 144 successful process runs and
+  identical complete results. Full-scope median compilation falls 12.7%, 28.7%
+  and 41.8% at the three corpus sizes. The 5,000-document paired RSS change is
+  +0.50%. The 1,000-document one-source and 5,000-document root controls regress
+  7.2% and 6.4% respectively; no measured cell exceeds the existing latency/RSS
+  guardrails. This is a source optimization diagnostic, not a version-wide
+  non-regression or task-quality claim. Twelve benchmark-reducer tests pass.
+  [The scope profile](context-sdk-0.14.0-scope-profile.md) records exact identities,
+  uncertainty, regressions and limitations. Full R2/Q1 qualification stays open.
+- Complete SDK regression tests against the optimized worker pass 470 Python
+  tests plus 39 subtests and all 156 Node tests. Statement/branch coverage remains
+  93.54%/86.74% overall; all critical-module coverage gates pass. Logs and coverage
+  use `scope-intersection-` under the development evidence directory.

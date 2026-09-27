@@ -263,6 +263,45 @@ pub(crate) struct Posting {
 }
 
 impl ContextGraph {
+    /// Enumerate the exact live authorization intersection in canonical ID order.
+    /// Sparse scopes use direct lookups; dense scopes merge the two ordered trees
+    /// instead of repeating O(log N) document lookups for every authorized ID.
+    /// This caches no authority or graph state and admits no absent/denied IDs.
+    pub(crate) fn authorized_documents<'a>(
+        &'a self,
+        ids: &'a BTreeSet<String>,
+    ) -> impl Iterator<Item = (&'a String, &'a Arc<IndexedDocument>)> {
+        let dense = ids.len() > self.documents.len() / 8;
+        let mut wanted = ids.iter().peekable();
+        let mut documents = self.documents.iter().peekable();
+        std::iter::from_fn(move || {
+            if !dense {
+                for id in wanted.by_ref() {
+                    if let Some(entry) = self.documents.get_key_value(id) {
+                        return Some(entry);
+                    }
+                }
+                return None;
+            }
+            loop {
+                let (id, _) = documents.peek()?;
+                let allowed = wanted.peek()?;
+                match id.as_str().cmp(allowed.as_str()) {
+                    std::cmp::Ordering::Less => {
+                        documents.next();
+                    }
+                    std::cmp::Ordering::Greater => {
+                        wanted.next();
+                    }
+                    std::cmp::Ordering::Equal => {
+                        wanted.next();
+                        return documents.next();
+                    }
+                }
+            }
+        })
+    }
+
     /// Creates an empty graph. The domain must identify the application's privacy boundary.
     pub fn new(domain: impl Into<String>, limits: GraphLimits) -> Result<Self, ContextError> {
         let domain = domain.into();
@@ -724,4 +763,74 @@ pub(crate) fn term_counts(text: &str) -> BTreeMap<String, usize> {
         }
     }
     terms
+}
+
+#[cfg(test)]
+mod authorization_iteration_tests {
+    use super::*;
+
+    #[test]
+    fn dense_and_sparse_intersections_preserve_exact_live_identity_order()
+    -> Result<(), ContextError> {
+        let mut graph = ContextGraph::new("authorized-iteration", GraphLimits::default())?;
+        for count in [0, 1, 7, 8, 16, 17, 128] {
+            graph.replace_source(
+                "docs",
+                (0..count)
+                    .map(|index| {
+                        Document::new(
+                            format!("id-{index:04}"),
+                            "docs",
+                            format!("document {index}"),
+                        )
+                    })
+                    .collect(),
+            )?;
+            for stride in [1, 2, 7, 16, 127] {
+                for extra in [false, true] {
+                    let mut ids = (0..=128)
+                        .step_by(stride)
+                        .map(|index| format!("id-{index:04}"))
+                        .collect::<BTreeSet<_>>();
+                    if extra {
+                        ids.extend([
+                            "before-all".into(),
+                            "id-0000-missing".into(),
+                            "zz-after-all".into(),
+                        ]);
+                    }
+                    // Independent legacy lookup oracle, including IDs before/between/after
+                    // current keys, empty graphs, withdrawal and both density branches.
+                    let expected = ids
+                        .iter()
+                        .filter_map(|id| graph.documents.get(id).map(|doc| (id, &doc.digest)))
+                        .collect::<Vec<_>>();
+                    let actual = graph
+                        .authorized_documents(&ids)
+                        .map(|(id, doc)| (id, &doc.digest))
+                        .collect::<Vec<_>>();
+                    assert_eq!(actual, expected);
+                    assert_eq!(
+                        crate::digest("comparison", &actual)?,
+                        crate::digest("comparison", &expected)?
+                    );
+                }
+            }
+            assert_eq!(graph.authorized_documents(&BTreeSet::new()).count(), 0);
+        }
+        let ids = BTreeSet::from(["id-0000".into()]);
+        let before = graph
+            .authorized_documents(&ids)
+            .map(|(_, doc)| doc.digest.clone())
+            .collect::<Vec<_>>();
+        graph.upsert(Document::new("id-0000", "docs", "replacement"))?;
+        let after = graph
+            .authorized_documents(&ids)
+            .map(|(_, doc)| doc.digest.clone())
+            .collect::<Vec<_>>();
+        assert_ne!(before, after);
+        graph.replace_source("docs", Vec::new())?;
+        assert_eq!(graph.authorized_documents(&ids).count(), 0);
+        Ok(())
+    }
 }

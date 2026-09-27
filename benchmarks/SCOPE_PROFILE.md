@@ -34,8 +34,8 @@ compiler configuration from an executable. It neither installs packages nor
 contacts services/models. It does not claim OS network denial.
 
 Latency includes Python serialization, queue/pipe transport, native compilation,
-result decoding and the harness's exact-selection/budget checks and rendered-text
-hash. Worker startup, ingestion and five warmups are excluded. A concurrent
+result decoding and the harness's exact-selection/budget checks, rendered-text
+hash and complete-result JSON hash. Worker startup, ingestion and five warmups are excluded. A concurrent
 20 ms sampler retains simultaneous Python-plus-worker resident bytes. These are
 RSS samples, not PSS or a claim to have caught every allocation peak.
 
@@ -57,3 +57,23 @@ scheduling, independent-agent fairness, mutation invalidation, durable storage,
 installation, model accuracy or end-to-end application performance. An accepted
 optimization still needs exact valid identity preservation, stale/revoked scope
 tests, paired before/after measurements and the full release performance gates.
+
+Use the companion comparison for a native optimization, building both workers
+with identical compiler settings and retaining their build receipts:
+
+```sh
+python benchmarks/scope_compare.py \
+  --baseline-worker /absolute/baseline/cigar-context-worker \
+  --candidate-worker /absolute/candidate/cigar-context-worker \
+  --output /absolute/new-scope-comparison \
+  --documents 100 1000 5000 --cohorts 8 --rounds 100
+```
+
+This retains both worker executables, exact corpora, harness sources and the
+candidate's uncommitted native diff. It alternates worker order in each paired
+fresh-process cohort and runs the same current harness against both. Complete
+result hashes must agree within each treatment, including scope IDs and snapshot
+fields; equal rendered text alone is insufficient. Different scope treatments
+are allowed to produce different scope commitments. Profilers do not run during
+this comparison. Earlier diagnostic timings using only rendered-text hashing
+are not interchangeable with timings from the current harness.
