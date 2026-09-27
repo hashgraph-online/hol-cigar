@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -103,16 +104,10 @@ test("tampered bundle identity fails closed", () => {
 });
 
 test("transform receipts exactly match representations at every TypeScript boundary", () => {
-  const forms = [
-    { representation: "exact", receipt: false, valid: true },
-    { representation: "redacted", receipt: false, valid: true },
-    { representation: "extracted", receipt: true, valid: true },
-    { representation: "summarized", receipt: true, valid: true },
-    { representation: "exact", receipt: true, valid: false },
-    { representation: "redacted", receipt: true, valid: false },
-    { representation: "extracted", receipt: false, valid: false },
-    { representation: "summarized", receipt: false, valid: false },
-  ] as const;
+  const fixture = JSON.parse(readFileSync(new URL("../../fixtures/semantic-boundaries-v1.json", import.meta.url), "utf8")) as {
+    representation_receipts: Array<{ representation: SemanticBundleBlock["representation"]; receipt: boolean; valid: boolean }>;
+  };
+  const forms = fixture.representation_receipts;
   for (const [index, form] of forms.entries()) {
     const candidate = {
       ...block(index % 2 === 0 ? "a" : "b", 1),

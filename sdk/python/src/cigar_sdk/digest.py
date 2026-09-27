@@ -111,10 +111,21 @@ def _normalize(value: Any, depth: int = 0, budget: list[int] | None = None) -> A
     raise ValidationError("semantic records contain an unsupported canonical value")
 
 
+def _validate_transform_receipt(block: Mapping[str, Any], context: str) -> None:
+    required = block["representation"] in {"extracted", "summarized"}
+    present = "transform_receipt" in block
+    if required != present:
+        raise ValidationError(
+            f"{context}: extracted and summarized representations require exactly one transform receipt"
+        )
+    if present:
+        _digest(block["transform_receipt"], f"{context} transform receipt")
+
+
 def _block(value: Any, index: int) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValidationError(f"block {index} must be an object")
-    block = dict(value)
+    block = dict(_unique_mapping_items(value))
     expected = {"block_id", "lane", "representation", "content_digest", "token_count", "provenance"}
     if "transform_receipt" in block:
         expected.add("transform_receipt")
@@ -133,16 +144,19 @@ def _block(value: Any, index: int) -> dict[str, Any]:
         _digest(item, f"block {index} provenance")
     if provenance != sorted(set(provenance)):
         raise ValidationError(f"block {index} provenance must be sorted and unique")
-    receipt = block.get("transform_receipt")
-    if receipt is None:
-        block.pop("transform_receipt", None)
-    else:
-        _digest(receipt, f"block {index} transform receipt")
+    _validate_transform_receipt(block, f"block {index}")
     return block
+
+
+def _blocks(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > 10_000:
+        raise ValidationError("bundle block count is invalid")
+    return [_block(block, index) for index, block in enumerate(value)]
 
 
 def bundle_id(bundle: Mapping[str, Any]) -> str:
     fields = {key: child for key, child in _unique_mapping_items(bundle) if key != "bundle_id"}
+    fields["blocks"] = _blocks(fields.get("blocks"))
     encoded = _deterministic_cbor([2, _normalize(fields)])
     separated = b"CIGAR-BUNDLE\0v1\0" + encoded
     return "1220" + hashlib.sha256(separated).hexdigest()
@@ -159,10 +173,7 @@ def verify_bundle(bundle: Mapping[str, Any]) -> None:
     _digest(bundle["bundle_id"], "bundle id")
     _digest(bundle["contract_digest"], "contract digest")
     _digest(bundle["manifest_digest"], "manifest digest")
-    blocks = bundle["blocks"]
-    if not isinstance(blocks, list) or len(blocks) > 10_000:
-        raise ValidationError("bundle block count is invalid")
-    checked = [_block(value, index) for index, value in enumerate(blocks)]
+    checked = _blocks(bundle["blocks"])
     ordering = [(_LANES[item["lane"]], item["block_id"]) for item in checked]
     if ordering != sorted(set(ordering)):
         raise ValidationError("bundle blocks must be lane/id sorted and unique")

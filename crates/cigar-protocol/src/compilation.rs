@@ -615,6 +615,51 @@ mod tests {
     }
 
     #[test]
+    fn shared_representation_receipt_matrix_matches_protocol()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/semantic-boundaries-v1.json"))?;
+        let cases = fixture
+            .get("representation_receipts")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("missing receipt cases")?;
+        assert_eq!(cases.len(), 8);
+        for case in cases {
+            let mut candidate = block()?;
+            candidate.representation = serde_json::from_value(
+                case.get("representation")
+                    .ok_or("missing representation")?
+                    .clone(),
+            )?;
+            candidate.transform_receipt = if case
+                .get("receipt")
+                .and_then(serde_json::Value::as_bool)
+                .ok_or("missing receipt flag")?
+            {
+                Some(content('f')?)
+            } else {
+                None
+            };
+            let bundle = ContextBundle {
+                schema_version: "cigar.context-bundle.v1".parse()?,
+                bundle_id: version('d')?,
+                contract_digest: content('e')?,
+                manifest_digest: content('f')?,
+                blocks: vec![candidate],
+                total_tokens: 10,
+                extensions: ExtensionMap::default(),
+            };
+            assert_eq!(
+                bundle.validate().is_ok(),
+                case.get("valid")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or("missing verdict")?
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn delta_rejects_same_base_and_overlapping_block_sets() -> Result<(), Box<dyn std::error::Error>>
     {
         let bundle = version('d')?;

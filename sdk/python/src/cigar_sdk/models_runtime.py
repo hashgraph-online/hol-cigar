@@ -9,7 +9,7 @@ from dataclasses import fields, is_dataclass
 from types import MappingProxyType
 from typing import Any
 
-from cigar_sdk.digest import _deterministic_cbor, _unique_mapping_items
+from cigar_sdk.digest import _deterministic_cbor, _unique_mapping_items, _validate_transform_receipt
 from cigar_sdk.errors import ValidationError
 from cigar_sdk.generated.models import PAYLOAD_SCHEMAS
 
@@ -220,6 +220,19 @@ def _freeze(value: Any, depth: int = 0, budget: list[int] | None = None) -> Any:
     return value
 
 
+def _validate_semantic(name: str, value: Any) -> None:
+    if name == "ContextBundle":
+        blocks = value["blocks"]
+        path = f"{name}/blocks"
+    elif name == "ContextDeltaResponse":
+        blocks = value["delta"]["added_blocks"]
+        path = f"{name}/delta/added_blocks"
+    else:
+        return
+    for index, block in enumerate(blocks):
+        _validate_transform_receipt(block, f"{path}/{index}")
+
+
 def payload_value(payload: object) -> Any:
     name = type(payload).__name__
     schema = PAYLOAD_SCHEMAS.get(name)
@@ -227,6 +240,7 @@ def payload_value(payload: object) -> Any:
         raise ValidationError(f"unknown nominal payload model {name}")
     plain = _plain(payload.value) if schema.get("type") != "object" and hasattr(payload, "value") else _plain(payload)
     _validate(schema, plain, schema, name)
+    _validate_semantic(name, plain)
     return plain
 
 
@@ -236,6 +250,7 @@ def construct_payload[T](model: type[T], value: Any) -> T:
         raise ValidationError(f"unknown nominal payload model {model.__name__}")
     coerced = _coerce(schema, value, schema)
     _validate(schema, coerced, schema, model.__name__)
+    _validate_semantic(model.__name__, coerced)
     frozen = _freeze(coerced)
     if isinstance(frozen, Mapping) and schema.get("type") == "object":
         return model(**frozen)

@@ -265,6 +265,18 @@ impl fmt::Debug for ExtensionMap {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_special_keys_are_ordinary_canonical_object_members()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/semantic-boundaries-v1.json"))?;
+        let object = serde_json::json!({ "type": "object", "value": fixture.get("operation_map").ok_or("missing operation map")? });
+        let value: super::CanonicalValue = serde_json::from_value(object.clone())?;
+        value.validate()?;
+        assert_eq!(serde_json::to_value(value)?, object);
+        Ok(())
+    }
+
     use super::{CanonicalValue, ExtensionKey, ExtensionMap};
     use crate::ValidationCode;
     use crate::limits::{MAX_EXTENSION_DEPTH, MAX_EXTENSION_KEY_BYTES};

@@ -1132,4 +1132,114 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn filesystem_special_file_does_not_retain_blocking_capacity()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut child = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "worker::tests::filesystem_special_file_pool_child",
+                "--ignored",
+                "--nocapture",
+            ])
+            .stdin(std::process::Stdio::null())
+            .spawn()?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = child.try_wait()? {
+                assert!(
+                    status.success(),
+                    "filesystem operation retained blocking capacity"
+                );
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill()?;
+                let _status = child.wait()?;
+                return Err("filesystem blocking pool child exceeded deadline".into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[ignore = "run only through the bounded subprocess test"]
+    async fn filesystem_special_file_pool_child() -> Result<(), Box<dyn std::error::Error>> {
+        use cigar_catalog::{
+            ConnectorContext, DiscoveryPolicy, DiscoveryRequest, LocalFilesystemConnector,
+            SourceConnector,
+        };
+        use cigar_protocol::{MediaType, SourceUri};
+        use std::collections::BTreeSet;
+
+        let root = tempfile::tempdir()?;
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(root.path().join("source.txt"))
+                .status()?
+                .success()
+        );
+        std::os::unix::fs::symlink("source.txt", root.path().join("alias.txt"))?;
+        let uri = SourceUri::new("file:///blocking-pool-fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let request = DiscoveryRequest {
+            root: uri,
+            policy: DiscoveryPolicy {
+                max_items: 10,
+                max_total_bytes: 1_000,
+                max_record_bytes: 1_000,
+                excluded_prefixes: Vec::new(),
+                allowed_media_types: [MediaType::new("text/plain")?].into_iter().collect(),
+                allow_user_broadening: false,
+                follow_internal_symlinks: true,
+                secret_patterns: Vec::new(),
+            },
+            include_overrides: BTreeSet::new(),
+        };
+        let pool = BlockingPool::new(1, 1)?;
+        for _ in 0..4 {
+            let job_connector = LocalFilesystemConnector::new(root.path(), request.root.clone())?;
+            let job_request = request.clone();
+            let plan = pool
+                .run(
+                    CancellationToken::new(),
+                    tokio::time::Instant::now() + Duration::from_secs(2),
+                    move |_cancellation| {
+                        job_connector.discover(
+                            &job_request,
+                            &ConnectorContext::new(
+                                StoreCancellationToken::default(),
+                                std::time::Instant::now() + Duration::from_secs(1),
+                            ),
+                        )
+                    },
+                )
+                .await??;
+            assert_eq!(plan.included_count, 0);
+            assert_eq!(pool.metrics().in_use, 0);
+            assert!(pool.is_drained());
+        }
+        std::fs::write(root.path().join("safe.txt"), b"ordinary")?;
+        let plan = pool
+            .run(
+                CancellationToken::new(),
+                tokio::time::Instant::now() + Duration::from_secs(2),
+                move |_cancellation| {
+                    connector.discover(
+                        &request,
+                        &ConnectorContext::new(
+                            StoreCancellationToken::default(),
+                            std::time::Instant::now() + Duration::from_secs(1),
+                        ),
+                    )
+                },
+            )
+            .await??;
+        assert_eq!(plan.included_count, 1);
+        assert_eq!(pool.metrics().completion_count, 5);
+        Ok(())
+    }
 }

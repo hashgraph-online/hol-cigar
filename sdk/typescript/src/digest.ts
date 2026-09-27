@@ -104,11 +104,9 @@ function canonicalPayload(value: unknown, depth = 0, budget = { nodes: 0 }): Can
   }
   if (Array.isArray(value)) return value.map((child) => canonicalPayload(child, depth + 1, budget));
   if (typeof value === "object" && value !== null) {
-    const result: Record<string, Canonical> = {};
-    for (const [key, child] of Object.entries(value)) {
-      if (child !== undefined) result[key] = canonicalPayload(child, depth + 1, budget);
-    }
-    return result;
+    return Object.fromEntries(Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, canonicalPayload(child, depth + 1, budget)]));
   }
   throw new ValidationError("operation payload contains null, undefined, or a non-canonical value");
 }
@@ -193,11 +191,13 @@ class PayloadCborParser {
         const start = this.#position;
         const key = this.parse(depth + 1);
         const encoded = this.#source.slice(start, this.#position);
-        if (typeof key !== "string" || (previous !== undefined && Buffer.compare(previous, encoded) >= 0) || key in result) {
+        if (typeof key !== "string" || (previous !== undefined && Buffer.compare(previous, encoded) >= 0) || Object.hasOwn(result, key)) {
           throw new ValidationError("payload CBOR map keys are not canonical and unique");
         }
         previous = encoded;
-        result[key] = this.parse(depth + 1);
+        Object.defineProperty(result, key, {
+          value: this.parse(depth + 1), enumerable: true, writable: true, configurable: true,
+        });
       }
       return result;
     }

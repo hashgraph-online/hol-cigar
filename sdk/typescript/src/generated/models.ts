@@ -118,11 +118,11 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patternProperties = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
     const required = new Set(Array.isArray(schema["required"]) ? schema["required"] as string[] : []);
-    for (const name of required) if (!(name in record)) fail(`${path}/${name}`, "required field is missing");
+    for (const name of required) if (!Object.hasOwn(record, name)) fail(`${path}/${name}`, "required field is missing");
     if (typeof schema["minProperties"] === "number" && Object.keys(record).length < schema["minProperties"]) fail(path, "object has too few fields");
     if (typeof schema["maxProperties"] === "number" && Object.keys(record).length > schema["maxProperties"]) fail(path, "object has too many fields");
     for (const [name, child] of Object.entries(record)) {
-      const childSchema = properties[name];
+      const childSchema = Object.hasOwn(properties, name) ? properties[name] : undefined;
       if (childSchema !== undefined) validate(childSchema, child, root, `${path}/${name}`, depth + 1, budget);
       else {
         const matches = Object.entries(patternProperties).filter(([pattern]) => matchesSchemaPattern(pattern, name, path));
@@ -180,7 +180,7 @@ function coerce(schema: Record<string, unknown>, value: unknown, root: Record<st
     const patterns = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
     const additional = schema["additionalProperties"];
     return Object.fromEntries(Object.entries(value).map(([key, child]) => {
-      const matched = properties[key]
+      const matched = (Object.hasOwn(properties, key) ? properties[key] : undefined)
         ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1]
         ?? (typeof additional === "object" && additional !== null ? additional as Record<string, unknown> : undefined);
       return [key, matched === undefined ? child : coerce(matched, child, root, depth + 1, budget)];

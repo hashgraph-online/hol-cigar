@@ -18,7 +18,7 @@ def block(n, lane="evidence"):
     return {
         "block_id": digest(n),
         "lane": lane,
-        "representation": "exact",
+        "representation": "summarized",
         "content_digest": digest(100 + n),
         "token_count": 17,
         "provenance": [digest(200 + n)],
@@ -115,6 +115,7 @@ def test_invalid_blocks_cannot_be_resealed(field, value):
 
 def test_optional_transform_receipt_can_be_omitted():
     item = block(1)
+    item["representation"] = "exact"
     del item["transform_receipt"]
     verify_bundle(bundle([item]))
 
