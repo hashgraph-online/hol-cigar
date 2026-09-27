@@ -43,6 +43,23 @@ jobs:
       - name: Check CLI file reads, active-store maintenance and backup boundaries
         if: runner.os != 'Windows'
         run: cargo test --locked -p cigar-cli --lib -- --test-threads=1
+      - name: Execute deployment filesystem boundaries on the disposable runner
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cargo run --locked -p cigar-daemon --example deployment_runtime_fixture > "${RUNNER_TEMP}/cigar-deployment-fixture.json"
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT /usr/bin/python3 scripts/release/qualify_deployment_boundaries.py \
+            --allow-ephemeral-host-mutations \
+            --fixture "${RUNNER_TEMP}/cigar-deployment-fixture.json" \
+            --output "${RUNNER_TEMP}/cigar-deployment-runtime.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && runner.os == 'Linux'
+        with:
+          name: context-deployment-filesystem-runtime
+          path: |
+            ${{ runner.temp }}/cigar-deployment-fixture.json
+            ${{ runner.temp }}/cigar-deployment-runtime.json
+          retention-days: 30
       - name: Check source remains clean
         shell: bash
         run: test -z "$(git status --porcelain=v1 --untracked-files=all)"

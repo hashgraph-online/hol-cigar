@@ -952,9 +952,10 @@ mod tests {
     use cigar_api::TenantId;
     use cigar_crypto::{ed25519_public_key, generate_ed25519_secret, sign_ed25519};
     use serde_json::json;
-    use std::future::pending;
+    use std::future::{Future as _, pending, poll_fn};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::task::Poll;
     use std::time::{Duration, Instant};
 
     struct NeverRefresh;
@@ -1014,21 +1015,25 @@ mod tests {
         }
     }
 
-    struct DelayedRefresh {
+    struct GatedRefresh {
         calls: Arc<AtomicUsize>,
         document: Vec<u8>,
         valid_until: i64,
+        started: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
     }
 
-    impl JwksRefresh for DelayedRefresh {
+    impl JwksRefresh for GatedRefresh {
         fn refresh(&self, _request: JwksRefreshRequest) -> JwksRefreshFuture {
             self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.notify_one();
+            let release = Arc::clone(&self.release);
             let response = super::JwksRefreshResponse {
                 document: self.document.clone(),
                 valid_until_unix_seconds: self.valid_until,
             };
             Box::pin(async move {
-                tokio::time::sleep(Duration::from_millis(20)).await;
+                release.notified().await;
                 Ok(response)
             })
         }
@@ -1432,12 +1437,20 @@ mod tests {
         let secret = generate_ed25519_secret()?;
         let public = ed25519_public_key(&secret)?;
         let calls = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        // This checks single-flight coordination, not a CPU/scheduler deadline.
+        // Separate hanging/blocked-provider tests retain their 20/25 ms limits.
+        let mut coordinated = settings();
+        coordinated.jwks_refresh_timeout_ms = 5_000;
         let authenticator = Arc::new(OidcAuthenticator::new(
-            settings(),
-            Arc::new(DelayedRefresh {
+            coordinated,
+            Arc::new(GatedRefresh {
                 calls: Arc::clone(&calls),
                 document: jwks(public)?,
                 valid_until: 2_000,
+                started: Arc::clone(&started),
+                release: Arc::clone(&release),
             }),
         ));
         let candidate = Arc::new(token(
@@ -1447,16 +1460,27 @@ mod tests {
         )?);
         let mut requests = Vec::new();
         for _index in 0..16 {
-            let authenticator = Arc::clone(&authenticator);
-            let candidate = Arc::clone(&candidate);
-            requests.push(tokio::spawn(async move {
-                authenticator
-                    .authenticate(candidate.as_str(), None, None, 1_000)
-                    .await
-            }));
+            requests.push(Box::pin(authenticator.authenticate(
+                candidate.as_str(),
+                None,
+                None,
+                1_000,
+            )));
         }
+        // Poll every request into the blocked refresh before releasing it. A
+        // timed sleep cannot prove contention and races on loaded hosted CPUs.
+        for request in &mut requests {
+            poll_fn(|context| {
+                assert!(request.as_mut().poll(context).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+        }
+        tokio::time::timeout(Duration::from_secs(5), started.notified()).await?;
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        release.notify_one();
         for request in requests {
-            let identity = request.await??;
+            let identity = request.await?;
             assert_eq!(identity.tenant(), &TenantId::new("tenant-a")?);
         }
         assert_eq!(calls.load(Ordering::SeqCst), 1);

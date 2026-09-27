@@ -1253,9 +1253,17 @@ dimension = 64
 maximum_entries = 100000
 maximum_neighbors = 128
 "#;
-        let enabled = DaemonConfig::from_toml(&local_config(table))?;
-        assert!(enabled.local_vector.enabled);
-        assert_eq!(enabled.local_vector.dimension, 64);
+        let enabled = DaemonConfig::from_toml(&local_config(table));
+        if cfg!(target_os = "macos") {
+            let enabled = enabled?;
+            assert!(enabled.local_vector.enabled);
+            assert_eq!(enabled.local_vector.dimension, 64);
+        } else {
+            assert_eq!(
+                enabled.err().map(|error| error.code()),
+                Some(ConfigErrorCode::IncompleteProductionInputs)
+            );
+        }
 
         for invalid in [
             local_config(table).replace(
