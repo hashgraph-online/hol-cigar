@@ -83,7 +83,7 @@ jobs:
           corepack pnpm --dir sdk/typescript run build
           node --test sdk/typescript/dist/tests/broker*.test.js sdk/typescript/dist/tests/context-effects.test.js sdk/typescript/dist/tests/selection-explanation.test.js sdk/typescript/dist/tests/syntax-ingestion.test.js
           uv sync --project sdk/python --frozen
-          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py sdk/python/tests/test_selection_explanation.py sdk/python/tests/test_syntax_ingestion.py
+          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py sdk/python/tests/test_selection_explanation.py sdk/python/tests/test_syntax_ingestion.py sdk/python/tests/test_scoped_retrieval.py
       - name: Qualify independent mixed-client faults on the built SDKs
         if: runner.os != 'Windows'
         shell: bash

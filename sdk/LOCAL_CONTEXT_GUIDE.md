@@ -93,6 +93,11 @@ Full text is the default. Query-window excerpts are opt-in; required evidence re
 its full hard dependency closure. Optional `semantic_candidates` can supply ranked
 IDs from your existing retrieval index without introducing a CIGAR model-service
 dependency. Lexical coverage is not a probability that an answer is true.
+The [retrieval adapter guide](RETRIEVAL_ADAPTERS.md) includes a bounded offline
+Python reference ranker, an explicit callback contract and Node integration.
+Scope text and corpus statistics before indexing or invoking a ranker, and rebuild
+the index after source/policy changes. The current graph/view/grant remains the
+final authorization boundary; optional ranks never grant access.
 
 Keep the complete snapshot. `promptView` / `prompt_view` can produce a compact
 rendering with short citation handles. Keep its citation map and verify it against

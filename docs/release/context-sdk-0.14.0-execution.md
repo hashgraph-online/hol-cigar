@@ -28,7 +28,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
-| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
+| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation, parser-boundary ingestion and bounded offline ranking recipe implemented; held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
@@ -557,3 +557,13 @@ only when their exercised behavior covers the corresponding requirement above.
   is unchanged. Tests retain broadened-ACL rejection, pinning/reparse denial and
   default-owner checks. Both Windows feature configurations pass local target
   compilation and strict Clippy; actual Windows runtime verification remains required.
+- Added an explicit scoped-ranking recipe through the existing candidate-ID port.
+  It reads only host-selected records before corpus statistics/callbacks, binds
+  exact text/source revisions/policy into an input identity, validates bounded
+  unique output IDs, and offers a reusable dependency-free BM25 reference index.
+  Seventeen tests pass, including hidden-record non-access, source/policy refresh,
+  Unicode and input bounds, and actual compiler authorization after the recipe is
+  bypassed or its index becomes stale. Strict typing/lint/format pass. The SDK
+  guide documents Python and Node integration and the callback trust boundary.
+  Default retrieval and public APIs remain unchanged; independent efficacy
+  measurements are registered but have not yet run.
