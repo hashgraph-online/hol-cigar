@@ -209,6 +209,36 @@ class HandoffTests(unittest.TestCase):
         with self.assertRaises(EvidenceWorkspaceError):
             self.verify()
 
+    def test_separate_build_stderr_is_required_and_digest_bound(self):
+        report = json.loads((self.dist / handoff.REPORT).read_bytes())
+        check = next(
+            row for row in report["checks"] if row["name"] == "native-dependencies"
+        )
+        diagnostic = b"warning: retained fixture\n"
+        check["stderr_sha256"] = hashlib.sha256(diagnostic).hexdigest()
+        name = "build-native-dependencies.stderr.gz"
+        payload = gzip.compress(diagnostic, mtime=0)
+        report["evidence"].append(
+            {
+                "file": name,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        )
+        write(self.dist / "evidence" / name, payload)
+        build_path = self.dist / "evidence/build-release.json.gz"
+        build = json.loads(gzip.decompress(build_path.read_bytes()))
+        build["checks"] = report["checks"]
+        write(build_path, gzip.compress(canonical_json_bytes(build), mtime=0))
+        handoff.validate_retained(self.dist, report)
+
+        write(self.dist / "evidence" / name, gzip.compress(b"changed", mtime=0))
+        with self.assertRaisesRegex(ReleaseError, "build stderr digest mismatch"):
+            handoff.validate_retained(self.dist, report)
+        report["evidence"] = [row for row in report["evidence"] if row["file"] != name]
+        with self.assertRaisesRegex(ReleaseError, "evidence inventory is not exact"):
+            handoff.validate_retained(self.dist, report)
+
     def test_manifest_pin_rejects_edited_manifest_before_signature_verification(self):
         write(self.dist / handoff.MANIFEST, b"{}")
         with self.assertRaises(EvidenceWorkspaceError):

@@ -719,3 +719,15 @@ only when their exercised behavior covers the corresponding requirement above.
   checks use nonexistent input paths. All seventy release integrity/native-source
   tests, full release-tooling lint and formatting pass locally. The failed hosted
   log remains retained as `release-e18c9515-integrity.log`.
+- At `8b8eb439`, all fourteen native builds, both complete SDK archive builds
+  and their exact-byte comparison pass. The separate legacy RC path reaches
+  dependency inventory and fails while parsing the combined stdout/stderr log
+  as JSON. Machine-readable dependency stdout now has a separate retained,
+  digest-bound stderr stream; normal command logs and nonzero status handling
+  remain unchanged. Tests cover warnings alongside valid JSON, nonzero commands,
+  missing diagnostic evidence and changed diagnostic bytes. Seventy-three
+  release tests, full release lint/format and workflow lint pass locally.
+  Future failed RC jobs also upload their diagnostic logs before final assembly.
+  `release-8b8eb439-legacy-rc.log` retains the original failure. A local metadata
+  probe of the exact extracted source archives parses all 75 dependency entries;
+  its cached environment emits no stderr, so hosted rerun remains required.

@@ -39,6 +39,7 @@ jobs:
             scripts.release.tests.test_context_sdk_handoff \
             scripts.release.tests.test_context_sdk_beta \
             scripts.release.tests.test_context_sdk_release \
+            scripts.release.tests.test_prepare_context_sdk_rc \
             scripts.release.tests.test_release_entrypoint_evidence \
             scripts.release.tests.test_license_inventory.CargoLicenseClosureTests.test_committed_inventory_contains_the_complete_cargo_lock_closure
 
@@ -98,6 +99,17 @@ jobs:
             --release "${RUNNER_TEMP}/sdk-rc" --qualification "${RUNNER_TEMP}/sdk-rc-checks" \
             --artifacts "${RUNNER_TEMP}/qualified/artifacts" --evidence "${RUNNER_TEMP}/qualified/evidence" \
             --uv "$(command -v uv)" --actionlint "$(go env GOPATH)/bin/actionlint"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: context-sdk-rc-diagnostics-${{ inputs.build-id || 'local' }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/sdk-rc/logs/
+            ${{ runner.temp }}/sdk-rc/checks.json
+            ${{ runner.temp }}/sdk-rc-checks/logs/
+            ${{ runner.temp }}/sdk-rc-checks/checks.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

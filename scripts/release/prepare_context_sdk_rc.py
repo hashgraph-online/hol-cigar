@@ -8,6 +8,7 @@ Python 3.14. Bundled native packaging is deliberately restricted to macOS ARM64.
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -27,6 +28,25 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run_logged(command, *, cwd, env, log, stderr=None):
+    """Keep machine-readable stdout separate from retained diagnostics when needed."""
+    with ExitStack() as streams:
+        output = streams.enter_context(log.open("wb"))
+        errors = (
+            streams.enter_context(stderr.open("wb"))
+            if stderr is not None
+            else subprocess.STDOUT
+        )
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            stdout=output,
+            stderr=errors,
+            timeout=1200,
+        )
 
 
 def main() -> None:
@@ -78,19 +98,18 @@ def main() -> None:
     env["npm_config_cache"] = str(output / "npm-cache")
     records = []
 
-    def run(name, command, cwd=ROOT, extra=None):
+    def run(name, command, cwd=ROOT, extra=None, separate_stderr=False):
         command = [str(part) for part in command]
         started = time.monotonic()
         print(name, flush=True)
-        with (logs / f"{name}.log").open("wb") as log:
-            result = subprocess.run(
-                command,
-                cwd=cwd,
-                env=env | (extra or {}),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=1200,
-            )
+        stderr = logs / f"{name}.stderr" if separate_stderr else None
+        result = run_logged(
+            command,
+            cwd=cwd,
+            env=env | (extra or {}),
+            log=logs / f"{name}.log",
+            stderr=stderr,
+        )
         record = {
             "name": name,
             "argv": command,
@@ -99,6 +118,8 @@ def main() -> None:
             "elapsed_seconds": time.monotonic() - started,
             "log_sha256": sha(logs / f"{name}.log"),
         }
+        if stderr is not None:
+            record["stderr_sha256"] = sha(stderr)
         records.append(record)
         (output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
         if result.returncode:
@@ -231,6 +252,7 @@ def main() -> None:
                 "bpe,broker-persistence",
             ],
             native_root,
+            separate_stderr=True,
         )
     )
     notices = [

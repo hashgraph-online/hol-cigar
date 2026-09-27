@@ -302,6 +302,11 @@ def validate_retained(snapshot: Path, report: dict) -> None:
     }
     required.update("build-" + row["name"] + ".log.gz" for row in report["checks"])
     required.update(
+        "build-" + row["name"] + ".stderr.gz"
+        for row in report["checks"]
+        if "stderr_sha256" in row
+    )
+    required.update(
         "installed-" + row["name"] + suffix
         for row in report["qualification"]["checks"]
         for suffix in (".stdout.gz", ".stderr.gz")
@@ -351,6 +356,14 @@ def validate_retained(snapshot: Path, report: dict) -> None:
             == check.get("log_sha256"),
             "build log digest mismatch",
         )
+        if "stderr_sha256" in check:
+            require(
+                hashlib.sha256(
+                    read("build-" + check["name"] + ".stderr.gz")
+                ).hexdigest()
+                == check["stderr_sha256"],
+                "build stderr digest mismatch",
+            )
     for check in report["additional_checks"]:
         require(
             hashlib.sha256(read("final-" + check["name"] + ".log.gz")).hexdigest()
