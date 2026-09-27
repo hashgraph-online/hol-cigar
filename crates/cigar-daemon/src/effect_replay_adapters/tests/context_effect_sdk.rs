@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+#[path = "context_effect_lifecycle.rs"]
+mod lifecycle;
+
 struct Authority {
     correlation_id: RecordId,
     now: UtcTimestamp,

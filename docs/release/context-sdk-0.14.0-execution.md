@@ -833,3 +833,21 @@ only when their exercised behavior covers the corresponding requirement above.
   real wakeup worker, using reference protected-value/scheduling stores. It does
   not establish encryption, human-approval policy, PostgreSQL durability or
   production deployment. No local test/build ran during the active soak.
+- [Release run 36348301804](https://github.com/hashgraph-online/hol-cigar/actions/runs/36348301804)
+  also succeeds at `4ea58edca26f3f6ac26f2b7a0993ccdef441e8e7`, including fourteen
+  native builds, two matching SDK archive builds, fourteen installed cells,
+  legacy compatibility and final assembly. Artifact `10942276118` has ZIP SHA-256
+  `78e98717c439203c39879f6afa11d1ef0a9e6de57012755dd1ee081e30f3848a`.
+  The archive has not been downloaded during the local soak. Source and boundary
+  runs pass at `cb78e68260289bc4dfcf0f73ddec847007419fb1`, which corrects the new
+  test oracle's unsupported SHA-256 array formatting. The preceding failure logs
+  and formatter diagnostic are retained; SDK and native runtime code is unchanged.
+- Added a separate installed-application lifecycle gate for real HTTP revision
+  rejection, separately authorized compensation, distinct child context binding,
+  and reopened SQLite outcomes. The native reader observes missing-revision HTTP
+  responses, exact mutation revisions/errors, the compensation link, both effect
+  attempts and two connector sends. Native begin/resolve transitions are explicit;
+  this test must not imply the application schedules them automatically. The
+  private driver uses the actual application adapter and compensation gateway.
+  This new gate is unexecuted and requires its separately selected downstream
+  driver. Existing source SDK, application and gateway gates remain unchanged.
