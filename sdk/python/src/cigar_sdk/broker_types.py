@@ -6,9 +6,10 @@ from cigar_sdk.context_types import LocalAnswerDraft, LocalDocument, LocalViewCo
 
 
 class LocalBrokerStorageOptions(TypedDict):
-    """Existing private host directory; only evidence is retained across restarts."""
+    """Private host directory; only evidence is retained across restarts."""
 
     directory: str
+    create_directory: NotRequired[bool]
     max_checkpoint_bytes: NotRequired[int]
     max_database_bytes: NotRequired[int]
     max_journal_records: NotRequired[int]

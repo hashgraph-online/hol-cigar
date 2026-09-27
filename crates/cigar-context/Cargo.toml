@@ -22,7 +22,7 @@ workspace = true
 default = []
 bpe = ["dep:tiktoken-rs"]
 broker = ["dep:getrandom", "dep:hmac", "dep:zeroize"]
-broker-persistence = ["broker", "dep:rusqlite", "dep:rustix"]
+broker-persistence = ["broker", "dep:rusqlite", "dep:rustix", "dep:cigar-windows-ipc"]
 
 [dependencies]
 serde.workspace = true
@@ -34,6 +34,9 @@ zeroize = { workspace = true, optional = true }
 tiktoken-rs = { version = "=0.12.0", optional = true }
 rusqlite = { workspace = true, optional = true, features = ["limits"] }
 rustix = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+cigar-windows-ipc = { version = "=0.9.4", path = "../cigar-windows-ipc", optional = true, default-features = false }
 
 [dev-dependencies]
 tempfile.workspace = true

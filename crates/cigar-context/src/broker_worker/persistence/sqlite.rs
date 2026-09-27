@@ -13,6 +13,10 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::time::Duration;
 
+#[cfg(unix)]
+mod path;
+#[cfg(windows)]
+#[path = "sqlite/windows_path.rs"]
 mod path;
 use path::PrivatePath;
 
@@ -97,7 +101,7 @@ impl Store {
             resulting: BTreeMap::new(),
         };
         store.commit(&broker, &event)?;
-        store.path.sync_directory()?;
+        store.path.sync_creation()?;
         Ok((broker, store, !created))
     }
 

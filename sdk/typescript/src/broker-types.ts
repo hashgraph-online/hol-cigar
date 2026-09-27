@@ -19,7 +19,7 @@ export type LocalBrokerAgentLimits = Readonly<Partial<{
 export type LocalBrokerAgentQueueLimits = Readonly<Partial<{max_jobs: number; max_bytes: number}>>;
 /** Existing private host directory; only evidence is retained across restarts. */
 export type LocalBrokerStorageOptions = Readonly<{
-  directory: string; max_checkpoint_bytes?: number; max_database_bytes?: number; max_journal_records?: number;
+  directory: string; create_directory?: boolean; max_checkpoint_bytes?: number; max_database_bytes?: number; max_journal_records?: number;
 }>;
 export type LocalBrokerStorageStatus = Readonly<{mode: "memory" | "sqlite-checkpoint.v1"; restored: boolean}>;
 export type LocalBrokerOptions = Readonly<{

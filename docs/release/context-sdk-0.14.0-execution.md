@@ -25,7 +25,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
-| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix opt-in atomic store, bounded receipt chain and SDK restart implemented; Windows protection, hosted fault qualification and performance acceptance pending |
+| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK exact-submission review port implemented; execution handoff pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
@@ -307,3 +307,34 @@ only when their exercised behavior covers the corresponding requirement above.
   and no performance, independent efficacy, platform or release qualification is
   claimed. The earlier release-profile test failures remain Q2/Q3 work. Source
   versions remain at the development alpha identity; no v0.14 publication occurs.
+- Added the Windows storage boundary in the existing audited `cigar-windows-ipc`
+  adapter. It checks the process owner, a protected inheritable owner-only DACL,
+  local fixed NTFS, single-link regular files and unchanged file identities.
+  Live directory handles omit write/delete sharing; the database handle prevents
+  replacement. UNC paths, junctions/reparse points and alternate streams fail
+  closed. The context crate retains `unsafe_code = "forbid"`. The adapter's
+  optional named-pipe feature preserves the existing Honey consumer while keeping
+  Tokio out of the standalone context dependency closure.
+- Added explicit `create_directory` to Rust, Python and Node host options. It
+  creates only a final private directory, requires an existing parent and never
+  rewrites existing permissions. Added Windows ACL/inheritance, replacement,
+  hardlink, junction and invalid-path tests, and made the common SQLite crash/
+  corruption/limit tests and both SDK recovery suites run on Windows.
+- Local validation passes 401 Python tests plus 39 subtests, 104 Node tests with
+  no skips, and the complete native gate: 115 all-feature tests, one doctest and
+  48 core-only invocations. The bounded crash parent exercises four abrupt-exit
+  boundaries. Strict typing and generated-local-asset checks pass. Native logs
+  are in `broker-windows-source-checks`; SDK results use the
+  `broker-windows-` prefix in the development evidence directory.
+- A SHA-256-verified Rust 1.92 Windows standard library allowed cross-target
+  compilation and strict Clippy of the Windows adapter and tests, with and without
+  named-pipe support. This does not execute Windows kernel behavior. The three-OS
+  source workflow now includes those adapter tests and independent Python/Node
+  broker consumers, followed by related-crate archive verification. Hosted results
+  remain required before claiming Windows storage support.
+- Local related-crate archive verification succeeds with the public crates.io
+  index available. Cargo 1.92's offline package verification hit an internal
+  "no hash listed" failure for its temporary registry; both failed diagnostics
+  and the successful online verification are retained. No model provider was
+  called, and packaging uploaded no source. Exact installed distribution,
+  performance, power-loss and release qualification remain incomplete.

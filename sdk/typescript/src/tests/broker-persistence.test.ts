@@ -9,7 +9,8 @@ import type { LocalBrokerOptions, LocalBrokerSourceProvenance } from "../context
 const provenance: LocalBrokerSourceProvenance = {authority:"host",upstream_revision:"one",
   observed_at_ms:1,valid_until_ms:null,origin:"host",derived_from:[]};
 const options = (directory: string): LocalBrokerOptions => ({
-  ...(process.env.CIGAR_TEST_WORKER ? {workerPath: process.env.CIGAR_TEST_WORKER} : {}),storage:{directory},
+  ...(process.env.CIGAR_TEST_WORKER ? {workerPath: process.env.CIGAR_TEST_WORKER} : {}),
+  storage:{directory:join(directory,"store"),create_directory:true},
 });
 const code = (wanted: string) => (error: unknown) => error instanceof LocalBrokerError && error.code === wanted;
 const grant = (broker: LocalContextBroker) => broker.grant({id:"agent",allowed_sources:["docs"],policy_revision:"same"});
@@ -17,7 +18,6 @@ const ingest = async (broker: LocalContextBroker, text: string) => broker.replac
   await broker.sourceRevision("docs"),[{id:"fact",source:"docs",text}],provenance);
 
 test("Node broker restores evidence and withdrawal while rejecting pre-restart context and CAS", {
-  skip:process.platform === "win32" ? "persistent directory protection is not implemented for Windows" : false,
   timeout:30_000,
 }, async()=>{
   const directory = await mkdtemp(join(tmpdir(),"cigar-broker-store-"));
@@ -48,11 +48,11 @@ test("Node broker restores evidence and withdrawal while rejecting pre-restart c
 });
 
 test("Node durability failure closes the broker without a false failure receipt or retry", {
-  skip:process.platform === "win32" ? "persistent directory protection is not implemented for Windows" : false,
   timeout:30_000,
 },async()=>{
   const directory = await mkdtemp(join(tmpdir(),"cigar-broker-store-"));
-  const opts: LocalBrokerOptions = {...options(directory),storage:{directory,max_checkpoint_bytes:4096}};
+  const opts: LocalBrokerOptions = {...options(directory),storage:{
+    directory:join(directory,"store"),create_directory:true,max_checkpoint_bytes:4096}};
   try {
     await using original = await LocalContextBroker.create("node-durable",opts);
     await ingest(original,"original evidence");

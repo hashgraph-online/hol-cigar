@@ -4,19 +4,36 @@ use cigar_context::broker::{AgentGrantSpec, AgentLimits, SourceOrigin, SourcePro
 use cigar_context::{ContextRequest, ContextViewSpec, Document, Utf8ByteCounter};
 use std::collections::BTreeSet;
 use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
+#[cfg(unix)]
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt, symlink};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 use tempfile::TempDir;
 
-fn private_directory() -> TempDir {
-    tempfile::Builder::new()
-        .permissions(fs::Permissions::from_mode(0o700))
-        .tempdir()
-        .unwrap()
+struct TestDirectory {
+    _parent: TempDir,
+    path: PathBuf,
+}
+impl TestDirectory {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+fn private_directory() -> TestDirectory {
+    let parent = tempfile::tempdir().unwrap();
+    let path = parent.path().join("store");
+    #[cfg(unix)]
+    fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
+    #[cfg(windows)]
+    drop(cigar_windows_ipc::PrivateStorageDirectory::open(&path, true).unwrap());
+    TestDirectory {
+        _parent: parent,
+        path,
+    }
 }
 
-fn options(directory: &TempDir) -> BrokerStorageOptions {
+fn options(directory: &TestDirectory) -> BrokerStorageOptions {
     let mut options = BrokerStorageOptions::new(directory.path());
     options.max_checkpoint_bytes = 4 * 1024 * 1024;
     options.max_database_bytes = 16 * 1024 * 1024;
@@ -75,6 +92,25 @@ fn grant(broker: &mut ContextBroker) -> cigar_context::broker::BrokerCredential 
             lease_ms: 60_000,
         })
         .unwrap()
+}
+
+#[test]
+fn private_directory_creation_is_explicit_and_never_creates_missing_parents() {
+    let parent = tempfile::tempdir().unwrap();
+    let directory = parent.path().join("store");
+    let mut options = BrokerStorageOptions::new(&directory);
+    assert!(open(options.clone()).is_err());
+    assert!(!directory.exists());
+    options.create_directory = true;
+    let (_, store, restored) = open(options.clone()).unwrap();
+    assert!(!restored);
+    drop(store);
+    let (_, store, restored) = open(options.clone()).unwrap();
+    assert!(restored);
+    drop(store);
+    options.directory = parent.path().join("missing-parent").join("store");
+    assert!(open(options).is_err());
+    assert!(!parent.path().join("missing-parent").exists());
 }
 
 #[test]
@@ -377,6 +413,7 @@ fn rejected_checkpoint_and_disk_bounds_leave_the_previous_durable_evidence() {
 }
 
 #[test]
+#[cfg(unix)]
 fn unsafe_paths_and_replaced_files_are_rejected_without_chmod_or_following() {
     let directory = private_directory();
     let opts = options(&directory);
@@ -412,7 +449,7 @@ fn unsafe_paths_and_replaced_files_are_rejected_without_chmod_or_following() {
         .tempdir_in(parent.path())
         .unwrap();
     fs::set_permissions(parent.path(), fs::Permissions::from_mode(0o777)).unwrap();
-    assert!(open(options(&child)).is_err());
+    assert!(open(BrokerStorageOptions::new(child.path())).is_err());
     assert!(!child.path().join("broker.sqlite3").exists());
     fs::set_permissions(parent.path(), fs::Permissions::from_mode(0o700)).unwrap();
 }

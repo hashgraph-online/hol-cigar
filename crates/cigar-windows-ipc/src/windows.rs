@@ -8,6 +8,7 @@ use std::os::windows::ffi::OsStrExt as _;
 use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _};
 use std::path::Path;
 use std::ptr::null_mut;
+#[cfg(feature = "named-pipe")]
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 use windows_sys::Win32::Foundation::{
     ERROR_SUCCESS, GENERIC_READ, GENERIC_WRITE, HLOCAL, INVALID_HANDLE_VALUE, LocalFree,
@@ -19,24 +20,29 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, ACL_SIZE_INFORMATION, AclSizeInformation,
-    DACL_SECURITY_INFORMATION, EqualSid, GetAce, GetAclInformation, GetSecurityDescriptorControl,
-    IsValidAcl, IsValidSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
-    SE_DACL_PROTECTED, SECURITY_ATTRIBUTES,
+    CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION, EqualSid, GetAce, GetAclInformation,
+    GetSecurityDescriptorControl, INHERITED_ACE, IsValidAcl, IsValidSid, OBJECT_INHERIT_ACE,
+    OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED, SECURITY_ATTRIBUTES,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateDirectoryW, CreateFileW, FILE_ATTRIBUTE_NORMAL,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
-    MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW, OPEN_ALWAYS, OPEN_EXISTING,
-    READ_CONTROL,
+    BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateDirectoryW, CreateFileW, FILE_ALL_ACCESS,
+    FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    GetFileInformationByHandle, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
+    OPEN_ALWAYS, OPEN_EXISTING, READ_CONTROL,
 };
 use windows_sys::Win32::System::SystemServices::ACCESS_ALLOWED_ACE_TYPE;
 
 const MAX_SID_TEXT_UNITS: usize = 256;
+#[cfg(feature = "named-pipe")]
 const MAX_PIPE_INSTANCES: usize = 64;
+#[cfg(feature = "named-pipe")]
 const PIPE_BUFFER_BYTES: u32 = 64 * 1024;
 const SID_FIXED_BYTES: usize = 8;
 const SID_SUBAUTHORITY_BYTES: usize = 4;
+
+mod storage;
+pub use storage::{PrivateStorageDirectory, StorageFileIdentity};
 
 struct LocalAllocation(*mut c_void);
 
@@ -401,6 +407,27 @@ fn validate_owner_only_handle(
     expected_owner: &str,
     require_single_link: bool,
 ) -> io::Result<()> {
+    validate_owner_acl(
+        file,
+        expected_owner,
+        require_single_link,
+        AclPolicy::Credential,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AclPolicy {
+    Credential,
+    StorageDirectory,
+    StorageFile,
+}
+
+fn validate_owner_acl(
+    file: &File,
+    expected_owner: &str,
+    require_single_link: bool,
+    policy: AclPolicy,
+) -> io::Result<()> {
     if !safe_sid_text(expected_owner) {
         return Err(unsafe_credential_acl());
     }
@@ -453,7 +480,7 @@ fn validate_owner_only_handle(
     // live. Both scalar outputs point to initialized local storage.
     if unsafe { GetSecurityDescriptorControl(descriptor.as_ptr(), &mut control, &mut revision) }
         == 0
-        || control & SE_DACL_PROTECTED == 0
+        || (policy != AclPolicy::StorageFile && control & SE_DACL_PROTECTED == 0)
     {
         return Err(unsafe_credential_acl());
     }
@@ -490,7 +517,15 @@ fn validate_owner_only_handle(
     let header = unsafe { &*ace_pointer.cast::<ACE_HEADER>() };
     let sid_offset = std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart);
     if u32::from(header.AceType) != ACCESS_ALLOWED_ACE_TYPE
-        || header.AceFlags != 0
+        || match policy {
+            AclPolicy::Credential => header.AceFlags != 0,
+            AclPolicy::StorageDirectory => {
+                u32::from(header.AceFlags) != (CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE)
+            }
+            AclPolicy::StorageFile => {
+                header.AceFlags != 0 && u32::from(header.AceFlags) != INHERITED_ACE
+            }
+        }
         || usize::from(header.AceSize) < sid_offset.saturating_add(SID_FIXED_BYTES)
     {
         return Err(unsafe_credential_acl());
@@ -498,6 +533,9 @@ fn validate_owner_only_handle(
     // SAFETY: the validated ACE type and size establish the documented `ACCESS_ALLOWED_ACE`
     // representation, and its storage remains live inside `descriptor`.
     let ace = unsafe { &*ace_pointer.cast::<ACCESS_ALLOWED_ACE>() };
+    if policy != AclPolicy::Credential && ace.Mask != FILE_ALL_ACCESS {
+        return Err(unsafe_credential_acl());
+    }
     let ace_sid = std::ptr::addr_of!(ace.SidStart).cast_mut().cast::<c_void>();
     // SAFETY: the preceding size check proves the complete fixed SID header is inside this valid
     // ACE, so its one-byte subauthority count at offset one can be inspected without overread.
@@ -533,6 +571,7 @@ fn unsafe_credential_acl() -> io::Error {
 }
 
 /// Creates one byte-mode local-only named-pipe server whose protected DACL grants only `owner_sid`.
+#[cfg(feature = "named-pipe")]
 pub fn create_user_only_named_pipe(
     pipe_name: &str,
     owner_sid: &str,
@@ -609,6 +648,7 @@ fn null_terminated(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
 
+#[cfg(feature = "named-pipe")]
 fn safe_pipe_name(value: &str) -> bool {
     let Some(suffix) = value.strip_prefix(r"\\.\pipe\cigar-") else {
         return false;
@@ -632,10 +672,12 @@ fn safe_sid_text(value: &str) -> bool {
 mod tests {
     use super::{
         LocalAllocation, create_or_validate_owner_only_directory,
-        create_owner_only_credential_file, create_user_only_named_pipe, file_owner_sid,
-        null_terminated, open_or_create_owner_only_lock_file, open_owner_only_credential_file,
-        replace_owner_only_file_write_through, safe_pipe_name,
+        create_owner_only_credential_file, file_owner_sid, null_terminated,
+        open_or_create_owner_only_lock_file, open_owner_only_credential_file,
+        replace_owner_only_file_write_through,
     };
+    #[cfg(feature = "named-pipe")]
+    use super::{create_user_only_named_pipe, safe_pipe_name};
     use std::ffi::OsStr;
     use std::io::Write as _;
     use std::ptr::null_mut;
@@ -682,6 +724,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "named-pipe")]
     #[tokio::test]
     async fn current_directory_owner_can_secure_a_first_pipe_instance()
     -> Result<(), Box<dyn std::error::Error>> {

@@ -1,7 +1,7 @@
 //! Fixed filenames in a caller-protected directory. No discovery, permissive chmod or cleanup.
 use super::{BrokerError, BrokerStorageOptions};
 use std::fs::{self, File, OpenOptions};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 pub(super) struct PrivatePath {
@@ -13,6 +13,24 @@ pub(super) struct PrivatePath {
 
 impl PrivatePath {
     pub(super) fn prepare(options: &BrokerStorageOptions) -> Result<(Self, bool), BrokerError> {
+        if options.create_directory {
+            let parent = options
+                .directory
+                .parent()
+                .ok_or(BrokerError::InvalidInput)?;
+            trusted_ancestry(parent)?;
+            trusted_ancestry(&parent.canonicalize().map_err(unavailable)?)?;
+            match fs::DirBuilder::new().mode(0o700).create(&options.directory) {
+                Ok(()) => {
+                    File::open(parent)
+                        .map_err(unavailable)?
+                        .sync_all()
+                        .map_err(unavailable)?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(unavailable(error)),
+            }
+        }
         let parent = fs::symlink_metadata(&options.directory).map_err(unavailable)?;
         private(&parent, true)?;
         trusted_ancestry(&options.directory)?;
@@ -88,7 +106,7 @@ impl PrivatePath {
         Ok(())
     }
 
-    pub(super) fn sync_directory(&self) -> Result<(), BrokerError> {
+    pub(super) fn sync_creation(&self) -> Result<(), BrokerError> {
         self.directory.sync_all().map_err(unavailable)
     }
 }

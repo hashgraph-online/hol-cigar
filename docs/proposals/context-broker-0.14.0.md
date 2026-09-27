@@ -4,7 +4,7 @@ Status: native authority, bounded scheduler and the explicit `--broker` worker
 transport are implemented behind the opt-in `broker` Cargo feature. Python and
 Node host/client facades have local source tests with independent 1/5/12-agent
 processes, including mixed-language clients. Durable storage is implemented as a
-Unix-only opt-in prototype; platform/performance qualification and installed
+Unix and Windows local-NTFS opt-in prototype; Windows runtime, platform/performance and installed
 distribution qualification are pending; this is not yet a shipped capability.
 The 0.13 views and ordinary 0.12 graph APIs remain available independently.
 See the [development SDK guide](../../sdk/LOCAL_BROKER_GUIDE.md).
@@ -178,7 +178,7 @@ needs an exclusive writer lock, durable commit markers and atomic checkpoints.
 Credentials and release permissions are never serialized as reusable authority.
 
 The `broker-persistence` feature reuses the repository's pinned embedded SQLite.
-The Unix prototype requires an existing absolute host-owned directory with mode
+The Unix prototype requires an absolute host-owned directory with mode
 0700, protected ancestor directories, a regular single-link database with mode
 0600, and verified sidecar identity.
 It refuses symlinks, unexpected WAL sidecars, unsupported schemas and empty
@@ -195,8 +195,14 @@ write, between journal/checkpoint updates, before commit, and after commit. Powe
 loss and advertised-platform qualification remain required. Profile full
 checkpoint rewrites against bounded source/document updates before selecting the
 release path. Core graph use retains its existing dependency and I/O behavior.
-Windows requests currently fail explicitly: private-directory and filesystem
-identity enforcement must be implemented and qualified before enabling storage.
+Explicit `create_directory` can create only a final private directory component;
+existing permissions are never repaired. The Windows adapter uses a protected
+inheritable owner-only DACL, checks local fixed NTFS storage and pins every
+directory component without write/delete sharing. Database handles prevent
+replacement; sidecars must retain one owner ACE and a regular single-link identity.
+It rejects UNC paths, reparse points and alternative streams. Windows raw APIs
+remain inside `cigar-windows-ipc`; disabling its named-pipe feature keeps Tokio out
+of the standalone worker dependency closure. Windows runtime tests are pending.
 No persistence capability is advertised by an ordinary memory-only broker.
 
 No success response is emitted before a committed mutation is durable. A failed

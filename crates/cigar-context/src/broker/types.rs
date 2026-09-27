@@ -35,13 +35,17 @@ impl std::fmt::Display for BrokerError {
 
 impl std::error::Error for BrokerError {}
 
-/// Opt-in evidence storage. The directory must already exist and be private to the host.
+/// Opt-in evidence storage in a directory private to the host.
 /// This stores source text, not agent credentials, reviews or execution authority.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BrokerStorageOptions {
-    /// Absolute existing host-owned directory. No path discovery or automatic migration.
+    /// Absolute host-owned directory. No path discovery or automatic migration.
     pub directory: std::path::PathBuf,
+    /// Explicitly create only the final directory with private permissions if absent.
+    /// The parent must exist. Existing permissions are validated and never rewritten.
+    #[serde(default)]
+    pub create_directory: bool,
     /// Maximum canonical checkpoint size (1 KiB..=512 MiB).
     #[serde(default = "default_checkpoint_bytes")]
     pub max_checkpoint_bytes: usize,
@@ -69,6 +73,7 @@ impl BrokerStorageOptions {
     pub fn new(directory: impl Into<std::path::PathBuf>) -> Self {
         Self {
             directory: directory.into(),
+            create_directory: false,
             max_checkpoint_bytes: default_checkpoint_bytes(),
             max_database_bytes: default_database_bytes(),
             max_journal_records: default_journal_records(),

@@ -20,7 +20,10 @@ def provenance(origin="host"):
 
 
 def options(directory):
-    return {"worker_path": os.environ.get("CIGAR_TEST_WORKER"), "storage": {"directory": str(directory)}}
+    return {
+        "worker_path": os.environ.get("CIGAR_TEST_WORKER"),
+        "storage": {"directory": str(directory / "store"), "create_directory": True},
+    }
 
 
 def grant(broker):
@@ -35,7 +38,6 @@ def ingest(broker, text):
     )
 
 
-@pytest.mark.skipif(os.name == "nt", reason="persistent directory protection is not implemented for Windows")
 def test_restart_after_worker_kill_preserves_admitted_evidence_and_revokes_all_handles(tmp_path):
     opts = options(tmp_path)
     with LocalContextBroker("durable-sdk", **opts) as broker:
@@ -95,7 +97,6 @@ def test_restart_after_worker_kill_preserves_admitted_evidence_and_revokes_all_h
         assert int(restored.source_revision("docs")["version"]) == int(old["version"]) + 1
 
 
-@pytest.mark.skipif(os.name == "nt", reason="persistent directory protection is not implemented for Windows")
 def test_storage_failure_closes_worker_with_unknown_outcome_and_no_retry(tmp_path):
     opts = options(tmp_path)
     opts["storage"]["max_checkpoint_bytes"] = 4096
@@ -112,7 +113,6 @@ def test_storage_failure_closes_worker_with_unknown_outcome_and_no_retry(tmp_pat
         assert "original evidence" in LocalContextClient(grant(restored)).compile({"query": "evidence"})["rendered"]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="persistent directory protection is not implemented for Windows")
 def test_store_excludes_second_owner_and_rejects_domain_mismatch(tmp_path):
     opts = options(tmp_path)
     with LocalContextBroker("single-owner", **opts) as broker:

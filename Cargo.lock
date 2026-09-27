@@ -896,6 +896,7 @@ dependencies = [
 name = "cigar-context"
 version = "0.13.0-alpha.1"
 dependencies = [
+ "cigar-windows-ipc",
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "rusqlite",
@@ -1238,6 +1239,7 @@ dependencies = [
 name = "cigar-windows-ipc"
 version = "0.9.4"
 dependencies = [
+ "tempfile",
  "tokio",
  "windows-sys 0.61.2",
 ]

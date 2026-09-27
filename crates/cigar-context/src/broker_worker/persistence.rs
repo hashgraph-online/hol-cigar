@@ -7,13 +7,13 @@ use cigar_context::broker::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[cfg(all(feature = "broker-persistence", unix))]
+#[cfg(all(feature = "broker-persistence", any(unix, windows)))]
 mod sqlite;
 
 #[derive(Default)]
 pub(super) struct Persistence {
     active: bool,
-    #[cfg(all(feature = "broker-persistence", unix))]
+    #[cfg(all(feature = "broker-persistence", any(unix, windows)))]
     store: Option<sqlite::Store>,
 }
 
@@ -45,7 +45,7 @@ impl Persistence {
         options: Option<BrokerStorageOptions>,
     ) -> Result<(ContextBroker, Self, bool), BrokerError> {
         if let Some(options) = options {
-            #[cfg(all(feature = "broker-persistence", unix))]
+            #[cfg(all(feature = "broker-persistence", any(unix, windows)))]
             {
                 let (broker, store, restored) =
                     sqlite::Store::open(domain, graph, limits, options)?;
@@ -58,7 +58,7 @@ impl Persistence {
                     restored,
                 ));
             }
-            #[cfg(not(all(feature = "broker-persistence", unix)))]
+            #[cfg(not(all(feature = "broker-persistence", any(unix, windows))))]
             {
                 let _ = options;
                 // Never silently downgrade a requested persistent broker to memory-only mode.
@@ -122,7 +122,7 @@ impl Persistence {
                 .resulting
                 .insert(source.clone(), broker.host_source_revision(source)?);
         }
-        #[cfg(all(feature = "broker-persistence", unix))]
+        #[cfg(all(feature = "broker-persistence", any(unix, windows)))]
         if let Some(store) = &mut self.store {
             return store.commit(broker, &event);
         }

@@ -171,24 +171,34 @@ routing and orchestration; its Honey execution integration remains separate.
 ## Experimental evidence persistence
 
 The v0.14 development worker can retain admitted evidence in an explicitly selected
-local directory when built with `broker-persistence`. The current prototype is
-Unix-only; Windows requests fail explicitly. Hosted platform, power-loss and
-performance qualification are pending. The default broker remains in memory.
+local directory when built with `broker-persistence`. The development prototype
+has Unix and local-NTFS Windows storage adapters. Windows runtime, hosted platform,
+power-loss and performance qualification are pending. The default broker remains
+in memory.
 
-Create a private directory owned by the host (mode 0700), then pass its absolute
-path on the host channel:
+Pass an absolute directory on the host channel. Set `create_directory` to create
+only its final component with private permissions; its parent must already exist.
+Existing directories are validated without rewriting permissions. Unix requires
+mode 0700. Windows requires a protected owner-only DACL with inheritance for
+SQLite sidecars; ordinary temporary directories do not meet that contract.
 
 ```python
-with LocalContextBroker("project", storage={"directory": "/absolute/private/cigar"}) as broker:
+with LocalContextBroker(
+    "project", storage={"directory": "/absolute/private/cigar", "create_directory": True}
+) as broker:
     print(broker.capabilities()["storage"])
     # {"mode": "sqlite-checkpoint.v1", "restored": False} on first initialization
 ```
 
 ```ts
 await using broker = await LocalContextBroker.create("project", {
-  storage: {directory: "/absolute/private/cigar"},
+  storage: {directory: "/absolute/private/cigar", create_directory: true},
 });
 ```
+
+On Windows use an absolute local drive path, such as `C:\private\cigar`.
+UNC/network paths, non-NTFS volumes and junctions/reparse points are rejected.
+Directory and database handles prevent replacement while the store is open.
 
 Reopen the same directory and domain to restore committed source versions,
 provenance, relations and withdrawal tombstones. Each evidence write commits its
