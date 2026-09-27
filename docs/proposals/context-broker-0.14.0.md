@@ -232,6 +232,23 @@ authority. HUMIDOR owns orchestration and model routing. Existing effect journal
 idempotency and reconciliation rules remain authoritative; the broker never
 turns a context assessment into a general tool grant or a blind redispatch.
 
+The native host now implements `host_bind_execution` and
+`host_take_execution_handoff`, exposed through both SDKs only when the worker
+advertises `execution_handoff.v1`. A binding retains the exact prepared effect
+ID/intent multihash, ticket/submission/context/snapshot identities, epoch, source
+authority digest and trusted review digest. The review input includes a host-owned
+authority revision, verdicts and answer policy. Reviews are bounded before cloning
+or hashing; retained bindings use the existing ticket quotas.
+
+Take requires the entire retained binding and current host review input. It checks
+freshness again and consumes the binding before returning; a lost reply cannot
+justify taking/sending again. Agent commands cannot decode either host operation.
+Replacing a submission invalidates its prior binding; a restart restores none.
+This is a transient context precondition, not a Honey approval, journal or dispatch
+permit. It establishes no cross-system lock or freshness guarantee after take.
+The execution adapter must preserve the exact existing intent and authority checks;
+its Honey/HUMIDOR integration and terminal-oracle tests remain required.
+
 ## Required evidence
 
 Tests must exercise actual independent Python and Node client processes, including

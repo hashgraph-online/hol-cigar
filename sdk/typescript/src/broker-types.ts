@@ -1,4 +1,4 @@
-import type { LocalAnswerDraft, LocalContextLimits, LocalDocument, LocalViewContext } from "./context-types.js";
+import type { LocalAnswerDraft, LocalAnswerPolicy, LocalClaimReview, LocalContextLimits, LocalDocument, LocalViewAssessment, LocalViewContext } from "./context-types.js";
 
 export type LocalBrokerLimits = Readonly<Partial<{
   max_agents: number; max_sources: number; max_tickets: number; max_proposals: number;
@@ -54,6 +54,20 @@ export type LocalBrokerProposal = Readonly<{
 }>;
 export type LocalBrokerSubmission = Readonly<{
   submission_id: string; draft: LocalAnswerDraft; review_keys: readonly string[];
+}>;
+/** Current host-owned review authority, verdicts and policy; never agent output. */
+export type LocalBrokerExecutionReview = Readonly<{
+  authority_revision: string; reviews: readonly LocalClaimReview[]; policy: LocalAnswerPolicy;
+}>;
+/** Retained context precondition for one exact external intent, not effect authorization. */
+export type LocalBrokerExecutionBinding = Readonly<{
+  schema: "cigar.context-execution-binding.v1"; id: string; epoch: string; ticket: string;
+  submission_id: string; context_id: string; snapshot_id: string; source_authority_digest: string;
+  review_digest: string; effect_id: string; intent_digest: string;
+}>;
+/** One consumed, freshly checked binding. Not a durable dispatch receipt. */
+export type LocalBrokerExecutionHandoff = Readonly<{
+  binding: LocalBrokerExecutionBinding; checked: LocalViewAssessment;
 }>;
 export type LocalBrokerCapabilities = Readonly<{
   protocol: "cigar.context-broker.v1"; core_version: string; epoch: string; host: "127.0.0.1"; port: number;

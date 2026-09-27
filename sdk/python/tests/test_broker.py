@@ -56,6 +56,93 @@ def ingest(broker, source, node, text):
     )
 
 
+def execution_fixture(broker):
+    ingest(broker, "docs", "fact", "Retry at most three times.")
+    client = LocalContextClient(grant(broker, "execution-agent", ["docs"]))
+    context = client.compile({"query": "retry", "required": ["fact"]})
+    draft = {
+        "snapshot_id": context["context"]["snapshot"]["id"],
+        "claims": [{"text": "Retry at most three times.", "citations": ["fact"], "confidence_bps": 9900}],
+    }
+    submission = client.submit_answer(context["ticket"], draft)
+    review = {
+        "authority_revision": "reviewer-policy-one",
+        "reviews": [
+            {"claim_key": key, "verdict": "supported"} for key in broker.submission(context["ticket"])["review_keys"]
+        ],
+        "policy": {},
+    }
+    return client, context, draft, submission, review
+
+
+def test_execution_handoff_consumes_once_without_granting_agent_dispatch_authority(broker):
+    client, context, _, submission, review = execution_fixture(broker)
+    intent = "1220" + "a" * 64
+    binding = broker.bind_execution(context["ticket"], submission, "prepared-effect", intent, review)
+    assert binding["intent_digest"] == intent and binding["epoch"] == broker.capabilities()["epoch"]
+    assert not hasattr(client, "bind_execution") and not hasattr(client, "take_execution_handoff")
+    with pytest.raises(LocalBrokerError, match="Stale"):
+        broker.take_execution_handoff(dict(binding, effect_id="substituted-effect"), review)
+    ingest(broker, "unrelated", "private", "unrelated private update")
+
+    def take():
+        try:
+            return broker.take_execution_handoff(binding, review)
+        except LocalBrokerError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _: take(), range(2)))
+    handoffs = [value for value in outcomes if isinstance(value, dict)]
+    assert len(handoffs) == 1 and outcomes.count("Conflict") == 1
+    assert handoffs[0]["binding"] == binding and handoffs[0]["checked"]["assessment"]["decision"] == "release"
+
+
+@pytest.mark.parametrize("change", ["source", "metadata", "submission", "revoke", "reviewer", "policy", "verdict"])
+def test_execution_handoff_revalidates_all_current_context_and_review_inputs(broker, change):
+    client, context, draft, submission, review = execution_fixture(broker)
+    binding = broker.bind_execution(context["ticket"], submission, "prepared-effect", "1220" + "a" * 64, review)
+    if change == "source":
+        ingest(broker, "docs", "fact", "Changed retry rule.")
+    elif change == "metadata":
+        broker.replace_source(
+            "docs",
+            broker.source_revision("docs"),
+            [{"id": "fact", "source": "docs", "text": "Retry at most three times."}],
+            dict(provenance(), upstream_revision="two"),
+        )
+    elif change == "submission":
+        client.submit_answer(context["ticket"], draft)
+    elif change == "revoke":
+        broker.revoke("execution-agent")
+    elif change == "reviewer":
+        review["authority_revision"] = "revoked-reviewer"
+    elif change == "policy":
+        review["policy"] = {"min_sources": 2}
+    else:
+        review["reviews"][0]["verdict"] = "unknown"
+    with pytest.raises(LocalBrokerError):
+        broker.take_execution_handoff(binding, review)
+
+
+def test_execution_handoff_requires_review_and_explicit_worker_capability(broker):
+    _, context, _, submission, review = execution_fixture(broker)
+    with pytest.raises(LocalBrokerError, match="AccessDenied"):
+        broker.bind_execution(
+            context["ticket"], submission, "prepared-effect", "1220" + "a" * 64, dict(review, reviews=[])
+        )
+    binding = broker.bind_execution(context["ticket"], submission, "prepared-effect", "1220" + "a" * 64, review)
+    hello = broker._hello
+    broker._hello = dict(hello, capabilities=[x for x in hello["capabilities"] if x != "execution_handoff.v1"])
+    with patch.object(broker, "_call", side_effect=AssertionError("unsupported host command was sent")):
+        with pytest.raises(LocalBrokerError, match="IncompatibleWorker"):
+            broker.bind_execution(context["ticket"], submission, "prepared-effect", "1220" + "a" * 64, review)
+        with pytest.raises(LocalBrokerError, match="IncompatibleWorker"):
+            broker.take_execution_handoff(binding, review)
+    broker._hello = hello
+    assert broker.take_execution_handoff(binding, review)["checked"]["assessment"]["decision"] == "release"
+
+
 @pytest.mark.parametrize("agents", [1, 5, 12])
 def test_independent_agent_processes_share_exact_scopes_and_preserve_unaffected_work(broker, agents):
     ingest(broker, "shared", "common", "common evidence")

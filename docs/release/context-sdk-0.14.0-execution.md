@@ -27,7 +27,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
-| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK exact-submission review port implemented; execution handoff pending |
+| P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK review/consumable intent binding implemented; Honey/HUMIDOR adapter and end-to-end qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
@@ -353,3 +353,21 @@ only when their exercised behavior covers the corresponding requirement above.
   See [the storage profile](context-sdk-0.14.0-storage-profile.md) for raw-evidence
   identities, limitations and the unresolved full-image write cost. B3/R2/Q1 and
   hosted/installed qualification remain incomplete.
+- Added a bounded, host-only execution binding in the native broker and both SDKs.
+  It commits to an exact already-prepared effect intent, complete reviewed
+  submission, current source/view authority and host reviewer-policy revision.
+  Fresh revalidation precedes a single successful take; changed source/provenance,
+  policy, verdict, submission, epoch, effect identity or expiry is rejected.
+  Replacing a draft invalidates its binding and checkpoints retain no execution
+  permission. The record does not grant tool authority, dispatch, sign a receipt,
+  or replace Honey's effect journal/reconciliation semantics.
+- Local validation passes 410 Python tests plus 39 subtests and all 113 Node
+  tests. Native formatting/strict Clippy pass with 122 all-feature tests, one
+  doctest and 48 core-only invocations. Six new native tests include all-field
+  substitution, single consumption, quota/byte limits, host-only command decoding
+  and restart rejection. SDK tests exercise the actual worker, current-state
+  changes and explicit capability refusal. Python coverage is 93.26% statements
+  and 86.42% branches overall; broker coverage remains 100%/100%. Strict mypy
+  and local asset checks pass. Logs use the `broker-execution-` prefix under the
+  development evidence directory. This completes a context-side primitive, not
+  P2's Honey/HUMIDOR integration or the final cross-platform/release gates.

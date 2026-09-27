@@ -9,9 +9,11 @@
 mod types;
 pub use types::*;
 pub mod authentication;
+mod execution;
 pub mod protocol;
 mod recovery;
 pub mod scheduler;
+pub use execution::{ExecutionBinding, ExecutionHandoff, ExecutionReview};
 pub use recovery::BrokerCheckpoint;
 
 use crate::{
@@ -56,6 +58,7 @@ struct Ticket {
     expires: Instant,
     bytes: usize,
     submission: Option<AnswerSubmission>,
+    execution: Option<execution::PendingExecution>,
 }
 
 struct Proposal {
@@ -412,6 +415,7 @@ impl ContextBroker {
                 expires,
                 bytes,
                 submission: None,
+                execution: None,
             },
         );
         Ok(result)
@@ -650,6 +654,7 @@ impl ContextBroker {
         let id = submission.submission_id.clone();
         if let Some(ticket) = self.tickets.get_mut(ticket_id) {
             ticket.submission = Some(submission);
+            ticket.execution = None;
             ticket.bytes = bytes;
         }
         Ok(id)

@@ -7,7 +7,7 @@ import { inspect } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { LocalBrokerConnection, LocalBrokerError, LocalContextBroker, LocalContextClient } from "../context-api.js";
-import type { LocalAnswerDraft, LocalBrokerContext, LocalBrokerSourceProvenance } from "../context-api.js";
+import type { LocalAnswerDraft, LocalBrokerContext, LocalBrokerExecutionReview, LocalBrokerSourceProvenance } from "../context-api.js";
 
 const options = () => process.env.CIGAR_TEST_WORKER ? {workerPath:process.env.CIGAR_TEST_WORKER} : {};
 const provenance = (origin: "host" | "reviewed_proposal" = "host"): LocalBrokerSourceProvenance => ({
@@ -16,6 +16,67 @@ const provenance = (origin: "host" | "reviewed_proposal" = "host"): LocalBrokerS
 const code = (expected: string) => (error: unknown): boolean => error instanceof LocalBrokerError && error.code === expected;
 const ingest = async (broker: LocalContextBroker, source: string, id: string, text: string) =>
   broker.replaceSource(source, await broker.sourceRevision(source), [{id, source, text}], provenance());
+
+async function executionFixture(broker: LocalContextBroker) {
+  await ingest(broker,"docs","fact","Retry at most three times.");
+  const client = new LocalContextClient(await broker.grant({id:"execution-agent",allowed_sources:["docs"],policy_revision:"one"}));
+  const context = await client.compile({query:"retry",required:["fact"]});
+  const draft: LocalAnswerDraft = {snapshot_id:context.context.snapshot.id,
+    claims:[{text:"Retry at most three times.",citations:["fact"],confidence_bps:9900}]};
+  const submission = await client.submitAnswer(context.ticket,draft);
+  const review: LocalBrokerExecutionReview = {authority_revision:"reviewer-policy-one",policy:{},
+    reviews:(await broker.submission(context.ticket)).review_keys.map(claim_key=>({claim_key,verdict:"supported"}))};
+  return {client,context,draft,submission,review};
+}
+
+test("execution handoff binds the exact intent and permits only one local take",async()=>{
+  await using broker = await LocalContextBroker.create("node-handoff",options());
+  const {client,context,submission,review} = await executionFixture(broker);
+  assert.equal("bindExecution" in client,false);
+  assert.equal("takeExecutionHandoff" in client,false);
+  const binding = await broker.bindExecution(context.ticket,submission,"prepared-effect","1220"+"a".repeat(64),review);
+  await assert.rejects(broker.takeExecutionHandoff({...binding,intent_digest:"1220"+"b".repeat(64)},review),code("Stale"));
+  await ingest(broker,"unrelated","private","Unrelated private update.");
+  const results = await Promise.allSettled([broker.takeExecutionHandoff(binding,review),broker.takeExecutionHandoff(binding,review)]);
+  const accepted = results.filter(value=>value.status==="fulfilled");
+  const denied = results.filter(value=>value.status==="rejected");
+  assert.equal(accepted.length,1); assert.equal(denied.length,1);
+  assert.deepEqual(accepted[0]!.value.binding,binding);
+  assert.equal(accepted[0]!.value.checked.assessment.decision,"release");
+  assert.ok(code("Conflict")(denied[0]!.reason));
+});
+
+for (const change of ["source","metadata","submission","revoke","reviewer","policy","verdict"]) {
+  test(`execution handoff rejects changed ${change}`,async()=>{
+    await using broker = await LocalContextBroker.create("node-handoff-stale",options());
+    const {client,context,draft,submission,review} = await executionFixture(broker);
+    const binding = await broker.bindExecution(context.ticket,submission,"prepared-effect","1220"+"a".repeat(64),review);
+    let current = review;
+    if (change==="source") await ingest(broker,"docs","fact","Changed retry rule.");
+    else if (change==="metadata") await broker.replaceSource("docs",await broker.sourceRevision("docs"),
+      [{id:"fact",source:"docs",text:"Retry at most three times."}],{...provenance(),upstream_revision:"two"});
+    else if (change==="submission") await client.submitAnswer(context.ticket,draft);
+    else if (change==="revoke") await broker.revoke("execution-agent");
+    else if (change==="reviewer") current={...review,authority_revision:"reviewer-revoked"};
+    else if (change==="policy") current={...review,policy:{min_sources:2}};
+    else current={...review,reviews:review.reviews.map(value=>({...value,verdict:"unknown"}))};
+    await assert.rejects(broker.takeExecutionHandoff(binding,current),(error:unknown)=>error instanceof LocalBrokerError);
+  });
+}
+
+test("execution handoff requires review and refuses workers without its advertised feature",async()=>{
+  await using broker = await LocalContextBroker.create("node-handoff-feature",options());
+  const {context,submission,review} = await executionFixture(broker);
+  await assert.rejects(broker.bindExecution(context.ticket,submission,"prepared-effect","1220"+"a".repeat(64),{...review,reviews:[]}),code("AccessDenied"));
+  const binding = await broker.bindExecution(context.ticket,submission,"prepared-effect","1220"+"a".repeat(64),review);
+  const capabilities = broker.capabilities.bind(broker);
+  const hello = capabilities();
+  broker.capabilities = ()=>({...hello,capabilities:hello.capabilities.filter(value=>value!=="execution_handoff.v1")});
+  await assert.rejects(broker.bindExecution(context.ticket,submission,"prepared-effect","1220"+"a".repeat(64),review),code("IncompatibleWorker"));
+  await assert.rejects(broker.takeExecutionHandoff(binding,review),code("IncompatibleWorker"));
+  broker.capabilities=capabilities;
+  assert.equal((await broker.takeExecutionHandoff(binding,review)).checked.assessment.decision,"release");
+});
 
 for (const agents of [1,5,12]) test(`${agents} independent Node agents share scopes and preserve unaffected work`, {timeout:30_000}, async () => {
   await using broker = await LocalContextBroker.create("node-broker", options());

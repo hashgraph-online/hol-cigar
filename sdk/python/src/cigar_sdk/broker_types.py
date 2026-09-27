@@ -2,7 +2,14 @@
 
 from typing import Literal, NotRequired, TypedDict
 
-from cigar_sdk.context_types import LocalAnswerDraft, LocalDocument, LocalViewContext
+from cigar_sdk.context_types import (
+    LocalAnswerDraft,
+    LocalAnswerPolicy,
+    LocalClaimReview,
+    LocalDocument,
+    LocalViewAssessment,
+    LocalViewContext,
+)
 
 
 class LocalBrokerStorageOptions(TypedDict):
@@ -141,6 +148,37 @@ class LocalBrokerSubmission(TypedDict):
     submission_id: str
     draft: LocalAnswerDraft
     review_keys: list[str]
+
+
+class LocalBrokerExecutionReview(TypedDict):
+    """Current host-owned review authority, verdicts and release policy; never agent output."""
+
+    authority_revision: str
+    reviews: list[LocalClaimReview]
+    policy: LocalAnswerPolicy
+
+
+class LocalBrokerExecutionBinding(TypedDict):
+    """Retained context precondition for an exact external intent, not effect authorization."""
+
+    schema: Literal["cigar.context-execution-binding.v1"]
+    id: str
+    epoch: str
+    ticket: str
+    submission_id: str
+    context_id: str
+    snapshot_id: str
+    source_authority_digest: str
+    review_digest: str
+    effect_id: str
+    intent_digest: str
+
+
+class LocalBrokerExecutionHandoff(TypedDict):
+    """One consumed, freshly checked context binding; not a durable dispatch receipt."""
+
+    binding: LocalBrokerExecutionBinding
+    checked: LocalViewAssessment
 
 
 class LocalBrokerCapabilities(TypedDict):

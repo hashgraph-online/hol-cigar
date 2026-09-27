@@ -5,7 +5,10 @@
 //! These helpers perform no socket discovery, connection, retries or background work.
 
 use super::scheduler::{AgentQueueLimits, QueueLimits};
-use super::{AgentGrantSpec, BrokerError, BrokerLimits, SourceProvenance, SourceRevision};
+use super::{
+    AgentGrantSpec, BrokerError, BrokerLimits, ExecutionBinding, ExecutionReview, SourceProvenance,
+    SourceRevision,
+};
 use crate::{
     AnswerDraft, AnswerPolicy, ClaimReview, ContextError, ContextRequest, Document, EdgeKind,
     GraphLimits, TokenCacheLimits,
@@ -236,6 +239,26 @@ pub enum HostCommand {
         /// Host release policy.
         #[serde(default)]
         policy: AnswerPolicy,
+    },
+    /// Bind current reviewed context to an exact independently prepared effect; no dispatch.
+    BindExecution {
+        /// Exact current context ticket.
+        ticket: String,
+        /// Exact submitted claim set.
+        submission_id: String,
+        /// Existing execution-authority identity.
+        effect_id: String,
+        /// Existing canonical effect intent multihash.
+        intent_digest: String,
+        /// Current trusted review authority, verdicts and release policy.
+        review: ExecutionReview,
+    },
+    /// Revalidate and consume one context handoff before an independently authorized send.
+    TakeExecutionHandoff {
+        /// All fields must equal the retained binding; never restored after restart.
+        binding: ExecutionBinding,
+        /// Current trusted review authority/policy; changes invalidate the binding.
+        review: ExecutionReview,
     },
     /// Gracefully terminate the explicit broker, invalidating all agent clients.
     Close {},

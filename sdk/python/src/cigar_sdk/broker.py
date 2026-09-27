@@ -22,6 +22,9 @@ from cigar_sdk.broker_types import (
     LocalBrokerCapabilities,
     LocalBrokerConnectionConfig,
     LocalBrokerContext,
+    LocalBrokerExecutionBinding,
+    LocalBrokerExecutionHandoff,
+    LocalBrokerExecutionReview,
     LocalBrokerLimits,
     LocalBrokerProposal,
     LocalBrokerProposalStatus,
@@ -360,6 +363,45 @@ class LocalContextBroker(_WorkerChannel):
                 }
             ),
         )
+
+    def bind_execution(
+        self, ticket: str, submission_id: str, effect_id: str, intent_digest: str, review: LocalBrokerExecutionReview
+    ) -> LocalBrokerExecutionBinding:
+        """Bind the exact existing effect intent to current reviewed context. Does not authorize or send."""
+        self._require_execution_handoff()
+        return cast(
+            LocalBrokerExecutionBinding,
+            self._call(
+                {
+                    "op": "bind_execution",
+                    "ticket": ticket,
+                    "submission_id": submission_id,
+                    "effect_id": effect_id,
+                    "intent_digest": intent_digest,
+                    "review": review,
+                }
+            ),
+        )
+
+    def take_execution_handoff(
+        self, binding: LocalBrokerExecutionBinding, review: LocalBrokerExecutionReview
+    ) -> LocalBrokerExecutionHandoff:
+        """Consume once with current host review authority. Uncertain outcomes require effect reconciliation."""
+        self._require_execution_handoff()
+        return cast(
+            LocalBrokerExecutionHandoff,
+            self._call(
+                {
+                    "op": "take_execution_handoff",
+                    "binding": binding,
+                    "review": review,
+                }
+            ),
+        )
+
+    def _require_execution_handoff(self) -> None:
+        if "execution_handoff.v1" not in self.capabilities()["capabilities"]:
+            raise LocalBrokerError("IncompatibleWorker")
 
 
 class LocalContextClient:

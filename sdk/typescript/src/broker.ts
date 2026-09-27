@@ -14,6 +14,7 @@ import type {
   LocalBrokerAgentLimits, LocalBrokerAgentQueueLimits, LocalBrokerCapabilities, LocalBrokerConnectionConfig,
   LocalBrokerContext, LocalBrokerOptions, LocalBrokerProposal, LocalBrokerProposalStatus,
   LocalBrokerSourceProvenance, LocalBrokerSourceReceipt, LocalBrokerSourceRevision, LocalBrokerSubmission,
+  LocalBrokerExecutionBinding, LocalBrokerExecutionHandoff, LocalBrokerExecutionReview,
 } from "./broker-types.js";
 
 const PROTOCOL = "cigar.context-broker.v1";
@@ -156,6 +157,20 @@ export class LocalContextBroker implements AsyncDisposable {
   submission(ticket: string): Promise<LocalBrokerSubmission> { return this.call({op: "submission", ticket}); }
   checkAnswer(ticket: string, submissionId: string, reviews: readonly LocalClaimReview[], policy: LocalAnswerPolicy = {}): Promise<LocalViewAssessment> {
     return this.call({op: "check_answer", ticket, submission_id: submissionId, reviews, policy});
+  }
+  /** Bind current reviewed context to an independently prepared effect. Does not authorize or send. */
+  async bindExecution(ticket: string, submissionId: string, effectId: string, intentDigest: string,
+    review: LocalBrokerExecutionReview): Promise<LocalBrokerExecutionBinding> {
+    this.requireExecutionHandoff();
+    return this.call({op:"bind_execution", ticket, submission_id:submissionId, effect_id:effectId, intent_digest:intentDigest, review});
+  }
+  /** Consume once using current host review authority. Reconcile uncertain outcomes with the effect authority. */
+  async takeExecutionHandoff(binding: LocalBrokerExecutionBinding, review: LocalBrokerExecutionReview): Promise<LocalBrokerExecutionHandoff> {
+    this.requireExecutionHandoff();
+    return this.call({op:"take_execution_handoff", binding, review});
+  }
+  private requireExecutionHandoff(): void {
+    if (!this.capabilities().capabilities.includes("execution_handoff.v1")) throw new LocalBrokerError("IncompatibleWorker");
   }
   async close(): Promise<void> { await this.#channel.close(); }
   async [Symbol.asyncDispose](): Promise<void> { await this.close(); }

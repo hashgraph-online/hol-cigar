@@ -138,6 +138,49 @@ CIGAR verifies bindings, freshness and review coverage. It does not determine
 semantic truth or remove the need for a trustworthy reviewer. Model-generated
 review labels must not be treated as an independent correctness oracle.
 
+## Bind context to an exact execution intent
+
+The development host API advertises `execution_handoff.v1`. It can bind a current
+reviewed submission to an effect already prepared by an execution authority.
+It neither creates that effect nor approves or sends it. Agents have neither of
+these methods. Local context use still requires no HOL service.
+
+```python
+review = {
+    "authority_revision": "reviewer-policy-7",
+    "reviews": trusted_reviews,
+    "policy": {"min_sources": 1},
+}
+binding = host.bind_execution(
+    ticket, submission_id, prepared.effect_id, prepared.intent_digest, review
+)
+# Resolve the current trusted reviewer revision, verdicts and policy again here.
+handoff = host.take_execution_handoff(binding, current_review)
+```
+
+Node exposes `bindExecution(...)` and `takeExecutionHandoff(binding, currentReview)`.
+The worker compares the complete retained binding and revalidates source versions,
+provenance, view/grant authority, expiry, the exact submission and trusted review.
+Changing the effect ID, intent digest, review authority revision, policy or verdicts
+rejects the handoff. Unrelated out-of-scope source changes preserve valid work.
+Repeated or competing takes cannot both succeed. A new submission invalidates an
+older binding, and recovery restores no binding or consumption permission.
+
+The review authority revision must come from current host policy; replaying a
+cached value cannot prove the reviewer remains authorized. Review input has a
+1 MiB accounting limit. Bindings consume the existing per-agent and total ticket
+retention quotas. A worker lacking the advertised feature is rejected before
+either command is sent.
+
+Consume immediately before passing the exact effect ID/intent to a separately
+authorized Honey dispatcher. Keep Honey's approval, expected revision, fencing,
+idempotency and reconciliation checks. If a reply or send outcome is uncertain,
+inspect/reconcile that existing effect; do not invent a new effect or retry blindly.
+The handoff proves a context check at consumption time. It is not a signature,
+execution grant, durable send receipt or lock spanning another system's send.
+The concrete Honey/HUMIDOR adapter and its end-to-end qualification remain P2
+work; this primitive does not enable a HUMIDOR deployment profile.
+
 ## Limits, failures and shutdown
 
 Agent frames are bounded at 2 MiB; replies at 8 MiB. Each client defaults to four

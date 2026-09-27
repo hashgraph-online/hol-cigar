@@ -215,7 +215,7 @@ impl Runtime {
             "execution": "single-owner-fair-dispatch", "requires_hol_services": false,
             "capabilities": ["broker_scopes.v1", "source_cas.v1", "proposal_admission.v1",
                 "provenance_freshness.v1", "exact_answer_review.v1", "fair_admission.v1",
-                "mutual_grant_proof.v1"],
+                "mutual_grant_proof.v1", "execution_handoff.v1"],
             "transport_limits": transport,
             "storage": {"mode": if persistence.active() { "sqlite-checkpoint.v1" } else { "memory" },
                 "restored": restored},
@@ -587,6 +587,23 @@ fn execute_host(
             &policy,
             tokenizer
         )?)),
+        HostCommand::BindExecution {
+            ticket,
+            submission_id,
+            effect_id,
+            intent_digest,
+            review,
+        } => Ok(json!(broker.host_bind_execution(
+            &ticket,
+            &submission_id,
+            &effect_id,
+            &intent_digest,
+            &review,
+            tokenizer
+        )?)),
+        HostCommand::TakeExecutionHandoff { binding, review } => Ok(json!(
+            broker.host_take_execution_handoff(&binding, &review, tokenizer)?
+        )),
         HostCommand::Close {} => Ok(Value::Null),
     }
 }
