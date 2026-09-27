@@ -143,7 +143,31 @@ pub struct SourceRevision {
     /// Broker-instance authority epoch, not an upstream publisher's identity.
     pub epoch: String,
     /// Monotonic for this source and epoch; zero means never admitted.
+    /// Encoded as a canonical decimal string so JavaScript never rounds a CAS version.
+    #[serde(with = "decimal_revision")]
     pub version: u64,
+}
+
+mod decimal_revision {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&value.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        if value.is_empty()
+            || value.len() > 20
+            || (value.len() > 1 && value.starts_with('0'))
+            || !value.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Err(serde::de::Error::custom("invalid source revision"));
+        }
+        value
+            .parse()
+            .map_err(|_| serde::de::Error::custom("invalid source revision"))
+    }
 }
 
 /// A host-declared exact input to derived evidence.

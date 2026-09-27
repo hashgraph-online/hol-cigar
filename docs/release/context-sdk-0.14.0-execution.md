@@ -185,3 +185,12 @@ only when their exercised behavior covers the corresponding requirement above.
   tests, the doctest and 48 core-only test/doctest invocations. Complete logs are
   retained in `CIGAR/releases/cigar-0.14.0-development/broker-core-source-checks`.
   These remain source-level invariants, not a broker transport/load qualification.
+- Added closed, disjoint host/agent protocol types and bounded big-endian length
+  framing. Agent decoding cannot produce a host mutation, grant or review command;
+  duplicate fields and authority overrides are rejected. Source versions are
+  canonical decimal strings to avoid JavaScript precision loss. Six protocol
+  regressions cover authority separation, malformed envelopes, exact frame limits,
+  truncated prefixes/bodies, rejection before oversized allocation, allowlisted
+  replies and u64 version boundaries. All 30 broker/core/scheduler/protocol tests
+  and all-feature/all-target strict Clippy pass locally. The transport still needs
+  to connect these contracts to actual private stdio and loopback channels.

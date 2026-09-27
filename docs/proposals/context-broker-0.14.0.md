@@ -25,6 +25,13 @@ automatic fallback. Multi-host use continues to require an explicitly deployed
 authenticated service; this transport does not invent a new remote TLS service.
 No HOL account or external service is needed for this same-host broker.
 
+The separate `cigar.context-broker.v1` agent envelope carries a positive u32
+request ID, current credential, requested queue deadline and a closed agent
+command. Host-only commands use a separate type and private channel. Agent
+frames are capped at 2 MiB before decode; replies at 8 MiB. Private host limits
+are 32/64 MiB. A malformed/truncated/oversized frame invalidates its connection;
+the transport never scans onward to guess where the next request begins.
+
 Each host-created grant binds a cryptographically random credential to one agent,
 one current view and explicit quotas. Requests carry the broker protocol, current
 authority epoch, credential, request ID and a closed command shape. Authentication
@@ -96,6 +103,9 @@ source does not reset to revision zero. Admission compares the proposal's expect
 revision again immediately before commit. Exactly one competing replacement of
 the same revision can win. Identical source bytes and unchanged admission metadata
 may remain a no-op; changed provenance or policy must invalidate dependent work.
+Source revision numbers use canonical decimal strings on the wire, preserving
+all u64 values in Python and JavaScript. Numeric JSON versions, leading zeroes,
+signs, whitespace and out-of-range values are rejected.
 Host-declared edge changes also use source CAS and advance affected source versions.
 An endpoint's source identity remains reserved while a relation still references
 it, so another source cannot substitute a withdrawn dependency node. The host can
