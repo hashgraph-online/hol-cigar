@@ -167,7 +167,13 @@ def validate_qualification(
     offline_names = {
         f"{kind}-{check}": (1 if check == "missing-worker" else 0)
         for kind in ("wheel", "sdist", "npm")
-        for check in ("offline-oracle", "doctor", "demo", "missing-worker")
+        for check in (
+            "offline-oracle",
+            "doctor",
+            "demo",
+            "shared-views",
+            "missing-worker",
+        )
     }
     check_logs(files, prefix + "offline/logs/", report["offline_checks"], offline_names)
     cases = raw_json(files, prefix + "cases.json")
@@ -278,6 +284,24 @@ def validate_qualification(
             and demo["checks"] == report["full_workflow_checks"]
             and len(demo["checks"]) >= 13,
             "complete installed workflow missing",
+        )
+        shared = raw_json(files, prefix + f"offline/logs/{kind}-shared-views.stdout")
+        expected_shared = {
+            "schema": "cigar.shared-views-example.v1",
+            "status": "passed",
+            "agents": 5,
+            "workers": 1,
+            "indexed_documents": 6,
+            "released": 50,
+            "missing_review_abstentions": 50,
+            "reviewer": "scripted-fixture",
+            "requires_hol_services": False,
+        }
+        require(
+            canonical_json_bytes(shared)
+            == canonical_json_bytes(expected_shared)
+            == canonical_json_bytes(report.get("shared_view_workflow")),
+            "installed shared-view workflow evidence mismatch",
         )
         missing = raw_json(files, prefix + f"offline/logs/{kind}-missing-worker.stdout")
         require(

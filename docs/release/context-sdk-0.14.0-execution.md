@@ -32,9 +32,9 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS contract checks pass |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
-| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
+| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; installed 24-hour soak started September 27, with completion and independent replay pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Second study preserves contracts and passes 112/115 guardrails; user accepted the three measured startup exceptions on September 27; final versioned qualification pending |
-| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Development native matrix passes all 14 jobs with matching payload bytes; final versioned SDK archives and installed matrix pending |
+| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | At 484d07ae, fourteen native builds, two matching SDK builds, all fourteen installed platform/runtime cells and legacy qualification pass; final assembly found a stale offline-check inventory, now corrected with hosted rerun pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
 
 ## Implementation order
@@ -731,3 +731,53 @@ only when their exercised behavior covers the corresponding requirement above.
   `release-8b8eb439-legacy-rc.log` retains the original failure. A local metadata
   probe of the exact extracted source archives parses all 75 dependency entries;
   its cached environment emits no stderr, so hosted rerun remains required.
+- [Distribution run 36342728916](https://github.com/hashgraph-online/hol-cigar/actions/runs/36342728916)
+  completes all fourteen installed platform/runtime cells successfully at
+  `8b8eb43947af38a78928162fa05e20aecd2b1f1a`. The run remains failed because of
+  the separately recorded legacy RC parser failure; final assembly was skipped.
+  This is installed matrix evidence, not a successful complete release run.
+  Both downloaded archive sets also pass the local exact-byte verifier for all
+  eleven archives and seven native receipts before the durability run starts.
+- Installed the exact 8b8eb439 macOS ARM64 wheel and npm archive in isolated
+  offline environments. Compared 52 Python files and 169 npm files directly
+  with their archives and verified the bundled executable and its native build
+  receipt. The installed-input receipt SHA-256 is
+  `36ee79877d286a89a14672620881ac850b79427bb0a2c6b062cfc95cea321af8`.
+  The worker SHA-256 is
+  `6b58a6470d45cd5c1389b612923c23d6170d9f117300359f5e5bbdff04366279`.
+- The actual installed 0.14.0 twelve-agent smoke, `broker-soak-smoke-03`, passes
+  720 cycles in 60.005 seconds, including eleven mutations, five proposal checks,
+  three revocations, two grant renewals and one durable restart. Its result
+  SHA-256 is `93344a5900d3537123359a4db2c2b7cdf1b964616bee9dadff3ebaf1445fd0ce`.
+  The continuous `broker-soak-24h-01` then starts at approximately
+  `2026-09-27T19:17:23Z`, using those same installed bytes, twelve persistent
+  Python/Node agent processes and SQLite. The frozen plan SHA-256 is
+  `15b1463c9c120db3e6daa11f9ef66505c0ac42f85ce6a559e9e51b807a10a1dd`.
+  Completion, independent replay and final input revalidation remain pending.
+  Local builds, tests, installs and other benchmarks are suspended during this
+  run. Loopback-only harness configuration is not an OS network-denial claim.
+  Later release fixes require exact runtime-byte comparison before this evidence
+  can qualify their artifacts; material worker changes require a new soak.
+- [Release run 36343499609](https://github.com/hashgraph-online/hol-cigar/actions/runs/36343499609)
+  at `484d07ae57a9b3e8772a5603e6568de4e9b837e0` passes the corrected legacy
+  build/installed compatibility path, all fourteen native builds, two matching
+  SDK archive builds and all fourteen installed platform/runtime cells. Source
+  and project-boundary workflows also pass. Final assembly rejects its own stale
+  twelve-check offline inventory: actual consumers retain fifteen checks, including
+  the three five-agent shared-view executions. The retained original assembly
+  failure is `release-484d07ae-assemble.log`.
+- Updated assembly to require all fifteen checks and independently revalidate
+  every raw shared-view outcome and its summary: five agents, one worker, six
+  indexed documents, fifty reviewed releases and fifty missing-review abstentions.
+  Recomputed log hashes cannot conceal changed outcomes, missing summaries or
+  boolean-for-integer substitutions. Added corresponding regression cases; their
+  execution is delegated to hosted CI while the local soak runs.
+- Corrected stale 0.13 wording in both SDK READMEs and the generated agent guide
+  that denied the existence of the implemented broker/persistence APIs. Native
+  installation examples now resolve the bundled worker automatically. Broker,
+  selection-explanation and parser-integration guides are copied into both
+  distributions, linked from the installed agent guidance, and required by archive
+  verification. Existing source-build staging and both package allowlists include
+  the same documents. These documentation/package-input changes do not change the
+  native or SDK runtime implementation. Hosted artifact qualification is pending;
+  no local build or test was run concurrently with the soak.

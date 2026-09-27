@@ -4,10 +4,11 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Node.js applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This 0.14.0 candidate contains a broker for independent agent
-processes. See the [broker guide](../LOCAL_BROKER_GUIDE.md) for host/client authority,
-provenance, reviews and failure semantics. No v0.14 archive is qualified yet;
-final installed qualification and the 24-hour soak remain release gates.
+This 0.14.0 candidate contains a broker for independent agent processes. See the
+packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
+reviews and failure semantics. Installed candidate tests have passed across seven
+native targets; the 24-hour soak and remaining release gates are still pending.
+Qualification applies to the exact artifacts named in their receipts.
 
 ## Install and check
 
@@ -21,7 +22,7 @@ npx --no-install cigar-context demo
 
 Install the exact archive with its matching qualification receipt. This candidate
 is not a registry release. It retains the canonical-CBOR union decoding repair,
-bounded worker hashing and seven native build targets; final installed platform
+bounded worker hashing and seven native build targets. Complete release
 qualification remains pending.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
@@ -53,10 +54,13 @@ Updates strictly outside the scope leave existing reviews valid. The assessment'
 
 Keep root graph access, scope configuration and reviews outside agent control.
 These are logical scopes inside a trusted host/privacy domain, not authenticated
-capabilities or an OS sandbox. A separate-process agent needs a host-owned broker;
-this alpha does not supply one. Views have no durable restart/resume contract; use
-a fresh run domain and fresh reviews after restart. Calls remain serialized in the
-worker. HUMIDOR retains scheduling and recovery; its Honey integration is unchanged.
+capabilities or an OS sandbox. For separate processes, use a host-owned
+`LocalContextBroker` and one `LocalContextClient` per agent. The broker can persist
+admitted evidence in an explicitly configured local directory. Recovery creates a
+new authority epoch: reissue grants, recompile and obtain fresh reviews. Ordinary
+graph views remain in-memory handles. Native graph calls remain serialized.
+HUMIDOR retains scheduling and recovery; adopting the optional context-to-Honey
+bridge requires its separate integration qualification.
 
 All 0.12 root APIs retain their behavior. New view methods require the worker's
 `context_views.v1` capability and fail with `IncompatibleWorker` if it is absent.
@@ -90,9 +94,10 @@ selected text block and short citation handles. Retain its citation map and full
 the expected authorized snapshot. A separate exact budget fails without truncating evidence.
 Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
 
-The platform inventory covers macOS, Linux glibc/musl and Windows x64. Only macOS
-ARM64 is qualified for this local alpha; a stable release still requires the complete
-seven-platform matrix. Browser, edge runtimes that prohibit subprocesses, and
+The native inventory covers macOS ARM64/x64, Linux glibc/musl ARM64/x64 and
+Windows x64. Candidate installed tests and independent archive comparison pass
+for this inventory; complete release qualification is still in progress. Browser,
+edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
 the matching Rust 0.14.0 source. There is no install script, runtime download, PATH
@@ -148,8 +153,9 @@ bytes. These errors do not indicate missing HOL services. For a deliberately sup
 matching worker, use `LocalContextGraph.create("project", {workerPath: "/absolute/path"})`
 or `cigar-context doctor --worker /absolute/path`.
 
-The installed package includes `AGENT_GUIDE.md` and `llms.txt`. The
-[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+The installed package includes `AGENT_GUIDE.md`, `BROKER_GUIDE.md`,
+`SELECTION_EXPLANATIONS.md`, `SYNTAX_INGESTION.md` and `llms.txt`. The
+[agent integration guide](AGENT_GUIDE.md)
 covers explicit file ingestion, graph relationships, authorization and the answer-review flow.
 
 ## Compatible remote client

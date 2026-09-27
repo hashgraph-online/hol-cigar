@@ -40,6 +40,17 @@ class InstalledEvidenceTests(unittest.TestCase):
         }
         self.put("offline/network-policy.json", policy)
         checks = [f"workflow-fixture-{i}" for i in range(13)]
+        shared_views = {
+            "schema": "cigar.shared-views-example.v1",
+            "status": "passed",
+            "agents": 5,
+            "workers": 1,
+            "indexed_documents": 6,
+            "released": 50,
+            "missing_review_abstentions": 50,
+            "reviewer": "scripted-fixture",
+            "requires_hol_services": False,
+        }
         self.report = {
             "schema": "cigar.context-distribution-qualification.v1",
             "status": "passed",
@@ -55,6 +66,7 @@ class InstalledEvidenceTests(unittest.TestCase):
             "expected_errors": 172,
             "network_policy": policy,
             "full_workflow_checks": checks,
+            "shared_view_workflow": shared_views,
             "legacy_exports": {},
         }
         install = []
@@ -128,6 +140,11 @@ class InstalledEvidenceTests(unittest.TestCase):
                         "reviewer": "scripted-fixture",
                         "checks": checks,
                     },
+                    0,
+                ),
+                (
+                    "shared-views",
+                    shared_views,
                     0,
                 ),
                 (
@@ -233,6 +250,48 @@ class InstalledEvidenceTests(unittest.TestCase):
         self.put("qualification.json", self.report)
         with self.assertRaisesRegex(ReleaseError, "offline policy"):
             self.verify()
+
+    def test_shared_view_output_is_rechecked_despite_updated_log_hashes(self):
+        changes = {
+            "schema": "another-schema.v1",
+            "status": "failed",
+            "agents": 4,
+            "workers": 5,
+            "indexed_documents": 5,
+            "released": 49,
+            "missing_review_abstentions": 0,
+            "reviewer": "model-self-review",
+            "requires_hol_services": True,
+            "unexpected": "field",
+        }
+        for kind in ("wheel", "sdist", "npm"):
+            for field, value in changes.items():
+                with self.subTest(kind=kind, field=field):
+                    self.setUp()
+                    name = f"{kind}-shared-views"
+                    raw = {**self.report["shared_view_workflow"], field: value}
+                    content = canonical_json_bytes(raw)
+                    self.files[f"offline/logs/{name}.stdout"] = content
+                    for row in self.report["offline_checks"]:
+                        if row["name"] == name:
+                            row["stdout"] = self.record(content)
+                    self.put("qualification.json", self.report)
+                    with self.assertRaisesRegex(ReleaseError, "shared-view"):
+                        self.verify()
+
+    def test_shared_view_summary_cannot_hide_absence_or_type_substitution(self):
+        for change in ("missing", "count", "boolean-for-integer"):
+            with self.subTest(change=change):
+                self.setUp()
+                if change == "missing":
+                    self.report.pop("shared_view_workflow")
+                elif change == "count":
+                    self.report["shared_view_workflow"]["released"] = 49
+                else:
+                    self.report["shared_view_workflow"]["workers"] = True
+                self.put("qualification.json", self.report)
+                with self.assertRaisesRegex(ReleaseError, "shared-view"):
+                    self.verify()
 
     def test_another_archive_or_runtime_cannot_reuse_the_evidence(self):
         self.candidate["artifacts"] = {"archive": "different-digest"}

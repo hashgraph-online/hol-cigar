@@ -329,6 +329,9 @@ def main() -> None:
         "pyproject.toml",
         "hatch_build.py",
         "AGENT_GUIDE.md",
+        "BROKER_GUIDE.md",
+        "SELECTION_EXPLANATIONS.md",
+        "SYNTAX_INGESTION.md",
         "llms.txt",
     ]:
         source = ROOT / "sdk/python" / name
@@ -348,6 +351,9 @@ def main() -> None:
         "fixtures",
         "README.md",
         "AGENT_GUIDE.md",
+        "BROKER_GUIDE.md",
+        "SELECTION_EXPLANATIONS.md",
+        "SYNTAX_INGESTION.md",
         "llms.txt",
         "LICENSE",
         "NOTICE",

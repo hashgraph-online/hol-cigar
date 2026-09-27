@@ -131,7 +131,7 @@ separately. The examples' known-fixture reviews cannot establish real-model qual
 
 ## Refresh, synchronize and measure
 
-### Sharing one worker in the 0.13 alpha
+### Sharing one worker within a host
 
 One trusted host can create five `createView` / `create_view` handles over one graph.
 Host-owned `allowed_sources`, `writable_sources` and `policy_revision` define each
@@ -144,10 +144,33 @@ old handles. Root methods keep their existing global-revision behavior.
 
 Views share one index and serialized worker. They are not authentication, a sandbox,
 a durable workflow or an effect permission. Keep root graph and review authority in
-the host. Use fresh run domains and reviews after restart; remote agents need a
-host-owned broker. HUMIDOR owns scheduling and recovery; this alpha does not replace
-or qualify its separate Honey runtime integration. No HOL services are needed for
-the local shared-view example in either SDK.
+the host. Use fresh run domains and reviews after restarting an ordinary graph.
+No HOL services are needed for the local shared-view example in either SDK.
+
+### Sharing one worker across agent processes
+
+The 0.14 candidate supplies `LocalContextBroker` and `LocalContextClient` in both
+SDKs. One trusted host owns the graph, admits evidence and creates source-scoped,
+expiring grants. Five or twelve independent agents can each use a restricted
+client over authenticated loopback. They do not need separate graph indexes or
+a HOL service. Native graph operations remain serialized.
+
+The host passes connection material through protected application IPC, never
+through prompts, logs or command-line arguments. Agents may propose source
+changes; only the host can admit them with provenance and exact source revision
+checks. The host also owns review verdicts and execution policy.
+
+Optional local SQLite persistence restores admitted evidence and source revisions.
+It does not restore credentials, tickets, drafts, reviews or execution permissions.
+After restart, reissue grants, recompile and obtain fresh reviews. Default broker
+storage is in memory. Read the packaged [broker guide](BROKER_GUIDE.md) for complete
+Python/Node setup, quotas, proposals, transactional batches and failure handling.
+
+HUMIDOR owns scheduling and orchestration. The optional `dispatch_context_effect`
+/ `dispatchContextEffect` bridge checks current reviewed context immediately before
+handoff to an already configured effect authority; it does not create approvals or
+retry uncertain sends. Its use requires that application's effect service and
+integration qualification. Standalone graph and broker operations remain local.
 
 Use `replaceSource` / `replace_source` for edits and an empty document list for
 withdrawal. Check cache hits/misses and graph revision with `stats`. Use `clearCache`

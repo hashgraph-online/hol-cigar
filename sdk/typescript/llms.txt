@@ -11,10 +11,15 @@ No HOL account, API key, service, daemon, database or model provider is needed f
 - doctor reports file availability separately from a verified compile and negotiated worker features. A platform inventory is not proof of release qualification.
 - If the worker is unavailable, use the diagnostic platform/version guidance. This is not a missing HOL service.
 - Reuse one graph per privacy domain, ingest explicitly authorized text, replace changed sources, pass current allowed IDs, preserve required dependencies and citations, and close the graph on shutdown.
+- The 0.14 candidate provides LocalContextBroker and LocalContextClient for independent same-host agents sharing one worker. The host owns grants, provenance, admission and reviews; clients cannot broaden scope or approve their own claims. No HOL service is needed.
+- Read packaged BROKER_GUIDE.md for Python/Node setup and optional SQLite persistence. Recovery restores evidence, not grants, tickets, reviews or execution permission; obtain fresh authority after restart. Native graph operations stay serialized.
+- Packaged SELECTION_EXPLANATIONS.md and SYNTAX_INGESTION.md describe selected-evidence inspection and parser-supplied chunk boundaries.
 - Answer review requires separately trusted semantic verdicts. Confidence and a generator's own supported flag do not authorize release. Only display assessed claims on release; recheck when source or policy changes.
 - Read the packaged AGENT_GUIDE.md for the full integration contract and ingestion recipes.
 
-## Versioned documentation
+## Previous stable 0.12 documentation
+
+These versioned pages describe 0.12. For the installed 0.14 candidate, use the packaged guides above and its exact qualification receipt; it is not yet a registry release.
 
 - [Agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
 - [Node.js guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/typescript/README.md)

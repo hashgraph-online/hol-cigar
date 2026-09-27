@@ -50,6 +50,9 @@
     "native/",
     "README.md",
     "AGENT_GUIDE.md",
+    "BROKER_GUIDE.md",
+    "SELECTION_EXPLANATIONS.md",
+    "SYNTAX_INGESTION.md",
     "llms.txt",
     "LICENSE",
     "NOTICE"

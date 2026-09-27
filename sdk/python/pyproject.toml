@@ -47,7 +47,7 @@ build-backend = "hatchling.build"
 packages = ["src/cigar_sdk"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/cigar_sdk", "tests", "README.md", "CHANGELOG.md", "AGENT_GUIDE.md", "llms.txt", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
+include = ["src/cigar_sdk", "tests", "README.md", "CHANGELOG.md", "AGENT_GUIDE.md", "BROKER_GUIDE.md", "SELECTION_EXPLANATIONS.md", "SYNTAX_INGESTION.md", "llms.txt", "LICENSE", "NOTICE", "pyproject.toml", "hatch_build.py"]
 exclude = ["src/cigar_sdk/_native"]
 
 [tool.hatch.build.hooks.custom]

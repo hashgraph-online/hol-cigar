@@ -4,10 +4,11 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Python applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This 0.14.0 candidate contains a broker for independent agent
-processes. See the [broker guide](../LOCAL_BROKER_GUIDE.md) for host/client authority,
-provenance, reviews and failure semantics. No v0.14 archive is qualified yet;
-final installed qualification and the 24-hour soak remain release gates.
+This 0.14.0 candidate contains a broker for independent agent processes. See the
+packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
+reviews and failure semantics. Installed candidate tests have passed across seven
+native targets; the 24-hour soak and remaining release gates are still pending.
+Qualification applies to the exact artifacts named in their receipts.
 
 ## Install and check
 
@@ -22,7 +23,7 @@ python3.14 -m cigar_sdk.examples.shared_views
 ```
 
 Install the exact wheel and matching qualification receipt for your platform.
-The example filename is for macOS ARM64; seven native targets are planned. This
+The example filename is for macOS ARM64; seven native targets are built. This
 candidate is not a published PyPI release. Each native wheel bundles its worker;
 no Rust compiler or separate worker installation is required.
 See the bundled [changelog](CHANGELOG.md) for migration details. The supported
@@ -64,11 +65,13 @@ later external action. The host must coordinate revalidation with effect executi
 Keep the root graph, view definitions and reviewer verdicts outside agent control.
 Views are logical host scopes, not a sandbox or authenticated capability. Sharing
 one process is appropriate only inside a trusted application/privacy domain. Use
-a host-owned broker for agents in separate processes; never share Python objects
-through `fork()`. This alpha provides no broker or durable restart/resume protocol.
-Use a fresh graph domain and fresh reviews for each run. Calls remain serialized.
-HUMIDOR remains responsible for scheduling and recovery; its Honey integration has
-not been upgraded or qualified by this local SDK alpha.
+a host-owned `LocalContextBroker` and one `LocalContextClient` per agent for
+separate processes; never share Python objects through `fork()`. The broker can
+persist admitted evidence in an explicitly configured local directory. Recovery
+creates a new authority epoch: reissue grants, recompile and obtain fresh reviews.
+Ordinary graph views remain in-memory handles. Native graph calls remain serialized.
+HUMIDOR remains responsible for scheduling and recovery; adopting the optional
+context-to-Honey bridge requires its separate integration qualification.
 
 Existing root methods retain their exact 0.12 behavior, including conservative
 global-revision stale-review rejection. New view methods require a worker advertising
@@ -159,9 +162,10 @@ the parent's worker. Create a new graph in the child; use a spawn-based process
 pool where possible. `close()` is idempotent and preserves ordinary primary errors.
 If OS cleanup fails, `cleanup_complete` remains false and another close retries.
 
-The existing platform inventory covers macOS, Linux glibc/musl and Windows x64.
-Only macOS ARM64 is qualified for this local alpha. The seven-platform qualification
-and independent reproducibility gates remain required before a stable release.
+The native inventory covers macOS ARM64/x64, Linux glibc/musl ARM64/x64 and
+Windows x64. Candidate installed tests and independent archive comparison pass
+for this inventory. Complete release qualification is still in progress;
+use the receipt for your exact archive rather than inferring support from a name.
 
 Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
@@ -170,7 +174,7 @@ but local graphs require an **explicit trusted absolute** `worker_path`. Build i
 0.14.0 Rust source using Rust 1.92+:
 
 ```sh
-cargo build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
+cargo build --locked --release -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
 ```
 
 Pass the resulting executable to `LocalContextGraph("my-project", worker_path="/absolute/path/to/cigar-context-worker")`.
@@ -210,8 +214,9 @@ worker bytes report `WorkerIntegrity`. These errors do not mean HOL services are
 An explicitly supplied matching worker can be checked with
 `python -m cigar_sdk.local_cli doctor --worker /absolute/path`.
 
-The installed `cigar_sdk` package includes `AGENT_GUIDE.md` and `llms.txt`. The
-[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.12.0/sdk/LOCAL_CONTEXT_GUIDE.md)
+The installed `cigar_sdk` package includes `AGENT_GUIDE.md`, `BROKER_GUIDE.md`,
+`SELECTION_EXPLANATIONS.md`, `SYNTAX_INGESTION.md` and `llms.txt`. The
+[agent integration guide](AGENT_GUIDE.md)
 explains explicit file ingestion, graph relationships, authorization and reviewed answers.
 
 ## Compatible remote client

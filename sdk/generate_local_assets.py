@@ -34,6 +34,11 @@ def outputs() -> dict[Path, str]:
     }
     guide = (ROOT / "LOCAL_CONTEXT_GUIDE.md").read_text()
     discovery = (ROOT / "local-context-llms.txt").read_text()
+    companion_guides = {
+        "BROKER_GUIDE.md": (ROOT / "LOCAL_BROKER_GUIDE.md").read_text(),
+        "SELECTION_EXPLANATIONS.md": (ROOT / "SELECTION_EXPLANATIONS.md").read_text(),
+        "SYNTAX_INGESTION.md": (ROOT / "SYNTAX_INGESTION.md").read_text(),
+    }
     for directory in [
         ROOT / "typescript",
         ROOT / "python",
@@ -41,8 +46,13 @@ def outputs() -> dict[Path, str]:
     ]:
         generated[directory / "AGENT_GUIDE.md"] = guide
         generated[directory / "llms.txt"] = discovery
+        for name, content in companion_guides.items():
+            generated[directory / name] = content
     generated[ROOT.parent / "llms.txt"] = discovery
+    generated[ROOT / "BROKER_GUIDE.md"] = companion_guides["BROKER_GUIDE.md"]
     generated[ROOT.parent / "docs/guides/local-context.md"] = guide
+    for name, content in companion_guides.items():
+        generated[ROOT.parent / "docs/guides" / name] = content
     return generated
 
 
