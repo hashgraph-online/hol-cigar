@@ -8,6 +8,7 @@ use cigar_api::{
 };
 use serde_json::{Value, json};
 use sha2::Digest as _;
+use std::fmt::Write as _;
 use std::io::{BufRead as _, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -375,7 +376,11 @@ async fn read_status(
 
 fn assert_gateway_intent(intent: &EffectIntent, now: UtcTimestamp) -> TestResult {
     let content_digest = |value: &[u8]| -> TestResult<ContentDigest> {
-        Ok(ContentDigest::new(format!("1220{:x}", Sha256::digest(value)))?)
+        let mut encoded = String::from("1220");
+        for byte in Sha256::digest(value) {
+            write!(&mut encoded, "{byte:02x}")?;
+        }
+        Ok(ContentDigest::new(encoded)?)
     };
     // The expected task is fixed by this independent reader, not supplied by the application.
     // The protected blob is a reference-store fixture, so this does not qualify encryption.
