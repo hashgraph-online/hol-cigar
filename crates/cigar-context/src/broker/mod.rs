@@ -10,7 +10,9 @@ mod types;
 pub use types::*;
 pub mod authentication;
 pub mod protocol;
+mod recovery;
 pub mod scheduler;
+pub use recovery::BrokerCheckpoint;
 
 use crate::{
     AnswerDraft, AnswerPolicy, Citation, ClaimReview, ContextGraph, ContextRequest, ContextView,

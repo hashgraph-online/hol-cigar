@@ -153,12 +153,39 @@ explicitly remove dangling relations; identity retention has its own byte bound.
 
 ## Durable recovery
 
+The Rust broker now provides an evidence-only `BrokerCheckpoint` codec through
+`host_checkpoint(max_bytes)` and `ContextBroker::from_checkpoint(...)`. The
+caller selects a byte limit, capped at 512 MiB. Canonical versioned bytes carry a
+content digest; unknown fields, duplicate/noncanonical members, altered bytes,
+invalid graph structure and incompatible current limits are rejected. Checkpoint
+bytes contain private source text and require protected storage. Their digest is
+neither a signature nor protection against replacing a whole checkpoint.
+
+Recovery preserves source versions, withdrawal tombstones, relation ownership and
+declared lineage. It rebinds internal lineage to a fresh random authority epoch.
+No grant, ticket, proposal, answer draft, review or effect permission is restored.
+Expired evidence remains stale. Saved monotonic remaining life caps each source's
+new deadline, and a wall clock preceding capture is rejected. Correct time still
+depends on the host's clock. The codec performs no filesystem writes and does not
+yet establish a durable commit or a supported SDK restart path.
+
 Persistence is explicit and host-owned. Reuse existing storage/locking primitives
 where their contracts fit; do not create a competing Honey authority format.
 A standalone journal records versioned source/provenance/edge mutations and their
 expected/result revisions with bounded records, a sequence and hash chain. It
 needs an exclusive writer lock, durable commit markers and atomic checkpoints.
 Credentials and release permissions are never serialized as reusable authority.
+
+The next storage prototype should reuse the repository's embedded SQLite
+transaction approach under an optional broker persistence feature. Use a private
+host-selected directory, verified single-writer locking, bounded records and a
+transaction committing journal and checkpoint together. SQLite documents
+[exclusive connection locking and durability settings](https://www.sqlite.org/pragma.html#pragma_locking_mode)
+and its [atomic commit assumptions](https://www.sqlite.org/atomiccommit.html).
+The prototype must read back effective settings and prove crash behavior on the
+advertised platforms; choosing SQLite is not itself qualification. Profile full
+checkpoint rewrites against bounded source/document updates before selecting the
+release path. Core graph use must retain its existing dependency and I/O behavior.
 
 No success response is emitted before a committed mutation is durable. A failed
 durability step after in-memory mutation closes the broker rather than serving

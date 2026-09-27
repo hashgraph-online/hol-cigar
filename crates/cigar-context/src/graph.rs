@@ -568,6 +568,46 @@ impl ContextGraph {
         Ok(true)
     }
 
+    /// Restore validated relationships, including intentionally withdrawn endpoints. Only the
+    /// broker recovery path supplies the separate historical endpoint ownership checks.
+    #[cfg(feature = "broker")]
+    pub(crate) fn restore_relationships(
+        &mut self,
+        edges: BTreeMap<String, BTreeSet<(EdgeKind, String)>>,
+    ) -> Result<(), ContextError> {
+        let count = edges.values().try_fold(0_usize, |count, outgoing| {
+            count
+                .checked_add(outgoing.len())
+                .ok_or(ContextError::LimitExceeded)
+        })?;
+        if count > self.limits.max_edges
+            || edges
+                .values()
+                .any(|outgoing| outgoing.len() > self.limits.max_edges_per_document)
+        {
+            return Err(ContextError::LimitExceeded);
+        }
+        for (from, outgoing) in &edges {
+            if !valid_id(from) || outgoing.is_empty() {
+                return Err(ContextError::Integrity);
+            }
+            for (kind, to) in outgoing {
+                if !valid_id(to)
+                    || from == to
+                    || (*kind == EdgeKind::Contradicts
+                        && !edges
+                            .get(to)
+                            .is_some_and(|reverse| reverse.contains(&(*kind, from.clone()))))
+                {
+                    return Err(ContextError::Integrity);
+                }
+            }
+        }
+        self.edges = edges;
+        self.edge_count = count;
+        Ok(())
+    }
+
     fn index(&mut self, mut node: IndexedDocument) {
         let slot = self.free_slots.pop().unwrap_or(self.slots.len());
         node.slot = slot;

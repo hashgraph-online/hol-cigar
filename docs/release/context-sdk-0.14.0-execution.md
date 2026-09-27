@@ -25,7 +25,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority and both SDKs implemented; 1/5/12 independent Python/Node and mixed-language processes pass locally; installed/platform qualification pending |
 | B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS, fair queue/cancellation and bounded transport implemented; installed load/fairness measurements pending |
-| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
+| B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Evidence checkpoint codec and fresh-authority restore implemented; atomic journal/storage, process restart and SDK integration pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; durable integration pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native and SDK exact-submission review port implemented; execution handoff pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Pending |
@@ -250,3 +250,21 @@ only when their exercised behavior covers the corresponding requirement above.
   through the explicit handoff allowlist, and one platform-inventory assertion
   still names a 0.12 wheel. The other 33 tests pass. These remain Q2/Q3 release
   tooling work; the allowlist has not been weakened to label an alpha as stable.
+- Added an opaque, bounded Rust evidence checkpoint codec and fresh-authority
+  restoration. It preserves source versions, provenance/lineage, withdrawal
+  tombstones and dangling/symmetric relations without retaining grants, tickets,
+  proposals, drafts or reviews. Restore checks the intended domain, current graph
+  and retention limits, canonical encoding/digest, endpoint ownership and acyclic
+  lineage. Saved remaining lifetime caps restored expiry, and a clock preceding
+  checkpoint capture is rejected. Checkpoints are private evidence, not signed
+  authority or rollback protection.
+- Eight recovery regressions pass, including old-credential/review rejection,
+  stale/expired derivations, reserved withdrawn node IDs, contradiction reference
+  counts, tampered and structurally forged checkpoints, current limits and exact
+  byte bounds. Atomic storage, journal durability, kill/restart fault injection
+  and the SDK persistence path remain B3 work; no crash-recovery claim is made.
+- The complete native checkpoint gate passes formatting, strict Clippy, 107
+  all-feature tests, one doctest and 48 core-only test/doctest invocations. Logs
+  are retained in `broker-checkpoint-source-checks` under the development evidence
+  directory. Existing Python/Node behavior is unaffected by this Rust-only codec;
+  neither SDK advertises a persistence capability yet.
