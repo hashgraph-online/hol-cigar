@@ -204,10 +204,18 @@ fn hardlinks_and_broadened_file_acls_are_rejected() -> io::Result<()> {
     file.write_all(b"unchanged")?;
     drop(file);
     let alias = directory.path().join("alias");
+    // The live directory pin also prevents CreateHardLink's parent write access.
+    // Construct the pre-existing malformed fixture only after releasing that pin.
+    assert!(fs::hard_link(&path, &alias).is_err());
+    assert!(!alias.exists());
+    drop(directory);
     fs::hard_link(&path, &alias)?;
+    let directory = PrivateStorageDirectory::open(&parent.path().join("store"), false)?;
     assert!(directory.inspect_file("broker.sqlite3").is_err());
     assert!(directory.open_or_create_file("broker.sqlite3").is_err());
+    drop(directory);
     fs::remove_file(alias)?;
+    let directory = PrivateStorageDirectory::open(&parent.path().join("store"), false)?;
     broaden_acl(&path)?;
     assert!(directory.inspect_file("broker.sqlite3").is_err());
     assert!(directory.open_or_create_file("broker.sqlite3").is_err());
