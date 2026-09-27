@@ -116,6 +116,9 @@ and 64 MiB including record identities, with a 16 KiB/64-term query and at most
 256 candidates. Index memory exceeds input bytes because it stores postings.
 The ranker is illustrative application code, not a stable top-level SDK API.
 Measure its extra indexing/query cost and evidence quality at the same context
-budget before adopting it. An independent retrieval study is registered in the
-[evaluation plan](../docs/proposals/context-retrieval-evaluation-0.14.0.md);
-no measured gain or reduced hallucination rate is established by the example.
+budget before adopting it. The [independent SciFact study](../docs/release/context-sdk-0.14.0-retrieval-evidence.md)
+finds higher evidence recall at 2,048/4,096 tokens, with lower precision and added
+latency/memory; it finds no recall gain at 512. A flat BM25 packing control does
+better than this blended candidate port at all three budgets. The same recipe
+works identically on v0.12 and the candidate. Treat it as an integration example,
+not a new default retriever or a demonstrated reduction in model hallucinations.

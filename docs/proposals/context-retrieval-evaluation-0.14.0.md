@@ -1,7 +1,8 @@
 # Scoped retrieval adapters and independent evidence evaluation
 
-Status: design and evaluation registration; no dataset run or retrieval benefit
-has been measured. This addresses the remaining R1/E2 work. It does not replace
+Status: registered design; the [first independent study](../release/context-sdk-0.14.0-retrieval-evidence.md)
+is complete and reports gains, costs and a stronger flat-retrieval control.
+This addresses part of the R1/E2 work. It does not replace
 the broker fault/load gates or the separate Hiero terminal-outcome evaluation.
 
 ## Reuse the existing ranking boundary

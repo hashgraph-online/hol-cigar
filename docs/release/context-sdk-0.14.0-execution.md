@@ -28,10 +28,10 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix and Windows source/runtime checks pass; installed qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
-| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation, parser-boundary ingestion and bounded offline ranking recipe implemented; held-out efficacy still pending |
+| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation, parser-boundary ingestion and scoped ranking recipe implemented; independent SciFact study complete, including precision/cost regressions and stronger flat control |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS contract checks pass |
-| E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
+| E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
@@ -600,3 +600,15 @@ only when their exercised behavior covers the corresponding requirement above.
   uses a fixed query and `allowed=[]`; no ranking parameter was tuned on labels.
   Independent data has not yet been acquired or scored. See
   [the reproduction guide](../../benchmarks/SCIFACT.md).
+- Completed the frozen independent SciFact study: 5,183 abstracts, all 300
+  development claims, five treatments and three budgets, with 4,500 successful
+  attempts. All 1,800 default/ranked version pairs preserve identical complete
+  results; citation text/line fidelity and budget checks pass throughout.
+  At 2,048 tokens, default/adapter/flat evidence recall is 45.93%/64.59%/81.34%.
+  The optional hook improves support/contradiction recall at larger budgets but
+  lowers precision and adds latency/memory. Flat BM25 is stronger at every budget.
+  The recipe remains optional, with this limitation documented; no default
+  retrieval, hallucination or task-success improvement is claimed for the version.
+  The [full report](context-sdk-0.14.0-retrieval-evidence.md) preserves strata,
+  unavailable zero-denominator intervals, adverse comparisons, exact identities
+  and the parser-only correction for the original training claim ID zero.

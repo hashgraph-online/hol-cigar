@@ -1,7 +1,9 @@
 # v0.14 broker source qualification
 
 Status: local short fault qualification and corrected repeated load study passed.
-The 24-hour soak, Windows load/runtime storage checks, installed
+The Windows source/runtime storage checks now pass in the
+[hosted source run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36332889565).
+The 24-hour soak, Windows sustained load checks, installed
 artifact matrix and independent task/answer efficacy remain pending. This is not
 a v0.14 release receipt or a claim of version-wide nonregression.
 
