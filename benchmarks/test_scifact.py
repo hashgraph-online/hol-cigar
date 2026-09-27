@@ -125,6 +125,16 @@ class SciFactTests(unittest.TestCase):
             with self.assertRaises(EvaluationError):
                 scifact.prepare(root / "data.tar.gz", root / "prepared")
 
+    def test_original_claim_id_zero_is_valid_and_not_an_overlap(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            values = fixture()
+            values["claims_train.jsonl"]["id"] = 0
+            archive(root / "data.tar.gz", values)
+            metadata = scifact.prepare(root / "data.tar.gz", root / "prepared")
+            self.assertEqual(metadata["split_counts"]["claims_train.jsonl"], 1)
+            self.assertEqual(metadata["queries"], 1)
+
     def test_flat_control_stops_at_first_oversize_without_skipping_or_gold(self):
         class Error(Exception):
             code = "BudgetUnsatisfiable"

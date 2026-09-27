@@ -161,7 +161,8 @@ def prepare(archive: Path, output: Path) -> dict:
         ids = set()
         for row in json_lines(members[name]):
             require(
-                positive_id(row.get("id"))
+                type(row.get("id")) is int
+                and 0 <= row["id"] < 2**53
                 and row["id"] not in ids
                 and type(row.get("claim")) is str,
                 "invalid claim identity",
