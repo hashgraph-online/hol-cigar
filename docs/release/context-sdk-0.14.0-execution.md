@@ -800,3 +800,16 @@ only when their exercised behavior covers the corresponding requirement above.
   preserved. This test change has not run locally during the soak. The private
   downstream driver and composition qualification remain separate, unpublished
   work; no HUMIDOR adoption result is claimed.
+- The `ea763af4` rerun finds a test-only Rust formatting discrepancy and one
+  macOS ARM64 abandonment-fixture failure while writing an excess agent request.
+  The fixture sent sixteen abandoned connections through the default per-grant
+  limit of four, although overload may correctly close a connection before its
+  command write. It now explicitly admits sixteen for the abandonment case.
+  The separate saturation case still requires a refusal and a working other
+  grant, and recognizes closure during either command write or response read.
+  It additionally completes both admitted partial requests and verifies that
+  the previously saturated grant can use its reclaimed capacity.
+  Native runtime limits, timeouts and behavior are unchanged. Original failure
+  logs and small diagnostic artifacts are retained under the `ea763af4` identity;
+  corrected hosted qualification is required. Formatting is corrected from the
+  hosted formatter's exact diff, without running local checks during the soak.

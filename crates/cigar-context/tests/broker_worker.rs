@@ -375,7 +375,10 @@ fn incomplete_prefix_times_out_and_releases_connection_capacity() {
 
 #[test]
 fn abandoned_agent_calls_leave_other_clients_and_host_control_available() {
-    let mut worker = Worker::start(json!({}));
+    // All sixteen abandoned commands should reach the frame reader. The default four-connection
+    // grant limit may correctly reject this burst before a command is written; that limit is
+    // tested separately below. Do not mistake a permitted overload refusal for failed cleanup.
+    let mut worker = Worker::start(json!({"max_connections_per_agent":16}));
     worker.ingest("docs", "one", "shared evidence");
     let abandoned = worker.grant("abandoned", &["docs"], &[]);
     let healthy = worker.grant("healthy", &["docs"], &[]);
@@ -478,27 +481,42 @@ fn per_agent_connection_limit_preserves_another_grants_capacity() {
     );
     let busy = worker.grant("busy", &["docs"], &[]);
     let healthy = worker.grant("healthy", &["docs"], &[]);
-    let mut stalled = (0..3)
-        .map(|_| {
-            let mut stream = authenticate(worker.address, &busy).unwrap();
-            stream.write_all(&[0]).unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_millis(10)))
-                .unwrap();
-            stream
-        })
-        .collect::<Vec<_>>();
-    let until = Instant::now() + Duration::from_secs(1);
+    let mut stalled = Vec::new();
     let mut rejected = false;
+    for _ in 0..3 {
+        let mut stream = authenticate(worker.address, &busy).unwrap();
+        match stream.write_all(&[0]) {
+            Ok(()) => {
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(10)))
+                    .unwrap();
+                stalled.push(stream);
+            }
+            Err(error) => {
+                // There is no post-proof admission acknowledgement. A rejected connection may
+                // report closure during this write instead of the subsequent read.
+                assert!(matches!(
+                    error.kind(),
+                    std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::BrokenPipe
+                ));
+                rejected = true;
+            }
+        }
+    }
+    assert!(stalled.len() >= 2, "connections below the grant limit failed");
+    let until = Instant::now() + Duration::from_secs(1);
     while !rejected && Instant::now() < until {
-        for stream in &mut stalled {
+        let mut closed = None;
+        for (index, stream) in stalled.iter_mut().enumerate() {
             match stream.read(&mut [0_u8; 1]) {
                 Ok(0) => {
-                    rejected = true;
+                    closed = Some(index);
                     break;
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {
-                    rejected = true;
+                    closed = Some(index);
                     break;
                 }
                 Err(error) => assert!(matches!(
@@ -508,14 +526,41 @@ fn per_agent_connection_limit_preserves_another_grants_capacity() {
                 Ok(count) => assert_eq!(count, 0, "unexpected bytes before a command"),
             }
         }
+        if let Some(index) = closed {
+            drop(stalled.swap_remove(index));
+            rejected = true;
+        }
     }
     assert!(
         rejected,
         "one grant exceeded its authenticated connection budget"
     );
+    assert_eq!(stalled.len(), 2, "the grant must retain its allowed capacity");
     success(&agent(
         worker.address,
         &healthy,
+        json!({"op":"source_revision","source":"docs"}),
+    ));
+    // Complete both admitted partial frames. A broken implementation that closes every busy
+    // connection must not pass merely because another grant can still make progress.
+    let command = envelope(json!({"op":"source_revision","source":"docs"}));
+    let request = serde_json::to_vec(&command).unwrap();
+    let prefix = u32::try_from(request.len()).unwrap().to_be_bytes();
+    assert_eq!(prefix[0], 0);
+    for mut stream in stalled {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+        stream.write_all(&prefix[1..]).unwrap();
+        stream.write_all(&request).unwrap();
+        let reply = read_frame(&mut stream, MAX_AGENT_RESPONSE).unwrap();
+        let reply: Value = serde_json::from_slice(&reply).unwrap();
+        success(&reply);
+        assert_eq!(stream.read(&mut [0_u8; 1]).unwrap(), 0);
+    }
+    success(&agent(
+        worker.address,
+        &busy,
         json!({"op":"source_revision","source":"docs"}),
     ));
     success(&worker.call(json!({"op":"revoke","agent":"busy"})));

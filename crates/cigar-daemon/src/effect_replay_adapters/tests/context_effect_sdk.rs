@@ -399,11 +399,13 @@ async fn exercise(
         axum::serve(listener, http_router(kernel)).await
     }));
     let mut driver = Driver::spawn(executable, script, root, consumer)?;
-    driver.send(&json!({"base_url":format!("http://{address}"), "scenario":scenario,
+    driver.send(
+        &json!({"base_url":format!("http://{address}"), "scenario":scenario,
         "effect_id":initial.effect_id.as_str(), "intent_digest":initial.intent_digest.as_str(),
         "initial_state":initial.state, "initial_version":initial.effect_version.to_string(),
         "now_unix_ns":now.unix_nanos().to_string(),
-        "tenant_id":record(10)?.as_str(), "principal_id":record(11)?.as_str()}))?;
+        "tenant_id":record(10)?.as_str(), "principal_id":record(11)?.as_str()}),
+    )?;
     let first = driver.receive()?;
     assert_eq!(first.get("phase"), Some(&json!("dispatch")));
     assert_eq!(
