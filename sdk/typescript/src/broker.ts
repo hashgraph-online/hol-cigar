@@ -145,6 +145,11 @@ export class LocalContextBroker implements AsyncDisposable {
     return this.call({op: "replace_source", source, expected, documents, provenance});
   }
   provenance(source: string): Promise<LocalBrokerSourceProvenance | null> { return this.call({op: "provenance", source}); }
+  /** Host-only preprocessing; source admission and provenance remain explicit. */
+  async chunksAtLines(document: LocalDocument, starts: readonly number[]): Promise<LocalDocument[]> {
+    if (!this.capabilities().capabilities.includes("document_boundaries.v1")) throw new LocalBrokerError("IncompatibleWorker");
+    return this.call({op:"chunks_at_lines",document,starts});
+  }
   setEdge(from: string, to: string, kind: LocalEdgeKind, present: boolean,
     expected: Readonly<Record<string, LocalBrokerSourceRevision>>): Promise<Record<string, LocalBrokerSourceRevision>> {
     return this.call({op: "set_edge", from, to, kind, present, expected});

@@ -9,6 +9,7 @@
 mod answer;
 #[cfg(feature = "broker")]
 pub mod broker;
+mod chunking;
 mod explain;
 mod graph;
 mod prompt;

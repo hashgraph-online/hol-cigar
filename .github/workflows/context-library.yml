@@ -77,9 +77,9 @@ jobs:
           cargo build --locked -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
           corepack pnpm install --frozen-lockfile --ignore-scripts
           corepack pnpm --dir sdk/typescript run build
-          node --test sdk/typescript/dist/tests/broker*.test.js sdk/typescript/dist/tests/context-effects.test.js sdk/typescript/dist/tests/selection-explanation.test.js
+          node --test sdk/typescript/dist/tests/broker*.test.js sdk/typescript/dist/tests/context-effects.test.js sdk/typescript/dist/tests/selection-explanation.test.js sdk/typescript/dist/tests/syntax-ingestion.test.js
           uv sync --project sdk/python --frozen
-          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py sdk/python/tests/test_selection_explanation.py
+          uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py sdk/python/tests/test_selection_explanation.py sdk/python/tests/test_syntax_ingestion.py
       - name: Install the pinned compiler for the native Honey integration
         if: runner.os == 'macOS'
         uses: ./.github/actions/setup-protoc

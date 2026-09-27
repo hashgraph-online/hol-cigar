@@ -28,7 +28,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Unix store locally verified; Windows NTFS protection implemented and cross-checked; hosted runtime/fault qualification and performance acceptance pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission, transitive invalidation and SDK integration implemented; Unix durable integration locally verified; hosted qualification pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
-| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation implemented; broader adapters and held-out efficacy still pending |
+| R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
@@ -429,3 +429,20 @@ only when their exercised behavior covers the corresponding requirement above.
   uses `selection-explanation-` under the development evidence directory. Hosted
   execution, independent task-quality comparisons and full performance gates
   remain pending; this does not close R1.
+- Added an explicit parser-boundary partitioner to the native document API and
+  both SDKs, including host-only broker preprocessing. It preserves every UTF-8
+  byte and LF/CRLF boundary, returns absolute citation lines, bounds input/chunk
+  counts and rejects invalid partitions. It introduces no parser dependency,
+  file access, graph mutation or evidence admission. A packaged Python AST
+  example preserves top-level decorated/async units and adds explicit fixture
+  dependencies; it makes no general dependency-inference or sandbox claim.
+- Local ingestion validation passes 131 all-feature native tests, one doctest
+  and 56 core-only test/doctest invocations, with formatting and strict Clippy.
+  All 470 Python tests plus 39 subtests and all 156 Node tests pass. Coverage is
+  93.54% statements / 86.74% branches; all critical-module gates pass. Strict
+  typing, changed-file lint/format and generated local assets pass. Evidence uses
+  `syntax-ingestion-` under the development evidence directory. The twelve real
+  Python/Node Honey scenarios also pass again after these changes; readback is
+  retained in `context-adapters-honey-integration-01.log`. Parser boundaries and
+  selection explanations still need independent matched-budget task comparisons;
+  R1 and final platform/artifact/performance qualification remain incomplete.

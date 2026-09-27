@@ -114,6 +114,13 @@ export class LocalContextGraph implements AsyncDisposable {
   chunks(document: LocalDocument, maxLines: number, overlapLines = 0): Promise<LocalDocument[]> {
     return this.call({op: "chunks", document, max_lines: maxLines, overlap_lines: overlapLines});
   }
+  /** Partition exact source at caller-supplied syntax boundaries; no parser, I/O or mutation. */
+  chunksAtLines(document: LocalDocument, starts: readonly number[]): Promise<LocalDocument[]> {
+    if (!this.workerFeatures.includes("document_boundaries.v1")) {
+      return Promise.reject(new LocalContextError("IncompatibleWorker"));
+    }
+    return this.call({op: "chunks_at_lines", document, starts});
+  }
   verify(snapshot: LocalContextSnapshot): Promise<LocalContextResult> { return this.call({op: "verify", snapshot}); }
   /** Compact data-role rendering bound to the complete snapshot and retained citation map. */
   promptView(snapshot: LocalContextSnapshot, maxTokens: number): Promise<LocalContextPrompt> {

@@ -376,6 +376,12 @@ class LocalContextGraph(_WorkerChannel):
             self._call({"op": "chunks", "document": document, "max_lines": max_lines, "overlap_lines": overlap_lines}),
         )
 
+    def chunks_at_lines(self, document: LocalDocument, starts: list[int]) -> list[LocalDocument]:
+        """Partition exact text at caller-supplied syntax boundaries. No parser, I/O or graph mutation."""
+        if "document_boundaries.v1" not in self.capabilities()["features"]:
+            raise LocalContextError("IncompatibleWorker")
+        return cast(list[LocalDocument], self._call({"op": "chunks_at_lines", "document": document, "starts": starts}))
+
     def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
         """Bind exact claims to their snapshot for a separate trusted reviewer; no truth judgment."""
         return cast(list[str], self._call({"op": "review_keys", "draft": draft}))

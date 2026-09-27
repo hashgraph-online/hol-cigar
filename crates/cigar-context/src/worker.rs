@@ -78,6 +78,10 @@ enum Command {
         max_lines: usize,
         overlap_lines: usize,
     },
+    ChunksAtLines {
+        document: Document,
+        starts: Vec<usize>,
+    },
     Verify {
         snapshot: ContextSnapshot,
     },
@@ -216,6 +220,9 @@ impl Session {
                 max_lines,
                 overlap_lines,
             } => Ok(json!(document.chunks(max_lines, overlap_lines)?)),
+            Command::ChunksAtLines { document, starts } => {
+                Ok(json!(document.chunks_at_lines(&starts)?))
+            }
             Command::Verify { snapshot } => self.rendered(snapshot),
             Command::PromptView {
                 snapshot,
@@ -305,7 +312,7 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
         "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
         "max_response_bytes": MAX_RESPONSE, "capabilities": [
             "context_graph.v1", "source_replace.v1", "snapshot_integrity.v1",
-            "answer_review.v1", "context_views.v1", "selection_explanation.v1"
+            "answer_review.v1", "context_views.v1", "selection_explanation.v1", "document_boundaries.v1"
         ]});
         *session = Some(value);
         Ok(reply)

@@ -188,6 +188,13 @@ pub enum HostCommand {
         /// Host-declared acquisition and derivation records.
         provenance: SourceProvenance,
     },
+    /// Partition host-supplied source without reading files, changing evidence or granting access.
+    ChunksAtLines {
+        /// Exact complete input; caller metadata does not become admitted provenance.
+        document: Document,
+        /// Strictly increasing one-based absolute chunk starts, excluding the first chunk.
+        starts: Vec<usize>,
+    },
     /// Inspect host provenance, including possibly hidden dependency locators.
     Provenance {
         /// Host-selected source locator.
@@ -583,6 +590,7 @@ mod tests {
             json!({"op":"grant"}),
             json!({"op":"revoke", "agent":"other"}),
             json!({"op":"replace_source", "source":"docs", "documents":[]}),
+            json!({"op":"chunks_at_lines", "document":{"id":"a","source":"s","text":"x"}, "starts":[]}),
             json!({"op":"admit_proposal", "proposal_id":"fake"}),
             json!({"op":"set_edge"}),
             json!({"op":"check_answer"}),

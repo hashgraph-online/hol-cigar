@@ -319,6 +319,12 @@ class LocalContextBroker(_WorkerChannel):
     def provenance(self, source: str) -> LocalBrokerSourceProvenance | None:
         return cast(LocalBrokerSourceProvenance | None, self._call({"op": "provenance", "source": source}))
 
+    def chunks_at_lines(self, document: LocalDocument, starts: list[int]) -> list[LocalDocument]:
+        """Host-only preprocessing; does not admit evidence or change its provenance."""
+        if "document_boundaries.v1" not in self.capabilities()["capabilities"]:
+            raise LocalBrokerError("IncompatibleWorker")
+        return cast(list[LocalDocument], self._call({"op": "chunks_at_lines", "document": document, "starts": starts}))
+
     def set_edge(
         self,
         from_id: str,

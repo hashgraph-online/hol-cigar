@@ -116,6 +116,11 @@ check. Construct new Python objects after `fork()`; inherited objects are reject
 
 ## Evidence writes and answer review
 
+The host can preprocess parser-owned source with `broker.chunks_at_lines(document,
+starts)` / `broker.chunksAtLines(document, starts)` when `document_boundaries.v1`
+is advertised. This only partitions exact text; it does not admit evidence or
+advance a source revision. See [parser integration](SYNTAX_INGESTION.md).
+
 An agent calls `propose_source(request_key, source, expected, documents)` (Node:
 `proposeSource`) for an assigned writable source. It cannot commit the source.
 The trusted host inspects `proposal`, then admits it with provenance or rejects
