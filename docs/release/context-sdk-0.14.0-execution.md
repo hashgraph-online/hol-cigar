@@ -34,7 +34,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Independent 300-claim SciFact comparison complete; actual Hiero terminal oracles and broader task/answer evidence remain pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
-| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
+| Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Development native matrix passes all 14 jobs with matching payload bytes; final versioned SDK archives and installed matrix pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
 
 ## Implementation order
@@ -612,3 +612,31 @@ only when their exercised behavior covers the corresponding requirement above.
   The [full report](context-sdk-0.14.0-retrieval-evidence.md) preserves strata,
   unavailable zero-denominator intervals, adverse comparisons, exact identities
   and the parser-only correction for the original training claim ID zero.
+- Corrected native packaging after the first release-builder diagnostic could
+  not resolve the unpublished Windows adapter. Cargo now packages both local
+  crates together; compilation uses verified extracted archives with an explicit
+  sibling patch and a narrowly checked lock conversion. All dependency versions,
+  edges and unrelated checksums remain fixed. Source binding includes the adapter,
+  and wheel/npm manifests bind both archives. The complete distribution inventory
+  now requires eleven archives. See [the rebuild contract](context-native-sources.md).
+  Forty-one focused release-boundary tests and all changed-file lint/workflow
+  checks pass. Eight older stable-profile tests remain incompatible with the
+  retained alpha identity and must pass after the final version/profile update.
+- The local packaged macOS worker passes all native tests, compilation and
+  dependency inspection. One earlier run retained nine broker startup failures
+  caused by the session sandbox denying loopback bind; a direct socket probe
+  reproduced `EPERM`. The unchanged offline build passed with local socket
+  permission. This does not indicate an external service dependency.
+- [Native run 36336517597](https://github.com/hashgraph-online/hol-cigar/actions/runs/36336517597)
+  at `bb1e41788802cd749fc6b62d50e454d2e10e3a26` passes two builders on all
+  seven targets. Downloaded receipts validate against the bound source; all nine
+  native/oracle/source payloads match exactly for each platform (63 comparisons).
+  Both source archives also match across every target. Logs and comparisons are
+  retained outside Git in `native-matrix-bb1e4178`. This is a development native
+  build result, not final SDK installed qualification or publication authority.
+- Registered the [installed regression comparison](../proposals/context-release-comparison-0.14.0.md)
+  using separate exact 0.12, retained-alpha and development wheel environments.
+  It preserves the established child workloads and adds source/archive/runtime
+  checks, complete-output parity, cohort-level intervals and explicit guardrails.
+  All 45 benchmark harness tests pass. Measurements have not started in this
+  record; source commits and worker commits are bound separately where needed.
