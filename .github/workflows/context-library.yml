@@ -27,6 +27,9 @@ jobs:
           python-version: "3.14.7"
       - name: Validate evidence binding, pairing, denominators and raw-study import
         run: python -m unittest discover -s benches/context-evaluation -p 'test_*.py'
+      - name: Validate diagnostic benchmark reductions
+        if: runner.os != 'Windows'
+        run: python -m unittest discover -s benchmarks -p 'test_*.py'
 
   context:
     name: standalone context / ${{ matrix.os }}
