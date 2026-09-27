@@ -18,6 +18,8 @@ import stat
 import subprocess
 import tempfile
 
+from release_lib import reject_evidence_directory
+
 
 def require(condition, message):
     if not condition:
@@ -273,7 +275,11 @@ def main():
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--allow-ephemeral-host-mutations", action="store_true")
+    parser.add_argument(
+        "--evidence-dir", type=Path, help="inapplicable to deployment diagnostics"
+    )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "deployment diagnostics")
     require(
         args.allow_ephemeral_host_mutations
         and os.geteuid() == 0

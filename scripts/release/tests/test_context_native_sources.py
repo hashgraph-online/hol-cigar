@@ -90,7 +90,7 @@ class NativeSourceTests(unittest.TestCase):
 
     def test_workspace_profile_drift_requires_explicit_review(self):
         (self.root / "Cargo.toml").write_text(
-            '[profile.release]\ncodegen-units = 16\nlto = false\n'
+            "[profile.release]\ncodegen-units = 16\nlto = false\n"
             'panic = "unwind"\nstrip = "none"\n'
         )
         with self.assertRaisesRegex(ReleaseError, "profile differs"):

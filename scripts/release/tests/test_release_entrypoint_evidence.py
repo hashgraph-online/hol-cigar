@@ -72,6 +72,20 @@ class SourceOnlyEntrypointTests(unittest.TestCase):
             ("check_context_version.py",),
             ("check_python_coverage.py", "/tmp/not-opened-coverage.json"),
             ("context_dependency_evidence.py", "python"),
+            (
+                "context_native_sources.py",
+                "--sources",
+                "/tmp/not-opened-native-sources",
+                "--output",
+                "/tmp/not-created-native-output",
+            ),
+            (
+                "qualify_deployment_boundaries.py",
+                "--fixture",
+                "/tmp/not-opened-deployment-fixture.json",
+                "--output",
+                "/tmp/not-created-deployment-output.json",
+            ),
         )
         environment = os.environ.copy()
         environment.pop("CIGAR_EVIDENCE_DIR", None)

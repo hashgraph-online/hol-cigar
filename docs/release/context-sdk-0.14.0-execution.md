@@ -711,3 +711,11 @@ only when their exercised behavior covers the corresponding requirement above.
   lint pass. Local handoff tests require the existing OpenSSL 3 binary, and the
   client generator requires the pinned Go formatter; initial missing/old-tool
   invocations failed without changing package behavior.
+- The first final-version run at `e18c9515` passes all fourteen native builds but
+  stops its legacy compatibility path on a release-test formatting discrepancy.
+  Local execution of that exact gate also finds two new diagnostic entrypoints
+  missing the common evidence selector. Both now explicitly reject the
+  inapplicable selector before reading inputs or mutating a host; regression
+  checks use nonexistent input paths. All seventy release integrity/native-source
+  tests, full release-tooling lint and formatting pass locally. The failed hosted
+  log remains retained as `release-e18c9515-integrity.log`.

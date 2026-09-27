@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 import tarfile
 import tomllib
 
-from release_lib import ReleaseError, canonical_json_bytes
+from release_lib import ReleaseError, canonical_json_bytes, reject_evidence_directory
 
 CONTEXT = "cigar-context"
 ADAPTER = "cigar-windows-ipc"
@@ -208,7 +208,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-dir", type=Path, help="inapplicable to native source preparation"
+    )
     args = parser.parse_args()
+    reject_evidence_directory(args.evidence_dir, "native source preparation")
     _, receipt = prepare(
         args.sources, args.output, versions(Path(__file__).resolve().parents[2])
     )
