@@ -585,3 +585,18 @@ only when their exercised behavior covers the corresponding requirement above.
   in-memory gRPC operations, preserving its expected bundle identity. Independent
   verification passes all 363 canonical vectors and 100,000 differential records.
   The demo contains no standalone test files. No model or external API was called.
+- All seven jobs in [the a1aa0b95 source run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36332889565)
+  now pass: compiler, three-OS evaluation contracts and complete Linux/macOS/Windows
+  context jobs. This includes the actual Windows persistence tests; seven-target
+  installed release qualification and the 24-hour soak remain outstanding.
+- Added a frozen offline SciFact producer/scorer with the registered five
+  treatments and three equal budgets. It binds exact SDK/worker/adapter bytes,
+  separates retrieval inputs from independent annotations, seals all predictions
+  before scoring and emits the common evaluation contract with shared-paper
+  clusters. Sixteen authored harness/scorer regressions pass; the complete common
+  suite has 56 tests. A positive-evidence integration fixture passes all 15 cells
+  against both workers. Earlier authored smoke runs are retained: they exposed
+  the empty-query validation rule in the flat control. Its empty-prefix case now
+  uses a fixed query and `allowed=[]`; no ranking parameter was tuned on labels.
+  Independent data has not yet been acquired or scored. See
+  [the reproduction guide](../../benchmarks/SCIFACT.md).

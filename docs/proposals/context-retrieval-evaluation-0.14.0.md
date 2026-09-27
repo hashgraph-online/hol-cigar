@@ -103,6 +103,10 @@ The flat control packs the longest BM25-ordered prefix fitting the same exact
 rendered budget, stopping at its first non-fitting document or 16 documents.
 It uses CIGAR's `required` field only as a budget/rendering oracle for those
 predicted IDs, with an empty query and no edges; it never uses annotated IDs.
+For an empty prefix only, use a fixed nonempty query with `allowed=[]`, because
+the API rejects an empty query together with empty required IDs. This cannot
+retrieve any document. Use the ordinary default of one witness per query term
+uniformly across treatments.
 An oversized first document therefore yields an empty flat prefix. Record this
 as a baseline packing limit, not a failed worker or evidence of abstention quality.
 Use the v0.12 renderer for that control and report its extra packing calls/time.
