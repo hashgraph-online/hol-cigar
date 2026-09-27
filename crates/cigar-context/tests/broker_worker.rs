@@ -505,7 +505,10 @@ fn per_agent_connection_limit_preserves_another_grants_capacity() {
             }
         }
     }
-    assert!(stalled.len() >= 2, "connections below the grant limit failed");
+    assert!(
+        stalled.len() >= 2,
+        "connections below the grant limit failed"
+    );
     let until = Instant::now() + Duration::from_secs(1);
     while !rejected && Instant::now() < until {
         let mut closed = None;
@@ -535,7 +538,11 @@ fn per_agent_connection_limit_preserves_another_grants_capacity() {
         rejected,
         "one grant exceeded its authenticated connection budget"
     );
-    assert_eq!(stalled.len(), 2, "the grant must retain its allowed capacity");
+    assert_eq!(
+        stalled.len(),
+        2,
+        "the grant must retain its allowed capacity"
+    );
     success(&agent(
         worker.address,
         &healthy,
