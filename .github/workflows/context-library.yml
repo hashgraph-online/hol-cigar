@@ -45,8 +45,6 @@ jobs:
           persist-credentials: false
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
-      - name: Check source quality, CLI, optional BPE, and core-only consumer
-        run: python scripts/dev.py context
       - name: Check the Windows storage and legacy named-pipe adapter
         if: runner.os == 'Windows'
         run: |
@@ -54,6 +52,8 @@ jobs:
           cargo test --locked -p cigar-windows-ipc
           cargo clippy --locked -p cigar-windows-ipc --all-targets --no-default-features -- -D warnings
           cargo test --locked -p cigar-windows-ipc --no-default-features
+      - name: Check source quality, CLI, optional BPE, and core-only consumer
+        run: python scripts/dev.py context
       - name: Check offline answer-quality metrics and denominators
         run: python -m unittest discover -s benches/answer-quality -p 'test_*.py'
       - name: Build public API documentation with warnings denied
@@ -78,11 +78,29 @@ jobs:
           CIGAR_TEST_NODE_AGENT: ${{ github.workspace }}/sdk/typescript/dist/tests/broker-agent.js
         run: |
           cargo build --locked -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
+          corepack enable
           corepack pnpm install --frozen-lockfile --ignore-scripts
           corepack pnpm --dir sdk/typescript run build
           node --test sdk/typescript/dist/tests/broker*.test.js sdk/typescript/dist/tests/context-effects.test.js sdk/typescript/dist/tests/selection-explanation.test.js sdk/typescript/dist/tests/syntax-ingestion.test.js
           uv sync --project sdk/python --frozen
           uv run --project sdk/python --no-sync python -m pytest -q sdk/python/tests/test_broker*.py sdk/python/tests/test_context_effects.py sdk/python/tests/test_selection_explanation.py sdk/python/tests/test_syntax_ingestion.py
+      - name: Qualify independent mixed-client faults on the built SDKs
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          uv run --project sdk/python --no-sync python benchmarks/broker_load.py \
+            --worker "${GITHUB_WORKSPACE}/target/debug/cigar-context-worker" \
+            --node "$(command -v node)" \
+            --node-sdk "${GITHUB_WORKSPACE}/sdk/typescript/dist" \
+            --output "${RUNNER_TEMP}/cigar-broker-fault-qualification" \
+            --cohorts 1 --agent-counts 5 12 --runtimes mixed --only-faults
+      - name: Retain source broker fault evidence
+        if: always() && runner.os != 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: broker-fault-source-${{ matrix.os }}
+          path: ${{ runner.temp }}/cigar-broker-fault-qualification
+          if-no-files-found: ignore
       - name: Install the pinned compiler for the native Honey integration
         if: runner.os == 'macOS'
         uses: ./.github/actions/setup-protoc

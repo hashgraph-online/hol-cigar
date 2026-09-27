@@ -94,6 +94,36 @@ fn grant(broker: &mut ContextBroker) -> cigar_context::broker::BrokerCredential 
         .unwrap()
 }
 
+#[cfg(windows)]
+#[test]
+#[allow(clippy::expect_used)] // Named test phases diagnose the redacted public error boundary.
+fn windows_sqlite_vfs_preserves_pinned_private_file() {
+    // Keep individual phase assertions: the public boundary deliberately redacts OS/SQLite
+    // failures to Unavailable, but this fixture must identify which interoperability failed.
+    let directory = private_directory();
+    let options = options(&directory);
+    let (path, created) = PrivatePath::prepare(&options).expect("prepare private NTFS path");
+    assert!(created);
+    let mut connection = Connection::open_with_flags(
+        &path.database,
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )
+    .expect("open pinned NTFS database through SQLite VFS");
+    path.verify(&options).expect("verify after VFS open");
+    configure(&connection, &options).expect("configure SQLite safety limits");
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Exclusive)
+        .expect("acquire SQLite exclusive transaction");
+    transaction.execute_batch(META).expect("create metadata");
+    transaction.execute_batch(JOURNAL).expect("create journal");
+    transaction.commit().expect("commit initialization");
+    path.verify(&options).expect("verify after SQLite commit");
+    path.sync_creation()
+        .expect("flush retained database handle");
+}
+
 #[test]
 fn source_batches_write_one_committed_image_and_restore_no_pending_staging() {
     use super::super::Persistence;

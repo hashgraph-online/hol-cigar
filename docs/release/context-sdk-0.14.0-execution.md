@@ -32,7 +32,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Checkpoint-buffer, ordered-scope lookup and transactional batch ingestion measured locally; full throughput/platform qualification pending |
 | E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Verifier and shared-view/answer/Hiero producers implemented; historical Hiero import and exact re-import pass locally; hosted three-OS checks pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
-| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
+| E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell Python/Node/mixed memory/SQLite fault matrix passes 3,879 checks; corrected repeated load study running; hosted faults and 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Pending |
 | Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Pending |
@@ -518,3 +518,24 @@ only when their exercised behavior covers the corresponding requirement above.
   critical-module gates met; broker/effect modules remain 100% / 100%. Sixteen
   benchmark tests, strict typing, changed-file lint/format and both generator
   checks pass. R2/Q1 still require full workload and hosted/platform qualification.
+- Added independent process load/fault harnesses and retained-data verification.
+  The local 18-cell fault matrix passes 3,879 checks across 1/5/12 Python, Node
+  and mixed clients, memory/SQLite, scope isolation, CAS proposals, revocation,
+  quotas, incomplete authenticated connections, abandoned clients and crash
+  recovery. Nine SQLite cells recheck 13,878 document instances across views.
+  Thirty-four benchmark reducer tests pass. This is authored source qualification,
+  not independent answer quality or a 24-hour reliability result.
+- Preserved an incomplete first load study: four of 180 completed cells failed
+  its complete-window gate, which incorrectly compared a monotonic workload with
+  wall time. None of those 180 cells recorded an API failure. Explicit monotonic
+  window observations and regression tests correct the harness without changing
+  limits. A new frozen eight-cohort, 288-cell study is running; old cells are not
+  pooled into it. See the [broker qualification report](context-sdk-0.14.0-broker-qualification.md).
+- Pushed the approved source branch through `059c0155385da5b2012b361d99a1ff8730e39199`.
+  The [first hosted run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36331345626)
+  passes the common evaluation suite on all three operating systems and the
+  compiler job. Linux/macOS SDK steps fail because the nested build script cannot
+  find the pnpm shim; CI now enables Corepack before running it. Windows persistence
+  tests return `Unavailable`; a staged SQLite interoperability test and earlier
+  Windows adapter checks will locate that failure. No Windows storage qualification
+  is claimed while this remains unresolved.
