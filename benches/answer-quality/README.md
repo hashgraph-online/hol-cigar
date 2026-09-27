@@ -5,6 +5,11 @@ contract with authored cases and oracle reviews. `metrics.py` measures displayed
 answers from **independently annotated** model/application runs. Neither tool
 contacts a provider. Do not describe fixture success as a model hallucination rate.
 
+For comparisons with exact package, worker, displayed-answer and oracle bindings,
+use the [common offline answer-study adapter](../context-evaluation/ANSWERS.md).
+It preserves these metric semantics, raw failure outcomes and independent task
+clusters. A legacy metrics summary alone cannot qualify as bound answer evidence.
+
 ## Runtime contract qualification
 
 Build a 0.11.0 release worker and the baseline/candidate probes using

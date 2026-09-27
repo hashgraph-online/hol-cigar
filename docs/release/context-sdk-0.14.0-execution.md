@@ -30,7 +30,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native binding and SDK Honey adapter implemented; 12 Python/Node HTTP/SQLite scenarios pass locally; HUMIDOR adoption and hosted qualification pending |
 | R1 | Improve retrieval and explanation through optional adapters | Scoped hybrid/reranking input, syntax-aware ingestion, safe selection explanation, tokenizer identity; held-out evidence tests at equal budget | Selected-only explanation and parser-boundary ingestion implemented; broader ranking adapters and held-out efficacy still pending |
 | R2 | Remove measured ingestion/throughput bottlenecks | Profile source/scope hashing and IPC; transactional batches and bounded APIs; paired latency/RSS evidence | Pending |
-| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier and shared-view adapter implemented; answer/Hiero producer adapters pending |
+| E1 | One auditable evaluation result contract | Versioned schema with exact artifact/corpus/treatment/task identities and reproducible raw observations | Bound verifier, shared-view and recorded-answer adapters implemented; Hiero producer adapter pending |
 | E2 | Prove efficacy against meaningful baselines | Independent gold task/evidence labels, Hiero terminal oracles, matched-budget retrieval/task comparisons and confidence intervals; replay separated from generation claims | Pending |
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Initial independent-process source tests pass; full fault/load matrix and 24-hour soak pending |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Pending |
@@ -446,3 +446,18 @@ only when their exercised behavior covers the corresponding requirement above.
   retained in `context-adapters-honey-integration-01.log`. Parser boundaries and
   selection explanations still need independent matched-budget task comparisons;
   R1 and final platform/artifact/performance qualification remain incomplete.
+- Added a recorded-answer producer for the common evaluation contract. Exact
+  measured artifact identities, producer/model identities, displayed text, claim
+  spans and original corpus/oracle annotations are retained. Twenty-two metrics
+  preserve denominators, failure outcomes, useful-answer yield and independent
+  task clusters. Re-importing the retained originals reproduces the report.
+  The adapter does not judge claims, prove annotation independence or run models.
+  Authored unit cases remain invariant evidence, not hallucination prevalence.
+- All 34 common-evaluation tests and seven existing answer-metric tests pass,
+  including hand-calculated scores, old/new metric agreement, lost/reused answers,
+  identity drift, incomplete annotations, unknown confidence, zero denominators,
+  failed/unsupported pairs and hidden stratum regressions. Changed-file lint and
+  formatting pass; `answer-import-tests-01.log` retains the results outside the
+  worktree. The existing three-OS evaluation job discovers these tests. Actual
+  independent labeled answer studies and Hiero terminal-oracle import remain
+  outstanding; E1/E2 and release efficacy gates are not complete.
