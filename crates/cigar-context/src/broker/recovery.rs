@@ -3,11 +3,13 @@
 
 use super::{
     BrokerError, BrokerLimits, ContextBroker, EdgeNode, MAX_PROVENANCE_BYTES, SourceProvenance,
-    SourceRecord, measure, unix_ms, valid_label, valid_source,
+    SourceRecord, hex, measure, unix_ms, valid_label, valid_source,
 };
-use crate::{ContextError, Document, EdgeKind, GraphLimits, digest};
+use crate::{ContextError, Document, EdgeKind, GraphLimits};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::{BufWriter, Write};
 use std::time::{Duration, Instant};
 
 const SCHEMA: &str = "cigar.broker-checkpoint.v1";
@@ -60,9 +62,17 @@ impl std::fmt::Debug for BrokerCheckpoint {
 impl BrokerCheckpoint {
     /// Copy the canonical private bytes, rejecting a caller limit outside 1..=512 MiB.
     pub fn encode(&self, max_bytes: usize) -> Result<Vec<u8>, BrokerError> {
+        let mut bytes = Vec::new();
+        self.encode_into(&mut bytes, max_bytes)?;
+        Ok(bytes)
+    }
+
+    /// Replace a reusable private buffer with the canonical bytes. On error its length is zero;
+    /// capacity may remain allocated. This is not memory zeroization. Limits match `encode`.
+    pub fn encode_into(&self, bytes: &mut Vec<u8>, max_bytes: usize) -> Result<(), BrokerError> {
+        bytes.clear();
         valid_bound(max_bytes)?;
-        // The writer enforces the bound while serializing, before building an unbounded buffer.
-        bounded_encode(&self.envelope, max_bytes)
+        bounded_encode_into(&self.envelope, bytes, max_bytes)
     }
 
     /// Decode only exact versioned canonical bytes with a matching content digest. Restore
@@ -74,7 +84,7 @@ impl BrokerCheckpoint {
         }
         let envelope: Envelope = serde_json::from_slice(bytes).map_err(|_| integrity())?;
         if envelope.schema != SCHEMA
-            || envelope.sha256 != digest(SCHEMA, &envelope.state)?
+            || envelope.sha256 != checkpoint_digest(&envelope.state)?
             || bounded_encode(&envelope, max_bytes)? != bytes
         {
             return Err(integrity());
@@ -131,7 +141,7 @@ impl ContextBroker {
                 .collect(),
         };
         measure(&state, max_bytes)?;
-        let sha256 = digest(SCHEMA, &state)?;
+        let sha256 = checkpoint_digest(&state)?;
         let checkpoint = BrokerCheckpoint {
             envelope: Envelope {
                 schema: SCHEMA.into(),
@@ -346,12 +356,46 @@ fn integrity() -> BrokerError {
     BrokerError::Context(ContextError::Integrity)
 }
 
+fn checkpoint_digest(state: &State) -> Result<String, BrokerError> {
+    struct Hasher(Sha256);
+    impl Write for Hasher {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.update(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut hash = Hasher(Sha256::new());
+    hash.0.update(SCHEMA.as_bytes());
+    hash.0.update([0]);
+    {
+        // Match the existing domain-separated JSON digest without retaining another full image.
+        // Buffer the many small serde writes so each field does not call SHA-256 independently.
+        let mut writer = BufWriter::with_capacity(16 * 1024, &mut hash);
+        serde_json::to_writer(&mut writer, state).map_err(|_| integrity())?;
+        writer.flush().map_err(|_| integrity())?;
+    }
+    Ok(hex(&hash.0.finalize()))
+}
+
 fn bounded_encode(value: &impl Serialize, limit: usize) -> Result<Vec<u8>, BrokerError> {
-    struct Writer {
-        bytes: Vec<u8>,
+    let mut bytes = Vec::new();
+    bounded_encode_into(value, &mut bytes, limit)?;
+    Ok(bytes)
+}
+
+fn bounded_encode_into(
+    value: &impl Serialize,
+    bytes: &mut Vec<u8>,
+    limit: usize,
+) -> Result<(), BrokerError> {
+    struct Writer<'a> {
+        bytes: &'a mut Vec<u8>,
         limit: usize,
     }
-    impl std::io::Write for Writer {
+    impl Write for Writer<'_> {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
             if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
                 return Err(std::io::Error::other("checkpoint limit"));
@@ -363,12 +407,12 @@ fn bounded_encode(value: &impl Serialize, limit: usize) -> Result<Vec<u8>, Broke
             Ok(())
         }
     }
-    let mut writer = Writer {
-        bytes: Vec::new(),
-        limit,
-    };
-    serde_json::to_writer(&mut writer, value).map_err(|_| BrokerError::Quota)?;
-    Ok(writer.bytes)
+    let mut writer = Writer { bytes, limit };
+    if serde_json::to_writer(&mut writer, value).is_err() {
+        writer.bytes.clear();
+        return Err(BrokerError::Quota);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -33,6 +33,7 @@ pub(super) struct Store {
     options: BrokerStorageOptions,
     sequence: i64,
     head: String,
+    checkpoint: Vec<u8>,
 }
 
 impl Store {
@@ -81,6 +82,7 @@ impl Store {
             options,
             sequence: 0,
             head: ZERO.into(),
+            checkpoint: Vec::new(),
         };
         let broker = if created {
             fresh
@@ -194,10 +196,11 @@ impl Store {
         if event.epoch != broker.epoch() {
             return Err(integrity());
         }
-        let checkpoint = broker
+        broker
             .host_checkpoint(self.options.max_checkpoint_bytes)?
-            .encode(self.options.max_checkpoint_bytes)?;
-        let checkpoint_hash = sha(&checkpoint);
+            .encode_into(&mut self.checkpoint, self.options.max_checkpoint_bytes)?;
+        let checkpoint = &self.checkpoint;
+        let checkpoint_hash = sha(checkpoint);
         let sequence = self
             .sequence
             .checked_add(1)

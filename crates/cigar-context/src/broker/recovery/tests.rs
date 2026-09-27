@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::broker::{AgentGrantSpec, AgentLimits, BrokerCredential, SourceOrigin, SourceRevision};
+use crate::digest;
 use crate::{AnswerClaim, AnswerDraft, ContextRequest, ContextViewSpec, Utf8ByteCounter};
 
 const LIMIT: usize = 1024 * 1024;
@@ -394,6 +395,45 @@ fn codec_enforces_exact_bounds_version_digest_and_canonical_bytes() {
             &checkpoint
         )
         .is_err()
+    );
+}
+
+#[test]
+fn reusable_encoding_preserves_bytes_and_never_returns_a_partial_checkpoint() {
+    let mut original = broker();
+    ingest(
+        &mut original,
+        "docs",
+        "one",
+        &"Unicode é\n\"\\\0".repeat(1800),
+    );
+    let checkpoint = original.host_checkpoint(LIMIT).unwrap();
+    assert_eq!(
+        checkpoint.envelope.sha256,
+        digest(SCHEMA, &checkpoint.envelope.state).unwrap()
+    );
+    let expected = checkpoint.encode(LIMIT).unwrap();
+    let mut buffer = vec![0xff; expected.len() * 2];
+    let allocation = buffer.as_ptr();
+    checkpoint.encode_into(&mut buffer, expected.len()).unwrap();
+    assert_eq!(buffer, expected);
+    assert_eq!(buffer.as_ptr(), allocation);
+    assert!(BrokerCheckpoint::decode(&buffer, buffer.len()).is_ok());
+    for limit in [0, expected.len() - 1, MAX_BYTES + 1] {
+        assert!(checkpoint.encode_into(&mut buffer, limit).is_err());
+        assert!(buffer.is_empty());
+        checkpoint.encode_into(&mut buffer, LIMIT).unwrap();
+        assert_eq!(buffer, expected);
+    }
+    // A shorter subsequent record must not append to or expose the prior serialization.
+    ingest(&mut original, "docs", "one", "short replacement");
+    let shorter = original.host_checkpoint(LIMIT).unwrap();
+    shorter.encode_into(&mut buffer, LIMIT).unwrap();
+    assert_eq!(buffer, shorter.encode(LIMIT).unwrap());
+    assert!(buffer.len() < expected.len());
+    assert_eq!(
+        shorter.envelope.sha256,
+        digest(SCHEMA, &shorter.envelope.state).unwrap()
     );
 }
 

@@ -338,3 +338,18 @@ only when their exercised behavior covers the corresponding requirement above.
   and the successful online verification are retained. No model provider was
   called, and packaging uploaded no source. Exact installed distribution,
   performance, power-loss and release qualification remain incomplete.
+- Profiled the full-image store with eight paired fresh-process cohorts at
+  100/1,000/5,000 documents. Repeated digest/encoding allocations caused macOS to
+  retain freed large buffers. Checkpoint hashing now streams identical canonical
+  bytes and the store reuses one bounded encoding buffer. The follow-up paired
+  comparison reduced 5,000-document combined sampled RSS from 294 MB to 158 MB
+  (about 46%). Update latency remained near 35 ms and compile latency rose about
+  3.4%; no general speed or release non-regression claim is made.
+- All 96 comparison processes returned matching rendered context, including 48
+  durable restore checks. The native gate passes 116 all-feature tests, one doctest
+  and 48 core-only invocations. Seven Python and two Node persistence tests pass
+  against the release worker. Six harness tests check failure retention, process
+  weighting and output equivalence. Exact-byte/boundary tests cover buffer reuse.
+  See [the storage profile](context-sdk-0.14.0-storage-profile.md) for raw-evidence
+  identities, limitations and the unresolved full-image write cost. B3/R2/Q1 and
+  hosted/installed qualification remain incomplete.
