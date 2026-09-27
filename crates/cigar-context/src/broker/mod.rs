@@ -7,6 +7,7 @@
 
 mod types;
 pub use types::*;
+pub mod scheduler;
 
 use crate::{
     AnswerDraft, AnswerPolicy, Citation, ClaimReview, ContextGraph, ContextRequest, ContextView,

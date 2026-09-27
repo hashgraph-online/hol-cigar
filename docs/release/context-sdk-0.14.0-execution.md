@@ -24,7 +24,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | A1 | Make local installation and capability discovery unambiguous | Installed Python/npm ingest → compile → cite → replace → revalidate example, no services/credentials/network; doctor/capability schema | Live worker feature report and packaged guidance implemented; installed artifact matrix pending |
 | A2 | Preserve existing API and all valid 0.12 behavior | Public exports/signatures/types, exact canonical fixtures, errors and legacy workflows | Existing 0.11/0.12 API snapshots pass; final candidate conformance pending |
 | B1 | Share one graph across independent agent processes | Supported broker/client API in both SDKs, authenticated caller-to-view binding, host-only policy/reviewer controls | Native authority core implemented; transport, SDK facades and independent processes pending |
-| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Retention/token quotas and source CAS implemented; scheduler/transport semantics pending |
+| B2 | Bound shared-agent resource use and conflicting writes | Per-agent quotas, bounded fair admission, cancellation/uncertain mutation semantics, source revision conflict tests | Native quotas, source CAS and fair queue/cancellation core implemented; transport integration and measurements pending |
 | B3 | Restore context safely after restart | Atomic versioned journal/checkpoint restore, new authority epoch, rejected old handles/reviews, retention/withdrawal tests | Pending |
 | P1 | Admit evidence with meaningful provenance | Host-owned source identity/version/time/trust and derivation lineage; unverified proposals remain untrusted | Native host admission and transitive invalidation implemented; SDK and durable integration pending |
 | P2 | Integrate review and execution authority | Reviewer port and complete displayed-claim coverage; bind checked context to existing Honey effects/HUMIDOR adapter, no blind retry | Native exact-submission review port implemented; execution handoff pending |
@@ -164,3 +164,14 @@ only when their exercised behavior covers the corresponding requirement above.
   context crate has 70 passing tests plus its doctest with `bpe,broker`; strict
   all-target Clippy passes. This is a single-owner core, not independent-process
   qualification: no listener, scheduler, journal or SDK broker is shipped yet.
+- Implemented a native bounded scheduler with per-grant job/byte limits, separate
+  host capacity, round-robin agent dispatch and alternating host opportunities.
+  Cancellation uses an atomic queued-to-dispatched boundary: a cancelled queued
+  operation cannot run, while a dispatched/completed operation cannot be declared
+  safely unexecuted. Revocation and expiry return explicit pre-dispatch failures.
+  Six scheduler regressions pass, including a twelve-agent saturated queue,
+  host admission during agent saturation, epoch/credential rejection, replaced
+  grants, drop cleanup and 100 cancellation/dispatch races. Strict all-target
+  Clippy passes. The existing three-OS `scripts/dev.py context` job already selects
+  all Cargo features and will exercise these tests; hosted execution and actual
+  independent-client queue-delay/fairness measurements remain pending.
