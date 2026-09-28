@@ -1,6 +1,11 @@
 # CIGAR 0.14.0 execution and release evidence
 
-Status: implementation in progress; not released or qualified.
+Status: qualification in progress; PyPI publication requested before soak completion.
+
+The September 27 PyPI publication request is recorded separately in the
+[publication scope](context-sdk-0.14.0-pypi-publication.md). It does not mark the
+original qualification requirements below complete. The release documentation
+discloses the pending continuous soak, HUMIDOR adoption and broader task evidence.
 
 The objective is to execute the project examination roadmap and release CIGAR
 0.14.0. The source baseline is the 0.13 alpha at

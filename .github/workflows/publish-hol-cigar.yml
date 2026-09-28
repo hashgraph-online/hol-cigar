@@ -188,6 +188,70 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  verify-public-stable:
+    name: verify public 0.14.0 archives and clean installation
+    if: inputs.confirm == 'publish hol-cigar 0.14.0'
+    needs: publish-to-pypi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14.7"
+      - name: Verify public registry bytes against the signed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: |
+          test "${GITHUB_REF}" = "refs/tags/v0.14.0"
+          gh release download v0.14.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
+          python3 scripts/release/context_registry_readback.py \
+            --directory "${RUNNER_TEMP}/signed-stable" --commit "${GITHUB_SHA}" \
+            --manifest-sha256 "${MANIFEST_SHA256}" --registry pypi \
+            --output "${RUNNER_TEMP}/registry-readback.json"
+      - name: Install from PyPI and exercise the public package
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/public-install"
+          "${RUNNER_TEMP}/public-install/bin/python" -m pip install \
+            --disable-pip-version-check --no-input --no-cache-dir --only-binary=:all: \
+            --index-url https://pypi.org/simple \
+            --report "${RUNNER_TEMP}/public-install-report.json" hol-cigar
+          "${RUNNER_TEMP}/public-install/bin/python" - <<'PY'
+          import importlib.metadata
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          assert importlib.metadata.version("hol-cigar") == "0.14.0"
+          manifest = json.loads((root / "signed-stable/release-manifest.json").read_text())
+          report = json.loads((root / "public-install-report.json").read_text())
+          installed = [row for row in report["install"] if row["metadata"]["name"] == "hol-cigar"]
+          assert len(installed) == 1
+          digest = installed[0]["download_info"]["archive_info"]["hashes"]["sha256"]
+          assert digest in {row["sha256"] for row in manifest["payloads"] if row["file"].endswith(".whl")}
+          print("Public default version and installed wheel digest match the signed 0.14.0 release.")
+          PY
+          "${RUNNER_TEMP}/public-install/bin/python" -m cigar_sdk.local_cli doctor --json >"${RUNNER_TEMP}/public-doctor.json"
+          "${RUNNER_TEMP}/public-install/bin/python" -m cigar_sdk.local_cli demo --json >"${RUNNER_TEMP}/public-demo.json"
+          cat "${RUNNER_TEMP}/public-doctor.json" "${RUNNER_TEMP}/public-demo.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hol-cigar-0.14.0-public-readback
+          path: |
+            ${{ runner.temp }}/registry-readback.json
+            ${{ runner.temp }}/public-install-report.json
+            ${{ runner.temp }}/public-doctor.json
+            ${{ runner.temp }}/public-demo.json
+          if-no-files-found: warn
+          retention-days: 30
+
   publish-to-pypi:
     name: publish approved exact archives to PyPI
     needs: [verify-release-bytes, verify-beta-bytes, verify-stable-bytes]

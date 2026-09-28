@@ -4,28 +4,30 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Python applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This 0.14.0 candidate contains a broker for independent agent processes. See the
+Version 0.14.0 contains a broker for independent agent processes. See the
 packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
-reviews and failure semantics. Installed candidate tests have passed across seven
-native targets; the 24-hour soak and remaining release gates are still pending.
-Qualification applies to the exact artifacts named in their receipts.
+reviews and failure semantics. Installed package tests have passed across seven
+native targets. This PyPI release proceeds at the maintainer's request before the
+24-hour soak finishes. Continuous-run qualification, HUMIDOR adoption and broader
+Hiero/task evidence remain pending; publication does not establish those results.
+Qualification applies to the exact artifacts named in the signed release receipts.
 
 ## Install and check
 
-The 0.14.0 candidate targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
+Version 0.14.0 targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install /absolute/path/to/hol_cigar-0.14.0-py3-none-macosx_11_0_arm64.whl
+python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 python3.14 -m cigar_sdk.examples.shared_views
 ```
 
-Install the exact wheel and matching qualification receipt for your platform.
-The example filename is for macOS ARM64; seven native targets are built. This
-candidate is not a published PyPI release. Each native wheel bundles its worker;
-no Rust compiler or separate worker installation is required.
+Pip selects the matching wheel for your supported platform. Seven native targets
+are included. Each native wheel bundles its worker; no Rust compiler or separate
+worker installation is required. Exact archive hashes and qualification receipts
+accompany the [GitHub release](https://github.com/hashgraph-online/hol-cigar/releases/tag/v0.14.0).
 See the bundled [changelog](CHANGELOG.md) for migration details. The supported
 protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
@@ -163,9 +165,9 @@ pool where possible. `close()` is idempotent and preserves ordinary primary erro
 If OS cleanup fails, `cleanup_complete` remains false and another close retries.
 
 The native inventory covers macOS ARM64/x64, Linux glibc/musl ARM64/x64 and
-Windows x64. Candidate installed tests and independent archive comparison pass
-for this inventory. Complete release qualification is still in progress;
-use the receipt for your exact archive rather than inferring support from a name.
+Windows x64. Installed tests and independent archive comparison pass for this
+inventory. The 24-hour soak and downstream application qualification remain in
+progress; use the receipt for your exact archive to identify completed checks.
 
 Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional

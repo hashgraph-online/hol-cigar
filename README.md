@@ -11,7 +11,7 @@ Use `LocalContextGraph` from Python's `cigar_sdk` or npm's `@hol-org/cigar/conte
 Both packages run a bundled Rust worker locally; their separate `CigarClient`
 APIs connect to a caller-selected CIGAR server.
 
-## 0.14.0 candidate: shared context for independent agents
+## 0.14.0: shared context for independent agents
 
 One local broker can serve independent Python and Node agent processes with
 host-issued, authenticated source scopes. The host controls evidence admission,
@@ -27,10 +27,11 @@ loading adds about 2.36 ms and worker hashing about 0.51 ms versus 0.12; hashing
 also exceeds the original limit versus alpha. All other compared guardrails pass.
 These are offline measurements, not a real-model hallucination claim.
 
-**0.14.0 remains a candidate.** Final versioned installed qualification, the
-24-hour twelve-agent soak and remaining task evidence are still open. No 0.14
-registry publication is claimed. The stable quickstarts below retain their
-published-version scope. See the [candidate notes](docs/release/context-sdk-0.14.0-notes.md),
+**The Python 0.14.0 release proceeds before the soak finishes.** The maintainer
+requested PyPI publication with the 24-hour twelve-agent soak still running.
+Seven-platform installed package checks pass; continuous-run qualification,
+HUMIDOR adoption and broader Hiero/task evidence remain pending. npm registry
+publication is separate. See the [release notes](docs/release/context-sdk-0.14.0-notes.md),
 [full comparison](docs/release/context-sdk-0.14.0-installed-comparison.md),
 [release checklist](docs/release/context-sdk-0.14.0-execution.md), and
 [broker guide](sdk/LOCAL_BROKER_GUIDE.md).
@@ -91,7 +92,7 @@ its npm registry publication is separate from this Python release.
 Use Python 3.14 on a supported native platform:
 
 ```sh
-python3.14 -m pip install --upgrade 'hol-cigar==0.12.0'
+python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 ```

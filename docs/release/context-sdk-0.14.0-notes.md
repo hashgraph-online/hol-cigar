@@ -1,8 +1,11 @@
-# CIGAR 0.14.0 candidate
+# CIGAR 0.14.0
 
-Status: release preparation; not published or fully qualified. The package version
-is staged as 0.14.0 so qualification can test the intended distribution identity.
-See the [execution checklist](context-sdk-0.14.0-execution.md) for open gates.
+The maintainer requested Python 0.14.0 publication on September 27, 2026 while
+the 24-hour soak continues. This release retains the incomplete qualification
+record: continuous-run completion, HUMIDOR adoption and broader Hiero/task
+evidence remain pending. The npm registry release is separate. See the
+[publication scope](context-sdk-0.14.0-pypi-publication.md) and the
+[execution checklist](context-sdk-0.14.0-execution.md) for completed and open work.
 
 ## Shared context for independent agents
 
@@ -66,18 +69,23 @@ retrieval superiority or real-model hallucination reduction is claimed. See the
 [retrieval report](context-sdk-0.14.0-retrieval-evidence.md).
 
 The independent-process load matrix passes 2,379,985 cycles across 288 cells and
-the fault matrix passes 3,879 checks. The continuous-run harness has passed only
-its 60-second preflight so far. Final versioned installed qualification, the
-24-hour soak, broader task evidence and publication/readback remain open.
+the fault matrix passes 3,879 checks. The a616c860 source, boundary and installed
+distribution workflows pass. A host restart interrupted the first soak after
+about 4 hours 50 minutes; its incomplete observations are retained separately.
+The replacement 24-hour installed run passed its 60-second preflight and started
+at 2026-09-28T00:29:20Z. Completion and independent replay remain pending.
+The publication workflow requalifies and signs the release archives; registry
+readback is required after upload. No broader task or model-quality gain is claimed.
 
 ## Compatibility and installation
 
-The planned distributions remain `hol-cigar` / `cigar_sdk` for Python 3.14 and
-`@hol-org/cigar` for Node.js 24 ESM. Seven native targets are retained. The intended
-default channel is stable/latest; nothing in this preparation publishes a package.
-Install only exact candidate archives with their corresponding qualification
-receipts until final publication. A source-only Python installation requires an
-explicit matching trusted worker. Existing graph APIs do not require broker mode.
+The distributions remain `hol-cigar` / `cigar_sdk` for Python 3.14 and
+`@hol-org/cigar` for Node.js 24 ESM. Seven native targets are retained. This
+publication targets PyPI's stable 0.14.0 version; npm publication remains separate.
+Use `python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'`. Signed archive hashes
+and installed qualification receipts accompany the GitHub release. A source-only
+Python installation requires an explicit matching trusted worker. Existing graph
+APIs do not require broker mode.
 
 See the [broker guide](../../sdk/LOCAL_BROKER_GUIDE.md),
 [local agent guide](../../sdk/LOCAL_CONTEXT_GUIDE.md), and
