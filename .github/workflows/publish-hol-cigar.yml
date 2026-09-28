@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirm:
-        description: Type "publish hol-cigar 0.14.0", "publish hol-cigar 0.10.0b1", or "publish hol-cigar 0.9.4"
+        description: Type "publish hol-cigar 0.14.0", "verify hol-cigar 0.14.0", "publish hol-cigar 0.10.0b1", or "publish hol-cigar 0.9.4"
         required: true
         type: string
 
@@ -190,7 +190,10 @@ jobs:
 
   verify-public-stable:
     name: verify public 0.14.0 archives and clean installation
-    if: inputs.confirm == 'publish hol-cigar 0.14.0'
+    if: >-
+      always() && !cancelled() &&
+      (inputs.confirm == 'verify hol-cigar 0.14.0' ||
+       (inputs.confirm == 'publish hol-cigar 0.14.0' && needs.publish-to-pypi.result == 'success'))
     needs: publish-to-pypi
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -199,6 +202,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: v0.14.0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -208,10 +212,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
         run: |
-          test "${GITHUB_REF}" = "refs/tags/v0.14.0"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse 'refs/tags/v0.14.0^{commit}')"
           gh release download v0.14.0 --repo "${GITHUB_REPOSITORY}" --dir "${RUNNER_TEMP}/signed-stable"
           python3 scripts/release/context_registry_readback.py \
-            --directory "${RUNNER_TEMP}/signed-stable" --commit "${GITHUB_SHA}" \
+            --directory "${RUNNER_TEMP}/signed-stable" --commit "$(git rev-parse HEAD)" \
             --manifest-sha256 "${MANIFEST_SHA256}" --registry pypi \
             --output "${RUNNER_TEMP}/registry-readback.json"
       - name: Install from PyPI and exercise the public package
