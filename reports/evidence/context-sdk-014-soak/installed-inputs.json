@@ -1,0 +1,21 @@
+{
+  "schema": "cigar.soak-installed-inputs.v1",
+  "status": "exact-installed-files-match-archives",
+  "sdk_commit": "a616c860013effe0a1eda6aa7105d0f37bec9946",
+  "artifacts": {
+    "hol_cigar-0.14.0-py3-none-macosx_11_0_arm64.whl": "50b94e372b05d017505893a09852e9ec31185f568c0bbdf9d6ca679460e05e7d",
+    "hol-org-cigar-0.14.0.tgz": "de3dd9190890bec548269dcfa8ebaf4d188a758ae3d7a7a2ea6043766882e22f"
+  },
+  "counts": {
+    "python_files": 55,
+    "node_files": 172
+  },
+  "python_sdk": "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/soak-installed-a616c860/python/lib/python3.14/site-packages/cigar_sdk",
+  "node_sdk": "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/soak-installed-a616c860/node/node_modules/@hol-org/cigar/dist",
+  "worker_sha256": "6b58a6470d45cd5c1389b612923c23d6170d9f117300359f5e5bbdff04366279",
+  "dependencies": {
+    "protobuf": "6.33.5",
+    "@bufbuild/protobuf": "2.12.1"
+  },
+  "worker_matches_interrupted_study": true
+}

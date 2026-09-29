@@ -1,0 +1,64 @@
+{
+  "schema": "cigar.broker-soak-independent-replay.v1",
+  "status": "passed",
+  "checked_at": "2026-09-29T16:20:21.825982+00:00",
+  "plan_sha256": "4c3ba22d32e0e4b6d20ea5b96b9fd3a42ffbcbb6280c6f55796e8819def9bfb9",
+  "validated_frozen_inputs": 187,
+  "interpreter_hashes_match": true,
+  "supervisor_returncode": 0,
+  "qualifies_24_hours": true,
+  "result_sha256": "801b4c969d1d6988892bb0d5f00a81e90f7dc3bb9e7cbbd38212c9e35daebbfc",
+  "supervisor_result_sha256": "0a2837000d1f99796ad754f3aaed552cb13fa9132bce2b6684e3698ee876bf7d",
+  "measurements": {
+    "elapsed_seconds": 86400.000643208,
+    "cycles_per_actor": 86400,
+    "total_cycles": 1036800,
+    "maintenance": {
+      "mutation": 1439,
+      "proposal": 287,
+      "renewal": 719,
+      "restart": 23,
+      "revocation": 143
+    },
+    "maximum_unexplained_gap_seconds": 1.0274536250071833,
+    "actor_pids": [
+      5669,
+      5671,
+      5672,
+      5673,
+      5674,
+      5675,
+      5676,
+      5677,
+      5678,
+      5679,
+      5680,
+      5681
+    ],
+    "observations_sha256": "31f792fb5e6185674140defc4a5d74a507325dcad4631ab17abf490ddb623f87",
+    "observation_records": 91625,
+    "observation_bytes": 310987358
+  },
+  "completed_at": "2026-09-29T00:29:27.895675+00:00",
+  "scope": "24-hour continuous macOS ARM64 SQLite broker soak with six Python and six Node actors",
+  "original_directory": "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/broker-soak-24h-02",
+  "installed_package_recheck": {
+    "status": "passed",
+    "python_sdk_files": 55,
+    "npm_sdk_files": 172,
+    "npm_protobuf_files": 308,
+    "npm_protobuf_lock_integrity": "sha512-BvAMfS6LrgZiryOAZ4pBYucu4wG/Ei/9o9DZ9akbREnMLbPJiom2i8b9C8IsKErQoiKqVhrerzt3kOT/RrzLHg==",
+    "sdk_archives_sha256": {
+      "hol_cigar-0.14.0-py3-none-macosx_11_0_arm64.whl": "50b94e372b05d017505893a09852e9ec31185f568c0bbdf9d6ca679460e05e7d",
+      "hol-org-cigar-0.14.0.tgz": "de3dd9190890bec548269dcfa8ebaf4d188a758ae3d7a7a2ea6043766882e22f"
+    },
+    "worker_sha256": "6b58a6470d45cd5c1389b612923c23d6170d9f117300359f5e5bbdff04366279",
+    "python_protobuf_version": "6.33.5",
+    "python_protobuf_archive_sha256": "a5cb85982d95d906df1e2210e58f8e4f1e3cdc088e52c921a041f9c9a0386de5",
+    "python_protobuf_files": 58,
+    "python_protobuf_runtime_files": 55,
+    "installed_record_excluded": true,
+    "source": "https://files.pythonhosted.org/packages/a2/6b/e48dfc1191bc5b52950246275bf4089773e91cb5ba3592621723cdddca62/protobuf-6.33.5-cp39-abi3-macosx_10_9_universal2.whl"
+  },
+  "original_evidence_modified": false
+}

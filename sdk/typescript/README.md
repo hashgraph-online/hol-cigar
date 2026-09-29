@@ -7,7 +7,10 @@ CIGAR owns a Rust graph in a persistent local worker process.
 This 0.14.0 candidate contains a broker for independent agent processes. See the
 packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
 reviews and failure semantics. Installed candidate tests have passed across seven
-native targets; the 24-hour soak and remaining release gates are still pending.
+native targets. The [24-hour installed soak](../../docs/release/context-sdk-0.14.0-soak.md)
+and independent replay passed on macOS ARM64 with twelve Python/Node clients.
+Node client RSS kept growing within the cap; broader application qualification
+remains open.
 Qualification applies to the exact artifacts named in their receipts.
 
 ## Install and check

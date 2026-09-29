@@ -1,9 +1,10 @@
 # CIGAR 0.14.0
 
-The maintainer requested Python 0.14.0 publication on September 27, 2026 while
-the 24-hour soak continues. This release retains the incomplete qualification
-record: continuous-run completion, HUMIDOR adoption and broader Hiero/task
-evidence remain pending. The npm registry release is separate. See the
+Python 0.14.0 is published on PyPI. The 24-hour installed soak completed on
+September 28, 2026 (PDT), and independent replay passed. The
+[soak report](context-sdk-0.14.0-soak.md) records all checks and the continuing
+Node client RSS growth within the configured cap. HUMIDOR adoption and broader
+Hiero/task evidence remain pending. The npm registry release is separate. See the
 [publication scope](context-sdk-0.14.0-pypi-publication.md) and the
 [execution checklist](context-sdk-0.14.0-execution.md) for completed and open work.
 
@@ -72,10 +73,15 @@ The independent-process load matrix passes 2,379,985 cycles across 288 cells and
 the fault matrix passes 3,879 checks. The a616c860 source, boundary and installed
 distribution workflows pass. A host restart interrupted the first soak after
 about 4 hours 50 minutes; its incomplete observations are retained separately.
-The replacement 24-hour installed run passed its 60-second preflight and started
-at 2026-09-28T00:29:20Z. Completion and independent replay remain pending.
-The publication workflow requalifies and signs the release archives; registry
-readback is required after upload. No broader task or model-quality gain is claimed.
+The replacement 24-hour installed run completed 1,036,800 cycles, 104,561
+additional checks and 23 forced worker recoveries with zero failed checks.
+Independent replay and installed-package integrity checks passed. Sampled total
+RSS peaked at 1.121 GiB, below the 2 GiB cap; the six Node clients grew from
+367 to 864 MiB combined without demonstrating a plateau. Hourly worker restarts
+limit conclusions about one worker remaining alive for a full day.
+The published archives passed requalification and signing, and all eight PyPI
+archives matched their signed hashes during public readback. No broader task or
+model-quality gain is claimed.
 
 ## Compatibility and installation
 

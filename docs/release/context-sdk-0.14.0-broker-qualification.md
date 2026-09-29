@@ -1,11 +1,13 @@
 # v0.14 broker source qualification
 
-Status: local short fault qualification and corrected repeated load study passed.
+Status: local short faults, corrected repeated load, installed distribution
+qualification and the 24-hour installed soak passed.
 The Windows source/runtime storage checks now pass in the
 [hosted source run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36332889565).
-The 24-hour soak, Windows sustained load checks, installed
-artifact matrix and independent task/answer efficacy remain pending. This is not
-a v0.14 release receipt or a claim of version-wide nonregression.
+See the [completed soak report](context-sdk-0.14.0-soak.md) for 1,036,800 cycles,
+23 recoveries and the Node client memory-growth finding. Windows sustained load
+checks and independent task/answer efficacy remain pending. The source studies
+below are not a claim of version-wide nonregression.
 
 ## Repeated load results
 
@@ -105,7 +107,8 @@ See [the harness guide](../../benchmarks/BROKER_LOAD.md) and the
 [preregistered plan and correction](../proposals/context-broker-qualification-0.14.0.md).
 The diagnostic benchmark suite has 34 passing tests, including 18 new load/report
 tests. Source CI now includes 5/12 mixed-client fault qualification on macOS and
-Linux; those hosted executions are pending.
+Linux; those hosted executions passed in the
+[runtime source run](https://github.com/hashgraph-online/hol-cigar/actions/runs/36352216714).
 
 Local evidence is retained outside the source worktree at
 `CIGAR/releases/cigar-0.14.0-development/`:

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.14.0 — PyPI release, soak qualification pending
+## 0.14.0 — PyPI release, 24-hour soak completed
 
 - Add `LocalContextBroker` and authenticated `LocalContextClient` for independent
   agent processes sharing one graph. The host owns grants, provenance admission,
@@ -18,10 +18,12 @@
   latency/RSS guardrails pass; no blanket no-regression claim is made.
 - Retain optional retrieval adapters with published costs and weaker results than
   the flat BM25 control on SciFact. No model-provider evaluation was performed.
-- Publish to PyPI at the maintainer's request while the 24-hour soak continues.
-  Seven-platform installed package checks and independent archive comparison pass.
-  Continuous-run qualification, HUMIDOR adoption and broader Hiero/task evidence
-  remain pending. The npm registry release is separate.
+- Publish to PyPI at the maintainer's request while the 24-hour soak was running.
+  Seven-platform installed package checks, independent archive comparison and
+  public registry readback passed. The completed soak and independent replay
+  passed 1,036,800 cycles and 23 forced recoveries. Node client RSS grew within
+  the cap; a plateau remains unproven. HUMIDOR adoption and broader Hiero/task
+  evidence remain pending. The npm registry release is separate.
 
 ## 0.13.0a1 — local alpha
 

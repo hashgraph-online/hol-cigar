@@ -7,9 +7,10 @@ CIGAR owns a Rust graph in a persistent local worker process.
 Version 0.14.0 contains a broker for independent agent processes. See the
 packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
 reviews and failure semantics. Installed package tests have passed across seven
-native targets. This PyPI release proceeds at the maintainer's request before the
-24-hour soak finishes. Continuous-run qualification, HUMIDOR adoption and broader
-Hiero/task evidence remain pending; publication does not establish those results.
+native targets. The [24-hour installed soak](../../docs/release/context-sdk-0.14.0-soak.md)
+and independent replay passed on macOS ARM64 with twelve Python/Node clients.
+Node client RSS kept growing within the cap. HUMIDOR adoption and broader
+Hiero/task evidence remain pending.
 Qualification applies to the exact artifacts named in the signed release receipts.
 
 ## Install and check
@@ -166,8 +167,8 @@ If OS cleanup fails, `cleanup_complete` remains false and another close retries.
 
 The native inventory covers macOS ARM64/x64, Linux glibc/musl ARM64/x64 and
 Windows x64. Installed tests and independent archive comparison pass for this
-inventory. The 24-hour soak and downstream application qualification remain in
-progress; use the receipt for your exact archive to identify completed checks.
+inventory. The macOS ARM64 24-hour soak passed; downstream application qualification
+remains open. Use the receipt for your exact archive to identify completed checks.
 
 Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional

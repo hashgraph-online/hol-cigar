@@ -27,11 +27,14 @@ loading adds about 2.36 ms and worker hashing about 0.51 ms versus 0.12; hashing
 also exceeds the original limit versus alpha. All other compared guardrails pass.
 These are offline measurements, not a real-model hallucination claim.
 
-**The Python 0.14.0 release proceeds before the soak finishes.** The maintainer
-requested PyPI publication with the 24-hour twelve-agent soak still running.
-Seven-platform installed package checks pass; continuous-run qualification,
-HUMIDOR adoption and broader Hiero/task evidence remain pending. npm registry
-publication is separate. See the [release notes](docs/release/context-sdk-0.14.0-notes.md),
+**Python 0.14.0 is published, and the 24-hour twelve-agent soak passed.**
+The run completed 1,036,800 cycles and 23 forced worker recoveries; independent
+replay confirmed the result. Node client RSS continued to grow within the 2 GiB
+aggregate cap; a memory plateau remains unproven. See the
+[complete soak report](docs/release/context-sdk-0.14.0-soak.md).
+Seven-platform installed package checks pass. HUMIDOR adoption and broader
+Hiero/task evidence remain pending; npm publication is separate.
+See the [release notes](docs/release/context-sdk-0.14.0-notes.md),
 [full comparison](docs/release/context-sdk-0.14.0-installed-comparison.md),
 [release checklist](docs/release/context-sdk-0.14.0-execution.md), and
 [broker guide](sdk/LOCAL_BROKER_GUIDE.md).
@@ -175,7 +178,7 @@ Choose the path that matches what you are trying to do:
 | Goal | Start here |
 |---|---|
 | Create a local context graph from npm | Follow the [local npm quickstart](#local-npm-quickstart); no HOL services are required. |
-| Create a local context graph from Python | Install `hol-cigar==0.12.0` from PyPI; follow the [Python quickstart](#local-python-quickstart). |
+| Create a local context graph from Python | Install `hol-cigar==0.14.0` from PyPI; follow the [Python quickstart](#local-python-quickstart). |
 | Connect to an existing CIGAR server from TypeScript | Use the compatible remote client; inspect the [`@hol-org/cigar@0.9.4` release assessment](reports/npm-sdk-0.9.4-readiness.md) for its exact scope and verification evidence. |
 | Evaluate the private Honey 0.9.4 candidate | [Install Honey](docs/guides/honey-install.md), then run the [offline context quickstart](docs/guides/honey-quickstart.md). |
 | Understand the security model first | Read [Honey security and limitations](docs/guides/honey-security-limitations.md). |

@@ -1,0 +1,18 @@
+{
+  "schema": "cigar.soak-supervisor-result.v1",
+  "started_at": "2026-09-28T00:29:18.647414+00:00",
+  "finished_at": "2026-09-29T00:29:27.895675+00:00",
+  "command": [
+    "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/soak-installed-a616c860/python/bin/python",
+    "-B",
+    "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/broker-soak-24h-02/harness/broker_soak.py",
+    "run",
+    "--directory",
+    "/Users/construct/Documents/projects/cigar-project/CIGAR/releases/cigar-0.14.0-development/broker-soak-24h-02"
+  ],
+  "returncode": 0,
+  "plan_sha256": "4c3ba22d32e0e4b6d20ea5b96b9fd3a42ffbcbb6280c6f55796e8819def9bfb9",
+  "status": "passed",
+  "result_sha256": "801b4c969d1d6988892bb0d5f00a81e90f7dc3bb9e7cbbd38212c9e35daebbfc",
+  "qualifies_24_hours": true
+}
