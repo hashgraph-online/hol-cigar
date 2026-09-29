@@ -39,7 +39,7 @@ def python_boundaries(document: LocalDocument) -> list[int]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SyntaxWarning)
             module = ast.parse(text, filename="<cigar-source>")
-    except SyntaxError, ValueError, RecursionError, UnicodeError:
+    except (SyntaxError, ValueError, RecursionError, UnicodeError):  # fmt: skip
         raise LocalContextError("InvalidInput") from None
     lines = []
     for node in module.body:

@@ -99,7 +99,8 @@ def rpc():
 
 def contracts(directory):
     from cigar_sdk import LocalContextError, LocalContextGraph, ValidationError, bundle_id, verify_bundle
-    from importlib import metadata, resources
+    # This installed SDK harness requires Python 3.14; pre-3.7 compatibility is out of scope.
+    from importlib import metadata, resources  # nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2
     import cigar_sdk
     compilation = []
     for case in json.loads((directory / "compile-cases.json").read_text()):

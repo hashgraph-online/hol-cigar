@@ -335,7 +335,8 @@ def __getattr__(name: str) -> Any:
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module, attribute = target
-    imported = import_module(module)
+    # Only literal module names from the fixed _EXPORTS allowlist can reach this import.
+    imported = import_module(module)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
     value = imported if attribute is None else getattr(imported, attribute)
     globals()[name] = value
     return value

@@ -58,3 +58,18 @@ The PyPI workflow checked the signed manifest, dependency advisories and package
 metadata before its protected upload. Public readback then compared all eight
 archives to their signed hashes and verified that PyPI resolved 0.14.0. These
 hosted checks ran while the local soak continued.
+
+## Subsequent npm publication
+
+The separately approved npm release is also public. On September 29, public
+readback verified `latest` selects `@hol-org/cigar@0.14.0` and the 30,665,807-byte
+tarball matches the approved signed archive exactly, SHA-256
+`1bf08c9e31e3f3841583a5ef34a2702e92182b4e02deb70c589e6869245a1ab7`.
+The [readback receipt](../../reports/evidence/context-sdk-014-publication/npm-readback.json)
+records the registry URL, check time and original release commit. This verification
+does not replace the open qualification work above.
+
+A clean public npm installation on macOS ARM64 with Node 24.19.0 resolved
+`@hol-org/cigar@0.14.0` and `@bufbuild/protobuf@2.12.1`. The bundled worker passed
+`doctor` with `compile_verified: true`, and the offline demo passed all thirteen
+checks. Both commands ran without HOL services or model-provider calls.

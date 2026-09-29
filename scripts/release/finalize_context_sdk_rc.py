@@ -169,7 +169,8 @@ def main():
         json.dumps({"queries": queries}).encode(),
         {"Content-Type": "application/json"},
     )
-    with urlopen(request, timeout=30) as response:
+    # The request targets the literal OSV HTTPS endpoint; dependency names are JSON body data.
+    with urlopen(request, timeout=30) as response:  # fmt: skip # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         answer = json.load(response)
     assert len(answer["results"]) == len(queries)
     advisory = {

@@ -373,6 +373,42 @@ class InstalledEvidenceTests(unittest.TestCase):
 
 
 class RegistryReadbackTests(unittest.TestCase):
+    def test_non_registry_urls_are_rejected_before_opening(self):
+        for url in (
+            "file:///etc/passwd",
+            "http://registry.npmjs.org/package.tgz",
+            "https://registry.npmjs.org.evil.example/package.tgz",
+            "https://user:password@registry.npmjs.org/package.tgz",
+        ):
+            with (
+                self.subTest(url=url),
+                mock.patch.object(registry, "urlopen") as opened,
+            ):
+                with self.assertRaisesRegex(ReleaseError, "unexpected origin"):
+                    registry.fetch(url, {"registry.npmjs.org"}, 16)
+                opened.assert_not_called()
+
+    def test_redirect_origin_is_checked_before_reading_response_bytes(self):
+        response = mock.MagicMock()
+        response.url = "https://unrelated.example/package.tgz"
+        response.__enter__.return_value = response
+        with mock.patch.object(registry, "urlopen", return_value=response):
+            with self.assertRaisesRegex(ReleaseError, "redirect changed origin"):
+                registry.fetch(
+                    "https://registry.npmjs.org/package.tgz", {"registry.npmjs.org"}, 16
+                )
+        response.read.assert_not_called()
+
+    def test_registry_response_size_is_bounded(self):
+        response = mock.MagicMock()
+        response.url = "https://registry.npmjs.org/package.tgz"
+        response.read.return_value = b"12345"
+        response.__enter__.return_value = response
+        with mock.patch.object(registry, "urlopen", return_value=response):
+            with self.assertRaisesRegex(ReleaseError, "exceeds byte limit"):
+                registry.fetch(response.url, {"registry.npmjs.org"}, 4)
+        response.read.assert_called_once_with(5)
+
     def test_published_version_with_old_default_tag_is_not_success(self):
         metadata = {
             "name": "@hol-org/cigar",

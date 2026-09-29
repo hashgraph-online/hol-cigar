@@ -124,7 +124,7 @@ class _WorkerChannel:
                     stdin.flush()
                     value = stdout.readline(_MAX_RESPONSE + 1)
                     response.put_nowait(value)
-                except OSError, ValueError:
+                except (OSError, ValueError):  # fmt: skip
                     response.put_nowait(None)
         finally:
             # Only the I/O owner closes buffered streams: another thread could
@@ -132,7 +132,7 @@ class _WorkerChannel:
             for pipe in (stdin, stdout):
                 try:
                     pipe.close()
-                except OSError, ValueError:
+                except (OSError, ValueError):  # fmt: skip
                     pass
 
     def _ensure_process_owner(self) -> None:
@@ -159,7 +159,7 @@ class _WorkerChannel:
                     )
                     + "\n"
                 ).encode("utf-8")
-            except ValueError, TypeError, UnicodeError, RecursionError:
+            except (ValueError, TypeError, UnicodeError, RecursionError):  # fmt: skip
                 raise LocalContextError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalContextError("LimitExceeded")
@@ -179,7 +179,7 @@ class _WorkerChannel:
                 raise LocalContextError("Transport")
             try:
                 return self._decode_reply(self._load_reply(value), self._next_id)
-            except ValueError, TypeError, KeyError, RecursionError:
+            except (ValueError, TypeError, KeyError, RecursionError):  # fmt: skip
                 self.close()
                 raise LocalContextError("Transport") from None
         finally:
@@ -243,7 +243,7 @@ class _WorkerChannel:
                         continue
                     try:
                         pipe.close()
-                    except OSError, ValueError:
+                    except (OSError, ValueError):  # fmt: skip
                         pass
             try:
                 self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()

@@ -1,10 +1,11 @@
 # CIGAR 0.14.0
 
-Python 0.14.0 is published on PyPI. The 24-hour installed soak completed on
+Version 0.14.0 is published on PyPI and npm; public readback matched the signed
+archives on both registries. The 24-hour installed soak completed on
 September 28, 2026 (PDT), and independent replay passed. The
 [soak report](context-sdk-0.14.0-soak.md) records all checks and the continuing
 Node client RSS growth within the configured cap. HUMIDOR adoption and broader
-Hiero/task evidence remain pending. The npm registry release is separate. See the
+Hiero/task evidence remain pending. See the
 [publication scope](context-sdk-0.14.0-pypi-publication.md) and the
 [execution checklist](context-sdk-0.14.0-execution.md) for completed and open work.
 
@@ -87,8 +88,9 @@ model-quality gain is claimed.
 
 The distributions remain `hol-cigar` / `cigar_sdk` for Python 3.14 and
 `@hol-org/cigar` for Node.js 24 ESM. Seven native targets are retained. This
-publication targets PyPI's stable 0.14.0 version; npm publication remains separate.
-Use `python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'`. Signed archive hashes
+release is available as stable 0.14.0 on both registries.
+Use `python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'` or
+`npm install --save-exact @hol-org/cigar@0.14.0`. Signed archive hashes
 and installed qualification receipts accompany the GitHub release. A source-only
 Python installation requires an explicit matching trusted worker. Existing graph
 APIs do not require broker mode.
@@ -96,3 +98,12 @@ APIs do not require broker mode.
 See the [broker guide](../../sdk/LOCAL_BROKER_GUIDE.md),
 [local agent guide](../../sdk/LOCAL_CONTEXT_GUIDE.md), and
 [Python changelog](../../sdk/python/CHANGELOG.md) for migration and API usage.
+
+## Repository integration after publication
+
+PR #38 also updates the repository's Rustls and Wasmtime dependencies, corrects
+Windows SID pointer provenance, and repairs CI configuration and a
+scheduler-sensitive cancellation test. These integration changes postdate the
+immutable `v0.14.0` tag. Published archives retain their original signed bytes;
+the soak evidence qualifies its named runtime source, not later runtime changes.
+Shipping those later changes requires a subsequent version and qualification.

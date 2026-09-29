@@ -4,9 +4,9 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Node.js applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-This 0.14.0 candidate contains a broker for independent agent processes. See the
+Version 0.14.0 contains a broker for independent agent processes. See the
 packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
-reviews and failure semantics. Installed candidate tests have passed across seven
+reviews and failure semantics. Installed package tests have passed across seven
 native targets. The [24-hour installed soak](../../docs/release/context-sdk-0.14.0-soak.md)
 and independent replay passed on macOS ARM64 with twelve Python/Node clients.
 Node client RSS kept growing within the cap; broader application qualification
@@ -15,18 +15,17 @@ Qualification applies to the exact artifacts named in their receipts.
 
 ## Install and check
 
-The 0.14.0 candidate is for ESM on Node.js `>=24.10.0 <25`:
+Version 0.14.0 is published on npm for ESM on Node.js `>=24.10.0 <25`:
 
 ```text
-npm install --save-exact /absolute/path/to/hol-org-cigar-0.14.0.tgz
+npm install --save-exact @hol-org/cigar@0.14.0
 npx --no-install cigar-context doctor
 npx --no-install cigar-context demo
 ```
 
-Install the exact archive with its matching qualification receipt. This candidate
-is not a registry release. It retains the canonical-CBOR union decoding repair,
-bounded worker hashing and seven native build targets. Complete release
-qualification remains pending.
+Public registry readback matched the signed release archive. The release retains
+the canonical-CBOR union decoding repair, bounded worker hashing and seven native
+build targets. HUMIDOR adoption and broader task qualification remain open.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
 citations, cache reuse, trusted fixture reviews, source updates and stale-review

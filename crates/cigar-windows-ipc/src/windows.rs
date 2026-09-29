@@ -7,7 +7,7 @@ use std::io;
 use std::os::windows::ffi::OsStrExt as _;
 use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _};
 use std::path::Path;
-use std::ptr::null_mut;
+use std::ptr::{NonNull, null_mut};
 #[cfg(feature = "named-pipe")]
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 use windows_sys::Win32::Foundation::{
@@ -519,12 +519,13 @@ fn validate_owner_acl(
     let mut ace_pointer: *mut c_void = null_mut();
     // SAFETY: the preceding ACL query proved there is exactly one ACE at index zero, and the DACL
     // storage remains live inside `descriptor` for the entire inspection below.
-    if unsafe { GetAce(dacl, 0, &mut ace_pointer) } == 0 || ace_pointer.is_null() {
+    if unsafe { GetAce(dacl, 0, &mut ace_pointer) } == 0 {
         return Err(unsafe_credential_acl());
     }
+    let ace_pointer = NonNull::new(ace_pointer).ok_or_else(unsafe_credential_acl)?;
     // SAFETY: `GetAce` returned ACE zero inside an ACL that `IsValidAcl` accepted, so the fixed
     // header is present and aligned. Its declared size is checked before the larger typed access.
-    let header = unsafe { &*ace_pointer.cast::<ACE_HEADER>() };
+    let header = unsafe { ace_pointer.cast::<ACE_HEADER>().as_ref() };
     let sid_offset = std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart);
     if u32::from(header.AceType) != ACCESS_ALLOWED_ACE_TYPE
         || match policy {
@@ -542,14 +543,20 @@ fn validate_owner_acl(
     }
     // SAFETY: the validated ACE type and size establish the documented `ACCESS_ALLOWED_ACE`
     // representation, and its storage remains live inside `descriptor`.
-    let ace = unsafe { &*ace_pointer.cast::<ACCESS_ALLOWED_ACE>() };
+    let ace = unsafe { ace_pointer.cast::<ACCESS_ALLOWED_ACE>().as_ref() };
     if policy != AclPolicy::Credential && ace.Mask != FILE_ALL_ACCESS {
         return Err(unsafe_credential_acl());
     }
     // SAFETY: the validated ACE contains the fixed SID header at `sid_offset`. Derive the
     // variable-length SID from the original allocation pointer, not the four-byte SidStart
     // field of the narrower ACCESS_ALLOWED_ACE reference.
-    let ace_sid = unsafe { ace_pointer.cast::<u8>().add(sid_offset).cast::<c_void>() };
+    let ace_sid = unsafe {
+        ace_pointer
+            .as_ptr()
+            .cast::<u8>()
+            .add(sid_offset)
+            .cast::<c_void>()
+    };
     // SAFETY: the preceding size check proves the complete fixed SID header is inside this valid
     // ACE, so its one-byte subauthority count at offset one can be inspected without overread.
     let subauthority_count = usize::from(unsafe { *ace_sid.cast::<u8>().add(1) });

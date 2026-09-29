@@ -521,7 +521,8 @@ def advisories(sbom: dict) -> dict:
         canonical_json_bytes({"queries": queries}),
         {"Content-Type": "application/json"},
     )
-    with urlopen(request, timeout=60) as response:
+    # The request targets the literal OSV HTTPS endpoint; SBOM values are only JSON body data.
+    with urlopen(request, timeout=60) as response:  # fmt: skip # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         result = json.load(response)
     require(
         len(result["results"]) == len(queries),

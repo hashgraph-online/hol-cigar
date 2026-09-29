@@ -1,6 +1,6 @@
 # CIGAR 0.14.0 execution and release evidence
 
-Status: PyPI 0.14.0 published and verified; the installed 24-hour soak and
+Status: PyPI and npm 0.14.0 published and verified; the installed 24-hour soak and
 independent replay passed. Broader application qualification remains open.
 
 The September 27 PyPI publication request is recorded separately in the
@@ -42,7 +42,7 @@ task outcomes, recorded-answer replay, and new model-generated answer studies.
 | E3 | Qualify 1/5/12-agent operation | Shared/private/overlapping scopes, hostile source content, lost update, revoke, restart, saturation and short fault schedules; subsequent 24-hour 12-agent soak | Local 18-cell fault matrix passes 3,879 checks; corrected 288-cell load matrix passes 2,379,985 cycles; hosted Linux/macOS faults pass; installed twelve-client 24-hour soak and independent replay passed 1,036,800 cycles, 104,561 additional checks and 23 forced recoveries |
 | Q1 | Preserve performance and reliability | Existing 10% median latency and 20% RSS guardrails plus preregistered tail/fairness limits, total host+worker RSS | Second study preserves contracts and passes 112/115 guardrails; user accepted the three measured startup exceptions on September 27; exact-runtime soak passed its limits, with continuing Node client RSS growth recorded separately |
 | Q2 | Qualify exact distributions | Two independent builds, seven native targets, minimum/current supported runtimes, network-denied installed consumers, metadata/licenses/SBOM/advisories/attestations | Published commit 830f9367 passed fourteen native builds, two matching SDK builds, fourteen installed platform/runtime cells, legacy qualification, assembly and signing in run 36377314040 |
-| Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | PyPI publication, all eight public archive hashes and clean installation passed; npm publication and public readback are tracked separately |
+| Q3 | Release 0.14.0 and verify public bytes | Consistent release identity/docs, required CI and release approvals, npm/PyPI publication, registry readback/hash comparison and clean install | Both registries publish 0.14.0 as their default; all eight PyPI archives and the npm tarball match the signed release; clean public Python and Node installations passed doctor and all thirteen demo checks; integration into main is tracked in PR #38 |
 
 ## Implementation order
 
@@ -82,6 +82,11 @@ only when their exercised behavior covers the corresponding requirement above.
 
 ## Execution record
 
+- September 29 public npm readback verified `latest` resolves to 0.14.0 and the
+  downloaded archive exactly matches the signed release, SHA-256
+  `1bf08c9e31e3f3841583a5ef34a2702e92182b4e02deb70c589e6869245a1ab7`.
+  The [registry receipt](../../reports/evidence/context-sdk-014-publication/npm-readback.json)
+  binds this result to published commit `830f9367`.
 - September 29 evidence update: the replacement installed soak completed its own
   continuous 86,400-second interval, without observations from the interrupted run.
   All twelve clients completed 86,400 cycles; independent replay and frozen-input

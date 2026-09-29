@@ -23,7 +23,8 @@
   public registry readback passed. The completed soak and independent replay
   passed 1,036,800 cycles and 23 forced recoveries. Node client RSS grew within
   the cap; a plateau remains unproven. HUMIDOR adoption and broader Hiero/task
-  evidence remain pending. The npm registry release is separate.
+  evidence remain pending. The separately approved npm release is also public,
+  with its archive verified against the signed release.
 
 ## 0.13.0a1 — local alpha
 

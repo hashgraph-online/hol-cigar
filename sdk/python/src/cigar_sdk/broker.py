@@ -288,7 +288,7 @@ class LocalContextBroker(_WorkerChannel):
             ):
                 raise ValueError
             return LocalBrokerConnection(self._hello["port"], result["epoch"], result["secret"])
-        except ValueError, TypeError, KeyError, LocalBrokerError:
+        except (ValueError, TypeError, KeyError, LocalBrokerError):  # fmt: skip
             self.close()
             raise LocalBrokerError("Transport", dispatched=None) from None
 
@@ -534,7 +534,7 @@ class LocalContextClient:
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ).encode("utf-8")
-            except ValueError, TypeError, UnicodeError, RecursionError:
+            except (ValueError, TypeError, UnicodeError, RecursionError):  # fmt: skip
                 raise LocalBrokerError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalBrokerError("LimitExceeded")
@@ -551,7 +551,7 @@ class LocalContextClient:
             raise
         except TimeoutError:
             raise LocalBrokerError("Timeout", dispatched=None if sent else False) from None
-        except OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError:
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):  # fmt: skip
             raise LocalBrokerError("Transport", dispatched=None if sent else False) from None
         finally:
             self._slots.release()

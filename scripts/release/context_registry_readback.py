@@ -34,7 +34,8 @@ def fetch(url: str, hosts: set[str], limit: int) -> bytes:
         and not parsed.password,
         "registry URL has an unexpected origin",
     )
-    with urlopen(url, timeout=60) as response:
+    # HTTPS, the exact registry host and absence of URL credentials are checked above.
+    with urlopen(url, timeout=60) as response:  # fmt: skip # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         destination = urlsplit(response.url)
         require(
             destination.scheme == "https" and destination.hostname in hosts,

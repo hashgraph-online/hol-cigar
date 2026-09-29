@@ -27,13 +27,13 @@ loading adds about 2.36 ms and worker hashing about 0.51 ms versus 0.12; hashing
 also exceeds the original limit versus alpha. All other compared guardrails pass.
 These are offline measurements, not a real-model hallucination claim.
 
-**Python 0.14.0 is published, and the 24-hour twelve-agent soak passed.**
+**Python and npm 0.14.0 are published, and the 24-hour twelve-agent soak passed.**
 The run completed 1,036,800 cycles and 23 forced worker recoveries; independent
 replay confirmed the result. Node client RSS continued to grow within the 2 GiB
 aggregate cap; a memory plateau remains unproven. See the
 [complete soak report](docs/release/context-sdk-0.14.0-soak.md).
 Seven-platform installed package checks pass. HUMIDOR adoption and broader
-Hiero/task evidence remain pending; npm publication is separate.
+Hiero/task evidence remain pending. Public archive readback passed for both registries.
 See the [release notes](docs/release/context-sdk-0.14.0-notes.md),
 [full comparison](docs/release/context-sdk-0.14.0-installed-comparison.md),
 [release checklist](docs/release/context-sdk-0.14.0-execution.md), and
@@ -108,10 +108,10 @@ matching worker path.
 ## Local npm quickstart
 
 The npm package name is **`@hol-org/cigar`**. `hol-cigar` is the Python distribution name.
-The current npm registry release is 0.11.0 and includes local context graphs:
+The current npm registry release is 0.14.0 and includes local graphs and the shared broker:
 
 ```sh
-npm install --save-exact @hol-org/cigar@0.11.0
+npm install --save-exact @hol-org/cigar@0.14.0
 ```
 
 Use **Node.js >=24.10.0 <25** on macOS ARM64/x64, Linux ARM64/x64 with glibc or musl,

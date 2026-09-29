@@ -105,7 +105,7 @@ def bundled_worker() -> Path:
             and manifest.get("target") == metadata["target"]
             and manifest.get("sha256") == _sha256_file(binary)
         )
-    except OSError, ValueError, TypeError:
+    except (OSError, ValueError, TypeError):  # fmt: skip
         raise LocalContextError("WorkerUnavailable") from None
     if not valid:
         raise LocalContextError("WorkerIntegrity")
@@ -130,7 +130,7 @@ def resolve_local_worker(worker_path: str | Path | None = None) -> Path:
         binary = Path(worker_path)
         if not binary.is_absolute() or not binary.is_file():
             raise ValueError
-    except OSError, TypeError, ValueError:
+    except (OSError, TypeError, ValueError):  # fmt: skip
         raise LocalContextError("WorkerUnavailable") from None
     return binary
 

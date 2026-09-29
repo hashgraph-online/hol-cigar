@@ -24,7 +24,8 @@ for (const [family, vectors] of [["valid", fixture.valid], ["invalid", fixture.i
       assert.equal(Object.isFrozen(value), true);
       for (const item of vector.integers ?? []) {
         let integer = value;
-        for (const key of item.path) integer = integer[key];
+        // Reads a frozen fixture result into a local variable; no object property is assigned.
+        for (const key of item.path) integer = integer[key]; // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
         assert.equal(typeof integer, item.typescript_type);
         assert.equal(String(integer), item.decimal);
       }

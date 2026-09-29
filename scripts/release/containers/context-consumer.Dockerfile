@@ -9,4 +9,5 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/cigar-python
 ENV CIGAR_PYTHON_VERSION=${CIGAR_PYTHON_VERSION}
 RUN uv python install --no-bin "${CIGAR_PYTHON_VERSION}"
 COPY context-python.sh /usr/local/bin/context-test-python
+USER 1000:1000
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/context-test-python"]
