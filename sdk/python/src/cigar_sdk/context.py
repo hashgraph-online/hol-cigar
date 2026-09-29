@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-import platform
+import os
 import queue
 import subprocess
 import threading
@@ -15,94 +14,95 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 from cigar_sdk.context_types import (
+    LocalAnswerAssessment,
+    LocalAnswerDraft,
+    LocalAnswerPolicy,
+    LocalCitation,
+    LocalClaimReview,
     LocalContextDelta,
     LocalContextLimits,
+    LocalContextPrompt,
     LocalContextRequest,
     LocalContextResult,
     LocalContextSnapshot,
     LocalDocument,
     LocalEdgeKind,
     LocalGraphStats,
+    LocalSelectionExplanation,
     LocalSourceUpdate,
+    LocalViewAssessment,
+    LocalViewContext,
+    LocalViewHandle,
+    LocalViewResult,
+    LocalViewSpec,
+)
+from cigar_sdk.local_runtime import (
+    LOCAL_CONTEXT_CORE_VERSION as LOCAL_CONTEXT_CORE_VERSION,
+)
+from cigar_sdk.local_runtime import (
+    LOCAL_CONTEXT_PROTOCOL as LOCAL_CONTEXT_PROTOCOL,
+)
+from cigar_sdk.local_runtime import (
+    LocalContextCapabilities as LocalContextCapabilities,
+)
+from cigar_sdk.local_runtime import (
+    LocalContextError as LocalContextError,
+)
+from cigar_sdk.local_runtime import (
+    LocalWorkerCapabilities as LocalWorkerCapabilities,
+)
+from cigar_sdk.local_runtime import (
+    bundled_worker as _bundled_worker,
+)
+from cigar_sdk.local_runtime import (
+    get_local_context_capabilities as get_local_context_capabilities,
+)
+from cigar_sdk.local_runtime import (
+    resolve_local_worker,
 )
 
-LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.10.0-beta.1"
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
 
 
-class LocalContextError(Exception):
-    """Stable, content-free error. Transport failures permanently close the graph."""
+class _WorkerChannel:
+    """Private serialized worker transport shared by the graph and broker host.
 
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(f"local context error: {code}")
-
-
-def _bundled_worker() -> Path:
-    machine = {"aarch64": "arm64", "AMD64": "x64", "x86_64": "x64"}.get(
-        platform.machine(), platform.machine()
-    )
-    system = {"Darwin": "darwin", "Linux": "linux", "Windows": "win32"}.get(platform.system(), "unknown")
-    directory = Path(__file__).parent / "_native" / f"{system}-{machine}"
-    binary = directory / ("cigar-context-worker.exe" if system == "win32" else "cigar-context-worker")
-    try:
-        manifest = json.loads((directory / "manifest.json").read_bytes())
-        valid = (
-            manifest["protocol"] == LOCAL_CONTEXT_PROTOCOL
-            and manifest["core_version"] == LOCAL_CONTEXT_CORE_VERSION
-            and manifest["sha256"] == hashlib.sha256(binary.read_bytes()).hexdigest()
-        )
-    except (OSError, ValueError, KeyError, TypeError):
-        raise LocalContextError("WorkerUnavailable") from None
-    if not valid:
-        raise LocalContextError("WorkerIntegrity")
-    return binary
-
-
-class LocalContextGraph:
-    """One graph, privacy domain, and bounded cache per worker process.
-
-    Use a context manager or close(). ``worker_path`` is an explicit trusted executable;
-    it is never searched in PATH. Calls are serialized. The timeout includes lock wait
-    and pipe I/O. A lock-wait timeout does not interrupt another caller's operation.
-    A transport timeout closes this graph, because mutation outcome may be unknown.
+    Owns process/PID/deadline/cleanup behavior; subclasses select only the reply codec.
     """
 
     def __init__(
-        self, domain: str, *, limits: LocalContextLimits | None = None,
-        worker_path: str | Path | None = None, timeout: float = 30.0,
+        self,
+        worker_path: str | Path | None,
+        timeout: float,
+        arguments: tuple[str, ...],
     ) -> None:
         if not math.isfinite(timeout) or timeout <= 0 or timeout > threading.TIMEOUT_MAX:
             raise LocalContextError("InvalidInput")
-        binary = Path(worker_path) if worker_path is not None else _bundled_worker()
-        if not binary.is_absolute() or not binary.is_file():
-            raise LocalContextError("WorkerUnavailable")
+        self._owner_pid = os.getpid()
+        binary = resolve_local_worker(worker_path) if worker_path is not None else _bundled_worker()
         self._timeout = timeout
         self._closed = False
+        self._cleanup_complete = False
+        self._stop = threading.Event()
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._next_id = 0
         self._jobs: queue.Queue[tuple[bytes, queue.Queue[bytes | None]] | None] = queue.Queue(maxsize=1)
+        self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
             self._process = subprocess.Popen(
-                [str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                shell=False, close_fds=True,
+                [str(binary), *arguments],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                shell=False,
+                close_fds=True,
             )
         except OSError:
             raise LocalContextError("WorkerUnavailable") from None
-        self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
-        self._thread.start()
         try:
-            hello = self._call({"op": "init", "domain": domain, "limits": limits or {}})
-            if (
-                not isinstance(hello, dict) or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
-                or hello.get("core_version") != LOCAL_CONTEXT_CORE_VERSION
-                or hello.get("max_frame_bytes") != _MAX_FRAME
-                or hello.get("max_response_bytes") != _MAX_RESPONSE
-            ):
-                raise LocalContextError("IncompatibleWorker")
+            self._thread.start()
         except BaseException:
             self.close()
             raise
@@ -110,17 +110,38 @@ class LocalContextGraph:
     def _exchange_loop(self) -> None:
         stdin, stdout = self._process.stdin, self._process.stdout
         assert stdin is not None and stdout is not None
-        while (job := self._jobs.get()) is not None:
-            frame, response = job
-            try:
-                stdin.write(frame)
-                stdin.flush()
-                value = stdout.readline(_MAX_RESPONSE + 1)
-                response.put_nowait(value)
-            except (OSError, ValueError):
-                response.put_nowait(None)
+        try:
+            while not self._stop.is_set():
+                try:
+                    job = self._jobs.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                if job is None or self._stop.is_set():
+                    break
+                frame, response = job
+                try:
+                    stdin.write(frame)
+                    stdin.flush()
+                    value = stdout.readline(_MAX_RESPONSE + 1)
+                    response.put_nowait(value)
+                except (OSError, ValueError):  # fmt: skip
+                    response.put_nowait(None)
+        finally:
+            # Only the I/O owner closes buffered streams: another thread could
+            # block indefinitely acquiring their internal locks during a write.
+            for pipe in (stdin, stdout):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):  # fmt: skip
+                    pass
+
+    def _ensure_process_owner(self) -> None:
+        # Check before touching inherited locks, queues, pipes or the Popen object.
+        if os.getpid() != self._owner_pid:
+            raise LocalContextError("ForkedProcess")
 
     def _call(self, command: dict[str, Any]) -> Any:
+        self._ensure_process_owner()
         deadline = time.monotonic() + self._timeout
         if not self._lock.acquire(timeout=self._timeout):
             raise LocalContextError("Busy")
@@ -129,14 +150,25 @@ class LocalContextGraph:
                 raise LocalContextError("Closed")
             self._next_id = (self._next_id % 4_294_967_295) + 1
             try:
-                frame = (json.dumps({"id": self._next_id, "command": command}, ensure_ascii=False,
-                                    allow_nan=False, separators=(",", ":")) + "\n").encode("utf-8")
-            except (ValueError, TypeError, UnicodeError, RecursionError):
+                frame = (
+                    json.dumps(
+                        {"id": self._next_id, "command": command},
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                ).encode("utf-8")
+            except (ValueError, TypeError, UnicodeError, RecursionError):  # fmt: skip
                 raise LocalContextError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalContextError("LimitExceeded")
             response: queue.Queue[bytes | None] = queue.Queue(maxsize=1)
-            self._jobs.put_nowait((frame, response))
+            try:
+                self._jobs.put_nowait((frame, response))
+            except queue.Full:
+                self.close()
+                raise LocalContextError("Transport") from None
             try:
                 value = response.get(timeout=max(0.0, deadline - time.monotonic()))
             except queue.Empty:
@@ -146,26 +178,175 @@ class LocalContextGraph:
                 self.close()
                 raise LocalContextError("Transport")
             try:
-                reply = json.loads(value)
-                if not isinstance(reply, dict) or type(reply.get("ok")) is not bool:
-                    raise ValueError
-                if reply.get("id") != self._next_id:
-                    raise ValueError
-                if reply["ok"]:
-                    return reply["result"]
-                code = reply["error"]
-                if code not in {"InvalidInput", "LimitExceeded", "RequiredUnavailable", "BudgetUnsatisfiable",
-                                "Tokenizer", "Integrity", "BaseMismatch"}:
-                    raise ValueError
-            except (ValueError, TypeError, KeyError, RecursionError):
+                return self._decode_reply(self._load_reply(value), self._next_id)
+            except (ValueError, TypeError, KeyError, RecursionError):  # fmt: skip
                 self.close()
                 raise LocalContextError("Transport") from None
-            raise LocalContextError(code)
         finally:
             self._lock.release()
 
+    def _load_reply(self, value: bytes) -> Any:
+        return json.loads(value)
+
+    def _decode_reply(self, reply: Any, request_id: int) -> Any:
+        if not isinstance(reply, dict) or type(reply.get("ok")) is not bool:
+            raise ValueError
+        if reply.get("id") != request_id:
+            raise ValueError
+        if reply["ok"]:
+            return reply["result"]
+        code = reply["error"]
+        if code not in {
+            "InvalidInput",
+            "LimitExceeded",
+            "RequiredUnavailable",
+            "BudgetUnsatisfiable",
+            "Tokenizer",
+            "Integrity",
+            "BaseMismatch",
+        }:
+            raise ValueError
+        raise LocalContextError(code)
+
+    def close(self) -> None:
+        """Stop accepting work and attempt bounded cleanup without masking errors.
+
+        If OS-level failures prevent completion, ``cleanup_complete`` stays false
+        and another close() retries. Never operates on an inherited instance.
+        """
+        self._ensure_process_owner()
+        with self._close_lock:
+            if self._cleanup_complete:
+                return
+            self._closed = True
+            self._stop.set()
+            deadline = time.monotonic() + 5.0
+            try:
+                self._process.kill()
+            except OSError:
+                pass
+            try:
+                self._jobs.put_nowait(None)
+            except queue.Full:
+                pass
+            try:
+                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except OSError, subprocess.TimeoutExpired:
+                # Keep reaping retryable; cleanup must not replace the API error.
+                pass
+            if self._thread.ident is not None:
+                self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            else:
+                # Thread creation failed; no thread can own these buffers.
+                for pipe in (self._process.stdin, self._process.stdout):
+                    if pipe is None:
+                        continue
+                    try:
+                        pipe.close()
+                    except (OSError, ValueError):  # fmt: skip
+                        pass
+            try:
+                self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
+            except OSError:
+                self._cleanup_complete = False
+
+    @property
+    def cleanup_complete(self) -> bool:
+        """Whether close has reaped the worker and joined its I/O thread."""
+        self._ensure_process_owner()
+        return self._cleanup_complete
+
+    def __enter__(self) -> Self:
+        self._ensure_process_owner()
+        return self
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        self.close()
+
+
+class LocalContextGraph(_WorkerChannel):
+    """One graph, privacy domain, and bounded cache per worker process.
+
+    Use a context manager or close(). ``worker_path`` is an explicit trusted executable;
+    it is never searched in PATH. Calls are serialized. The timeout includes lock wait
+    and pipe I/O. A lock-wait timeout does not interrupt another caller's operation.
+    A transport timeout closes this graph, because mutation outcome may be unknown.
+    Instances belong to the creating process; create a new graph after fork().
+    """
+
+    def __init__(
+        self,
+        domain: str,
+        *,
+        limits: LocalContextLimits | None = None,
+        worker_path: str | Path | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        super().__init__(worker_path, timeout, ())
+        try:
+            hello = self._call({"op": "init", "domain": domain, "limits": limits or {}})
+            if (
+                not isinstance(hello, dict)
+                or hello.get("protocol") != LOCAL_CONTEXT_PROTOCOL
+                or hello.get("core_version") != LOCAL_CONTEXT_CORE_VERSION
+                or hello.get("max_frame_bytes") != _MAX_FRAME
+                or hello.get("max_response_bytes") != _MAX_RESPONSE
+            ):
+                raise LocalContextError("IncompatibleWorker")
+            capabilities = hello.get("capabilities", [])
+            if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
+                raise LocalContextError("IncompatibleWorker")
+            self._worker_features = tuple(sorted(set(capabilities)))
+            self._supports_views = "context_views.v1" in capabilities
+        except BaseException:
+            self.close()
+            raise
+
     def upsert(self, document: LocalDocument) -> bool:
         return cast(bool, self._call({"op": "upsert", "document": document}))
+
+    def capabilities(self) -> LocalWorkerCapabilities:
+        """Return negotiated features; this is not a release qualification claim."""
+        self._ensure_process_owner()
+        if self._closed:
+            raise LocalContextError("Closed")
+        return {
+            "schema": "cigar.local-worker-capabilities.v1",
+            "protocol": LOCAL_CONTEXT_PROTOCOL,
+            "core_version": LOCAL_CONTEXT_CORE_VERSION,
+            "features": list(self._worker_features),
+            "max_frame_bytes": _MAX_FRAME,
+            "max_response_bytes": _MAX_RESPONSE,
+            "execution": "isolated-process-serialized",
+            "authority": "trusted-host",
+            "requires_hol_services": False,
+        }
+
+    def _view_call(self, command: dict[str, Any]) -> Any:
+        if not self._supports_views:
+            raise LocalContextError("IncompatibleWorker")
+        if command["op"] == "explain_view":
+            self._require_explanation()
+        return self._call(command)
+
+    def _require_explanation(self) -> None:
+        if "selection_explanation.v1" not in self.capabilities()["features"]:
+            raise LocalContextError("IncompatibleWorker")
+
+    def create_view(self, spec: LocalViewSpec) -> LocalContextView:
+        """Define/replace a host-owned view over this graph. Replacing revokes its old handles.
+
+        Sources are indexed once. Keep the root graph and this method outside agent control;
+        a view is not a sandbox or a replacement for authenticated CIGAR service capabilities.
+        """
+        handle = cast(LocalViewHandle, self._view_call({"op": "define_view", "spec": spec}))
+        return LocalContextView(self, handle)
+
+    def revoke_view(self, view_id: str) -> bool:
+        """Revoke access through existing view handles without deleting shared source data."""
+        return cast(bool, self._view_call({"op": "revoke_view", "view_id": view_id}))
 
     def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
         """Atomically replace one source; [] withdraws it. Hard edges remain fail-closed."""
@@ -184,12 +365,65 @@ class LocalContextGraph:
         """Return a verified snapshot and Rust-rendered data-role context (not instructions)."""
         return cast(LocalContextResult, self._call({"op": "compile", "request": request}))
 
+    def explain(self, request: LocalContextRequest, snapshot: LocalContextSnapshot) -> LocalSelectionExplanation:
+        """Recompile and explain an exact current snapshot. No rejected IDs or truth probabilities."""
+        self._require_explanation()
+        return cast(LocalSelectionExplanation, self._call({"op": "explain", "request": request, "snapshot": snapshot}))
+
     def chunks(self, document: LocalDocument, max_lines: int, overlap_lines: int = 0) -> list[LocalDocument]:
-        return cast(list[LocalDocument], self._call({"op": "chunks", "document": document,
-                                                    "max_lines": max_lines, "overlap_lines": overlap_lines}))
+        return cast(
+            list[LocalDocument],
+            self._call({"op": "chunks", "document": document, "max_lines": max_lines, "overlap_lines": overlap_lines}),
+        )
+
+    def chunks_at_lines(self, document: LocalDocument, starts: list[int]) -> list[LocalDocument]:
+        """Partition exact text at caller-supplied syntax boundaries. No parser, I/O or graph mutation."""
+        if "document_boundaries.v1" not in self.capabilities()["features"]:
+            raise LocalContextError("IncompatibleWorker")
+        return cast(list[LocalDocument], self._call({"op": "chunks_at_lines", "document": document, "starts": starts}))
+
+    def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
+        """Bind exact claims to their snapshot for a separate trusted reviewer; no truth judgment."""
+        return cast(list[str], self._call({"op": "review_keys", "draft": draft}))
+
+    def check_answer(
+        self,
+        request: LocalContextRequest,
+        draft: LocalAnswerDraft,
+        reviews: list[LocalClaimReview],
+        policy: LocalAnswerPolicy | None = None,
+    ) -> LocalAnswerAssessment:
+        """Recompile current authorized context and enforce host-trusted claim reviews.
+
+        Keep reviews/policy outside model control. Only display assessed claims on release.
+        Confidence is telemetry, not permission. This does not run a semantic judge.
+        """
+        return cast(
+            LocalAnswerAssessment,
+            self._call(
+                {"op": "check_answer", "request": request, "draft": draft, "reviews": reviews, "policy": policy or {}}
+            ),
+        )
 
     def verify(self, snapshot: LocalContextSnapshot) -> LocalContextResult:
         return cast(LocalContextResult, self._call({"op": "verify", "snapshot": snapshot}))
+
+    def prompt_view(self, snapshot: LocalContextSnapshot, max_tokens: int) -> LocalContextPrompt:
+        """Compact data-role rendering; retain its citation map and the complete snapshot."""
+        return cast(
+            LocalContextPrompt, self._call({"op": "prompt_view", "snapshot": snapshot, "max_tokens": max_tokens})
+        )
+
+    def verify_prompt(self, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot) -> LocalContextPrompt:
+        return cast(LocalContextPrompt, self._call({"op": "verify_prompt", "prompt": prompt, "snapshot": snapshot}))
+
+    def resolve_citation(
+        self, reference: str, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot
+    ) -> list[LocalCitation]:
+        return cast(
+            list[LocalCitation],
+            self._call({"op": "resolve_citation", "reference": reference, "prompt": prompt, "snapshot": snapshot}),
+        )
 
     def delta(self, base: LocalContextSnapshot, target: LocalContextSnapshot) -> LocalContextDelta:
         return cast(LocalContextDelta, self._call({"op": "delta", "base": base, "target": target}))
@@ -203,31 +437,68 @@ class LocalContextGraph:
     def clear_cache(self) -> None:
         self._call({"op": "clear_cache"})
 
-    def close(self) -> None:
-        with self._close_lock:
-            if self._closed:
-                return
-            self._closed = True
-            if self._process.poll() is None:
-                try:
-                    self._process.kill()
-                except ProcessLookupError:
-                    pass
-            self._process.wait(timeout=5)
-            # Killing the child unblocks the single I/O thread, including blocked writes.
-            self._jobs.put(None, timeout=5)
-            self._thread.join(timeout=5)
-            if self._process.stdin is not None:
-                try:
-                    self._process.stdin.close()
-                except OSError:
-                    pass
-            if self._process.stdout is not None:
-                self._process.stdout.close()
 
-    def __enter__(self) -> Self:
-        return self
+class LocalContextView:
+    """A scoped facade sharing its owner's single worker/index and bounded call queue.
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
-                 traceback: TracebackType | None) -> None:
-        self.close()
+    Host-created views are logical source partitions within one trusted application.
+    Do not give untrusted code the root graph, worker pipe, review authority or filesystem.
+    Views are session-local; worker failure closes all of them without automatic retry.
+    """
+
+    def __init__(self, graph: LocalContextGraph, handle: LocalViewHandle) -> None:
+        self._graph = graph
+        self._handle = handle.copy()
+
+    def compile(self, request: LocalContextRequest) -> LocalViewResult:
+        """Compile authorized current sources; request access may narrow but cannot widen scope."""
+        return cast(
+            LocalViewResult,
+            self._graph._view_call({"op": "compile_view", "view": self._handle, "request": request}),
+        )
+
+    def explain(self, context: LocalViewContext) -> LocalSelectionExplanation:
+        """Explain selected IDs only after revalidating this view and all its readable evidence."""
+        return cast(
+            LocalSelectionExplanation,
+            self._graph._view_call({"op": "explain_view", "view": self._handle, "context": context}),
+        )
+
+    def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
+        """Atomically replace a writable source. Cross-source document ID collisions are denied."""
+        return cast(
+            LocalSourceUpdate,
+            self._graph._view_call(
+                {"op": "replace_view_source", "view": self._handle, "source": source, "documents": documents}
+            ),
+        )
+
+    def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
+        """Use context['snapshot']['id'] in the draft; these remain the legacy claim-review keys."""
+        return self._graph.review_keys(draft)
+
+    def check_answer(
+        self,
+        context: LocalViewContext,
+        draft: LocalAnswerDraft,
+        reviews: list[LocalClaimReview],
+        policy: LocalAnswerPolicy | None = None,
+    ) -> LocalViewAssessment:
+        """Recompile and recheck current scope; every authorized source/edge change invalidates.
+
+        Unrelated writes outside the view do not invalidate. Reviews/policy remain host-trusted.
+        This transient assessment grants no external effect authority or durable approval.
+        """
+        return cast(
+            LocalViewAssessment,
+            self._graph._view_call(
+                {
+                    "op": "check_view_answer",
+                    "view": self._handle,
+                    "context": context,
+                    "draft": draft,
+                    "reviews": reviews,
+                    "policy": policy or {},
+                }
+            ),
+        )

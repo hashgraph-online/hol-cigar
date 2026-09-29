@@ -1117,6 +1117,7 @@ fn open_blob_readonly(path: &Path) -> Result<File, BlobError> {
 
 #[cfg(windows)]
 fn open_blob_readonly(path: &Path) -> Result<File, BlobError> {
+    use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt as _;
 
     const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;

@@ -51,10 +51,17 @@ def require(condition: bool, message: str) -> None:
 
 
 def artifact_names(version: str) -> set[str]:
+    if version in {"0.10.1", "0.11.0", "0.12.0", "0.14.0"}:
+        return {
+            f"cigar-context-{version}.crate",
+            f"hol-org-cigar-{version}.tgz",
+            f"hol_cigar-{version}.tar.gz",
+            f"hol_cigar-{version}-py3-none-macosx_11_0_arm64.whl",
+        }
     match = RELEASE.fullmatch(version)
     require(
         match is not None,
-        "expected release must be an explicit 0.10.0 rc/beta prerelease",
+        "expected release must be an explicit 0.10.0 rc/beta prerelease or 0.10.1/0.11.0/0.12.0/0.14.0",
     )
     channel, number = match.groups()
     python = f"0.10.0{'rc' if channel == 'rc' else 'b'}{number}"
@@ -295,6 +302,11 @@ def validate_retained(snapshot: Path, report: dict) -> None:
     }
     required.update("build-" + row["name"] + ".log.gz" for row in report["checks"])
     required.update(
+        "build-" + row["name"] + ".stderr.gz"
+        for row in report["checks"]
+        if "stderr_sha256" in row
+    )
+    required.update(
         "installed-" + row["name"] + suffix
         for row in report["qualification"]["checks"]
         for suffix in (".stdout.gz", ".stderr.gz")
@@ -344,6 +356,14 @@ def validate_retained(snapshot: Path, report: dict) -> None:
             == check.get("log_sha256"),
             "build log digest mismatch",
         )
+        if "stderr_sha256" in check:
+            require(
+                hashlib.sha256(
+                    read("build-" + check["name"] + ".stderr.gz")
+                ).hexdigest()
+                == check["stderr_sha256"],
+                "build stderr digest mismatch",
+            )
     for check in report["additional_checks"]:
         require(
             hashlib.sha256(read("final-" + check["name"] + ".log.gz")).hexdigest()

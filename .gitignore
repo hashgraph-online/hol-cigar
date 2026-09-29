@@ -14,6 +14,7 @@ reports/*.info
 **/.mypy_cache/
 **/.ruff_cache/
 **/node_modules/
+**/node_modules
 .shared-secrets/
 **/.shared-secrets/
 .coverage

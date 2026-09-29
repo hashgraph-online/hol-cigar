@@ -11,6 +11,7 @@ use crate::ignore::{IgnorePatterns, IgnoreWorkBudget, MAX_IGNORE_BYTES, path_has
 use crate::secret::scan_secrets_with_patterns;
 use cap_fs_ext::{
     DirExt, FollowSymlinks, MetadataExt as CapabilityMetadataExt, OpenOptionsFollowExt,
+    OpenOptionsSyncExt,
 };
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, File, Metadata, OpenOptions};
@@ -28,6 +29,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_RETAINED_EVENTS: usize = 100_000;
 const MAX_FILESYSTEM_DEPTH: usize = 256;
+const MAX_SYMLINK_EXPANSIONS: usize = 40;
 const MAX_FILE_BYTES: u64 = 67_108_864;
 const READ_CHUNK_BYTES: usize = 64 * 1_024;
 const MAX_AGGREGATE_GIT_IGNORE_BYTES: usize = 8 * 1_048_576;
@@ -435,6 +437,7 @@ impl SourceConnector for LocalFilesystemConnector {
 struct Candidate {
     relative_path: PathBuf,
     relative: Vec<u8>,
+    resolved_target: Option<PathBuf>,
     metadata: Metadata,
     identity: Option<FileIdentity>,
     follow_final_symlink: bool,
@@ -663,15 +666,17 @@ impl FilesystemWalker<'_> {
             }
             if matches!(entry.kind, WalkEntryKind::Symlink) {
                 if self.policy.follow_internal_symlinks
-                    && let Some(metadata) = internal_symlink_metadata(self.root, &relative_path)?
+                    && let Some((target, metadata)) =
+                        internal_symlink_target(self.root, &relative_path, self.context)?
                 {
                     self.output.push(Candidate {
                         relative_path,
+                        hard_excluded: is_hard_file(&relative_bytes),
                         relative: relative_bytes,
+                        resolved_target: Some(target),
                         identity: Some(file_identity(&metadata)),
                         metadata,
                         follow_final_symlink: true,
-                        hard_excluded: false,
                     });
                     continue;
                 }
@@ -681,6 +686,7 @@ impl FilesystemWalker<'_> {
                 self.output.push(Candidate {
                     relative_path,
                     relative: relative_bytes,
+                    resolved_target: None,
                     metadata,
                     identity: None,
                     follow_final_symlink: false,
@@ -700,6 +706,7 @@ impl FilesystemWalker<'_> {
                 self.output.push(Candidate {
                     relative_path,
                     relative: relative_bytes.clone(),
+                    resolved_target: None,
                     identity: Some(file_identity(&metadata)),
                     metadata,
                     follow_final_symlink: false,
@@ -857,33 +864,36 @@ impl MetadataClassifier<'_> {
                 DiscoveryReason::HardExclusion,
             ));
         }
-        if self
-            .policy
-            .excluded_prefixes
-            .iter()
-            .any(|prefix| path_has_prefix(relative.as_bytes(), prefix.as_bytes()))
-        {
+        let target = candidate.resolved_target.as_deref().map(path_bytes);
+        let paths = [Some(relative.as_bytes()), target.as_deref()];
+        if self.policy.excluded_prefixes.iter().any(|prefix| {
+            paths
+                .iter()
+                .flatten()
+                .any(|path| path_has_prefix(path, prefix.as_bytes()))
+        }) {
             return Ok((
                 DiscoveryDisposition::Exclude,
                 DiscoveryReason::PolicyExclusion,
             ));
         }
-        if self.cigar_ignore.matches_filesystem(
-            relative.as_bytes(),
-            self.ignore_work,
-            self.context,
-        )? {
-            return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::CigarIgnore));
+        for path in paths.iter().flatten() {
+            if ignored_file_or_ancestor(self.cigar_ignore, path, self.ignore_work, self.context)? {
+                return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::CigarIgnore));
+            }
         }
         for scoped in self.git_ignores {
-            if let Some(scoped_path) = scoped.path(relative.as_bytes())
-                && scoped.patterns.matches_filesystem(
-                    scoped_path,
-                    self.ignore_work,
-                    self.context,
-                )?
-            {
-                return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::GitIgnore));
+            for path in paths.iter().flatten() {
+                if let Some(scoped_path) = scoped.path(path)
+                    && ignored_file_or_ancestor(
+                        &scoped.patterns,
+                        scoped_path,
+                        self.ignore_work,
+                        self.context,
+                    )?
+                {
+                    return Ok((DiscoveryDisposition::Exclude, DiscoveryReason::GitIgnore));
+                }
             }
         }
         if record.size_bytes > self.policy.max_record_bytes {
@@ -894,6 +904,35 @@ impl MetadataClassifier<'_> {
         }
         Ok((DiscoveryDisposition::Include, DiscoveryReason::Eligible))
     }
+}
+
+fn ignored_file_or_ancestor(
+    patterns: &IgnorePatterns,
+    path: &[u8],
+    work: &mut IgnoreWorkBudget,
+    context: &ConnectorContext,
+) -> Result<bool, CatalogError> {
+    if patterns.matches_filesystem(path, work, context)? {
+        return Ok(true);
+    }
+    // The walker prunes directories using both spellings. A symlink target
+    // must receive the same decision even when that directory was not visited.
+    for (index, byte) in path.iter().enumerate() {
+        if *byte == b'/' {
+            let without_slash = path
+                .get(..index)
+                .ok_or_else(|| CatalogError::new(CatalogErrorCode::InvalidMetadata))?;
+            let with_slash = path
+                .get(..=index)
+                .ok_or_else(|| CatalogError::new(CatalogErrorCode::InvalidMetadata))?;
+            if patterns.matches_filesystem(without_slash, work, context)?
+                || patterns.matches_filesystem(with_slash, work, context)?
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 #[derive(Clone)]
@@ -920,14 +959,30 @@ fn read_candidate(
     let identity = candidate
         .identity
         .ok_or_else(|| CatalogError::new(CatalogErrorCode::SourceChanged))?;
-    read_capability_file(
+    if let Some(target) = &candidate.resolved_target
+        && (resolve_regular_target(root, &candidate.relative_path, context)?.as_ref()
+            != Some(target)
+            || !admitted_target_parents(root, target, context)?)
+    {
+        return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+    }
+    let bytes = read_capability_file(
         root,
-        &candidate.relative_path,
-        candidate.follow_final_symlink,
+        candidate
+            .resolved_target
+            .as_deref()
+            .unwrap_or(&candidate.relative_path),
+        false,
         identity,
         candidate.metadata.len(),
         context,
-    )
+    )?;
+    if let Some(target) = &candidate.resolved_target
+        && resolve_regular_target(root, &candidate.relative_path, context)?.as_ref() != Some(target)
+    {
+        return Err(CatalogError::new(CatalogErrorCode::SourceChanged));
+    }
+    Ok(bytes)
 }
 
 fn read_capability_file(
@@ -1035,12 +1090,16 @@ fn reopen_relative_directory(root: &Dir, relative: &Path) -> std::io::Result<Dir
 
 fn open_file_in(directory: &Dir, path: impl AsRef<Path>, follow: bool) -> std::io::Result<File> {
     let mut options = OpenOptions::new();
-    options.read(true).follow(if follow {
+    options.read(true).nonblock(true).follow(if follow {
         FollowSymlinks::Yes
     } else {
         FollowSymlinks::No
     });
-    directory.open_with(path, &options)
+    let file = directory.open_with(path, &options)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+    }
+    Ok(file)
 }
 
 fn metadata_fingerprint(metadata: &Metadata) -> MetadataFingerprint {
@@ -1053,16 +1112,20 @@ fn metadata_fingerprint(metadata: &Metadata) -> MetadataFingerprint {
     }
 }
 
-fn internal_symlink_metadata(
+fn internal_symlink_target(
     root: &Dir,
     link_path: &Path,
-) -> Result<Option<Metadata>, CatalogError> {
-    let resolved_before = match root.canonicalize(link_path) {
-        Ok(path) => path,
-        Err(_error) => return Ok(None),
+    context: &ConnectorContext,
+) -> Result<Option<(PathBuf, Metadata)>, CatalogError> {
+    let resolved_before = match resolve_regular_target(root, link_path, context)? {
+        Some(path) => path,
+        None => return Ok(None),
     };
     let resolved_bytes = path_bytes(&resolved_before);
-    if is_hard_directory(&resolved_bytes) || is_hard_file(&resolved_bytes) {
+    if is_hard_directory(&resolved_bytes)
+        || is_hard_file(&resolved_bytes)
+        || !admitted_target_parents(root, &resolved_before, context)?
+    {
         return Ok(None);
     }
     let target = match open_relative_file(root, &resolved_before, false) {
@@ -1082,16 +1145,162 @@ fn internal_symlink_metadata(
     let linked_metadata = linked
         .metadata()
         .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
-    let resolved_after = match root.canonicalize(link_path) {
-        Ok(path) => path,
-        Err(_error) => return Ok(None),
+    let resolved_after = match resolve_regular_target(root, link_path, context)? {
+        Some(path) => path,
+        None => return Ok(None),
     };
     if resolved_before != resolved_after
         || metadata_fingerprint(&target_metadata) != metadata_fingerprint(&linked_metadata)
     {
         return Ok(None);
     }
-    Ok(Some(linked_metadata))
+    Ok(Some((resolved_before, linked_metadata)))
+}
+
+fn resolve_regular_target(
+    root: &Dir,
+    path: &Path,
+    context: &ConnectorContext,
+) -> Result<Option<PathBuf>, CatalogError> {
+    let mut current = path.to_path_buf();
+    for _ in 0..=MAX_SYMLINK_EXPANSIONS {
+        context.check()?;
+        if path_bytes(&current).len() > cigar_protocol::limits::MAX_PATH_BYTES
+            || current.components().count() > MAX_FILESYSTEM_DEPTH + 1
+        {
+            return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+        }
+        // Stat the full spelling first, including any trailing slash or dot.
+        // Never canonicalize a leaf: cap-std's portable canonicalizer opens it
+        // for reading, which can block on a substituted FIFO before validation.
+        let metadata = match root.symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(_error) => return Ok(None),
+        };
+        let parent = current.parent().unwrap_or_else(|| Path::new(""));
+        if metadata.is_symlink() {
+            let destination = match root.read_link(&current) {
+                Ok(destination) => destination,
+                Err(_error) => return Ok(None),
+            };
+            current = parent.join(destination);
+            continue;
+        }
+        if !metadata.is_file() {
+            return Ok(None);
+        }
+        let Some(name) = current.file_name() else {
+            return Ok(None);
+        };
+        // The explicit final dot forces O_DIRECTORY even if a named parent is
+        // concurrently replaced by a special file. Capability resolution keeps
+        // relative symlinks and '..' confined to the root.
+        let parent = match root.canonicalize(parent.join(".")) {
+            Ok(parent) => parent,
+            Err(_error) => return Ok(None),
+        };
+        let resolved = if parent == Path::new(".") {
+            PathBuf::from(name)
+        } else {
+            parent.join(name)
+        };
+        return stored_target_spelling(root, &resolved, context);
+    }
+    Ok(None)
+}
+
+fn stored_target_spelling(
+    root: &Dir,
+    target: &Path,
+    context: &ConnectorContext,
+) -> Result<Option<PathBuf>, CatalogError> {
+    let mut directory = root
+        .try_clone()
+        .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+    let mut stored = PathBuf::new();
+    let mut inspected = 0_usize;
+    let mut components = target.components().peekable();
+    while let Some(component) = components.next() {
+        context.check()?;
+        let std::path::Component::Normal(name) = component else {
+            return Ok(None);
+        };
+        let expected = match directory.symlink_metadata(name) {
+            Ok(metadata) if !metadata.is_symlink() => file_identity(&metadata),
+            _ => return Ok(None),
+        };
+        let entries = directory
+            .read_dir(".")
+            .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+        let mut stored_name = None;
+        // Canonicalization preserves input spelling on some filesystems. Bind
+        // exclusion/ignore matching to the same directory entry names used by
+        // discovery, including on case/Unicode-insensitive filesystems.
+        for entry in entries {
+            context.check()?;
+            inspected += 1;
+            if inspected > MAX_CONNECTOR_ITEMS {
+                return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+            }
+            let entry = entry.map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+            // DirEntry::metadata lacks by-handle identity fields on Windows.
+            // Capability stat supplies them without opening Unix file content.
+            let metadata = directory
+                .symlink_metadata(entry.file_name())
+                .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+            if !metadata.is_symlink() && file_identity(&metadata) == expected {
+                stored_name = Some(entry.file_name());
+                break;
+            }
+        }
+        let Some(name) = stored_name else {
+            return Ok(None);
+        };
+        stored.push(&name);
+        if components.peek().is_some() {
+            directory = match directory.open_dir_nofollow(&name) {
+                Ok(child) => child,
+                Err(_error) => return Ok(None),
+            };
+            if directory
+                .dir_metadata()
+                .map(|metadata| file_identity(&metadata))
+                .ok()
+                != Some(expected)
+            {
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some(stored))
+}
+
+fn admitted_target_parents(
+    root: &Dir,
+    target: &Path,
+    context: &ConnectorContext,
+) -> Result<bool, CatalogError> {
+    let mut directory = root
+        .try_clone()
+        .map_err(|_error| CatalogError::new(CatalogErrorCode::Unavailable))?;
+    let parent = target.parent().unwrap_or_else(|| Path::new(""));
+    for (depth, component) in parent.components().enumerate() {
+        context.check()?;
+        if depth >= MAX_FILESYSTEM_DEPTH {
+            return Err(CatalogError::new(CatalogErrorCode::LimitExceeded));
+        }
+        let std::path::Component::Normal(name) = component else {
+            return Ok(false);
+        };
+        directory = match directory.open_dir_nofollow(name) {
+            Ok(child) => child,
+            Err(_error) => return Ok(false),
+        };
+        if has_nested_git_marker(&directory, context)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn file_identity(metadata: &Metadata) -> FileIdentity {
@@ -2030,6 +2239,374 @@ mod tests {
             assert_eq!(entry.reason, DiscoveryReason::HardExclusion);
         }
         assert_eq!(plan.included_count, 2);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_aliases_preserve_target_exclusions_and_ignore_override_rules()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir()?;
+        for directory in [
+            "denied",
+            "denied-other",
+            "private/cache",
+            "nested/.git",
+            "src",
+        ] {
+            fs::create_dir_all(root.path().join(directory))?;
+        }
+        fs::write(
+            root.path().join(".cigarignore"),
+            b"ignored-alias.txt\ncigar-target.txt\n",
+        )?;
+        fs::write(root.path().join(".gitignore"), b"private/cache\nnested\n")?;
+        fs::write(root.path().join("src/.gitignore"), b"private.txt\n")?;
+        for target in [
+            "denied/private.txt",
+            "denied-other/safe.txt",
+            "private/cache/data.txt",
+            "nested/data.txt",
+            "src/private.txt",
+            "cigar-target.txt",
+        ] {
+            fs::write(root.path().join(target), b"ordinary fixture content")?;
+        }
+        for (alias, target) in [
+            ("denied-alias.txt", "denied/private.txt"),
+            ("ignored-alias.txt", "denied/private.txt"),
+            ("chain.txt", "denied-alias.txt"),
+            ("safe-alias.txt", "denied-other/safe.txt"),
+            ("ancestor-alias.txt", "private/cache/data.txt"),
+            ("nested-alias.txt", "nested/data.txt"),
+            ("scoped-alias.txt", "src/private.txt"),
+            ("cigar-alias.txt", "cigar-target.txt"),
+            (".env", "denied-other/safe.txt"),
+        ] {
+            symlink(target, root.path().join(alias))?;
+        }
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        for (broadening, ancestor_pattern) in [
+            (false, "private/cache"),
+            (false, "private/cache/"),
+            (true, "private/cache"),
+            (true, "private/cache/"),
+        ] {
+            fs::write(
+                root.path().join(".gitignore"),
+                format!("{ancestor_pattern}\nnested\n"),
+            )?;
+            let mut discovery_policy = policy()?;
+            discovery_policy.follow_internal_symlinks = true;
+            discovery_policy.allow_user_broadening = broadening;
+            discovery_policy.excluded_prefixes = vec![RelativePath::new(b"denied".to_vec())?];
+            let overrides = [
+                "denied-alias.txt",
+                "ignored-alias.txt",
+                "chain.txt",
+                "ancestor-alias.txt",
+                "nested-alias.txt",
+                "scoped-alias.txt",
+                "cigar-alias.txt",
+                ".env",
+            ];
+            let plan = connector.discover(
+                &DiscoveryRequest {
+                    root: uri.clone(),
+                    policy: discovery_policy,
+                    include_overrides: overrides
+                        .iter()
+                        .map(|path| RelativePath::new(path.as_bytes().to_vec()))
+                        .collect::<Result<_, _>>()?,
+                },
+                &context(),
+            )?;
+            for (path, expected) in [
+                ("denied-alias.txt", DiscoveryReason::PolicyExclusion),
+                ("ignored-alias.txt", DiscoveryReason::PolicyExclusion),
+                ("chain.txt", DiscoveryReason::PolicyExclusion),
+                ("nested-alias.txt", DiscoveryReason::HardExclusion),
+                (".env", DiscoveryReason::HardExclusion),
+            ] {
+                let entry = plan
+                    .entries
+                    .iter()
+                    .find(|entry| entry.record.relative_path.as_bytes() == path.as_bytes())
+                    .ok_or("missing alias")?;
+                assert_eq!(entry.reason, expected, "{path}, broadening={broadening}");
+                assert_eq!(entry.disposition, DiscoveryDisposition::Exclude);
+            }
+            for (path, ignored) in [
+                ("ancestor-alias.txt", DiscoveryReason::GitIgnore),
+                ("scoped-alias.txt", DiscoveryReason::GitIgnore),
+                ("cigar-alias.txt", DiscoveryReason::CigarIgnore),
+            ] {
+                let entry = plan
+                    .entries
+                    .iter()
+                    .find(|entry| entry.record.relative_path.as_bytes() == path.as_bytes())
+                    .ok_or("missing ignored alias")?;
+                assert_eq!(
+                    entry.reason,
+                    if broadening {
+                        DiscoveryReason::UserOverride
+                    } else {
+                        ignored
+                    }
+                );
+                assert_eq!(
+                    entry.disposition,
+                    if broadening {
+                        DiscoveryDisposition::Include
+                    } else {
+                        DiscoveryDisposition::Exclude
+                    }
+                );
+            }
+            let safe = plan
+                .entries
+                .iter()
+                .find(|entry| entry.record.relative_path.as_bytes() == b"safe-alias.txt")
+                .ok_or("missing safe alias")?;
+            assert_eq!(safe.disposition, DiscoveryDisposition::Include);
+            assert_eq!(
+                connector
+                    .read(&safe.record, ByteRange::new(0, 8)?, &context())?
+                    .as_slice(),
+                b"ordinary"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_target_spelling_cannot_bypass_policy() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir()?;
+        fs::create_dir(root.path().join("denied"))?;
+        fs::write(root.path().join("denied/private.txt"), b"ordinary")?;
+        symlink("DENIED/private.txt", root.path().join("alias.txt"))?;
+        let uri = SourceUri::new("file:///fixture")?;
+        let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+        let mut discovery_policy = policy()?;
+        discovery_policy.follow_internal_symlinks = true;
+        discovery_policy.excluded_prefixes = vec![RelativePath::new(b"denied".to_vec())?];
+        let plan = connector.discover(
+            &DiscoveryRequest {
+                root: uri,
+                policy: discovery_policy,
+                include_overrides: BTreeSet::new(),
+            },
+            &context(),
+        )?;
+        assert_eq!(plan.included_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn stored_target_spelling_uses_complete_cross_platform_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use cap_std::ambient_authority;
+        use cap_std::fs::Dir;
+        use std::path::Path;
+
+        let root = tempfile::tempdir()?;
+        fs::create_dir(root.path().join("src"))?;
+        fs::write(root.path().join("src/target.txt"), b"ordinary")?;
+        let directory = Dir::open_ambient_dir(root.path(), ambient_authority())?;
+        assert_eq!(
+            super::stored_target_spelling(&directory, Path::new("src/target.txt"), &context())?,
+            Some(Path::new("src/target.txt").to_path_buf()),
+        );
+        if root.path().join("SRC/TARGET.TXT").is_file() {
+            assert_eq!(
+                super::resolve_regular_target(&directory, Path::new("SRC/TARGET.TXT"), &context())?,
+                Some(Path::new("src/target.txt").to_path_buf()),
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn regular_target_resolution_preserves_relative_links_and_rejects_invalid_forms()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use cap_std::ambient_authority;
+        use cap_std::fs::Dir;
+        use std::os::unix::fs::symlink;
+        use std::path::Path;
+
+        let root = tempfile::tempdir()?;
+        fs::create_dir(root.path().join("src"))?;
+        fs::write(root.path().join("src/target.txt"), b"ordinary")?;
+        symlink("src", root.path().join("directory"))?;
+        symlink("../directory/target.txt", root.path().join("src/link.txt"))?;
+        symlink("src/link.txt", root.path().join("chain.txt"))?;
+        symlink("cycle.txt", root.path().join("cycle.txt"))?;
+        symlink("../outside.txt", root.path().join("escape.txt"))?;
+        let directory = Dir::open_ambient_dir(root.path(), ambient_authority())?;
+        for valid in [
+            "src/target.txt",
+            "directory/target.txt",
+            "src/link.txt",
+            "chain.txt",
+        ] {
+            assert_eq!(
+                super::resolve_regular_target(&directory, Path::new(valid), &context())?,
+                Some(Path::new("src/target.txt").to_path_buf()),
+                "{valid}"
+            );
+        }
+        for invalid in [
+            "cycle.txt",
+            "escape.txt",
+            "src",
+            "src/target.txt/",
+            "src/target.txt/.",
+        ] {
+            assert_eq!(
+                super::resolve_regular_target(&directory, Path::new(invalid), &context())?,
+                None,
+                "{invalid}"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn admitted_symlink_target_cannot_be_retargeted_with_the_same_inode()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use cap_std::ambient_authority;
+        use cap_std::fs::Dir;
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir()?;
+        fs::write(root.path().join("safe.txt"), b"ordinary")?;
+        fs::create_dir(root.path().join("denied"))?;
+        symlink("safe.txt", root.path().join("alias.txt"))?;
+        let directory = Dir::open_ambient_dir(root.path(), ambient_authority())?;
+        let alias = std::path::PathBuf::from("alias.txt");
+        let (target, metadata) = super::internal_symlink_target(&directory, &alias, &context())?
+            .ok_or("valid symlink must be admitted")?;
+        let candidate = super::Candidate {
+            relative_path: alias,
+            relative: b"alias.txt".to_vec(),
+            resolved_target: Some(target),
+            identity: Some(file_identity(&metadata)),
+            metadata,
+            follow_final_symlink: true,
+            hard_excluded: false,
+        };
+        assert_eq!(
+            super::read_candidate(&directory, &candidate, &context())?,
+            b"ordinary"
+        );
+        fs::rename(
+            root.path().join("safe.txt"),
+            root.path().join("denied/safe.txt"),
+        )?;
+        fs::remove_file(root.path().join("alias.txt"))?;
+        symlink("denied/safe.txt", root.path().join("alias.txt"))?;
+        let error = super::read_candidate(&directory, &candidate, &context())
+            .err()
+            .ok_or("retargeted alias must fail")?;
+        assert_eq!(error.code(), crate::CatalogErrorCode::SourceChanged);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn special_file_opens_are_bounded_in_a_subprocess() -> Result<(), Box<dyn std::error::Error>> {
+        use std::process::{Command, Stdio};
+        for mode in ["symlink", "parent", "source", "ignore"] {
+            let mut child = Command::new(std::env::current_exe()?)
+                .args([
+                    "--exact",
+                    "filesystem::tests::special_file_probe_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("CIGAR_CATALOG_SPECIAL_FILE_TEST", mode)
+                .stdin(Stdio::null())
+                .spawn()?;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if let Some(status) = child.try_wait()? {
+                    assert!(status.success(), "special file case failed: {mode}");
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    child.kill()?;
+                    let _status = child.wait()?;
+                    return Err(format!("special file open exceeded deadline: {mode}").into());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "run only through the bounded subprocess test"]
+    fn special_file_probe_child() -> Result<(), Box<dyn std::error::Error>> {
+        use cap_std::ambient_authority;
+        use cap_std::fs::Dir;
+        use std::os::unix::fs::symlink;
+        use std::process::Command;
+
+        let mode = std::env::var("CIGAR_CATALOG_SPECIAL_FILE_TEST")?;
+        let root = tempfile::tempdir()?;
+        let fifo = root.path().join(if mode == "ignore" {
+            ".gitignore"
+        } else {
+            "source.txt"
+        });
+        fs::write(&fifo, b"ordinary")?;
+        let directory = Dir::open_ambient_dir(root.path(), ambient_authority())?;
+        let before = directory.metadata(fifo.file_name().ok_or("missing name")?)?;
+        fs::remove_file(&fifo)?;
+        assert!(Command::new("mkfifo").arg(&fifo).status()?.success());
+        if mode == "symlink" || mode == "parent" {
+            let target = if mode == "parent" {
+                "source.txt/child.txt"
+            } else {
+                "source.txt"
+            };
+            symlink(target, root.path().join("alias.txt"))?;
+            let uri = SourceUri::new("file:///fixture")?;
+            let connector = LocalFilesystemConnector::new(root.path(), uri.clone())?;
+            let mut discovery_policy = policy()?;
+            discovery_policy.follow_internal_symlinks = true;
+            let plan = connector.discover(
+                &DiscoveryRequest {
+                    root: uri,
+                    policy: discovery_policy,
+                    include_overrides: BTreeSet::new(),
+                },
+                &context(),
+            )?;
+            assert_eq!(plan.included_count, 0);
+        } else {
+            let path = fifo.file_name().ok_or("missing name")?;
+            assert!(
+                super::read_capability_file(
+                    &directory,
+                    std::path::Path::new(path),
+                    false,
+                    file_identity(&before),
+                    before.len(),
+                    &context()
+                )
+                .is_err()
+            );
+        }
         Ok(())
     }
 

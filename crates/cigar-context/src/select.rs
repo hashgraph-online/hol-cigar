@@ -1,6 +1,7 @@
 use crate::graph::term_counts;
 use crate::{
-    Citation, ContextError, ContextGraph, ContextSnapshot, EdgeKind, EvidenceBlock, TokenCounter,
+    Citation, ContextError, ContextGraph, ContextSnapshot, EdgeKind, EvidenceBlock,
+    SelectionExplanation, SelectionSignal, SelectionStep, TokenCounter,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -111,12 +112,158 @@ struct Witnesses {
 }
 
 impl ContextGraph {
+    fn scored_roots<'a>(
+        &'a self,
+        request: &ContextRequest,
+        terms: &BTreeSet<String>,
+        total: usize,
+    ) -> (BTreeMap<String, u64>, Vec<Root<'a>>, usize) {
+        let allowed = |id: &str| request.allowed.as_ref().is_none_or(|ids| ids.contains(id));
+        let work = terms
+            .iter()
+            .filter_map(|term| self.postings.get(term))
+            .fold(0_usize, |count, posting| {
+                count.saturating_add(posting.len())
+            });
+        let dense = self.slots.len() > 512 && work > self.slots.len() / 4;
+        let authorization = (dense && request.allowed.is_some()).then(|| {
+            let mut slots = vec![false; self.slots.len()];
+            if let Some(ids) = &request.allowed {
+                for node in ids.iter().filter_map(|id| self.documents.get(id)) {
+                    if let Some(entry) = slots.get_mut(node.slot) {
+                        *entry = true;
+                    }
+                }
+            }
+            slots
+        });
+        let slot_allowed = |slot: usize| {
+            authorization
+                .as_ref()
+                .is_none_or(|slots| slots.get(slot).copied().unwrap_or(false))
+        };
+        let mut weights = BTreeMap::new();
+        let mut sparse = HashMap::<&str, u64>::new();
+        let mut scores = if dense {
+            vec![0_u64; self.slots.len()]
+        } else {
+            Vec::new()
+        };
+        let mut touched = Vec::new();
+        for term in terms {
+            let Some(posting) = self.postings.get(term) else {
+                continue;
+            };
+            let frequency = if request.allowed.is_none() {
+                posting.len()
+            } else if dense {
+                posting
+                    .values()
+                    .filter(|entry| slot_allowed(entry.slot))
+                    .count()
+            } else {
+                posting.keys().filter(|id| allowed(id)).count()
+            };
+            // Preserve the integer score and authorized corpus statistics exactly.
+            let weight = 1000 + (1000 * total as u64 / (frequency as u64 + 1)).min(100_000);
+            weights.insert(term.clone(), weight);
+            if dense {
+                for entry in posting.values().filter(|entry| slot_allowed(entry.slot)) {
+                    if let Some(score) = scores.get_mut(entry.slot) {
+                        if *score == 0 {
+                            touched.push(entry.slot);
+                        }
+                        *score += weight * (3 + u64::from(entry.count));
+                    }
+                }
+            } else {
+                for (id, entry) in posting.iter().filter(|(id, _)| allowed(id)) {
+                    *sparse.entry(id).or_default() += weight * (3 + u64::from(entry.count));
+                }
+            }
+        }
+        let lexical_matches = if dense { touched.len() } else { sparse.len() };
+        for (rank, id) in request.semantic_candidates.iter().enumerate() {
+            let Some(node) = self.documents.get(id) else {
+                continue;
+            };
+            if dense {
+                if slot_allowed(node.slot)
+                    && let Some(score) = scores.get_mut(node.slot)
+                {
+                    if *score == 0 {
+                        touched.push(node.slot);
+                    }
+                    *score += 600_000 / (60 + rank as u64);
+                }
+            } else if allowed(id) {
+                *sparse.entry(id).or_default() += 600_000 / (60 + rank as u64);
+            }
+        }
+        let semantic = request
+            .semantic_candidates
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let root = |node: &'a crate::graph::IndexedDocument, score| Root {
+            declarations: node.declarations.intersection(terms).count(),
+            semantic: semantic.contains(node.document.id.as_str()),
+            id: node.document.id.as_str(),
+            score,
+            depth: 0,
+        };
+        let roots = if dense {
+            touched
+                .into_iter()
+                .filter_map(|slot| {
+                    self.slots
+                        .get(slot)
+                        .and_then(Option::as_deref)
+                        .zip(scores.get(slot))
+                        .map(|(node, score)| root(node, *score))
+                })
+                .collect()
+        } else {
+            sparse
+                .into_iter()
+                .filter_map(|(id, score)| self.documents.get(id).map(|node| root(node, score)))
+                .collect()
+        };
+        (weights, roots, lexical_matches)
+    }
+
     /// Retrieves, expands, selects, cites, and seals a context snapshot using exact final counts.
     /// Every selected hard dependency and counterclaim must be authorized and fit in full.
     pub fn compile(
         &self,
         request: &ContextRequest,
         tokenizer: &impl TokenCounter,
+    ) -> Result<ContextSnapshot, ContextError> {
+        self.compile_traced(request, tokenizer, None)
+    }
+
+    /// Reconstruct the selector's successful steps for an exact current snapshot/request.
+    /// Stale, substituted or differently scoped snapshots fail before a trace is returned.
+    /// This opt-in operation recompiles; ordinary compilation allocates no selection trace.
+    pub fn explain(
+        &self,
+        request: &ContextRequest,
+        snapshot: &ContextSnapshot,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<SelectionExplanation, ContextError> {
+        let mut steps = Vec::new();
+        let current = self.compile_traced(request, tokenizer, Some(&mut steps))?;
+        if snapshot != &current {
+            return Err(ContextError::BaseMismatch);
+        }
+        SelectionExplanation::new(snapshot, request, self.revision(), tokenizer, steps)
+    }
+
+    pub(crate) fn compile_traced(
+        &self,
+        request: &ContextRequest,
+        tokenizer: &impl TokenCounter,
+        mut trace: Option<&mut Vec<SelectionStep>>,
     ) -> Result<ContextSnapshot, ContextError> {
         validate(request, tokenizer)?;
         let available = request.max_tokens - request.reserve_tokens;
@@ -125,54 +272,11 @@ impl ContextGraph {
             return Err(ContextError::LimitExceeded);
         }
         let allowed = |id: &str| request.allowed.as_ref().is_none_or(|ids| ids.contains(id));
-        let total = request.allowed.as_ref().map_or(self.len(), |ids| {
-            ids.iter()
-                .filter(|id| self.documents.contains_key(*id))
-                .count()
-        });
-        let mut weights = BTreeMap::new();
-        let mut scores = HashMap::<&str, u64>::new();
-        for term in &terms {
-            let Some(posting) = self.postings.get(term) else {
-                continue;
-            };
-            let frequency = if request.allowed.is_none() {
-                posting.len()
-            } else {
-                posting.keys().filter(|id| allowed(id)).count()
-            };
-            // Integer inverse-frequency weighting and saturating term frequency are deterministic
-            // across CPUs. This is a simple lexical ranker, not a claim of BM25 equivalence.
-            let weight = 1000 + (1000 * total as u64 / (frequency as u64 + 1)).min(100_000);
-            weights.insert(term.clone(), weight);
-            for (id, frequency) in posting.iter().filter(|(id, _)| allowed(id)) {
-                *scores.entry(id).or_default() += weight * (3 + u64::from(*frequency));
-            }
-        }
-        let lexical_matches = scores.len();
-        for (rank, id) in request.semantic_candidates.iter().enumerate() {
-            if allowed(id) && self.documents.contains_key(id) {
-                *scores.entry(id).or_default() += 600_000 / (60 + rank as u64);
-            }
-        }
-        let semantic = request
-            .semantic_candidates
-            .iter()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        let mut roots = scores
-            .into_iter()
-            .map(|(id, score)| Root {
-                declarations: self
-                    .documents
-                    .get(id)
-                    .map_or(0, |node| node.declarations.intersection(&terms).count()),
-                semantic: semantic.contains(id),
-                id,
-                score,
-                depth: 0,
-            })
-            .collect::<Vec<_>>();
+        let total = request
+            .allowed
+            .as_ref()
+            .map_or(self.len(), |ids| self.authorized_documents(ids).count());
+        let (weights, mut roots, lexical_matches) = self.scored_roots(request, &terms, total);
         let rank = |a: &Root<'_>, b: &Root<'_>| {
             b.declarations
                 .cmp(&a.declarations)
@@ -239,6 +343,15 @@ impl ContextGraph {
             }
             let additions = self.blocks_for(&closure, &selected, &terms, None)?;
             append_coalesced(&mut blocks, additions);
+            if let Some(steps) = trace.as_deref_mut()
+                && !closure.is_subset(&selected)
+            {
+                steps.push(SelectionStep {
+                    root_id: id.clone(),
+                    added_ids: closure.difference(&selected).cloned().collect(),
+                    signals: vec![SelectionSignal::Required],
+                });
+            }
             selected.extend(closure);
             if blocks.len() > request.max_blocks {
                 return Err(ContextError::BudgetUnsatisfiable);
@@ -382,7 +495,7 @@ impl ContextGraph {
             let Some((index, _, _, _)) = best else {
                 break;
             };
-            let (_, closure, additions, _, _) = prepared.remove(index);
+            let (root, closure, additions, _, _) = prepared.remove(index);
             let mut proposed = blocks.clone();
             append_coalesced(
                 &mut proposed,
@@ -401,6 +514,30 @@ impl ContextGraph {
             {
                 budget_rejected += 1;
                 continue;
+            }
+            if let Some(steps) = trace.as_deref_mut() {
+                let mut signals = Vec::new();
+                if self
+                    .documents
+                    .get(root.id)
+                    .is_some_and(|node| terms.iter().any(|term| node.terms.contains_key(term)))
+                {
+                    signals.push(SelectionSignal::LexicalMatch);
+                }
+                if root.declarations > 0 {
+                    signals.push(SelectionSignal::DeclarationMatch);
+                }
+                if root.semantic {
+                    signals.push(SelectionSignal::SemanticCandidate);
+                }
+                if root.depth > 0 {
+                    signals.push(SelectionSignal::GraphExpansion);
+                }
+                steps.push(SelectionStep {
+                    root_id: root.id.to_owned(),
+                    added_ids: closure.difference(&selected).cloned().collect(),
+                    signals,
+                });
             }
             blocks = proposed;
             selected.extend(closure);

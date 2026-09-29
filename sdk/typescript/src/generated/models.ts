@@ -118,11 +118,11 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patternProperties = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
     const required = new Set(Array.isArray(schema["required"]) ? schema["required"] as string[] : []);
-    for (const name of required) if (!(name in record)) fail(`${path}/${name}`, "required field is missing");
+    for (const name of required) if (!Object.hasOwn(record, name)) fail(`${path}/${name}`, "required field is missing");
     if (typeof schema["minProperties"] === "number" && Object.keys(record).length < schema["minProperties"]) fail(path, "object has too few fields");
     if (typeof schema["maxProperties"] === "number" && Object.keys(record).length > schema["maxProperties"]) fail(path, "object has too many fields");
     for (const [name, child] of Object.entries(record)) {
-      const childSchema = properties[name];
+      const childSchema = Object.hasOwn(properties, name) ? properties[name] : undefined;
       if (childSchema !== undefined) validate(childSchema, child, root, `${path}/${name}`, depth + 1, budget);
       else {
         const matches = Object.entries(patternProperties).filter(([pattern]) => matchesSchemaPattern(pattern, name, path));
@@ -133,24 +133,38 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     }
   }
 }
-function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>): unknown {
+function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>, depth = 0, budget: ValidationBudget = { nodes: 0 }): unknown {
+  if (depth > 64 || ++budget.nodes > 100_000) fail("payload", "payload exceeds nesting or node bounds");
   const reference = schema["$ref"];
   if (typeof reference === "string") {
     const definitions = root["$defs"] as Record<string, Record<string, unknown>>;
-    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root);
+    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root, depth + 1, budget);
   }
   const alternatives = schema["oneOf"] ?? schema["anyOf"];
   if (Array.isArray(alternatives)) {
     for (const alternative of alternatives) {
-      try { validate(alternative as Record<string, unknown>, value, root, "payload"); return coerce(alternative as Record<string, unknown>, value, root); } catch { /* variant probe */ }
+      try {
+        // Canonical CBOR decodes small integers as numbers, including nested
+        // int64/uint64 fields. Probe the normalized branch, not the raw value.
+        const candidate = alternative as Record<string, unknown>;
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
     return value;
   }
   const declared = schema["type"];
   if (Array.isArray(declared)) {
     for (const kind of declared) {
-      try { return coerce({ ...schema, type: kind }, value, root); } catch { /* union probe */ }
+      try {
+        const candidate = { ...schema, type: kind };
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
+    return value;
   }
   if (declared === "integer") {
     const wide = schema["format"] === "int64" || schema["format"] === "uint64";
@@ -159,14 +173,17 @@ function coerce(schema: Record<string, unknown>, value: unknown, root: Record<st
   }
   if (declared === "array" && Array.isArray(value)) {
     const item = schema["items"] as Record<string, unknown> | undefined;
-    return item === undefined ? value : value.map((child) => coerce(item, child, root));
+    return item === undefined ? value : value.map((child) => coerce(item, child, root, depth + 1, budget));
   }
   if ((declared === "object" || "properties" in schema) && typeof value === "object" && value !== null && !Array.isArray(value)) {
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patterns = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
+    const additional = schema["additionalProperties"];
     return Object.fromEntries(Object.entries(value).map(([key, child]) => {
-      const matched = properties[key] ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1];
-      return [key, matched === undefined ? child : coerce(matched, child, root)];
+      const matched = (Object.hasOwn(properties, key) ? properties[key] : undefined)
+        ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1]
+        ?? (typeof additional === "object" && additional !== null ? additional as Record<string, unknown> : undefined);
+      return [key, matched === undefined ? child : coerce(matched, child, root, depth + 1, budget)];
     }));
   }
   return value;

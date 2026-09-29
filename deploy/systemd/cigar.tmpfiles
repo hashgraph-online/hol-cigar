@@ -1,3 +1,4 @@
 d /run/cigar 0750 cigar cigar -
 d /var/lib/cigar 0750 cigar cigar -
+d /var/lib/cigar-effect-checkpoints 0700 cigar cigar -
 d /var/cache/cigar 0750 cigar cigar -

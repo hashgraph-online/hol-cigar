@@ -26,6 +26,31 @@ fn systemd_unit_is_non_root_fail_closed_and_sandbox_compatible()
     assert!(unit.contains("cigard serve --config"));
     assert!(unit.contains("Restart=on-failure"));
     assert!(!unit.contains("Type=notify"));
+    let config = DaemonConfig::from_toml(&workspace_file("deploy/docker/cigard.example.toml")?)?;
+    let checkpoint_directory = config
+        .production
+        .effect_checkpoint_file
+        .parent()
+        .ok_or("checkpoint parent absent")?;
+    let writable = unit
+        .lines()
+        .find_map(|line| line.strip_prefix("ReadWritePaths="))
+        .ok_or("writable directories absent")?;
+    assert!(
+        writable
+            .split_whitespace()
+            .any(|path| checkpoint_directory.starts_with(path))
+    );
+    assert!(!checkpoint_directory.starts_with(&config.state_directory));
+    let tmpfiles = workspace_file("deploy/systemd/cigar.tmpfiles")?;
+    assert!(tmpfiles.lines().any(|line| {
+        let mut fields = line.split_whitespace();
+        fields.next() == Some("d")
+            && fields.next().map(Path::new) == Some(checkpoint_directory)
+            && fields.next() == Some("0700")
+            && fields.next() == Some("cigar")
+            && fields.next() == Some("cigar")
+    }));
     Ok(())
 }
 
@@ -171,6 +196,28 @@ fn shared_kubernetes_profile_separates_runtime_and_migration_authority()
     assert!(deployment.contains("secretName: cigar-shared-runtime"));
     assert!(deployment.contains("secretName: cigar-postgres-tls"));
     assert!(deployment.contains("/prepared-postgres-tls/postgres-ca.crt"));
+    assert!(deployment.contains("secretName: cigar-telemetry-tls"));
+    assert!(
+        deployment
+            .contains("name: raw-telemetry-tls, mountPath: /raw-telemetry-tls, readOnly: true")
+    );
+    assert!(deployment.contains("cp /raw-telemetry-tls/ca.crt /prepared/telemetry-ca.pem"));
+    assert!(
+        deployment
+            .contains("name: prepared-secrets, mountPath: /run/secrets/cigar, readOnly: true")
+    );
+    let configmap: serde_json::Value =
+        yaml_serde::from_str(&workspace_file("deploy/kubernetes/shared/configmap.yaml")?)?;
+    let config = DaemonConfig::from_toml(
+        configmap
+            .pointer("/data/cigard.toml")
+            .and_then(serde_json::Value::as_str)
+            .ok_or("daemon configuration absent")?,
+    )?;
+    assert_eq!(
+        config.telemetry.otlp_ca_certificate_file.as_deref(),
+        Some(Path::new("/run/secrets/cigar/telemetry-ca.pem"))
+    );
     assert!(!deployment.contains("secretName: cigar-shared-migrator"));
     assert!(migration.contains("secretName: cigar-shared-migrator"));
     assert!(migration.contains("secretName: cigar-postgres-tls"));

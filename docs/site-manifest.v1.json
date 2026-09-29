@@ -20,7 +20,7 @@
     "schemas/proto/context_abi.proto", "schemas/vectors/replay-v1.json"
   ],
   "required_pages": [
-    "docs/site/index.md", "docs/guides/quickstart.md", "docs/guides/install.md", "docs/guides/concepts.md",
+    "docs/site/index.md", "docs/guides/local-context.md", "docs/guides/quickstart.md", "docs/guides/install.md", "docs/guides/concepts.md",
     "docs/guides/workflows.md", "docs/guides/handoffs-effects-replay.md", "docs/guides/claude-code.md",
     "docs/guides/deployment.md", "docs/guides/sdks.md",
     "docs/guides/honey-install.md", "docs/guides/honey-0.9.3-upgrade.md", "docs/guides/honey-0.9.4-upgrade.md", "docs/guides/honey-quickstart.md",

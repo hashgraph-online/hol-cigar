@@ -1,70 +1,219 @@
-"""CIGAR v1 Python SDK."""
+"""Local CIGAR context graphs and compatible remote protocol clients.
 
-from typing import Final
+Public exports load on first access so local users do not import remote clients.
+"""
 
-from cigar_sdk.client import AsyncCigarClient, BearerTokenProvider, CigarClient
-from cigar_sdk.context import (
-    LOCAL_CONTEXT_CORE_VERSION,
-    LOCAL_CONTEXT_PROTOCOL,
-    LocalContextError,
-    LocalContextGraph,
-)
-from cigar_sdk.context_types import (
-    LocalCitation,
-    LocalContextDelta,
-    LocalContextLimits,
-    LocalContextRequest,
-    LocalContextResult,
-    LocalContextSnapshot,
-    LocalDocument,
-    LocalEdgeKind,
-    LocalEvidenceBlock,
-    LocalGraphStats,
-    LocalSelectionStats,
-    LocalSourceUpdate,
-    LocalTokenCacheStats,
-)
-from cigar_sdk.digest import apply_context_delta, bundle_id, delta_digest, verify_bundle
-from cigar_sdk.errors import (
-    CigarApiError,
-    CigarError,
-    CigarTimeoutError,
-    CompatibilityError,
-    TransportError,
-    ValidationError,
-)
-from cigar_sdk.generated import models
-from cigar_sdk.generated.operations import OPERATION_COUNT, OPERATIONS, PAYLOAD_TYPES
-from cigar_sdk.idempotency import create_idempotency_key, validate_idempotency_key
-from cigar_sdk.types import (
-    CallOptions,
-    OperationEvent,
-    OperationRequest,
-    OperationResponse,
-    PathParameter,
-    TypedOperationEvent,
-    TypedOperationRequest,
-    TypedOperationResponse,
-)
-from cigar_sdk.workflow_session import (
-    MAX_WORKFLOW_DELTA_CHAIN_LENGTH,
-    MAX_WORKFLOW_REPLAY_CYCLES,
-    WORKFLOW_SESSION_EVENT_NAMES,
-    WorkflowContextCycleIdentity,
-    WorkflowContextPhase,
-    WorkflowContextReplayComparison,
-    WorkflowContextReplayIdentity,
-    WorkflowContextSession,
-    WorkflowDeltaReplayIdentity,
-    WorkflowEffectReplayIdentity,
-    WorkflowQuarantineReason,
-    WorkflowReplayDiffStatus,
-    WorkflowResumeAction,
-    WorkflowSessionError,
-    WorkflowSessionErrorCode,
-)
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from cigar_sdk.broker import (
+        LocalBrokerConnection,
+        LocalBrokerError,
+        LocalContextBroker,
+        LocalContextClient,
+    )
+    from cigar_sdk.broker_types import (
+        LocalBrokerAgentLimits,
+        LocalBrokerAgentQueueLimits,
+        LocalBrokerCapabilities,
+        LocalBrokerConnectionConfig,
+        LocalBrokerContext,
+        LocalBrokerExecutionBinding,
+        LocalBrokerExecutionHandoff,
+        LocalBrokerExecutionReview,
+        LocalBrokerLimits,
+        LocalBrokerProposal,
+        LocalBrokerProposalAdmitted,
+        LocalBrokerProposalPending,
+        LocalBrokerProposalRejected,
+        LocalBrokerProposalStatus,
+        LocalBrokerQueueLimits,
+        LocalBrokerSourceDependency,
+        LocalBrokerSourceProvenance,
+        LocalBrokerSourceReceipt,
+        LocalBrokerSourceRevision,
+        LocalBrokerSourceTransaction,
+        LocalBrokerStorageOptions,
+        LocalBrokerStorageStatus,
+        LocalBrokerSubmission,
+        LocalBrokerTransportLimits,
+    )
+    from cigar_sdk.client import AsyncCigarClient, BearerTokenProvider, CigarClient
+    from cigar_sdk.context import (
+        LOCAL_CONTEXT_CORE_VERSION,
+        LOCAL_CONTEXT_PROTOCOL,
+        LocalContextCapabilities,
+        LocalContextError,
+        LocalContextGraph,
+        LocalContextView,
+        LocalWorkerCapabilities,
+        get_local_context_capabilities,
+    )
+    from cigar_sdk.context_effects import (
+        ContextEffectClient,
+        ContextEffectDispatch,
+        ContextEffectDispatchUncertain,
+        dispatch_context_effect,
+    )
+    from cigar_sdk.context_types import (
+        LocalAnswerAssessment,
+        LocalAnswerClaim,
+        LocalAnswerDraft,
+        LocalAnswerPolicy,
+        LocalCitation,
+        LocalClaimAssessment,
+        LocalClaimReview,
+        LocalContextDelta,
+        LocalContextLimits,
+        LocalContextPrompt,
+        LocalContextRequest,
+        LocalContextResult,
+        LocalContextSnapshot,
+        LocalDocument,
+        LocalEdgeKind,
+        LocalEvidenceBlock,
+        LocalGraphStats,
+        LocalSelectionExplanation,
+        LocalSelectionSignal,
+        LocalSelectionStats,
+        LocalSelectionStep,
+        LocalSourceUpdate,
+        LocalTokenCacheStats,
+        LocalViewAssessment,
+        LocalViewContext,
+        LocalViewHandle,
+        LocalViewResult,
+        LocalViewSpec,
+    )
+    from cigar_sdk.digest import apply_context_delta, bundle_id, delta_digest, verify_bundle
+    from cigar_sdk.errors import (
+        CigarApiError,
+        CigarError,
+        CigarTimeoutError,
+        CompatibilityError,
+        TransportError,
+        ValidationError,
+    )
+    from cigar_sdk.generated import models
+    from cigar_sdk.generated.operations import OPERATION_COUNT, OPERATIONS, PAYLOAD_TYPES
+    from cigar_sdk.idempotency import create_idempotency_key, validate_idempotency_key
+    from cigar_sdk.types import (
+        CallOptions,
+        OperationEvent,
+        OperationRequest,
+        OperationResponse,
+        PathParameter,
+        TypedOperationEvent,
+        TypedOperationRequest,
+        TypedOperationResponse,
+    )
+    from cigar_sdk.workflow_session import (
+        MAX_WORKFLOW_DELTA_CHAIN_LENGTH,
+        MAX_WORKFLOW_REPLAY_CYCLES,
+        WORKFLOW_SESSION_EVENT_NAMES,
+        WorkflowContextCycleIdentity,
+        WorkflowContextPhase,
+        WorkflowContextReplayComparison,
+        WorkflowContextReplayIdentity,
+        WorkflowContextSession,
+        WorkflowDeltaReplayIdentity,
+        WorkflowEffectReplayIdentity,
+        WorkflowQuarantineReason,
+        WorkflowReplayDiffStatus,
+        WorkflowResumeAction,
+        WorkflowSessionError,
+        WorkflowSessionErrorCode,
+    )
 
 CONTEXT_ABI: Final = "cigar.context.v1"
+
+_EXPORTS: Final[dict[str, tuple[str, str | None]]] = {
+    name: (module, None if name == "models" else name)
+    for module, names in (
+        (
+            "cigar_sdk.context_types",
+            "LocalSelectionExplanation LocalSelectionSignal LocalSelectionStep",
+        ),
+        (
+            "cigar_sdk.context_effects",
+            "ContextEffectClient ContextEffectDispatch ContextEffectDispatchUncertain dispatch_context_effect",
+        ),
+        (
+            "cigar_sdk.broker",
+            "LocalBrokerConnection LocalBrokerError LocalContextBroker LocalContextClient",
+        ),
+        (
+            "cigar_sdk.broker_types",
+            "LocalBrokerAgentLimits LocalBrokerAgentQueueLimits LocalBrokerCapabilities "
+            "LocalBrokerConnectionConfig LocalBrokerContext LocalBrokerExecutionBinding "
+            "LocalBrokerExecutionHandoff LocalBrokerExecutionReview LocalBrokerLimits LocalBrokerProposal "
+            "LocalBrokerProposalAdmitted LocalBrokerProposalPending LocalBrokerProposalRejected "
+            "LocalBrokerProposalStatus LocalBrokerQueueLimits LocalBrokerSourceDependency "
+            "LocalBrokerSourceProvenance LocalBrokerSourceReceipt LocalBrokerSourceRevision "
+            "LocalBrokerSourceTransaction LocalBrokerStorageOptions LocalBrokerStorageStatus "
+            "LocalBrokerSubmission LocalBrokerTransportLimits",
+        ),
+        (
+            "cigar_sdk.client",
+            "AsyncCigarClient BearerTokenProvider CigarClient",
+        ),
+        (
+            "cigar_sdk.context",
+            "LOCAL_CONTEXT_CORE_VERSION LOCAL_CONTEXT_PROTOCOL LocalContextCapabilities LocalContextError "
+            "LocalContextGraph LocalContextView LocalWorkerCapabilities",
+        ),
+        (
+            "cigar_sdk.context_types",
+            "LocalViewAssessment LocalViewContext LocalViewHandle LocalViewResult LocalViewSpec",
+        ),
+        (
+            "cigar_sdk.context",
+            "get_local_context_capabilities",
+        ),
+        (
+            "cigar_sdk.context_types",
+            "LocalAnswerAssessment LocalAnswerClaim LocalAnswerDraft LocalAnswerPolicy LocalCitation "
+            "LocalClaimAssessment LocalClaimReview LocalContextDelta LocalContextLimits LocalContextPrompt "
+            "LocalContextRequest LocalContextResult LocalContextSnapshot LocalDocument LocalEdgeKind "
+            "LocalEvidenceBlock LocalGraphStats LocalSelectionStats LocalSourceUpdate LocalTokenCacheStats",
+        ),
+        (
+            "cigar_sdk.digest",
+            "apply_context_delta bundle_id delta_digest verify_bundle",
+        ),
+        (
+            "cigar_sdk.errors",
+            "CigarApiError CigarError CigarTimeoutError CompatibilityError TransportError ValidationError",
+        ),
+        (
+            "cigar_sdk.generated.models",
+            "models",
+        ),
+        (
+            "cigar_sdk.generated.operations",
+            "OPERATION_COUNT OPERATIONS PAYLOAD_TYPES",
+        ),
+        (
+            "cigar_sdk.idempotency",
+            "create_idempotency_key validate_idempotency_key",
+        ),
+        (
+            "cigar_sdk.types",
+            "CallOptions OperationEvent OperationRequest OperationResponse PathParameter "
+            "TypedOperationEvent TypedOperationRequest TypedOperationResponse",
+        ),
+        (
+            "cigar_sdk.workflow_session",
+            "MAX_WORKFLOW_DELTA_CHAIN_LENGTH MAX_WORKFLOW_REPLAY_CYCLES WORKFLOW_SESSION_EVENT_NAMES "
+            "WorkflowContextCycleIdentity WorkflowContextPhase WorkflowContextReplayComparison "
+            "WorkflowContextReplayIdentity WorkflowContextSession WorkflowDeltaReplayIdentity "
+            "WorkflowEffectReplayIdentity WorkflowQuarantineReason WorkflowReplayDiffStatus "
+            "WorkflowResumeAction WorkflowSessionError WorkflowSessionErrorCode",
+        ),
+    )
+    for name in names.split()
+}
 
 __all__ = [
     "CONTEXT_ABI",
@@ -84,21 +233,70 @@ __all__ = [
     "CigarError",
     "CigarTimeoutError",
     "CompatibilityError",
+    "ContextEffectClient",
+    "ContextEffectDispatch",
+    "ContextEffectDispatchUncertain",
+    "LocalAnswerAssessment",
+    "LocalAnswerClaim",
+    "LocalAnswerDraft",
+    "LocalAnswerPolicy",
+    "LocalBrokerAgentLimits",
+    "LocalBrokerAgentQueueLimits",
+    "LocalBrokerCapabilities",
+    "LocalBrokerConnection",
+    "LocalBrokerConnectionConfig",
+    "LocalBrokerContext",
+    "LocalBrokerError",
+    "LocalBrokerExecutionBinding",
+    "LocalBrokerExecutionHandoff",
+    "LocalBrokerExecutionReview",
+    "LocalBrokerLimits",
+    "LocalBrokerProposal",
+    "LocalBrokerProposalAdmitted",
+    "LocalBrokerProposalPending",
+    "LocalBrokerProposalRejected",
+    "LocalBrokerProposalStatus",
+    "LocalBrokerQueueLimits",
+    "LocalBrokerSourceDependency",
+    "LocalBrokerSourceProvenance",
+    "LocalBrokerSourceReceipt",
+    "LocalBrokerSourceRevision",
+    "LocalBrokerSourceTransaction",
+    "LocalBrokerStorageOptions",
+    "LocalBrokerStorageStatus",
+    "LocalBrokerSubmission",
+    "LocalBrokerTransportLimits",
     "LocalCitation",
+    "LocalClaimAssessment",
+    "LocalClaimReview",
+    "LocalContextBroker",
+    "LocalContextCapabilities",
+    "LocalContextClient",
     "LocalContextDelta",
     "LocalContextError",
     "LocalContextGraph",
     "LocalContextLimits",
+    "LocalContextPrompt",
     "LocalContextRequest",
     "LocalContextResult",
     "LocalContextSnapshot",
+    "LocalContextView",
     "LocalDocument",
     "LocalEdgeKind",
     "LocalEvidenceBlock",
     "LocalGraphStats",
+    "LocalSelectionExplanation",
+    "LocalSelectionSignal",
     "LocalSelectionStats",
+    "LocalSelectionStep",
     "LocalSourceUpdate",
     "LocalTokenCacheStats",
+    "LocalViewAssessment",
+    "LocalViewContext",
+    "LocalViewHandle",
+    "LocalViewResult",
+    "LocalViewSpec",
+    "LocalWorkerCapabilities",
     "OperationEvent",
     "OperationRequest",
     "OperationResponse",
@@ -124,7 +322,25 @@ __all__ = [
     "bundle_id",
     "create_idempotency_key",
     "delta_digest",
+    "dispatch_context_effect",
+    "get_local_context_capabilities",
     "models",
     "validate_idempotency_key",
     "verify_bundle",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    target = _EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module, attribute = target
+    # Only literal module names from the fixed _EXPORTS allowlist can reach this import.
+    imported = import_module(module)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
+    value = imported if attribute is None else getattr(imported, attribute)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

@@ -1,0 +1,11 @@
+{
+  "schema": "cigar.broker-authentication-vector.v1",
+  "description": "Public synthetic test key; independently checked with Python hashlib/hmac and Node crypto.",
+  "epoch": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "secret": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "grant_id": "c89c40775757656e5b6a727138a28bff546108afef29615f55745a59f3fdadbb",
+  "client_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+  "server_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+  "server_proof": "9fb4333833761376e345dee19edd13c640a49c9c6582f07a8e33222a99d06afa",
+  "client_proof": "fbc3d97c3ccd4eba614f1354c0b845fdf79a65d8058f321f8cd5147045c29d87"
+}

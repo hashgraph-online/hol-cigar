@@ -11,3 +11,11 @@ exclude-newer = "7 days"
 dev = [
     "pytest==9.0.3",
 ]
+
+# Preserve the release scripts' pre-0.16 Ruff policy explicitly. SDK code has its
+# stronger, independent configuration in sdk/python/pyproject.toml.
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

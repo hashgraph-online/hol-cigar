@@ -8,6 +8,7 @@ Python 3.14. Bundled native packaging is deliberately restricted to macOS ARM64.
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -15,18 +16,37 @@ import platform
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
 from pathlib import Path
 
 from release_lib import reject_evidence_directory
 import context_sdk_inputs
+import context_native_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run_logged(command, *, cwd, env, log, stderr=None):
+    """Keep machine-readable stdout separate from retained diagnostics when needed."""
+    with ExitStack() as streams:
+        output = streams.enter_context(log.open("wb"))
+        errors = (
+            streams.enter_context(stderr.open("wb"))
+            if stderr is not None
+            else subprocess.STDOUT
+        )
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            stdout=output,
+            stderr=errors,
+            timeout=1200,
+        )
 
 
 def main() -> None:
@@ -78,19 +98,18 @@ def main() -> None:
     env["npm_config_cache"] = str(output / "npm-cache")
     records = []
 
-    def run(name, command, cwd=ROOT, extra=None):
+    def run(name, command, cwd=ROOT, extra=None, separate_stderr=False):
         command = [str(part) for part in command]
         started = time.monotonic()
         print(name, flush=True)
-        with (logs / f"{name}.log").open("wb") as log:
-            result = subprocess.run(
-                command,
-                cwd=cwd,
-                env=env | (extra or {}),
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=1200,
-            )
+        stderr = logs / f"{name}.stderr" if separate_stderr else None
+        result = run_logged(
+            command,
+            cwd=cwd,
+            env=env | (extra or {}),
+            log=logs / f"{name}.log",
+            stderr=stderr,
+        )
         record = {
             "name": name,
             "argv": command,
@@ -99,6 +118,8 @@ def main() -> None:
             "elapsed_seconds": time.monotonic() - started,
             "log_sha256": sha(logs / f"{name}.log"),
         }
+        if stderr is not None:
+            record["stderr_sha256"] = sha(stderr)
         records.append(record)
         (output / "checks.json").write_text(json.dumps(records, indent=2) + "\n")
         if result.returncode:
@@ -120,7 +141,7 @@ def main() -> None:
             "cigar-context",
             "--all-targets",
             "--features",
-            "bpe",
+            "bpe,broker-persistence",
             "--",
             "-D",
             "warnings",
@@ -135,7 +156,7 @@ def main() -> None:
             "-p",
             "cigar-context",
             "--features",
-            "bpe",
+            "bpe,broker-persistence",
             "--",
             "--test-threads=1",
         ],
@@ -160,6 +181,8 @@ def main() -> None:
             "package",
             "--locked",
             "-p",
+            "cigar-windows-ipc",
+            "-p",
             "cigar-context",
             *(["--allow-dirty"] if args.allow_dirty else []),
             "--no-verify",
@@ -167,20 +190,36 @@ def main() -> None:
     )
     archive = args.target_dir / f"package/cigar-context-{core_version}.crate"
     shutil.copy2(archive, artifacts / archive.name)
+    # The historical handoff keeps its original archive inventory. The complete
+    # distribution pipeline separately ships and verifies both native crates.
+    sources = output / "native-source-archives"
+    sources.mkdir()
+    versions = context_native_sources.versions(ROOT)
+    for name in sorted(context_native_sources.archive_names(versions)):
+        shutil.copyfile(args.target_dir / "package" / name, sources / name)
     native_source = output / "native-source"
-    native_source.mkdir()
-    with tarfile.open(archive) as packed:
-        packed.extractall(native_source, filter="data")
-    native_root = native_source / f"cigar-context-{core_version}"
+    crates, source_closure = context_native_sources.prepare(
+        sources, native_source, versions
+    )
+    native_root = crates[context_native_sources.CONTEXT]
     # Debug/panic source paths must not depend on an independent builder's staging path.
     # The two-host release gate below still compares the actual finished bytes.
     env["RUSTFLAGS"] = (
         f"--remap-path-prefix={native_root}=/cigar/native "
+        f"--remap-path-prefix={crates[context_native_sources.ADAPTER]}=/cigar/windows-ipc "
         f"--remap-path-prefix={ROOT}=/cigar/source"
     )
     run(
         "native-build-from-package",
-        [args.cargo, "build", "--locked", "--release", "--features", "bpe", "--bins"],
+        [
+            args.cargo,
+            "build",
+            "--locked",
+            "--release",
+            "--features",
+            "bpe,broker-persistence",
+            "--bins",
+        ],
         native_root,
     )
     worker = args.target_dir / "release/cigar-context-worker"
@@ -194,6 +233,7 @@ def main() -> None:
         "target": "aarch64-apple-darwin",
         "sha256": sha(worker),
         "source_archive_sha256": sha(archive),
+        "source_archives_sha256": source_closure["archives"],
     }
     native = output / "native/darwin-arm64"
     native.mkdir(parents=True)
@@ -209,9 +249,10 @@ def main() -> None:
                 "--format-version",
                 "1",
                 "--features",
-                "bpe",
+                "bpe,broker-persistence",
             ],
             native_root,
+            separate_stderr=True,
         )
     )
     notices = [
@@ -282,10 +323,16 @@ def main() -> None:
         "src",
         "tests",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE",
         "NOTICE",
         "pyproject.toml",
         "hatch_build.py",
+        "AGENT_GUIDE.md",
+        "BROKER_GUIDE.md",
+        "SELECTION_EXPLANATIONS.md",
+        "SYNTAX_INGESTION.md",
+        "llms.txt",
     ]:
         source = ROOT / "sdk/python" / name
         if source.is_dir():
@@ -299,7 +346,19 @@ def main() -> None:
     shutil.copytree(native.parent, py_stage / "src/cigar_sdk/_native")
     ts_stage = output / "typescript"
     ts_stage.mkdir()
-    for name in ["dist", "fixtures", "README.md", "LICENSE", "NOTICE", "package.json"]:
+    for name in [
+        "dist",
+        "fixtures",
+        "README.md",
+        "AGENT_GUIDE.md",
+        "BROKER_GUIDE.md",
+        "SELECTION_EXPLANATIONS.md",
+        "SYNTAX_INGESTION.md",
+        "llms.txt",
+        "LICENSE",
+        "NOTICE",
+        "package.json",
+    ]:
         source = ROOT / "sdk/typescript" / name
         if source.is_dir():
             shutil.copytree(

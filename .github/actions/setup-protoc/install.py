@@ -1,0 +1,51 @@
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+import urllib.request
+import zipfile
+
+# Digests from the official protocolbuffers/protobuf v33.2 release.
+archives = {
+    ("macOS", "ARM64"): (
+        "osx-aarch_64",
+        "5be1427127788c9f7dd7d606c3e69843dd3587327dea993917ffcb77e7234b44",
+    ),
+    ("Linux", "X64"): (
+        "linux-x86_64",
+        "b24b53f87c151bfd48b112fe4c3a6e6574e5198874f38036aff41df3456b8caf",
+    ),
+    ("Windows", "X64"): (
+        "win64",
+        "376770cd4073beb63db56fdd339260edb9957b3c4472e05a75f5f9ec8f98d8f5",
+    ),
+}
+platform, expected = archives[(os.environ["RUNNER_OS"], os.environ["RUNNER_ARCH"])]
+root = Path(os.environ["RUNNER_TEMP"]) / "protoc-33.2"
+archive = root.with_name(f"protoc-33.2-{platform}.zip")
+if root.exists() or archive.exists():
+    raise SystemExit("protoc staging paths already exist")
+url = f"https://github.com/protocolbuffers/protobuf/releases/download/v33.2/{archive.name}"
+# The URL uses a fixed HTTPS GitHub release and one of three literal archive names.
+# The archive must match its pinned SHA-256 before it is extracted or executed.
+with urllib.request.urlopen(url, timeout=60) as response, archive.open("xb") as output:  # fmt: skip # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    payload = response.read(32 * 1024 * 1024 + 1)
+    if (
+        len(payload) > 32 * 1024 * 1024
+        or hashlib.sha256(payload).hexdigest() != expected
+    ):
+        raise SystemExit("protoc archive digest mismatch")
+    output.write(payload)
+root.mkdir(mode=0o700)
+with zipfile.ZipFile(archive) as package:
+    package.extractall(root)
+binary = root / "bin" / ("protoc.exe" if os.name == "nt" else "protoc")
+if os.name != "nt":
+    binary.chmod(0o755)
+if (
+    subprocess.check_output([str(binary), "--version"], text=True).strip()
+    != "libprotoc 33.2"
+):
+    raise SystemExit("unexpected protoc version")
+with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
+    output.write(str(binary.parent) + "\n")

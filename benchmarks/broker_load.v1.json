@@ -1,0 +1,32 @@
+{
+  "schema": "cigar.broker-load-configuration.v1",
+  "agents": [1, 5, 12],
+  "runtimes": ["python", "node", "mixed"],
+  "storage": ["memory", "sqlite"],
+  "parallelism": [1, 4],
+  "duration_ms": 3000,
+  "window_clock": "monotonic",
+  "start_delay_ms": 1000,
+  "max_cycles_per_agent": 10000,
+  "warmup_cycles_per_agent": 2,
+  "call_timeout_ms": 5000,
+  "corpus": {
+    "shared_documents": 128,
+    "private_documents": 64,
+    "pair_documents": 64,
+    "document_text_bytes": 256
+  },
+  "request": {"query": "evidence anchor", "max_tokens": 1024, "max_blocks": 3},
+  "gates": {
+    "max_start_skew_ms": 100,
+    "max_compile_p95_ms": 250,
+    "max_compile_p99_ms": 900,
+    "min_cycles_per_second_per_agent": 5,
+    "min_same_runtime_completion_ratio": 0.8,
+    "min_same_runtime_jain_fairness": 0.95,
+    "unexpected_failures": 0
+  },
+  "model_mode": "none",
+  "evidence_class": "authored-invariant-and-source-load",
+  "network_scope": "explicit local broker only; no OS-denial claim"
+}

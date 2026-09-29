@@ -2606,6 +2606,8 @@ pub fn register_effect_replay_handlers<R: Repository + 'static>(
 
 #[cfg(test)]
 mod tests {
+    mod context_effect_sdk;
+
     use super::{
         ApplicationIdError, ApplicationIdGenerator, DurableLiveReplayAuthorizationRepository,
         EffectDispatchGate, EffectDispatchQueue, EffectDispatchQueueError, EffectPolicyAction,

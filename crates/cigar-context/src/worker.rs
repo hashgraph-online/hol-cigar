@@ -1,11 +1,16 @@
 //! Versioned, bounded stdio bridge. One caller-owned graph/cache per process.
 use cigar_context::{
-    ContextDelta, ContextError, ContextGraph, ContextRequest, ContextSnapshot, Document, EdgeKind,
-    GraphLimits, O200kTokenizer, TokenCacheLimits, TokenCounter,
+    AnswerDraft, AnswerPolicy, ClaimReview, ContextDelta, ContextError, ContextGraph,
+    ContextPrompt, ContextRequest, ContextSnapshot, ContextView, ContextViewHandle,
+    ContextViewSpec, ContextViews, Document, EdgeKind, GraphLimits, O200kTokenizer,
+    TokenCacheLimits, TokenCounter,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::{BufRead, Read, Write};
+
+#[cfg(feature = "broker")]
+mod broker_worker;
 
 const PROTOCOL: &str = "cigar.context-worker.v1";
 const MAX_FRAME: usize = 32 * 1024 * 1024;
@@ -54,13 +59,44 @@ enum Command {
     Compile {
         request: ContextRequest,
     },
+    Explain {
+        request: ContextRequest,
+        snapshot: ContextSnapshot,
+    },
+    ReviewKeys {
+        draft: AnswerDraft,
+    },
+    CheckAnswer {
+        request: ContextRequest,
+        draft: AnswerDraft,
+        reviews: Vec<ClaimReview>,
+        #[serde(default)]
+        policy: AnswerPolicy,
+    },
     Chunks {
         document: Document,
         max_lines: usize,
         overlap_lines: usize,
     },
+    ChunksAtLines {
+        document: Document,
+        starts: Vec<usize>,
+    },
     Verify {
         snapshot: ContextSnapshot,
+    },
+    PromptView {
+        snapshot: ContextSnapshot,
+        max_tokens: usize,
+    },
+    VerifyPrompt {
+        snapshot: ContextSnapshot,
+        prompt: ContextPrompt,
+    },
+    ResolveCitation {
+        snapshot: ContextSnapshot,
+        prompt: ContextPrompt,
+        reference: String,
     },
     Delta {
         base: ContextSnapshot,
@@ -72,6 +108,33 @@ enum Command {
     },
     Stats {},
     ClearCache {},
+    DefineView {
+        spec: ContextViewSpec,
+    },
+    RevokeView {
+        view_id: String,
+    },
+    CompileView {
+        view: ContextViewHandle,
+        request: ContextRequest,
+    },
+    ExplainView {
+        view: ContextViewHandle,
+        context: ContextView,
+    },
+    ReplaceViewSource {
+        view: ContextViewHandle,
+        source: String,
+        documents: Vec<Document>,
+    },
+    CheckViewAnswer {
+        view: ContextViewHandle,
+        context: ContextView,
+        draft: AnswerDraft,
+        reviews: Vec<ClaimReview>,
+        #[serde(default)]
+        policy: AnswerPolicy,
+    },
 }
 
 #[derive(Deserialize)]
@@ -84,6 +147,7 @@ struct Request {
 struct Session {
     graph: ContextGraph,
     tokenizer: O200kTokenizer,
+    views: ContextViews,
 }
 
 impl Session {
@@ -108,7 +172,11 @@ impl Session {
             max_entries: limits.cache_entries.unwrap_or(cache.max_entries),
             max_text_bytes: limits.cache_text_bytes.unwrap_or(cache.max_text_bytes),
         })?;
-        Ok(Self { graph, tokenizer })
+        Ok(Self {
+            graph,
+            tokenizer,
+            views: ContextViews::default(),
+        })
     }
 
     fn rendered(&self, snapshot: ContextSnapshot) -> Result<Value, ContextError> {
@@ -129,12 +197,50 @@ impl Session {
             Command::Compile { request } => {
                 self.rendered(self.graph.compile(&request, &self.tokenizer)?)
             }
+            Command::Explain { request, snapshot } => Ok(json!(self.graph.explain(
+                &request,
+                &snapshot,
+                &self.tokenizer
+            )?)),
+            Command::ReviewKeys { draft } => Ok(json!(draft.review_keys()?)),
+            Command::CheckAnswer {
+                request,
+                draft,
+                reviews,
+                policy,
+            } => Ok(json!(self.graph.check_answer(
+                &request,
+                &draft,
+                &reviews,
+                &policy,
+                &self.tokenizer
+            )?)),
             Command::Chunks {
                 document,
                 max_lines,
                 overlap_lines,
             } => Ok(json!(document.chunks(max_lines, overlap_lines)?)),
+            Command::ChunksAtLines { document, starts } => {
+                Ok(json!(document.chunks_at_lines(&starts)?))
+            }
             Command::Verify { snapshot } => self.rendered(snapshot),
+            Command::PromptView {
+                snapshot,
+                max_tokens,
+            } => Ok(json!(snapshot.prompt_view(max_tokens, &self.tokenizer)?)),
+            Command::VerifyPrompt { snapshot, prompt } => {
+                prompt.verify(&snapshot, &self.tokenizer)?;
+                Ok(json!(prompt))
+            }
+            Command::ResolveCitation {
+                snapshot,
+                prompt,
+                reference,
+            } => Ok(json!(prompt.resolve(
+                &reference,
+                &snapshot,
+                &self.tokenizer
+            )?)),
             Command::Delta { base, target } => {
                 Ok(json!(target.delta_from(&base, &self.tokenizer)?))
             }
@@ -153,6 +259,45 @@ impl Session {
                 self.tokenizer.clear_cache()?;
                 Ok(Value::Null)
             }
+            Command::DefineView { spec } => Ok(json!(self.views.define(spec)?)),
+            Command::RevokeView { view_id } => Ok(json!(self.views.revoke(&view_id))),
+            Command::CompileView { view, request } => {
+                let context = self
+                    .views
+                    .compile(&self.graph, &view, &request, &self.tokenizer)?;
+                Ok(json!({"rendered": context.snapshot().render(), "context": context}))
+            }
+            Command::ExplainView { view, context } => Ok(json!(self.views.explain(
+                &self.graph,
+                &view,
+                &context,
+                &self.tokenizer,
+            )?)),
+            Command::ReplaceViewSource {
+                view,
+                source,
+                documents,
+            } => Ok(json!(self.views.replace_source(
+                &mut self.graph,
+                &view,
+                &source,
+                documents
+            )?)),
+            Command::CheckViewAnswer {
+                view,
+                context,
+                draft,
+                reviews,
+                policy,
+            } => Ok(json!(self.views.check_answer(
+                &self.graph,
+                &view,
+                &context,
+                &draft,
+                &reviews,
+                &policy,
+                &self.tokenizer
+            )?)),
         }
     }
 }
@@ -164,8 +309,11 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
     if let Command::Init { domain, limits } = command {
         let value = Session::new(domain, limits)?;
         let reply = json!({"protocol": PROTOCOL, "core_version": env!("CARGO_PKG_VERSION"),
-            "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
-            "max_response_bytes": MAX_RESPONSE});
+        "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
+        "max_response_bytes": MAX_RESPONSE, "capabilities": [
+            "context_graph.v1", "source_replace.v1", "snapshot_integrity.v1",
+            "answer_review.v1", "context_views.v1", "selection_explanation.v1", "document_boundaries.v1"
+        ]});
         *session = Some(value);
         Ok(reply)
     } else {
@@ -211,6 +359,10 @@ fn run(input: &mut impl BufRead, output: &mut impl Write) -> std::io::Result<()>
 
 fn main() -> std::io::Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    #[cfg(feature = "broker")]
+    if args.as_slice() == ["--broker"] {
+        return broker_worker::run();
+    }
     if args.as_slice() == ["--version"] {
         println!(
             "cigar-context-worker {} {PROTOCOL}",

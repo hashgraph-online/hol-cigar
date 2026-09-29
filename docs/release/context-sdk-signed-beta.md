@@ -2,7 +2,7 @@
 
 Current implementation: genuine beta identities are Python `0.10.0b1`, npm and
 Rust core `0.10.0-beta.1`. The public-release path is now
-[`context-sdk-beta.yml`](../../.github/workflows/context-sdk-beta.yml), using two
+[`context-sdk-beta.yml`](https://github.com/hashgraph-online/hol-cigar/blob/v0.10.0-beta.1/.github/workflows/context-sdk-beta.yml), using two
 fresh hosted builders, the existing qualification tests, OS-enforced offline
 oracles, SPDX/CycloneDX runtime inventories, and GitHub/Sigstore provenance.
 See [beta release notes and verification](context-sdk-beta-notes.md) for the exact
@@ -128,5 +128,5 @@ also reject optimized Python (`-O`) so assertions cannot silently disable their
 qualification checks.
 
 See [reproducibility and signing](reproducibility-signing.md) for the full
-signing/trust policy, and [the SDK RC report](../../reports/cigar-0.10.0-sdk-rc.md)
+signing/trust policy, and [the SDK RC report](https://github.com/hashgraph-online/hol-cigar/blob/v0.10.0-beta.1/reports/cigar-0.10.0-sdk-rc.md)
 for the retained functionality and compatibility measurements.

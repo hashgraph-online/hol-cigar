@@ -87,6 +87,16 @@ pub struct ContextSnapshot {
 }
 
 impl ContextSnapshot {
+    // Scoped views may reuse reviews across unrelated global revisions, but never
+    // across a domain, scoped policy/content epoch, tokenizer or evidence change.
+    pub(crate) fn same_view_evidence(&self, other: &Self) -> bool {
+        self.domain == other.domain
+            && self.policy_revision == other.policy_revision
+            && self.tokenizer == other.tokenizer
+            && self.blocks == other.blocks
+            && self.stats == other.stats
+    }
+
     pub(crate) fn seal(
         domain: &str,
         policy: &str,

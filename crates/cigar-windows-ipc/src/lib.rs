@@ -15,8 +15,11 @@ mod windows;
 
 #[cfg(windows)]
 pub use windows::{
-    create_or_validate_owner_only_directory, create_owner_only_credential_file,
-    create_user_only_named_pipe, file_owner_sid, open_or_create_owner_only_lock_file,
+    PrivateStorageDirectory, StorageFileIdentity, create_or_validate_owner_only_directory,
+    create_owner_only_credential_file, file_owner_sid, open_or_create_owner_only_lock_file,
     open_owner_only_credential_file, replace_owner_only_file_write_through,
     validate_owner_only_directory,
 };
+
+#[cfg(all(windows, feature = "named-pipe"))]
+pub use windows::create_user_only_named_pipe;

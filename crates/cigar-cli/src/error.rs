@@ -213,6 +213,16 @@ impl CliError {
     }
 
     #[cfg(feature = "full")]
+    pub(crate) const fn unsupported_active_store() -> Self {
+        Self::new(
+            "CLI_UNSUPPORTED_SURFACE",
+            "this administrative operation does not support the selected active storage format",
+            "use compaction status or integrity deep for v5 inspection; v5 backup and blob GC need a v5-aware implementation",
+            69,
+        )
+    }
+
+    #[cfg(feature = "full")]
     pub(crate) const fn state_unavailable() -> Self {
         Self::new(
             "CLI_STATE_UNAVAILABLE",

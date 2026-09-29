@@ -26,6 +26,9 @@ class ReleaseContractTests(unittest.TestCase):
                 "Homepage, https://hol.org",
                 "Repository, https://github.com/hashgraph-online/hol-cigar",
                 "Issues, https://github.com/hashgraph-online/hol-cigar/issues",
+                "Documentation, https://github.com/hashgraph-online/hol-cigar/blob/main/sdk/LOCAL_CONTEXT_GUIDE.md",
+                "Changelog, https://github.com/hashgraph-online/hol-cigar/blob/main/sdk/python/CHANGELOG.md",
+                "Security, https://github.com/hashgraph-online/hol-cigar/security/policy",
             ],
         )
 

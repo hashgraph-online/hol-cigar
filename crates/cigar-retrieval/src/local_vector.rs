@@ -44,6 +44,7 @@ impl LocalVectorDistanceMetric {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub(crate) fn from_identifier(value: &str) -> Option<Self> {
         match value {
             "squared-euclidean-v1" => Some(Self::SquaredEuclideanV1),
@@ -67,6 +68,7 @@ impl LocalVectorQuantization {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub(crate) fn from_identifier(value: &str) -> Option<Self> {
         match value {
             "symmetric-int8-minus127-plus127-v1" => Some(Self::SymmetricInt8V1),
@@ -174,6 +176,7 @@ impl LocalVectorConfiguration {
         &self.parameters.index_generation_id
     }
 
+    #[cfg(target_os = "macos")]
     pub(crate) const fn parameters(&self) -> &LocalVectorParameters {
         &self.parameters
     }
@@ -361,10 +364,12 @@ impl SealedLocalVectorAdapter {
         })
     }
 
+    #[cfg(target_os = "macos")]
     pub(crate) const fn configuration(&self) -> &LocalVectorConfiguration {
         &self.configuration
     }
 
+    #[cfg(target_os = "macos")]
     pub(crate) const fn vectors(&self) -> &BTreeMap<VersionId, ProcessorApprovedVector> {
         &self.vectors
     }

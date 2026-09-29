@@ -167,7 +167,7 @@
         },
         {
           "name": "rustls-webpki",
-          "version": "0.103.13"
+          "version": "0.103.15"
         }
       ]
     },

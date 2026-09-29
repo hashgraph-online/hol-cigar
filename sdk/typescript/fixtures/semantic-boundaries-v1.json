@@ -1,0 +1,63 @@
+{
+  "schema_version": "cigar.semantic-boundaries.v1",
+  "representation_receipts": [
+    {
+      "representation": "exact",
+      "receipt": false,
+      "valid": true
+    },
+    {
+      "representation": "redacted",
+      "receipt": false,
+      "valid": true
+    },
+    {
+      "representation": "extracted",
+      "receipt": true,
+      "valid": true
+    },
+    {
+      "representation": "summarized",
+      "receipt": true,
+      "valid": true
+    },
+    {
+      "representation": "exact",
+      "receipt": true,
+      "valid": false
+    },
+    {
+      "representation": "redacted",
+      "receipt": true,
+      "valid": false
+    },
+    {
+      "representation": "extracted",
+      "receipt": false,
+      "valid": false
+    },
+    {
+      "representation": "summarized",
+      "receipt": false,
+      "valid": false
+    }
+  ],
+  "operation_map": {
+    "__proto__": {
+      "type": "text",
+      "value": "preserved"
+    },
+    "constructor": {
+      "type": "integer",
+      "value": 7
+    },
+    "toString": {
+      "type": "boolean",
+      "value": true
+    },
+    "hasOwnProperty": {
+      "type": "text",
+      "value": "ordinary data"
+    }
+  }
+}

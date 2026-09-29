@@ -1,0 +1,45 @@
+{
+  "schema": "cigar.committed-soak-evidence.v1",
+  "run": "broker-soak-24h-02",
+  "runtime_source_commit": "a616c860013effe0a1eda6aa7105d0f37bec9946",
+  "published_release_commit": "830f936742088a7e39c5b5dd666e2f5b02415fde",
+  "files": {
+    "result.json": {
+      "bytes": 809,
+      "sha256": "801b4c969d1d6988892bb0d5f00a81e90f7dc3bb9e7cbbd38212c9e35daebbfc"
+    },
+    "supervisor-result.json": {
+      "bytes": 851,
+      "sha256": "0a2837000d1f99796ad754f3aaed552cb13fa9132bce2b6684e3698ee876bf7d"
+    },
+    "plan.json": {
+      "bytes": 20321,
+      "sha256": "4c3ba22d32e0e4b6d20ea5b96b9fd3a42ffbcbb6280c6f55796e8819def9bfb9"
+    },
+    "independent-replay.json": {
+      "bytes": 2589,
+      "sha256": "956ed712b43a850d55455cd2ef8167606bbd61f1188a124e709f3fad66230ef2"
+    },
+    "statistics.json": {
+      "bytes": 53915,
+      "sha256": "8c4963b95de3852a418bed00357a64abd9bd1e144e3d69afb99a5d53b217ed7b"
+    },
+    "installed-inputs.json": {
+      "bytes": 1035,
+      "sha256": "73dbc26c4c1a8bbac033da2062ac22b3b5350d5596fbcf9cbe1334973b56af7f"
+    }
+  },
+  "raw_transcript": {
+    "file": "observations.jsonl",
+    "bytes": 310987358,
+    "records": 91625,
+    "sha256": "31f792fb5e6185674140defc4a5d74a507325dcad4631ab17abf490ddb623f87",
+    "retention": "Retained with the original broker-soak-24h-02 evidence outside Git; full raw transcript is not embedded in this compact repository receipt."
+  },
+  "limitations": [
+    "Local macOS ARM64 fixed-cadence study; no model calls.",
+    "Node client RSS grew through the run; aggregate sampled RSS remained below the frozen 2 GiB cap.",
+    "Worker was restarted hourly; clients remained alive throughout.",
+    "Published archives and original test outputs remain unchanged."
+  ]
+}

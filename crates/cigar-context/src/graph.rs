@@ -23,6 +23,31 @@ const fn first_line() -> usize {
 }
 
 impl Document {
+    pub(crate) fn validate_shape(&self) -> Result<(), ContextError> {
+        if !valid_id(&self.id)
+            || self.source.is_empty()
+            || self.source.len() > 2048
+            || self.source.chars().any(char::is_control)
+            || self.text.trim().is_empty()
+            || self.start_line == 0
+        {
+            return Err(ContextError::InvalidInput);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_bounds(&self, max_document_bytes: usize) -> Result<(), ContextError> {
+        if self.text.len() > max_document_bytes
+            || self
+                .start_line
+                .checked_add(self.text.lines().count().saturating_sub(1))
+                .is_none()
+        {
+            return Err(ContextError::LimitExceeded);
+        }
+        Ok(())
+    }
+
     /// Constructs an input document. The graph validates bounds before indexing.
     pub fn new(id: impl Into<String>, source: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
@@ -136,7 +161,9 @@ impl Default for GraphLimits {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct IndexedDocument {
+    pub slot: usize,
     pub document: Document,
     pub terms: BTreeMap<String, IndexedTerm>,
     pub digest: String,
@@ -144,6 +171,7 @@ pub(crate) struct IndexedDocument {
     pub declarations: BTreeSet<String>,
 }
 
+#[derive(Clone)]
 pub(crate) struct IndexedTerm {
     pub count: u8,
     // None encodes the common line-zero occurrence (or no text occurrence when !in_text).
@@ -153,6 +181,7 @@ pub(crate) struct IndexedTerm {
     pub in_source: bool,
 }
 
+#[derive(Clone)]
 enum LinePosting {
     Single(usize),
     Multiple(Vec<usize>),
@@ -240,17 +269,64 @@ pub struct SourceUpdate {
 pub struct ContextGraph {
     pub(crate) domain: String,
     pub(crate) limits: GraphLimits,
-    pub(crate) documents: BTreeMap<String, IndexedDocument>,
-    // Store the saturated frequency beside each ID, avoiding random document lookups per term.
-    pub(crate) postings: BTreeMap<String, BTreeMap<Arc<str>, u8>>,
+    pub(crate) documents: BTreeMap<String, Arc<IndexedDocument>>,
+    // Reusable slots let broad queries accumulate exact scores without hashing source IDs.
+    // Slots never escape the graph or participate in a snapshot identity.
+    pub(crate) slots: Vec<Option<Arc<IndexedDocument>>>,
+    free_slots: Vec<usize>,
+    pub(crate) postings: BTreeMap<String, BTreeMap<Arc<str>, Posting>>,
     pub(crate) edges: BTreeMap<String, BTreeSet<(EdgeKind, String)>>,
     pub(crate) revision: u64,
-    sources: BTreeMap<String, BTreeSet<String>>,
+    pub(crate) sources: BTreeMap<String, BTreeSet<String>>,
     bytes: usize,
     edge_count: usize,
 }
 
+pub(crate) struct Posting {
+    pub slot: usize,
+    pub count: u8,
+}
+
 impl ContextGraph {
+    /// Enumerate the exact live authorization intersection in canonical ID order.
+    /// Sparse scopes use direct lookups; dense scopes merge the two ordered trees
+    /// instead of repeating O(log N) document lookups for every authorized ID.
+    /// This caches no authority or graph state and admits no absent/denied IDs.
+    pub(crate) fn authorized_documents<'a>(
+        &'a self,
+        ids: &'a BTreeSet<String>,
+    ) -> impl Iterator<Item = (&'a String, &'a Arc<IndexedDocument>)> {
+        let dense = ids.len() > self.documents.len() / 8;
+        let mut wanted = ids.iter().peekable();
+        let mut documents = self.documents.iter().peekable();
+        std::iter::from_fn(move || {
+            if !dense {
+                for id in wanted.by_ref() {
+                    if let Some(entry) = self.documents.get_key_value(id) {
+                        return Some(entry);
+                    }
+                }
+                return None;
+            }
+            loop {
+                let (id, _) = documents.peek()?;
+                let allowed = wanted.peek()?;
+                match id.as_str().cmp(allowed.as_str()) {
+                    std::cmp::Ordering::Less => {
+                        documents.next();
+                    }
+                    std::cmp::Ordering::Greater => {
+                        wanted.next();
+                    }
+                    std::cmp::Ordering::Equal => {
+                        wanted.next();
+                        return documents.next();
+                    }
+                }
+            }
+        })
+    }
+
     /// Creates an empty graph. The domain must identify the application's privacy boundary.
     pub fn new(domain: impl Into<String>, limits: GraphLimits) -> Result<Self, ContextError> {
         let domain = domain.into();
@@ -268,6 +344,8 @@ impl ContextGraph {
             domain,
             limits,
             documents: BTreeMap::new(),
+            slots: Vec::new(),
+            free_slots: Vec::new(),
             postings: BTreeMap::new(),
             edges: BTreeMap::new(),
             revision: 0,
@@ -297,15 +375,7 @@ impl ContextGraph {
 
     /// Inserts or replaces one source and updates only its term postings. Returns whether changed.
     pub fn upsert(&mut self, document: Document) -> Result<bool, ContextError> {
-        if !valid_id(&document.id)
-            || document.source.is_empty()
-            || document.source.len() > 2048
-            || document.source.chars().any(char::is_control)
-            || document.text.trim().is_empty()
-            || document.start_line == 0
-        {
-            return Err(ContextError::InvalidInput);
-        }
+        document.validate_shape()?;
         let old = self.documents.get(&document.id);
         if old.is_some_and(|value| value.document == document) {
             return Ok(false);
@@ -321,13 +391,7 @@ impl ContextGraph {
         {
             return Err(ContextError::LimitExceeded);
         }
-        if document
-            .start_line
-            .checked_add(document.text.lines().count().saturating_sub(1))
-            .is_none()
-        {
-            return Err(ContextError::LimitExceeded);
-        }
+        document.validate_bounds(self.limits.max_document_bytes)?;
         let revision = self
             .revision
             .checked_add(1)
@@ -349,27 +413,14 @@ impl ContextGraph {
             value.in_source = true;
         }
         self.unindex(&document.id);
-        self.sources
-            .entry(document.source.clone())
-            .or_default()
-            .insert(document.id.clone());
-        let posting_id: Arc<str> = Arc::from(document.id.as_str());
-        for (term, value) in &terms {
-            self.postings
-                .entry(term.clone())
-                .or_default()
-                .insert(Arc::clone(&posting_id), value.count);
-        }
-        self.documents.insert(
-            document.id.clone(),
-            IndexedDocument {
-                document,
-                terms,
-                digest: content_digest,
-                text_digest,
-                declarations,
-            },
-        );
+        self.index(IndexedDocument {
+            slot: 0,
+            document,
+            terms,
+            digest: content_digest,
+            text_digest,
+            declarations,
+        });
         self.bytes = bytes;
         self.revision = revision;
         Ok(true)
@@ -393,25 +444,32 @@ impl ContextGraph {
         }
         let mut staged = Self::new(self.domain.clone(), self.limits)?;
         let mut result = SourceUpdate::default();
+        let mut incoming = BTreeSet::new();
+        let mut retained = BTreeSet::new();
+        let mut incoming_bytes = 0_usize;
         for document in documents {
-            if document.source != source || staged.documents.contains_key(&document.id) {
+            if document.source != source || !incoming.insert(document.id.clone()) {
                 return Err(ContextError::InvalidInput);
             }
+            incoming_bytes = incoming_bytes
+                .checked_add(document.text.len())
+                .ok_or(ContextError::LimitExceeded)?;
             match self.documents.get(&document.id) {
                 Some(old) if old.document.source != source => {
                     return Err(ContextError::InvalidInput);
                 }
-                Some(old) if old.document == document => result.unchanged += 1,
+                Some(old) if old.document == document => {
+                    result.unchanged += 1;
+                    retained.insert(document.id);
+                    continue;
+                }
                 Some(_) => result.replaced += 1,
                 None => result.inserted += 1,
             }
             staged.upsert(document)?;
         }
         let old_ids = self.sources.get(source).cloned().unwrap_or_default();
-        result.removed = old_ids
-            .iter()
-            .filter(|id| !staged.documents.contains_key(*id))
-            .count();
+        result.removed = old_ids.iter().filter(|id| !incoming.contains(*id)).count();
         if result.inserted + result.replaced + result.removed == 0 {
             result.revision = self.revision;
             return Ok(result);
@@ -424,9 +482,9 @@ impl ContextGraph {
         let bytes = self
             .bytes
             .checked_sub(removed_bytes)
-            .and_then(|v| v.checked_add(staged.bytes))
+            .and_then(|v| v.checked_add(incoming_bytes))
             .ok_or(ContextError::LimitExceeded)?;
-        let count = self.len() - old_ids.len() + staged.len();
+        let count = self.len() - old_ids.len() + incoming.len();
         if bytes > self.limits.max_total_bytes || count > self.limits.max_documents {
             return Err(ContextError::LimitExceeded);
         }
@@ -437,14 +495,16 @@ impl ContextGraph {
         // No fallible operations after this point. The temporary index bounds staging work and
         // leaves the live graph unchanged on all validation/limit failures.
         for id in old_ids {
-            self.unindex(&id);
-            self.documents.remove(&id);
+            if !retained.contains(&id) {
+                self.unindex(&id);
+            }
         }
-        for (term, entries) in staged.postings {
-            self.postings.entry(term).or_default().extend(entries);
+        // Release the staging slot references before moving its immutable nodes. Live slots
+        // are assigned here, so a staged ordinal cannot refer to an unrelated live document.
+        drop(staged.slots);
+        for (_, node) in staged.documents {
+            self.index(Arc::unwrap_or_clone(node));
         }
-        self.sources.extend(staged.sources);
-        self.documents.extend(staged.documents);
         self.bytes = bytes;
         self.revision = result.revision;
         Ok(result)
@@ -461,7 +521,6 @@ impl ContextGraph {
             .checked_add(1)
             .ok_or(ContextError::LimitExceeded)?;
         self.unindex(id);
-        self.documents.remove(id);
         self.bytes = bytes;
         self.revision = revision;
         Ok(true)
@@ -559,8 +618,76 @@ impl ContextGraph {
         Ok(true)
     }
 
+    /// Restore validated relationships, including intentionally withdrawn endpoints. Only the
+    /// broker recovery path supplies the separate historical endpoint ownership checks.
+    #[cfg(feature = "broker")]
+    pub(crate) fn restore_relationships(
+        &mut self,
+        edges: BTreeMap<String, BTreeSet<(EdgeKind, String)>>,
+    ) -> Result<(), ContextError> {
+        let count = edges.values().try_fold(0_usize, |count, outgoing| {
+            count
+                .checked_add(outgoing.len())
+                .ok_or(ContextError::LimitExceeded)
+        })?;
+        if count > self.limits.max_edges
+            || edges
+                .values()
+                .any(|outgoing| outgoing.len() > self.limits.max_edges_per_document)
+        {
+            return Err(ContextError::LimitExceeded);
+        }
+        for (from, outgoing) in &edges {
+            if !valid_id(from) || outgoing.is_empty() {
+                return Err(ContextError::Integrity);
+            }
+            for (kind, to) in outgoing {
+                if !valid_id(to)
+                    || from == to
+                    || (*kind == EdgeKind::Contradicts
+                        && !edges
+                            .get(to)
+                            .is_some_and(|reverse| reverse.contains(&(*kind, from.clone()))))
+                {
+                    return Err(ContextError::Integrity);
+                }
+            }
+        }
+        self.edges = edges;
+        self.edge_count = count;
+        Ok(())
+    }
+
+    fn index(&mut self, mut node: IndexedDocument) {
+        let slot = self.free_slots.pop().unwrap_or(self.slots.len());
+        node.slot = slot;
+        let node = Arc::new(node);
+        let document = &node.document;
+        let posting_id: Arc<str> = Arc::from(document.id.as_str());
+        for (term, value) in &node.terms {
+            self.postings.entry(term.clone()).or_default().insert(
+                Arc::clone(&posting_id),
+                Posting {
+                    slot,
+                    count: value.count,
+                },
+            );
+        }
+        self.sources
+            .entry(document.source.clone())
+            .or_default()
+            .insert(document.id.clone());
+        self.documents
+            .insert(document.id.clone(), Arc::clone(&node));
+        if slot == self.slots.len() {
+            self.slots.push(Some(node));
+        } else if let Some(entry) = self.slots.get_mut(slot) {
+            *entry = Some(node);
+        }
+    }
+
     fn unindex(&mut self, id: &str) {
-        if let Some(old) = self.documents.get(id) {
+        if let Some(old) = self.documents.remove(id) {
             if let Some(ids) = self.sources.get_mut(&old.document.source) {
                 ids.remove(id);
                 if ids.is_empty() {
@@ -574,6 +701,10 @@ impl ContextGraph {
                         self.postings.remove(term);
                     }
                 }
+            }
+            if let Some(slot) = self.slots.get_mut(old.slot) {
+                *slot = None;
+                self.free_slots.push(old.slot);
             }
         }
     }
@@ -643,4 +774,74 @@ pub(crate) fn term_counts(text: &str) -> BTreeMap<String, usize> {
         }
     }
     terms
+}
+
+#[cfg(test)]
+mod authorization_iteration_tests {
+    use super::*;
+
+    #[test]
+    fn dense_and_sparse_intersections_preserve_exact_live_identity_order()
+    -> Result<(), ContextError> {
+        let mut graph = ContextGraph::new("authorized-iteration", GraphLimits::default())?;
+        for count in [0, 1, 7, 8, 16, 17, 128] {
+            graph.replace_source(
+                "docs",
+                (0..count)
+                    .map(|index| {
+                        Document::new(
+                            format!("id-{index:04}"),
+                            "docs",
+                            format!("document {index}"),
+                        )
+                    })
+                    .collect(),
+            )?;
+            for stride in [1, 2, 7, 16, 127] {
+                for extra in [false, true] {
+                    let mut ids = (0..=128)
+                        .step_by(stride)
+                        .map(|index| format!("id-{index:04}"))
+                        .collect::<BTreeSet<_>>();
+                    if extra {
+                        ids.extend([
+                            "before-all".into(),
+                            "id-0000-missing".into(),
+                            "zz-after-all".into(),
+                        ]);
+                    }
+                    // Independent legacy lookup oracle, including IDs before/between/after
+                    // current keys, empty graphs, withdrawal and both density branches.
+                    let expected = ids
+                        .iter()
+                        .filter_map(|id| graph.documents.get(id).map(|doc| (id, &doc.digest)))
+                        .collect::<Vec<_>>();
+                    let actual = graph
+                        .authorized_documents(&ids)
+                        .map(|(id, doc)| (id, &doc.digest))
+                        .collect::<Vec<_>>();
+                    assert_eq!(actual, expected);
+                    assert_eq!(
+                        crate::digest("comparison", &actual)?,
+                        crate::digest("comparison", &expected)?
+                    );
+                }
+            }
+            assert_eq!(graph.authorized_documents(&BTreeSet::new()).count(), 0);
+        }
+        let ids = BTreeSet::from(["id-0000".into()]);
+        let before = graph
+            .authorized_documents(&ids)
+            .map(|(_, doc)| doc.digest.clone())
+            .collect::<Vec<_>>();
+        graph.upsert(Document::new("id-0000", "docs", "replacement"))?;
+        let after = graph
+            .authorized_documents(&ids)
+            .map(|(_, doc)| doc.digest.clone())
+            .collect::<Vec<_>>();
+        assert_ne!(before, after);
+        graph.replace_source("docs", Vec::new())?;
+        assert_eq!(graph.authorized_documents(&ids).count(), 0);
+        Ok(())
+    }
 }

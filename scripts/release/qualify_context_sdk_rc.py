@@ -4,16 +4,17 @@
 import argparse
 import json
 import os
-import random
 import shutil
 import subprocess
 import sys
 import time
+import tomllib
 import zipfile
 from pathlib import Path
 
 from release_lib import reject_evidence_directory
 import context_sdk_inputs
+from context_sdk_cases import build_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,7 +101,7 @@ def main():
         "-p",
         "(version 1)(allow default)(deny network*)",
     ]
-    if staged.get("channel") == "beta":
+    if staged.get("channel") in {"beta", "stable"}:
         # A failed connection alone is not sufficient: require the OS policy denial.
         run(
             "offline-policy-probe",
@@ -124,73 +125,7 @@ def main():
         assert "Root-Is-Purelib: false" in wheel_metadata
         assert "Tag: py3-none-macosx_11_0_arm64" in wheel_metadata
         assert not any(".venv/" in n or "__pycache__" in n for n in package.namelist())
-    cases = []
-    authored = json.loads(
-        (ROOT / "crates/cigar-context/fixtures/quality.json").read_bytes()
-    )
-    for case in authored:
-        for mode in ["full", "query_windows"]:
-            for budget in [32, 512, 2048]:
-                cases.append(
-                    {
-                        "domain": f"rc-{case['id']}",
-                        "documents": [
-                            dict(zip(["id", "source", "text"], doc))
-                            for doc in case["documents"]
-                        ],
-                        "edges": case["edges"],
-                        "request": {
-                            "query": case["query"],
-                            "max_tokens": budget,
-                            "excerpt_mode": mode,
-                            "evidence_per_term": case.get("evidence_per_term", 1),
-                        },
-                    }
-                )
-    rng = random.Random(10_000)
-    for index in range(100):
-        documents = [
-            {
-                "id": str(i),
-                "source": f"src/{i}.rs",
-                "text": "\n".join(
-                    rng.choices(
-                        [
-                            "alpha beta",
-                            "fn authorize_user() {}",
-                            "café 🦀 索引",
-                            "tenant policy",
-                            "retry identity",
-                        ],
-                        k=4,
-                    )
-                ),
-            }
-            for i in range(10)
-        ]
-        request = {
-            "query": rng.choice(
-                ["alpha", "authorizeUser", "tenant retry", "索引", "missing"]
-            ),
-            "max_tokens": rng.choice([1, 128, 512]),
-            "excerpt_mode": rng.choice(["full", "query_windows"]),
-        }
-        if index % 3 == 0:
-            request["required"] = ["0"]
-        if index % 5 == 0:
-            request["allowed"] = ["0", "2", "3"]
-        cases.append(
-            {
-                "domain": f"seed-{index}",
-                "documents": documents,
-                "edges": [
-                    ["0", "1", "requires"],
-                    ["2", "3", "contradicts"],
-                    ["4", "5", "related"],
-                ],
-                "request": request,
-            }
-        )
+    cases = build_cases(ROOT)
     fixtures = out / "cases.json"
     fixtures.write_text(json.dumps(cases, ensure_ascii=False) + "\n")
     expected = []
@@ -219,11 +154,30 @@ def main():
         json.dumps(expected, ensure_ascii=False) + "\n"
     )
     consumer_results = {}
+    locked = tomllib.loads((ROOT / "sdk/python/uv.lock").read_text())
+    test_dependencies = [
+        f"{item['name']}=={item['version']}"
+        for item in locked["package"]
+        if item["name"] in {"pytest", "hypothesis"}
+    ]
+    policy = json.loads((ROOT / "sdk/context-toolchain.v1.json").read_bytes())
     for kind, archive in [("wheel", wheel), ("sdist", sdist)]:
         venv = out / f"{kind}-venv"
         run(f"{kind}-venv", [args.uv, "venv", "--python", sys.executable, venv])
         python = venv / "bin/python"
-        run(f"{kind}-install", [args.uv, "pip", "install", "--python", python, archive])
+        run(
+            f"{kind}-install",
+            [
+                args.uv,
+                "pip",
+                "install",
+                "--python",
+                python,
+                archive,
+                f"protobuf=={policy['python']['protobuf_minimum']}",
+            ],
+            extra={"CIGAR_ALLOW_PORTABLE_WHEEL": "1"} if kind == "sdist" else {},
+        )
         extra = (
             {}
             if kind == "wheel"
@@ -235,7 +189,7 @@ def main():
         )
         run(
             f"{kind}-test-tools",
-            [args.uv, "pip", "install", "--python", python, "pytest==9.0.3"],
+            [args.uv, "pip", "install", "--python", python, *test_dependencies],
         )
         run(
             f"{kind}-tests",
@@ -246,7 +200,7 @@ def main():
         if kind == "sdist":
             command.append(extra["CIGAR_TEST_WORKER"])
         consumer_results[kind] = json.loads(run(f"{kind}-oracle", command))
-        if staged.get("channel") == "beta":
+        if staged.get("channel") in {"beta", "stable"}:
             offline = json.loads(run(f"{kind}-offline-oracle", sandbox + command))
             assert offline == consumer_results[kind]
         assert str(venv) in consumer_results[kind]["module"]
@@ -265,7 +219,7 @@ def main():
     consumer_results["npm"] = json.loads(
         run("npm-oracle", ["node", "consumer.mjs", fixtures], npm_consumer)
     )
-    if staged.get("channel") == "beta":
+    if staged.get("channel") in {"beta", "stable"}:
         offline = json.loads(
             run(
                 "npm-offline-oracle",
@@ -278,7 +232,9 @@ def main():
     manifest = json.loads((installed / "package.json").read_bytes())
     assert manifest["version"] == staged["npm"] and manifest["publishConfig"][
         "tag"
-    ] == staged.get("channel", "rc")
+    ] == (
+        "latest" if staged.get("channel") == "stable" else staged.get("channel", "rc")
+    )
     assert not any(
         k in manifest["scripts"] for k in ["preinstall", "install", "postinstall"]
     )

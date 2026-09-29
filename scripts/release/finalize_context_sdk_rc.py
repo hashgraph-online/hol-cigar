@@ -120,6 +120,7 @@ def main():
             ".github/workflows/npm-sdk-readiness.yml",
             ".github/workflows/fast-ci.yml",
             ".github/workflows/context-sdk-beta.yml",
+            ".github/workflows/context-sdk-release.yml",
             ".github/workflows/publish-hol-cigar.yml",
             ".github/workflows/stage-hol-cigar-npm.yml",
         ],
@@ -131,7 +132,10 @@ def main():
             "tool",
             "run",
             "--from",
-            "twine==6.2.0",
+            "twine=="
+            + json.loads((ROOT / "sdk/context-toolchain.v1.json").read_bytes())[
+                "python"
+            ]["twine"],
             "twine",
             "check",
             "--strict",
@@ -165,7 +169,8 @@ def main():
         json.dumps({"queries": queries}).encode(),
         {"Content-Type": "application/json"},
     )
-    with urlopen(request, timeout=30) as response:
+    # The request targets the literal OSV HTTPS endpoint; dependency names are JSON body data.
+    with urlopen(request, timeout=30) as response:  # fmt: skip # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         answer = json.load(response)
     assert len(answer["results"]) == len(queries)
     advisory = {
@@ -260,7 +265,7 @@ def main():
         "evidence": retained,
         "qualified_platform": release["native_qualified_host"],
         "limitations": [
-            "This diagnostic report alone does not establish hosted or independent build provenance; see the separate signed beta manifest.",
+            "This diagnostic report alone does not establish hosted or independent build provenance; see the separate signed release manifest.",
             "No bundled native Linux/Windows qualification.",
             "Platform binary has macOS 11 deployment floor, not a test result on macOS 11.",
             "Exact tested Python/Node versions are in retained logs; other supported versions are not individually qualified.",

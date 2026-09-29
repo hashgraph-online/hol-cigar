@@ -1,0 +1,6293 @@
+{
+  "schema": "cigar.context-012.startup-exploration.v1",
+  "checked_at": "2026-09-25T15:06:39.785899+00:00",
+  "version": "0.11.0",
+  "python": "3.14.7 (v3.14.7:823f0323ee6, Aug  5 2026, 07:07:01) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "harness_sha256": "35cbd3e2b1eec5321f6ad55e6baacdd8744aff7d26e54370f556b7a8aa9ccd89",
+  "baseline_init_sha256": "4923487548dad074eba045fbbaa3d9f55604d596d121c1e9b781172584f09d91",
+  "baseline_runtime_sha256": "58b379412ab04bda355fda8a7e89be1c851ed11cf731d377163ef32566276a5f",
+  "prototype_init_sha256": "2a270720f9221cd1b114dba730b9bd7175ddb199b9f096481ecb2167c3014b86",
+  "prototype_runtime_sha256": "b5c3fe85a478adf9f14263698c527ede8d5621db18e7f8700f460aa74c3718b5",
+  "worker_sha256": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+  "worker_bytes": 7282320,
+  "resolved_exports": 69,
+  "rounds": 25,
+  "memory_rounds": 5,
+  "warmup_rounds": 2,
+  "limits": [
+    "Exploratory prototypes, not an implemented or qualified v0.12.0 release.",
+    "Fresh Python processes; warm filesystem/bytecode caches, not cold disk measurements.",
+    "Common stdlib probe modules load before the operation timer; process wall includes them.",
+    "Allocation instrumentation runs separately and its timings are not used.",
+    "Parent RSS excludes the Rust worker; no whole-application RSS claim.",
+    "One host/session; descriptive timings, not statistically independent deployment samples.",
+    "Hash cases run against identical installed native bytes; no digest caching."
+  ],
+  "summary": [
+    {
+      "case": "import",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 76.3345,
+      "p95_ms": 89.461833,
+      "process_wall_p50_ms": 111.326209,
+      "parent_rss_p50_bytes": 36749312,
+      "allocation_peak_max_bytes": 11977590,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ]
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "n": 25,
+      "p50_ms": 1.468459,
+      "p95_ms": 1.562417,
+      "process_wall_p50_ms": 26.186458,
+      "parent_rss_p50_bytes": 18710528,
+      "allocation_peak_max_bytes": 587408,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": []
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 67.265708,
+      "p95_ms": 85.19875,
+      "process_wall_p50_ms": 94.711375,
+      "parent_rss_p50_bytes": 36782080,
+      "allocation_peak_max_bytes": 11977953,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ]
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "n": 25,
+      "p50_ms": 11.954416,
+      "p95_ms": 12.497959,
+      "process_wall_p50_ms": 33.601,
+      "parent_rss_p50_bytes": 24739840,
+      "allocation_peak_max_bytes": 2836897,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ]
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 66.952666,
+      "p95_ms": 87.519667,
+      "process_wall_p50_ms": 94.5065,
+      "parent_rss_p50_bytes": 36782080,
+      "allocation_peak_max_bytes": 11977952,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ]
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "n": 25,
+      "p50_ms": 60.732375,
+      "p95_ms": 61.393833,
+      "process_wall_p50_ms": 87.659417,
+      "parent_rss_p50_bytes": 35766272,
+      "allocation_peak_max_bytes": 10774970,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ]
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 56.414375,
+      "p95_ms": 57.7565,
+      "process_wall_p50_ms": 157.797,
+      "parent_rss_p50_bytes": 44154880,
+      "allocation_peak_max_bytes": 7286249,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ]
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "n": 25,
+      "p50_ms": 55.65025,
+      "p95_ms": 57.102334,
+      "process_wall_p50_ms": 94.506708,
+      "parent_rss_p50_bytes": 25903104,
+      "allocation_peak_max_bytes": 1184639,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ]
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 123.871,
+      "p95_ms": 161.645833,
+      "process_wall_p50_ms": 158.232916,
+      "parent_rss_p50_bytes": 44138496,
+      "allocation_peak_max_bytes": 18978337,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ]
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "n": 25,
+      "p50_ms": 67.688666,
+      "p95_ms": 69.9525,
+      "process_wall_p50_ms": 94.463834,
+      "parent_rss_p50_bytes": 25903104,
+      "allocation_peak_max_bytes": 3916121,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ]
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 3.322167,
+      "p95_ms": 3.414959,
+      "process_wall_p50_ms": 29.522375,
+      "parent_rss_p50_bytes": 28835840,
+      "allocation_peak_max_bytes": 7284019,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": []
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "n": 25,
+      "p50_ms": 3.049916,
+      "p95_ms": 3.194125,
+      "process_wall_p50_ms": 29.191875,
+      "parent_rss_p50_bytes": 22577152,
+      "allocation_peak_max_bytes": 1182314,
+      "protobuf_loaded": [
+        false
+      ],
+      "loaded_sdk_modules": []
+    }
+  ],
+  "samples": [
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 76.92075,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36732928,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.236583
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 1.468459,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18628608,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.78625
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 1.562417,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18677760,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.834625
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 76.524291,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 111.722458
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 76.846125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36864000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.380625
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 1.464916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18661376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.623
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 1.47675,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18776064,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.146875
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 76.7035,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36962304,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.434709
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 76.3345,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.850792
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 1.487792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18743296,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.844625
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 1.464584,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18710528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 25.923917
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 76.027875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.942875
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 102.542709,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 138.767542
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 1.49925,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18792448,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.186458
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 1.581458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18595840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.614875
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 76.446959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36732928,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 111.326209
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 76.909667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36798464,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.001167
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 1.491,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18694144,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.342458
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 1.465625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18710528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.601375
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 76.626,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 111.0735
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 76.962416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36814848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.062542
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 1.496584,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18710528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.848792
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 1.490292,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18726912,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.708166
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 77.128084,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36700160,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.956833
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 89.461833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36798464,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 125.377291
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 1.497792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18726912,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.794167
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 1.48625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18743296,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.437792
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 76.850958,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 112.293875
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 76.241542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 111.244541
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 1.496542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18743296,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.411875
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 1.512375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18677760,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 26.095042
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 74.027917,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 106.733541
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 69.996875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36995072,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 99.372583
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 1.344833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18644992,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 22.688875
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 1.340167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18694144,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.968875
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 69.280583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36962304,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 96.978708
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 66.840625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.065916
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 1.3045,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18710528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.723792
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 1.323875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18743296,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.207458
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 67.030875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.776583
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 67.680917,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36798464,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 95.657667
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 1.299042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18792448,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.117166
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 1.286583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18759680,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 20.783792
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 66.812541,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36896768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.357417
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 66.684834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.652167
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 1.305667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18710528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.021417
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 1.300292,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18661376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 20.96
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 66.605959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36732928,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 92.874625
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 66.834833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.892584
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 1.339084,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 18694144,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 65,
+      "digest": null,
+      "process_wall_ms": 21.2165
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 498.825,
+      "python_peak_bytes": 11977387,
+      "parent_peak_rss_bytes": 46874624,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 535.408292
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 6.285291,
+      "python_peak_bytes": 587408,
+      "parent_peak_rss_bytes": 19628032,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 74,
+      "digest": null,
+      "process_wall_ms": 31.098708
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 6.427083,
+      "python_peak_bytes": 587408,
+      "parent_peak_rss_bytes": 19791872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 74,
+      "digest": null,
+      "process_wall_ms": 30.58425
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 480.198666,
+      "python_peak_bytes": 11977590,
+      "parent_peak_rss_bytes": 47087616,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 516.074125
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 473.738,
+      "python_peak_bytes": 11977590,
+      "parent_peak_rss_bytes": 47022080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 510.284167
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 6.328167,
+      "python_peak_bytes": 587408,
+      "parent_peak_rss_bytes": 19644416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 74,
+      "digest": null,
+      "process_wall_ms": 29.313333
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 6.086791,
+      "python_peak_bytes": 587408,
+      "parent_peak_rss_bytes": 19791872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 74,
+      "digest": null,
+      "process_wall_ms": 28.096792
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 472.926417,
+      "python_peak_bytes": 11976424,
+      "parent_peak_rss_bytes": 47005696,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 509.659084
+    },
+    {
+      "case": "import",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 543.073417,
+      "python_peak_bytes": 11977475,
+      "parent_peak_rss_bytes": 46907392,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 580.082375
+    },
+    {
+      "case": "import",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 6.340416,
+      "python_peak_bytes": 587408,
+      "parent_peak_rss_bytes": 19791872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 74,
+      "digest": null,
+      "process_wall_ms": 29.659166
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 66.980542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.841042
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 11.963291,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24756224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.774542
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 11.830875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24739840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.257542
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 67.070625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.462125
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 67.772125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36814848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 95.850709
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 12.2105,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24608768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 34.746459
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 12.145,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24707072,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 34.134458
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 68.287,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 96.599792
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 85.19875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36814848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 113.700042
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 12.088041,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24788992,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 34.1495
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 11.958625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24788992,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.601
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 67.024208,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36732928,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.225583
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 67.884416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 96.094292
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 11.9115,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24739840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.980791
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 11.805708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24576000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.524875
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 67.285875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36864000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.56575
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 67.122083,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36880384,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.608542
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 12.04225,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24559616,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.633584
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 11.980209,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24723456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.420083
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 67.034834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36732928,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.046625
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 67.087875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36929536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.711375
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 11.812875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24707072,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.5445
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 11.839875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24788992,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.346084
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 67.331834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 95.234458
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 92.388708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 153.65025
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 11.915583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24723456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.644
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 11.861708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24690688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.004
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 67.283458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.557792
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 67.265708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.650625
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 11.744792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24739840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.241333
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 11.954416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24576000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.350333
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 67.779625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36913152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 96.735167
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 73.003042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 104.856333
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 13.5355,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24756224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 38.373084
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 12.497959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24608768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 36.362375
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 67.473083,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36896768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 95.167958
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 67.192667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.794833
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 12.047,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24788992,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.819875
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 11.989875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24559616,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 53.82475
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 81.848541,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36864000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 109.7405
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 66.882167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36880384,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.626583
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 12.256667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24739840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 34.5145
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 11.832084,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24723456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.511417
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 67.011291,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.548792
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 66.622791,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.101334
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 11.82525,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24756224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.125167
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 11.823459,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24772608,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.175291
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 66.908042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36716544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.285708
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 66.759542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36831232,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.792916
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 11.929833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 24756224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 33.4395
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 490.509583,
+      "python_peak_bytes": 11976473,
+      "parent_peak_rss_bytes": 47513600,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 526.075625
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 33.492333,
+      "python_peak_bytes": 2836655,
+      "parent_peak_rss_bytes": 27557888,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 58.798125
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 33.417333,
+      "python_peak_bytes": 2836354,
+      "parent_peak_rss_bytes": 27557888,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 57.954542
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 495.897583,
+      "python_peak_bytes": 11977953,
+      "parent_peak_rss_bytes": 47054848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 529.9095
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 478.74175,
+      "python_peak_bytes": 11977614,
+      "parent_peak_rss_bytes": 47022080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 514.808084
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 34.183084,
+      "python_peak_bytes": 2836384,
+      "parent_peak_rss_bytes": 27426816,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 60.188625
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 33.378083,
+      "python_peak_bytes": 2836897,
+      "parent_peak_rss_bytes": 27410432,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 58.284042
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 477.864917,
+      "python_peak_bytes": 11977805,
+      "parent_peak_rss_bytes": 47005696,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 515.985959
+    },
+    {
+      "case": "local_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 505.040958,
+      "python_peak_bytes": 11976684,
+      "parent_peak_rss_bytes": 47022080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 542.009333
+    },
+    {
+      "case": "local_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 33.547,
+      "python_peak_bytes": 2836696,
+      "parent_peak_rss_bytes": 27557888,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 58.807792
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 67.119834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.990709
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 61.458833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35913728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 88.428291
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 60.732375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35913728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.9995
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 67.053958,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.635916
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 66.857833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36929536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.208667
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 60.439,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35700736,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.387542
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 61.122333,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35880960,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.893667
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 66.804875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36700160,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.082583
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 66.667916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.262583
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 61.267125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35749888,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 115.589584
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 61.393833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35864576,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 88.801917
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 69.112792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 98.895333
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 68.973291,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36798464,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 97.788208
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 60.853833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35667968,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 107.882458
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 60.563833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35766272,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.616291
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 66.952666,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.329458
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 66.724167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36913152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.816667
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 60.831458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35766272,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.3135
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 60.650792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35667968,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.659417
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 66.518292,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.858917
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 66.747084,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36765696,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.916792
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 60.586875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35618816,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.216959
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 60.756333,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35831808,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.974709
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 69.867458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36831232,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 99.507333
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 87.519667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36700160,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 116.863459
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 60.659833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35618816,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.3555
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 60.622417,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35913728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.463584
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 66.6325,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36847616,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.767875
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 66.948875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36945920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.356584
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 60.64725,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35667968,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.359458
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 60.364042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35717120,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 86.895375
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 66.763292,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.770042
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 67.339583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.78325
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 60.417959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35618816,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.309583
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 60.819583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35831808,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.784791
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 90.400667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 121.148916
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 69.259,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36782080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 100.408833
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 61.21675,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35880960,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 88.669666
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 60.389625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35880960,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.254458
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 66.909125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36814848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.5065
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 66.7065,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36700160,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.599916
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 60.691625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35635200,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 113.114625
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 60.816,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35946496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.67925
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 67.03975,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 94.45975
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 66.899,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36831232,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 93.994167
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 60.362708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35815424,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.038042
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 61.011792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35782656,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.554666
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 69.078125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36749312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 117.64225
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 68.358125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 36913152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 97.098458
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 60.897584,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 35684352,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 213,
+      "digest": null,
+      "process_wall_ms": 87.954167
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 513.356083,
+      "python_peak_bytes": 11977799,
+      "parent_peak_rss_bytes": 47054848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 548.373417
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 448.685084,
+      "python_peak_bytes": 10774970,
+      "parent_peak_rss_bytes": 45416448,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 218,
+      "digest": null,
+      "process_wall_ms": 483.310125
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 449.969042,
+      "python_peak_bytes": 10774645,
+      "parent_peak_rss_bytes": 45400064,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 218,
+      "digest": null,
+      "process_wall_ms": 484.160917
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 525.891792,
+      "python_peak_bytes": 11977952,
+      "parent_peak_rss_bytes": 46940160,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 561.253041
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 473.587958,
+      "python_peak_bytes": 11977157,
+      "parent_peak_rss_bytes": 47038464,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 508.515625
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 467.503583,
+      "python_peak_bytes": 10773996,
+      "parent_peak_rss_bytes": 45285376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 218,
+      "digest": null,
+      "process_wall_ms": 502.307542
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 496.709709,
+      "python_peak_bytes": 10773945,
+      "parent_peak_rss_bytes": 45596672,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 218,
+      "digest": null,
+      "process_wall_ms": 535.711958
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 498.435167,
+      "python_peak_bytes": 11976684,
+      "parent_peak_rss_bytes": 47235072,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 535.375042
+    },
+    {
+      "case": "remote_api",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 475.457833,
+      "python_peak_bytes": 11976773,
+      "parent_peak_rss_bytes": 46956544,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 512.474291
+    },
+    {
+      "case": "remote_api",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 513.125958,
+      "python_peak_bytes": 10773858,
+      "parent_peak_rss_bytes": 45334528,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.generated.models"
+      ],
+      "module_count": 218,
+      "digest": null,
+      "process_wall_ms": 554.533125
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 56.106458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44285952,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 155.019375
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 55.857666,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.506708
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 55.60775,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25870336,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.206666
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 56.446875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44056576,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.509459
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 56.787834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44171264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 161.662334
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 55.962583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25722880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.653459
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 55.636708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.530708
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 56.550417,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44285952,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 180.711417
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 56.099791,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44318720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.797
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 56.128625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25952256,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.949584
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 55.462125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25968640,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.571291
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 56.582458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.97125
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 57.636625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44269568,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 160.222833
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 55.800667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25788416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.185625
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 55.539,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.312666
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 56.414375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 177.754
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 56.04825,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44318720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.703667
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 55.907583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.962708
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 55.451834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25788416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.029375
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 55.992375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.029041
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 56.082833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44089344,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.973959
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 57.102334,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25952256,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.816083
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 56.531833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25919488,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.875417
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 56.532834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44318720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 187.0685
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 56.181917,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44335104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.580208
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 55.499,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25985024,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.343375
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 55.46525,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25935872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.112333
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 56.080916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.22875
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 56.216583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44089344,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.053417
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 55.723416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25870336,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 92.026959
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 57.391167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25935872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.571375
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 56.591416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 167.84075
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 56.222083,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.498
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 55.586875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25919488,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.586833
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 55.706042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25935872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.050167
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 55.647291,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.735
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 56.176583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.381084
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 55.862,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25722880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.760417
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 55.499542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25870336,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 93.819167
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 57.902583,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 185.981125
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 56.463292,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44089344,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 155.401917
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 55.65025,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25985024,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.461916
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 55.571458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 93.851791
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 55.530208,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.037375
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 56.5615,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44154880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.1635
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 55.545167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25788416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.33375
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 55.748958,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25739264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.294333
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 57.7565,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 207.3115
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 56.856834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 162.798916
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 55.623792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25935872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.834708
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 56.681666,
+      "python_peak_bytes": 7286249,
+      "parent_peak_rss_bytes": 44761088,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 162.591625
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 55.63925,
+      "python_peak_bytes": 1184639,
+      "parent_peak_rss_bytes": 26591232,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 113.598417
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 57.800167,
+      "python_peak_bytes": 1184639,
+      "parent_peak_rss_bytes": 26411008,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 99.907208
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 56.539083,
+      "python_peak_bytes": 7286249,
+      "parent_peak_rss_bytes": 44531712,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 163.831541
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 58.0085,
+      "python_peak_bytes": 7286249,
+      "parent_peak_rss_bytes": 44597248,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 163.664334
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 55.691083,
+      "python_peak_bytes": 1184639,
+      "parent_peak_rss_bytes": 26411008,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 97.048459
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 55.987542,
+      "python_peak_bytes": 1184639,
+      "parent_peak_rss_bytes": 26673152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 96.787875
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 56.549625,
+      "python_peak_bytes": 7286249,
+      "parent_peak_rss_bytes": 44515328,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 160.599708
+    },
+    {
+      "case": "graph_open",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 56.798709,
+      "python_peak_bytes": 7286249,
+      "parent_peak_rss_bytes": 44482560,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 166.185333
+    },
+    {
+      "case": "graph_open",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 55.776542,
+      "python_peak_bytes": 1184639,
+      "parent_peak_rss_bytes": 26411008,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 97.393292
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 123.542833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.232916
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 94.8925,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25722880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 121.866708
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 67.438542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25788416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.410292
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 143.717166,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 177.148292
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 122.925917,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.81925
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 68.884334,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.113708
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 69.674375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 97.405542
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 123.642458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.728083
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 123.349625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.675917
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 67.84575,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25968640,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 92.11375
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 67.57775,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25952256,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 91.836583
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 161.645833,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44105728,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 195.606125
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 122.916916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44154880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 156.514625
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 68.015916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 26017792,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 95.160542
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 69.0525,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25935872,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 95.955792
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 125.524042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44154880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.155083
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 123.655167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44253184,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.628791
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 67.632916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25772032,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.295625
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 69.581458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 96.186917
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 124.001208,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44171264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.400709
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 124.834125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 159.642083
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 67.913708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 95.066542
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 67.541541,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.463834
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 125.754166,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 160.478333
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 148.467958,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 183.657917
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 67.482959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25985024,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.490291
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 67.445916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.188459
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 124.202834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.884584
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 123.282625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44220416,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.035708
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 67.664375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.550333
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 67.330416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25919488,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 93.899625
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 123.088084,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44171264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 154.229166
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 126.881875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44204032,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 161.59925
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 68.19975,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 95.427167
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 67.399834,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25919488,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.149583
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 123.348417,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44318720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 158.191042
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 124.250333,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 185.1285
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 67.688666,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25952256,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 94.454708
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 67.354625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 93.876125
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 123.497542,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.058167
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 124.497334,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44335104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 159.372208
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 69.782458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25985024,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 97.517875
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 67.629625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25739264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 91.621541
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 123.338458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44089344,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.857375
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 193.317083,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44138496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 227.593875
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 67.715042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25903104,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 92.127375
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 67.483041,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25886720,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 93.98875
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 123.82225,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 157.53625
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 123.871,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 44122112,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 228,
+      "digest": null,
+      "process_wall_ms": 190.020542
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 69.9525,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 25739264,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 105,
+      "digest": null,
+      "process_wall_ms": 97.896958
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 528.828458,
+      "python_peak_bytes": 18978090,
+      "parent_peak_rss_bytes": 54378496,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 570.782
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 89.93725,
+      "python_peak_bytes": 3915364,
+      "parent_peak_rss_bytes": 28770304,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 120.388209
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 92.149375,
+      "python_peak_bytes": 3915764,
+      "parent_peak_rss_bytes": 28622848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 122.834667
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 571.493291,
+      "python_peak_bytes": 18978337,
+      "parent_peak_rss_bytes": 54394880,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 614.773166
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 565.000334,
+      "python_peak_bytes": 18976827,
+      "parent_peak_rss_bytes": 54444032,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 616.509625
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 93.214208,
+      "python_peak_bytes": 3916121,
+      "parent_peak_rss_bytes": 28672000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 135.25475
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 94.422209,
+      "python_peak_bytes": 3916019,
+      "parent_peak_rss_bytes": 28672000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 125.580042
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 545.682084,
+      "python_peak_bytes": 18977116,
+      "parent_peak_rss_bytes": 54296576,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 586.150667
+    },
+    {
+      "case": "first_graph",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 548.36575,
+      "python_peak_bytes": 18978088,
+      "parent_peak_rss_bytes": 54509568,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.client",
+        "cigar_sdk.context",
+        "cigar_sdk.generated.models",
+        "cigar_sdk.workflow_session"
+      ],
+      "module_count": 233,
+      "digest": null,
+      "process_wall_ms": 589.530083
+    },
+    {
+      "case": "first_graph",
+      "variant": "lazy_stream_prototype",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 93.14175,
+      "python_peak_bytes": 3915611,
+      "parent_peak_rss_bytes": 28737536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [
+        "cigar_sdk.context"
+      ],
+      "module_count": 112,
+      "digest": null,
+      "process_wall_ms": 123.360666
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 3.621375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28819456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.701792
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 3.268875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28934144,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.792416
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 3.23,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28835840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.308125
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 3.213458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28672000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.624375
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 3.328083,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28901376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.397958
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 3.342959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28819456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.510875
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 3.326333,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28852224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.840042
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 3.277458,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28835840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.274917
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 3.314125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28852224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.298
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 3.378375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28753920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.182292
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 3.320416,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28704768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.388667
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 3.250375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28901376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.509416
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 3.414959,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28672000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.695375
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 3.33075,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28803072,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 57.908875
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 3.303708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28835840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.60125
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 3.325708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28852224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.627834
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 3.284166,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28901376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.577875
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 3.247,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28786688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.522375
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 3.37475,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28819456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.215334
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 3.322167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28901376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.819583
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 3.305167,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28852224,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 53.138834
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 3.34225,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28868608,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.363583
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 3.401917,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28835840,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.387708
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 3.283792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28737536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.397791
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 3.324625,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 28901376,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.338125
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 3.353666,
+      "python_peak_bytes": 7284019,
+      "parent_peak_rss_bytes": 29442048,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.855084
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 3.467,
+      "python_peak_bytes": 7284019,
+      "parent_peak_rss_bytes": 29425664,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.515917
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 3.424041,
+      "python_peak_bytes": 7284019,
+      "parent_peak_rss_bytes": 29392896,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.366542
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 3.396916,
+      "python_peak_bytes": 7284019,
+      "parent_peak_rss_bytes": 29491200,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.588833
+    },
+    {
+      "case": "hash_whole",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 3.339583,
+      "python_peak_bytes": 7284019,
+      "parent_peak_rss_bytes": 29474816,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 32.080916
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 0,
+      "operation_ms": 3.077166,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22478848,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.093416
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 1,
+      "operation_ms": 2.982208,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22577152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.000042
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 2,
+      "operation_ms": 3.085417,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22511616,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.898875
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 3,
+      "operation_ms": 3.25875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22593536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.42625
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 4,
+      "operation_ms": 3.049916,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22609920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.174958
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 5,
+      "operation_ms": 2.9975,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22446080,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.237667
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 6,
+      "operation_ms": 3.14225,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22642688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.376083
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 7,
+      "operation_ms": 3.159792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22609920,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.12625
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 8,
+      "operation_ms": 3.118541,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22577152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.063458
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 9,
+      "operation_ms": 3.019459,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22544384,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.675083
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 10,
+      "operation_ms": 3.071334,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22642688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.881709
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 11,
+      "operation_ms": 3.1875,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22544384,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.427875
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 12,
+      "operation_ms": 3.033958,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22413312,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.007042
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 13,
+      "operation_ms": 3.013042,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22560768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.327208
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 14,
+      "operation_ms": 3.094334,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22560768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.704958
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 15,
+      "operation_ms": 3.194125,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22544384,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.262792
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 16,
+      "operation_ms": 3.05975,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22560768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.920417
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 17,
+      "operation_ms": 3.003667,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22642688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.579042
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 18,
+      "operation_ms": 2.987333,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22675456,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.36025
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 19,
+      "operation_ms": 3.0175,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22560768,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.617125
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 20,
+      "operation_ms": 3.089375,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22642688,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.41975
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 21,
+      "operation_ms": 2.987708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22593536,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.935916
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 22,
+      "operation_ms": 3.021792,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22528000,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 28.853
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 23,
+      "operation_ms": 3.018,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22577152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.191875
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": false,
+      "round": 24,
+      "operation_ms": 2.974708,
+      "python_peak_bytes": null,
+      "parent_peak_rss_bytes": 22577152,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 72,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 29.042
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": true,
+      "round": 0,
+      "operation_ms": 3.081833,
+      "python_peak_bytes": 1182314,
+      "parent_peak_rss_bytes": 23035904,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.923542
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": true,
+      "round": 1,
+      "operation_ms": 3.10175,
+      "python_peak_bytes": 1182314,
+      "parent_peak_rss_bytes": 23166976,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.146125
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": true,
+      "round": 2,
+      "operation_ms": 3.065959,
+      "python_peak_bytes": 1182314,
+      "parent_peak_rss_bytes": 23199744,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.849208
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": true,
+      "round": 3,
+      "operation_ms": 3.028583,
+      "python_peak_bytes": 1182314,
+      "parent_peak_rss_bytes": 23199744,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 31.005375
+    },
+    {
+      "case": "hash_stream",
+      "variant": "baseline",
+      "memory": true,
+      "round": 4,
+      "operation_ms": 3.064042,
+      "python_peak_bytes": 1182314,
+      "parent_peak_rss_bytes": 23019520,
+      "protobuf_loaded": false,
+      "loaded_sdk_modules": [],
+      "module_count": 79,
+      "digest": "fa6923c04830c9558bbe973efcd1f09f791ffa75739c050c1e73606e7de8b4c7",
+      "process_wall_ms": 30.740291
+    }
+  ]
+}

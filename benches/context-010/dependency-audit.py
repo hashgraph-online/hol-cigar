@@ -18,7 +18,8 @@ def main():
                for p in packages if p.get('source', '').startswith('registry+')]
     request = Request('https://api.osv.dev/v1/querybatch', json.dumps({'queries': queries}).encode(),
                       {'Content-Type': 'application/json', 'User-Agent': 'cigar-context-release-diagnostics/0.10.0'})
-    with urlopen(request, timeout=60) as response:
+    # Only the literal OSV HTTPS endpoint above is used; package names are JSON body data.
+    with urlopen(request, timeout=60) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         result = json.load(response)
     if len(result.get('results', [])) != len(queries):
         raise RuntimeError('incomplete advisory response')

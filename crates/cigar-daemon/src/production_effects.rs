@@ -583,13 +583,17 @@ fn map_argument_error(error: EffectError) -> EffectArgumentVaultError {
 mod tests {
     use super::{
         EFFECT_REGISTRY_SCHEMA, EffectArgumentVaultError, PROTECTED_EFFECT_ARGUMENT_MEDIA_TYPE,
-        ProductionEffectRegistry, ProductionEffectRegistryError, ProductionHttpTransportFactory,
-        ProductionHttpsEffectTransportConfiguration,
+        ProductionEffectRegistry, ProductionEffectRegistryError,
     };
+    #[cfg(target_os = "macos")]
+    use super::{ProductionHttpTransportFactory, ProductionHttpsEffectTransportConfiguration};
+    use cigar_effects::reference::DemoIssueRequest;
+    #[cfg(target_os = "macos")]
     use cigar_effects::reference::{
-        DemoIssueRequest, HttpLookupObservation, HttpResourceBindingRequest, HttpTransport,
-        HttpTransportObservation, HttpTransportQuery, HttpTransportRequest, HttpTransportSecurity,
+        HttpLookupObservation, HttpResourceBindingRequest, HttpTransport, HttpTransportObservation,
+        HttpTransportQuery, HttpTransportRequest, HttpTransportSecurity,
     };
+    #[cfg(target_os = "macos")]
     use cigar_effects::{EffectError, EffectErrorCode};
     use cigar_protocol::{
         BlobRef, Capability, ContentDigest, EffectIntent, ExtensionMap, IdempotencyKey, MediaType,
@@ -598,8 +602,11 @@ mod tests {
     use cigar_store::{BlobRecord, RepositoryBlobStore, StoreError};
     use sha2::{Digest as _, Sha256};
     use std::collections::{BTreeMap, BTreeSet};
+    #[cfg(target_os = "macos")]
     use std::net::Ipv4Addr;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
+    #[cfg(target_os = "macos")]
+    use std::sync::Mutex;
 
     struct StaticBlobs {
         tenant: RecordId,
@@ -669,10 +676,12 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     struct TestHttpTransport {
         endpoint: String,
     }
 
+    #[cfg(target_os = "macos")]
     impl HttpTransport for TestHttpTransport {
         fn security(&self) -> Result<HttpTransportSecurity, EffectError> {
             HttpTransportSecurity::new(
@@ -706,11 +715,13 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     #[derive(Default)]
     struct RecordingHttpFactory {
         builds: Mutex<Vec<(String, String)>>,
     }
 
+    #[cfg(target_os = "macos")]
     impl ProductionHttpTransportFactory for RecordingHttpFactory {
         fn build(
             &self,

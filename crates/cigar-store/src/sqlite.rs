@@ -39,7 +39,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
+#[cfg(unix)]
+use std::fs::OpenOptions;
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::path::PathBuf;
@@ -2016,6 +2018,7 @@ fn secure_sqlite_file_identity(
     })
 }
 
+#[cfg(unix)]
 fn sqlite_runtime_lock_path(database: &Path) -> Option<PathBuf> {
     if database == Path::new(":memory:") {
         return None;
@@ -6246,12 +6249,14 @@ fn publish_garbage_collection_execution_marker(
 }
 
 fn ensure_garbage_collection_execution_directory(path: &Path) -> Result<(), StoreError> {
-    let mut builder = fs::DirBuilder::new();
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt as _;
+        let mut builder = builder;
         builder.mode(0o700);
-    }
+        builder
+    };
     let created = match builder.create(path) {
         Ok(()) => true,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
@@ -6294,7 +6299,10 @@ fn validate_garbage_collection_execution_marker(
     let file_metadata = file
         .metadata()
         .map_err(|_error| StoreError::new(StoreErrorCode::Unavailable))?;
-    if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
+    if path_metadata.file_type().is_symlink()
+        || !path_metadata.is_file()
+        || !file_metadata.is_file()
+    {
         return Err(StoreError::new(StoreErrorCode::Unavailable));
     }
     #[cfg(unix)]

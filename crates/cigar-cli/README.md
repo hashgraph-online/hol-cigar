@@ -155,6 +155,15 @@ Administrative source/project/focus state is written atomically beneath `project
 
 `cigar migration cleanup <absolute-v4-source.sqlite3> <absolute-verified-backup> <absolute-incomplete-v5-target.sqlite3> <absolute-active-store.json> --yes` is the explicit interrupted-run cleanup path. It rejects a receipted or active target, reauthenticates the retained source and backup, and removes only the named target plus its closed sidecar set before proving the source bytes are unchanged.
 
+After configuring `production.active_store_descriptor`, `backup create`, blob
+GC, `doctor --security`, `effect list`, and these v4 migration commands return
+`CLI_UNSUPPORTED_SURFACE`. Their implementation supports the legacy store only;
+the retained `metadata_database` is no longer the active daemon database. This
+guard also applies to dry runs and malformed descriptors. Named backup
+verification/restore and explicit v5 compaction/integrity operations remain
+available. See the [v5 operations guide](../../docs/guides/honey-storage-v5.md)
+for the current maintenance limits.
+
 `cigar compaction preview <absolute-v5-source.sqlite3> <absolute-migration-receipt.json> <absolute-new-target.sqlite3> <absolute-active-store.json> <absolute-new-preview.json> --yes` writes a 15-minute signed authorization bound to exact database, backup, descriptor, head, policy, pin, candidate, retained-range, and byte-estimate evidence. `cigar compaction execute <absolute-signed-preview.json> --yes` rejects any drift, constructs and verifies a distinct compacted target, emits a separate signed receipt, and atomically advances the descriptor while retaining the prior database. `cigar compaction status <absolute-active-store.json>` verifies the descriptor without running maintenance. These surfaces never invoke blob GC.
 
 `cigar integrity deep <absolute-v5-database.sqlite3> --yes` runs the explicit retained-history verifier and publishes an owner-only purpose-signed `.cigar-verified-prefix.json` sidecar. A later run reuses that prefix only when its signature, database device/inode, retained origin, prefix chain head, policy digest, and verifier version remain valid; it then checks only the authenticated suffix plus the current projection. Add `--force-full` to ignore or replace the sidecar and authenticate every retained checkpoint and delta again. Ordinary v5 readiness uses only the latest checkpoint and its bounded delta suffix.

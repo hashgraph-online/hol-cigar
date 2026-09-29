@@ -62,6 +62,7 @@ cigar-testkit.workspace = true
 opentelemetry-proto = { version = "=0.32.0", default-features = false, features = ["gen-tonic", "metrics", "trace"] }
 rcgen = { version = "=0.14.8", default-features = false, features = ["pem", "ring"] }
 tempfile.workspace = true
+yaml_serde.workspace = true
 
 [lints]
 workspace = true

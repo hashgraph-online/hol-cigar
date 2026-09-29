@@ -23,7 +23,7 @@ pub struct TokenCacheLimits {
 impl Default for TokenCacheLimits {
     fn default() -> Self {
         Self {
-            max_entries: 1024,
+            max_entries: 2048,
             max_text_bytes: 8 * 1024 * 1024,
         }
     }

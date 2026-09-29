@@ -1,0 +1,344 @@
+{
+  "schema": "cigar.sdk-union-response-vectors.v1",
+  "description": "Fixed canonical CBOR responses shared by TypeScript and Python. Valid vectors must decode successfully; malformed vectors must still fail schema validation.",
+  "uuid": "01900000-0000-7000-8000-000000000001",
+  "valid": [
+    {
+      "name": "published-one",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21laXB1Ymxpc2hlZA",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "deduplicated-one",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21lbGRlZHVwbGljYXRlZA",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "published-max-safe-integer",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlGwAf________aHNwYWNlX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpYXV0aG9yX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWpleHRlbnNpb25zoGtyb290X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFsY29tbWl0dGVkX2F0dDIwMjYtMDEtMDFUMDA6MDA6MDBabnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtY29tbWl0LnYxdnBvbGljeV9zbmFwc2hvdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExZ291dGNvbWVpcHVibGlzaGVk",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "9007199254740991",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "published-above-safe-integer",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlGwAgAAAAAAAAaHNwYWNlX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpYXV0aG9yX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWpleHRlbnNpb25zoGtyb290X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFsY29tbWl0dGVkX2F0dDIwMjYtMDEtMDFUMDA6MDA6MDBabnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtY29tbWl0LnYxdnBvbGljeV9zbmFwc2hvdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExZ291dGNvbWVpcHVibGlzaGVk",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "9007199254740992",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "published-uint64-max",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlG___________aHNwYWNlX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpYXV0aG9yX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWpleHRlbnNpb25zoGtyb290X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFsY29tbWl0dGVkX2F0dDIwMjYtMDEtMDFUMDA6MDA6MDBabnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtY29tbWl0LnYxdnBvbGljeV9zbmFwc2hvdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExZ291dGNvbWVpcHVibGlzaGVk",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "18446744073709551615",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "published-nested-integers",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6VkZmxhZ6JkdHlwZWdib29sZWFuZXZhbHVl9WR0ZXh0omR0eXBlZHRleHRldmFsdWVpdW5jaGFuZ2VkZWJ5dGVzomR0eXBlZWJ5dGVzZXZhbHVlYkFRZXNtYWxsomR0eXBlZ2ludGVnZXJldmFsdWUgZm5lc3RlZKJkdHlwZWZvYmplY3RldmFsdWWhZWl0ZW1zomR0eXBlZWFycmF5ZXZhbHVlg6JkdHlwZWdpbnRlZ2VyZXZhbHVlAaJkdHlwZWZvYmplY3RldmFsdWWhZHplcm-iZHR5cGVnaW50ZWdlcmV2YWx1ZQCiZHR5cGVnaW50ZWdlcmV2YWx1ZTt__________2tyb290X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFsY29tbWl0dGVkX2F0dDIwMjYtMDEtMDFUMDA6MDA6MDBabnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtY29tbWl0LnYxdnBvbGljeV9zbmFwc2hvdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExZ291dGNvbWVpcHVibGlzaGVk",
+      "integers": [
+        {
+          "path": [
+            "commit",
+            "sequence"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commit",
+            "extensions",
+            "small",
+            "value"
+          ],
+          "decimal": "-1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commit",
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            0,
+            "value"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commit",
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            1,
+            "value",
+            "zero",
+            "value"
+          ],
+          "decimal": "0",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commit",
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            2,
+            "value"
+          ],
+          "decimal": "-9223372036854775808",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "conflicted",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omdvdXRjb21lamNvbmZsaWN0ZWRsY29uZmxpY3RfaWRzgXgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAx",
+      "integers": []
+    },
+    {
+      "name": "bundle-nested-integers",
+      "response_type": "ContextBundle",
+      "payload_cbor": "p2ZibG9ja3OAaWJ1bmRsZV9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6VkZmxhZ6JkdHlwZWdib29sZWFuZXZhbHVl9WR0ZXh0omR0eXBlZHRleHRldmFsdWVpdW5jaGFuZ2VkZWJ5dGVzomR0eXBlZWJ5dGVzZXZhbHVlYkFRZXNtYWxsomR0eXBlZ2ludGVnZXJldmFsdWUgZm5lc3RlZKJkdHlwZWZvYmplY3RldmFsdWWhZWl0ZW1zomR0eXBlZWFycmF5ZXZhbHVlg6JkdHlwZWdpbnRlZ2VyZXZhbHVlAaJkdHlwZWZvYmplY3RldmFsdWWhZHplcm-iZHR5cGVnaW50ZWdlcmV2YWx1ZQCiZHR5cGVnaW50ZWdlcmV2YWx1ZTt__________2x0b3RhbF90b2tlbnMAbnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtYnVuZGxlLnYxb2NvbnRyYWN0X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFvbWFuaWZlc3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMQ",
+      "integers": [
+        {
+          "path": [
+            "total_tokens"
+          ],
+          "decimal": "0",
+          "typescript_type": "number"
+        },
+        {
+          "path": [
+            "extensions",
+            "small",
+            "value"
+          ],
+          "decimal": "-1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            0,
+            "value"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            1,
+            "value",
+            "zero",
+            "value"
+          ],
+          "decimal": "0",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            2,
+            "value"
+          ],
+          "decimal": "-9223372036854775808",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "space-log-nested-integers",
+      "response_type": "SpaceLogResponse",
+      "payload_cbor": "oWdjb21taXRzgatmZXZlbnRzgaNka2luZHFjb250ZXh0X2NvbW1pdHRlZGhldmVudF9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxbnBheWxvYWRfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdwdXJwb3NleCRPZmZsaW5lIHJlc3BvbnNlIGRlY29kaW5nIHJlZ3Jlc3Npb25oc2VxdWVuY2UBaHNwYWNlX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpYXV0aG9yX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWpleHRlbnNpb25zpWRmbGFnomR0eXBlZ2Jvb2xlYW5ldmFsdWX1ZHRleHSiZHR5cGVkdGV4dGV2YWx1ZWl1bmNoYW5nZWRlYnl0ZXOiZHR5cGVlYnl0ZXNldmFsdWViQVFlc21hbGyiZHR5cGVnaW50ZWdlcmV2YWx1ZSBmbmVzdGVkomR0eXBlZm9iamVjdGV2YWx1ZaFlaXRlbXOiZHR5cGVlYXJyYXlldmFsdWWDomR0eXBlZ2ludGVnZXJldmFsdWUBomR0eXBlZm9iamVjdGV2YWx1ZaFkemVyb6JkdHlwZWdpbnRlZ2VyZXZhbHVlAKJkdHlwZWdpbnRlZ2VyZXZhbHVlO3__________a3Jvb3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWxjb21taXR0ZWRfYXR0MjAyNi0wMS0wMVQwMDowMDowMFpuc2NoZW1hX3ZlcnNpb253Y2lnYXIuY29udGV4dC1jb21taXQudjF2cG9saWN5X3NuYXBzaG90X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE",
+      "integers": [
+        {
+          "path": [
+            "commits",
+            0,
+            "sequence"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commits",
+            0,
+            "extensions",
+            "small",
+            "value"
+          ],
+          "decimal": "-1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commits",
+            0,
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            0,
+            "value"
+          ],
+          "decimal": "1",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commits",
+            0,
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            1,
+            "value",
+            "zero",
+            "value"
+          ],
+          "decimal": "0",
+          "typescript_type": "bigint"
+        },
+        {
+          "path": [
+            "commits",
+            0,
+            "extensions",
+            "nested",
+            "value",
+            "items",
+            "value",
+            2,
+            "value"
+          ],
+          "decimal": "-9223372036854775808",
+          "typescript_type": "bigint"
+        }
+      ]
+    },
+    {
+      "name": "fork-private-overlay",
+      "response_type": "SpaceForkResponse",
+      "payload_cbor": "o2RraW5kb3ByaXZhdGVfb3ZlcmxheWpvdmVybGF5X2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFuYmFzZV9jb21taXRfaWR4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTEx",
+      "integers": []
+    },
+    {
+      "name": "fork-focus-branch",
+      "response_type": "SpaceForkResponse",
+      "payload_cbor": "o2RraW5kbGZvY3VzX2JyYW5jaGhmb2N1c19pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxbmZvcmtfY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMQ",
+      "integers": []
+    }
+  ],
+  "invalid": [
+    {
+      "name": "negative-sequence",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlIGhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21laXB1Ymxpc2hlZA"
+    },
+    {
+      "name": "text-sequence",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlYTFoc3BhY2VfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMWlhdXRob3JfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMWljb21taXRfaWR4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExamV4dGVuc2lvbnOga3Jvb3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWxjb21taXR0ZWRfYXR0MjAyNi0wMS0wMVQwMDowMDowMFpuc2NoZW1hX3ZlcnNpb253Y2lnYXIuY29udGV4dC1jb21taXQudjF2cG9saWN5X3NuYXBzaG90X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFnb3V0Y29tZWlwdWJsaXNoZWQ"
+    },
+    {
+      "name": "boolean-sequence",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNl9WhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21laXB1Ymxpc2hlZA"
+    },
+    {
+      "name": "missing-sequence",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSqZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNwYWNlX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpYXV0aG9yX2lkeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDFpY29tbWl0X2lkeEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWpleHRlbnNpb25zoGtyb290X2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFsY29tbWl0dGVkX2F0dDIwMjYtMDEtMDFUMDA6MDA6MDBabnNjaGVtYV92ZXJzaW9ud2NpZ2FyLmNvbnRleHQtY29tbWl0LnYxdnBvbGljeV9zbmFwc2hvdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExZ291dGNvbWVpcHVibGlzaGVk"
+    },
+    {
+      "name": "unknown-outcome",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21lZ3Vua25vd24"
+    },
+    {
+      "name": "mixed-variant-fields",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "o2Zjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6Brcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21laXB1Ymxpc2hlZGxjb25mbGljdF9pZHOBeCQwMTkwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDE"
+    },
+    {
+      "name": "invalid-nested-integer",
+      "response_type": "SpacePublishResponse",
+      "payload_cbor": "omZjb21taXSrZmV2ZW50c4GjZGtpbmRxY29udGV4dF9jb21taXR0ZWRoZXZlbnRfaWR4JDAxOTAwMDAwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMW5wYXlsb2FkX2RpZ2VzdHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFncHVycG9zZXgkT2ZmbGluZSByZXNwb25zZSBkZWNvZGluZyByZWdyZXNzaW9uaHNlcXVlbmNlAWhzcGFjZV9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWF1dGhvcl9pZHgkMDE5MDAwMDAtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWNvbW1pdF9pZHhEMTIyMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFqZXh0ZW5zaW9uc6VkZmxhZ6JkdHlwZWdib29sZWFuZXZhbHVl9WR0ZXh0omR0eXBlZHRleHRldmFsdWVpdW5jaGFuZ2VkZWJ5dGVzomR0eXBlZWJ5dGVzZXZhbHVlYkFRZXNtYWxsomR0eXBlZ2ludGVnZXJldmFsdWVhMWZuZXN0ZWSiZHR5cGVmb2JqZWN0ZXZhbHVloWVpdGVtc6JkdHlwZWVhcnJheWV2YWx1ZYOiZHR5cGVnaW50ZWdlcmV2YWx1ZQGiZHR5cGVmb2JqZWN0ZXZhbHVloWR6ZXJvomR0eXBlZ2ludGVnZXJldmFsdWUAomR0eXBlZ2ludGVnZXJldmFsdWU7f_________9rcm9vdF9kaWdlc3R4RDEyMjAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExbGNvbW1pdHRlZF9hdHQyMDI2LTAxLTAxVDAwOjAwOjAwWm5zY2hlbWFfdmVyc2lvbndjaWdhci5jb250ZXh0LWNvbW1pdC52MXZwb2xpY3lfc25hcHNob3RfZGlnZXN0eEQxMjIwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMWdvdXRjb21laXB1Ymxpc2hlZA"
+    }
+  ]
+}

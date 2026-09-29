@@ -15,6 +15,8 @@ on:
       - "crates/cigar-context/**"
       - "scripts/release/*context*"
       - ".github/workflows/context-sdk-rc.yml"
+      - ".github/workflows/context-distribution.yml"
+      - ".github/workflows/context-native.yml"
       - "sdk/capabilities-v1.json"
       - "sdk/generate_clients.py"
       - "schemas/**"
@@ -37,6 +39,8 @@ on:
       - "crates/cigar-context/**"
       - "scripts/release/*context*"
       - ".github/workflows/context-sdk-rc.yml"
+      - ".github/workflows/context-distribution.yml"
+      - ".github/workflows/context-native.yml"
       - "sdk/capabilities-v1.json"
       - "sdk/generate_clients.py"
       - "schemas/**"
@@ -67,13 +71,18 @@ jobs:
       - id: track
         run: |
           version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1"
+          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1" || test "${version}" = "0.10.1" || test "${version}" = "0.11.0" || test "${version}" = "0.14.0"
           printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   local-context-rc:
     needs: release-track
-    if: needs.release-track.outputs.version == '0.10.0-rc.1' || needs.release-track.outputs.version == '0.10.0-beta.1'
+    if: needs.release-track.outputs.version == '0.10.0-rc.1' || needs.release-track.outputs.version == '0.10.0-beta.1' || needs.release-track.outputs.version == '0.10.1' || needs.release-track.outputs.version == '0.11.0'
     uses: ./.github/workflows/context-sdk-rc.yml
+
+  local-context-stable:
+    needs: release-track
+    if: needs.release-track.outputs.version == '0.14.0'
+    uses: ./.github/workflows/context-distribution.yml
 
   qualify:
     needs: release-track

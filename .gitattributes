@@ -1,0 +1,2 @@
+# Source digests and packaged inputs use identical bytes on every build platform.
+* text=auto eol=lf

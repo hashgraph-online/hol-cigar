@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -246,7 +247,7 @@ class SemgrepPolicyTests(unittest.TestCase):
     ) -> None:
         ignored_parts = {".git", ".venv", "dist", "node_modules", "target", "vendor"}
         security_suppressions: list[tuple[Path, int, str, str]] = []
-        for extension in ("*.py", "*.go"):
+        for extension in ("*.py", "*.go", "*.mjs"):
             for path in ROOT.rglob(extension):
                 if ignored_parts.intersection(path.relative_to(ROOT).parts):
                     continue
@@ -268,6 +269,9 @@ class SemgrepPolicyTests(unittest.TestCase):
             "python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
             "python.lang.security.audit.insecure-file-permissions.insecure-file-permissions",
             "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
+            "python.lang.security.audit.non-literal-import.non-literal-import",
+            "python.lang.security.use-defused-xml-parse.use-defused-xml-parse",
+            "javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop",
         }
         for relative, line_number, line, rule in security_suppressions:
             with self.subTest(path=str(relative), line=line_number, rule=rule):
@@ -327,11 +331,104 @@ class SemgrepPolicyTests(unittest.TestCase):
                         )
                     )
                 elif rule.endswith("dynamic-urllib-use-detected"):
-                    self.assertEqual(relative, Path("tools/quality/semgrep_policy.py"))
-                    self.assertIn("urllib.request.urlopen(request, timeout=60)", line)
+                    if relative == Path("tools/quality/semgrep_policy.py"):
+                        self.assertIn(
+                            "urllib.request.urlopen(request, timeout=60)", line
+                        )
+                        self.assertEqual(
+                            self.policy["upstream_ruleset"]["url"],
+                            "https://semgrep.dev/c/p/default",
+                        )
+                    elif relative == Path(
+                        "scripts/release/context_registry_readback.py"
+                    ):
+                        # RegistryReadbackTests exercise rejection before any URL is opened.
+                        self.assertIn("urlopen(url, timeout=60)", line)
+                    elif relative == Path(".github/actions/setup-protoc/install.py"):
+                        source = "\n".join(source_lines)
+                        declarations = {
+                            node.targets[0].id: node.value
+                            for node in ast.walk(ast.parse(source))
+                            if isinstance(node, ast.Assign)
+                            and isinstance(node.targets[0], ast.Name)
+                        }
+                        archives = ast.literal_eval(declarations["archives"])
+                        self.assertEqual(
+                            {archive for archive, _ in archives.values()},
+                            {"osx-aarch_64", "linux-x86_64", "win64"},
+                        )
+                        for _, digest in archives.values():
+                            self.assertRegex(digest, r"^[a-f0-9]{64}$")
+                        url = declarations["url"]
+                        self.assertIsInstance(url, ast.JoinedStr)
+                        self.assertEqual(
+                            url.values[0].value,
+                            "https://github.com/protocolbuffers/protobuf/releases/download/v33.2/",
+                        )
+                        self.assertIn(
+                            "hashlib.sha256(payload).hexdigest() != expected", source
+                        )
+                        self.assertIn("urllib.request.urlopen(url, timeout=60)", line)
+                    else:
+                        self.assertIn(
+                            relative,
+                            {
+                                Path("benches/context-010/dependency-audit.py"),
+                                Path("scripts/release/context_distribution_release.py"),
+                                Path("scripts/release/finalize_context_sdk_rc.py"),
+                            },
+                        )
+                        requests = [
+                            node
+                            for node in ast.walk(ast.parse("\n".join(source_lines)))
+                            if isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Name)
+                            and node.func.id == "Request"
+                        ]
+                        self.assertEqual(len(requests), 1)
+                        self.assertEqual(
+                            ast.literal_eval(requests[0].args[0]),
+                            "https://api.osv.dev/v1/querybatch",
+                        )
+                        self.assertIn("urlopen(request, timeout=", line)
+                elif rule.endswith("non-literal-import"):
                     self.assertEqual(
-                        self.policy["upstream_ruleset"]["url"],
-                        "https://semgrep.dev/c/p/default",
+                        relative, Path("sdk/python/src/cigar_sdk/__init__.py")
+                    )
+                    declarations = [
+                        node
+                        for node in ast.walk(ast.parse("\n".join(source_lines)))
+                        if isinstance(node, ast.AnnAssign)
+                        and isinstance(node.target, ast.Name)
+                        and node.target.id == "_EXPORTS"
+                    ]
+                    self.assertEqual(len(declarations), 1)
+                    exports = declarations[0].value
+                    self.assertIsInstance(exports, ast.DictComp)
+                    module_groups = ast.literal_eval(exports.generators[0].iter)
+                    self.assertTrue(module_groups)
+                    self.assertTrue(
+                        all(
+                            module.startswith("cigar_sdk.")
+                            for module, _ in module_groups
+                        )
+                    )
+                    self.assertIn("import_module(module)", line)
+                elif rule.endswith("use-defused-xml-parse"):
+                    self.assertEqual(
+                        relative,
+                        Path("scripts/release/qualify_context_distribution.py"),
+                    )
+                    self.assertIn(
+                        'ET.parse(output / "logs" / f"{kind}-tests.xml")', line
+                    )
+                    self.assertIn('"--junitxml",', "\n".join(source_lines))
+                elif rule.endswith("prototype-pollution-loop"):
+                    self.assertEqual(
+                        relative, Path("benches/context-012/compare_union.mjs")
+                    )
+                    self.assertIn(
+                        "for (const key of item.path) integer = integer[key];", line
                     )
                 else:
                     context = "\n".join(source_lines[line_number - 4 : line_number + 1])

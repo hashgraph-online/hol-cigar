@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import time
+import threading
 import unittest
 from collections.abc import Iterator, Mapping
 from importlib import resources
@@ -475,22 +475,37 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
         transport.responses = [ok("getVersion", payload={})]
 
         original_request = transport.request
+        request_started = threading.Event()
+        release_request = threading.Event()
+        request_finished = threading.Event()
 
         def delayed_request(*args: object, **kwargs: object) -> HttpResponse:
-            time.sleep(0.2)
-            return original_request(*args, **kwargs)  # type: ignore[arg-type]
+            request_started.set()
+            try:
+                if not release_request.wait(10):
+                    raise TimeoutError("test transport was not released")
+                return original_request(*args, **kwargs)  # type: ignore[arg-type]
+            finally:
+                request_finished.set()
 
         transport.request = delayed_request  # type: ignore[method-assign]
         client = AsyncCigarClient(
             "http://localhost", allow_insecure_loopback=True, transport=transport, trust_custom_transport=True
         )
         task = asyncio.create_task(client.get_version(TypedOperationRequest(models.EmptyRequest())))
-        await asyncio.sleep(0.01)
-        started = time.monotonic()
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-        self.assertLess(time.monotonic() - started, 0.1)
+        try:
+            self.assertTrue(await asyncio.to_thread(request_started.wait, 5))
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=5)
+            # Cancellation must finish while the blocking transport is still held.
+            # This checks ordering without assuming a quiet hosted runner.
+            self.assertFalse(request_finished.is_set())
+        finally:
+            release_request.set()
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            self.assertTrue(await asyncio.to_thread(request_finished.wait, 5))
 
 
 if __name__ == "__main__":

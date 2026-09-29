@@ -6,18 +6,34 @@
 
 #![doc = include_str!("../README.md")]
 
+mod answer;
+#[cfg(feature = "broker")]
+pub mod broker;
+mod chunking;
+mod explain;
 mod graph;
+mod prompt;
 mod select;
 mod snapshot;
 mod tokenizer;
+mod views;
 
+pub use answer::{
+    AnswerAssessment, AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimAssessment,
+    ClaimIssue, ClaimReview, ClaimVerdict,
+};
+pub use explain::{SelectionExplanation, SelectionSignal, SelectionStep};
 pub use graph::{ContextGraph, Document, EdgeKind, GraphLimits, SourceUpdate};
+pub use prompt::ContextPrompt;
 pub use select::{ContextRequest, ExcerptMode, SelectionStats};
 pub use snapshot::{Citation, ContextDelta, ContextSnapshot, EvidenceBlock};
 #[cfg(feature = "bpe")]
 pub use tokenizer::O200kTokenizer;
 pub use tokenizer::{
     CachedTokenCounter, TokenCacheLimits, TokenCacheStats, TokenCounter, Utf8ByteCounter,
+};
+pub use views::{
+    ContextView, ContextViewAssessment, ContextViewHandle, ContextViewSpec, ContextViews,
 };
 
 use sha2::{Digest, Sha256};

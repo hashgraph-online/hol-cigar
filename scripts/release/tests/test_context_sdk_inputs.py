@@ -56,6 +56,17 @@ class SourceBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(ReleaseError, "source changed"):
             inputs.require_unchanged(self.root, first)
 
+    def test_windows_adapter_mutation_invalidates_the_source_binding(self):
+        self.assertIn("crates/cigar-windows-ipc", inputs.SOURCE_DIRECTORIES)
+        path = self.root / "crates/cigar-windows-ipc/src/storage.rs"
+        path.parent.mkdir(parents=True)
+        path.write_text("original storage boundary\n")
+        self.names += b"crates/cigar-windows-ipc/src/storage.rs\0"
+        first = inputs.capture(self.root)
+        path.write_text("changed storage boundary\n")
+        with self.assertRaisesRegex(ReleaseError, "source changed"):
+            inputs.require_unchanged(self.root, first)
+
     def test_dirty_checkout_requires_explicit_diagnostic_opt_in(self):
         self.status = b" M Cargo.toml\n"
         with self.assertRaisesRegex(ReleaseError, "clean checkout"):

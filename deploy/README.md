@@ -26,6 +26,11 @@ also includes a multi-stage, non-root container and a hardened systemd unit.
   by rootless bubblewrap; cgroup namespaces remain denied.
 - `systemd/cigar.sysusers` and `systemd/cigar.tmpfiles` provision the dedicated
   service identity and permission-restricted directories.
+  Apply these definitions before starting the unit. The effect checkpoint lives
+  separately from mutable repository state at `/var/lib/cigar-effect-checkpoints`,
+  owned by `cigar:cigar` with mode `0700`, and the unit permits writes there.
+  Keep its checkpoint and lock files when upgrading or recovering the service;
+  a nonempty effect store cannot initialize a new empty checkpoint safely.
 
 Image digest pinning, signing, SBOM/provenance attachment, and distribution
 qualification remain release-pipeline responsibilities in WP20-WP22.

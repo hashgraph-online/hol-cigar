@@ -314,11 +314,11 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patternProperties = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
     const required = new Set(Array.isArray(schema["required"]) ? schema["required"] as string[] : []);
-    for (const name of required) if (!(name in record)) fail(`${path}/${name}`, "required field is missing");
+    for (const name of required) if (!Object.hasOwn(record, name)) fail(`${path}/${name}`, "required field is missing");
     if (typeof schema["minProperties"] === "number" && Object.keys(record).length < schema["minProperties"]) fail(path, "object has too few fields");
     if (typeof schema["maxProperties"] === "number" && Object.keys(record).length > schema["maxProperties"]) fail(path, "object has too many fields");
     for (const [name, child] of Object.entries(record)) {
-      const childSchema = properties[name];
+      const childSchema = Object.hasOwn(properties, name) ? properties[name] : undefined;
       if (childSchema !== undefined) validate(childSchema, child, root, `${path}/${name}`, depth + 1, budget);
       else {
         const matches = Object.entries(patternProperties).filter(([pattern]) => matchesSchemaPattern(pattern, name, path));
@@ -329,24 +329,38 @@ function validate(schema: Record<string, unknown>, value: unknown, root: Record<
     }
   }
 }
-function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>): unknown {
+function coerce(schema: Record<string, unknown>, value: unknown, root: Record<string, unknown>, depth = 0, budget: ValidationBudget = { nodes: 0 }): unknown {
+  if (depth > 64 || ++budget.nodes > 100_000) fail("payload", "payload exceeds nesting or node bounds");
   const reference = schema["$ref"];
   if (typeof reference === "string") {
     const definitions = root["$defs"] as Record<string, Record<string, unknown>>;
-    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root);
+    return coerce(definitions[reference.replace("#/$defs/", "")] ?? {}, value, root, depth + 1, budget);
   }
   const alternatives = schema["oneOf"] ?? schema["anyOf"];
   if (Array.isArray(alternatives)) {
     for (const alternative of alternatives) {
-      try { validate(alternative as Record<string, unknown>, value, root, "payload"); return coerce(alternative as Record<string, unknown>, value, root); } catch { /* variant probe */ }
+      try {
+        // Canonical CBOR decodes small integers as numbers, including nested
+        // int64/uint64 fields. Probe the normalized branch, not the raw value.
+        const candidate = alternative as Record<string, unknown>;
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
     return value;
   }
   const declared = schema["type"];
   if (Array.isArray(declared)) {
     for (const kind of declared) {
-      try { return coerce({ ...schema, type: kind }, value, root); } catch { /* union probe */ }
+      try {
+        const candidate = { ...schema, type: kind };
+        const normalized = coerce(candidate, value, root, depth + 1, budget);
+        validate(candidate, normalized, root, "payload", depth + 1);
+        return normalized;
+      } catch (error) { if (!(error instanceof ValidationError)) throw error; }
     }
+    return value;
   }
   if (declared === "integer") {
     const wide = schema["format"] === "int64" || schema["format"] === "uint64";
@@ -355,14 +369,17 @@ function coerce(schema: Record<string, unknown>, value: unknown, root: Record<st
   }
   if (declared === "array" && Array.isArray(value)) {
     const item = schema["items"] as Record<string, unknown> | undefined;
-    return item === undefined ? value : value.map((child) => coerce(item, child, root));
+    return item === undefined ? value : value.map((child) => coerce(item, child, root, depth + 1, budget));
   }
   if ((declared === "object" || "properties" in schema) && typeof value === "object" && value !== null && !Array.isArray(value)) {
     const properties = (schema["properties"] ?? {}) as Record<string, Record<string, unknown>>;
     const patterns = (schema["patternProperties"] ?? {}) as Record<string, Record<string, unknown>>;
+    const additional = schema["additionalProperties"];
     return Object.fromEntries(Object.entries(value).map(([key, child]) => {
-      const matched = properties[key] ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1];
-      return [key, matched === undefined ? child : coerce(matched, child, root)];
+      const matched = (Object.hasOwn(properties, key) ? properties[key] : undefined)
+        ?? Object.entries(patterns).find(([pattern]) => matchesSchemaPattern(pattern, key, "payload"))?.[1]
+        ?? (typeof additional === "object" && additional !== null ? additional as Record<string, unknown> : undefined);
+      return [key, matched === undefined ? child : coerce(matched, child, root, depth + 1, budget)];
     }));
   }
   return value;
@@ -827,7 +844,8 @@ def generate_python(items: list[dict[str, Any]]) -> None:
                 if field["source"] == "path"
             ),
         }
-        rows.append(f"    {item['operation_id']!r}: OperationDefinition(**{row!r}),")
+        arguments = ", ".join(f"{key}={value!r}" for key, value in row.items())
+        rows.append(f"    {item['operation_id']!r}: OperationDefinition({arguments}),")
         if item["stream_kind"] == "server_stream":
             async_methods.append(
                 f"    def {name}(self, request: TypedOperationRequest[{item['request_schema']}], *, options: CallOptions | None = None) -> TypedAsyncEventStream[{item['event_schema']}]:\n"
@@ -1246,6 +1264,25 @@ def assert_packaged_fixtures() -> None:
             "packaged semantic bundle fixture drift: " + ", ".join(drift)
         )
 
+    union_responses = (SDK / "fixtures/union-responses-v1.json").read_bytes()
+    for path in (
+        SDK / "typescript/fixtures/union-responses-v1.json",
+        SDK / "python/src/cigar_sdk/fixtures/union-responses-v1.json",
+    ):
+        if path.read_bytes() != union_responses:
+            raise AssertionError(f"packaged union response fixture drift: {path.relative_to(SDK)}")
+
+    boundaries = (SDK / "fixtures/semantic-boundaries-v1.json").read_bytes()
+    for path in (
+        SDK / "typescript/fixtures/semantic-boundaries-v1.json",
+        SDK / "python/src/cigar_sdk/fixtures/semantic-boundaries-v1.json",
+        ROOT / "crates/cigar-protocol/src/fixtures/semantic-boundaries-v1.json",
+    ):
+        if path.read_bytes() != boundaries:
+            raise AssertionError(
+                f"shared semantic boundary fixture drift: {path.relative_to(ROOT)}"
+            )
+
 
 def assert_release_contracts() -> None:
     """Bind SDKs to explicit release tracks and one unchanged remote ABI/license/notice."""
@@ -1285,20 +1322,23 @@ def assert_release_contracts() -> None:
         "typescript": version,
         "python": python_version,
     }
-    # Local context SDKs have their own beta track; this does not promote the frozen
+    # Local context SDKs have their own release track; this does not promote the frozen
     # Honey daemon, Rust/Go remote clients, or their 0.9.4 publication contracts.
     local_release_path = SDK / "local-context-release.v1.json"
     local_release = load_json(local_release_path) if local_release_path.exists() else None
     if local_release is not None:
+        local_version = local_release.get("core_version", "")
+        if re.fullmatch(r"0\.\d+\.\d+(?:-alpha\.[1-9]\d*)?", local_version) is None:
+            raise AssertionError("invalid local-context release version")
         expected_local = {
             "schema_version": "cigar.local-context-sdk-release.v1",
             "remote_workspace_version": version,
             "context_abi": context_abi,
-            "core_version": "0.10.0-beta.1",
+            "core_version": local_version,
             "protocol": "cigar.context-worker.v1",
-            "channel": "beta",
-            "versions": {"python": "0.10.0b1", "typescript": "0.10.0-beta.1"},
-            "bundled_native_targets": ["aarch64-apple-darwin"],
+            "channel": "alpha" if "-alpha." in local_version else "stable",
+            "versions": {"python": local_version.replace("-alpha.", "a"), "typescript": local_version},
+            "bundled_native_targets": [entry["target"] for entry in load_json(SDK / "native-platforms.v1.json")["platforms"]],
             "published": False,
         }
         if local_release != expected_local or version != "0.9.4":

@@ -5,6 +5,57 @@ from typing import Literal, NotRequired, TypedDict
 LocalEdgeKind = Literal["requires", "contradicts", "supports", "related"]
 
 
+class LocalAnswerClaim(TypedDict):
+    text: str
+    citations: list[str]
+    confidence_bps: int | None
+
+
+class LocalAnswerDraft(TypedDict):
+    snapshot_id: str
+    claims: list[LocalAnswerClaim]
+    abstain: NotRequired[bool]
+
+
+class LocalClaimReview(TypedDict):
+    """Host-trusted judgment; never take this from the generator's untrusted draft."""
+
+    claim_key: str
+    verdict: Literal["supported", "unsupported", "contradicted", "unknown"]
+    reviewed_counterevidence: NotRequired[list[str]]
+
+
+class LocalAnswerPolicy(TypedDict, total=False):
+    min_sources: int
+    high_confidence_bps: int
+
+
+class LocalClaimAssessment(TypedDict):
+    claim_key: str
+    independent_sources: int
+    issues: list[
+        Literal[
+            "uncited",
+            "invalid_citation",
+            "insufficient_sources",
+            "unreviewed",
+            "unsupported",
+            "contradicted",
+            "unknown",
+            "unreviewed_counterevidence",
+        ]
+    ]
+
+
+class LocalAnswerAssessment(TypedDict):
+    snapshot_id: str
+    draft_id: str
+    decision: Literal["release", "abstain"]
+    claims: list[LocalClaimAssessment]
+    confident_failures: int
+    missing_confidence: int
+
+
 class LocalDocument(TypedDict):
     id: str
     source: str
@@ -45,6 +96,17 @@ class LocalCitation(TypedDict):
     end_line: int
 
 
+class LocalContextPrompt(TypedDict):
+    schema: Literal["cigar.context-prompt.v1"]
+    id: str
+    snapshot_id: str
+    tokenizer: str
+    rendered: str
+    rendered_tokens: int
+    max_tokens: int
+    citations: dict[str, list[LocalCitation]]
+
+
 class LocalEvidenceBlock(TypedDict):
     text: str
     citations: list[LocalCitation]
@@ -80,6 +142,28 @@ class LocalContextResult(TypedDict):
     rendered: str
 
 
+LocalSelectionSignal = Literal[
+    "required", "lexical_match", "declaration_match", "semantic_candidate", "graph_expansion"
+]
+
+
+class LocalSelectionStep(TypedDict):
+    root_id: str
+    added_ids: list[str]
+    signals: list[LocalSelectionSignal]
+
+
+class LocalSelectionExplanation(TypedDict):
+    """Current selection trace, not truth confidence or execution authority. Contains selected IDs."""
+
+    schema: Literal["cigar.context-selection-explanation.v1"]
+    snapshot_id: str
+    request_id: str
+    checked_graph_revision: int
+    tokenizer: str
+    steps: list[LocalSelectionStep]
+
+
 class LocalContextDelta(TypedDict):
     base_id: str
     target_id: str
@@ -108,3 +192,38 @@ class LocalGraphStats(TypedDict):
     documents: int
     revision: int
     cache: LocalTokenCacheStats
+
+
+class LocalViewSpec(TypedDict):
+    """Host-owned exact source scope; definition and root access stay outside agent control."""
+
+    id: str
+    allowed_sources: list[str]
+    writable_sources: NotRequired[list[str]]
+    policy_revision: str
+
+
+class LocalViewHandle(TypedDict):
+    """Session-local routing identity, not a bearer credential or signed capability."""
+
+    id: str
+    generation: int
+
+
+class LocalViewContext(TypedDict):
+    id: str
+    view: LocalViewHandle
+    request: LocalContextRequest
+    scope_id: str
+    snapshot: LocalContextSnapshot
+
+
+class LocalViewResult(TypedDict):
+    context: LocalViewContext
+    rendered: str
+
+
+class LocalViewAssessment(TypedDict):
+    context_id: str
+    checked_graph_revision: int
+    assessment: LocalAnswerAssessment

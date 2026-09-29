@@ -85,7 +85,11 @@ class _UrllibStream:
         self.status = int(self._response.status)
         raw_headers = self._response.headers
         self.headers: Mapping[str, str]
-        self.headers = _response_headers(raw_headers)
+        try:
+            self.headers = _response_headers(raw_headers)
+        except TransportError:
+            self._response.close()
+            raise
 
     def __iter__(self) -> Iterator[bytes]:
         while True:
