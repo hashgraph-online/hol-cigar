@@ -36,7 +36,7 @@ cigar-protocol = { version = "=0.9.4", path = "../../crates/cigar-protocol" }
 futures-core = "=0.3.32"
 futures-util = "=0.3.32"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
-rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 rustix = { version = "=1.1.4", features = ["fs", "process"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"

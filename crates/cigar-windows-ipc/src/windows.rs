@@ -546,7 +546,10 @@ fn validate_owner_acl(
     if policy != AclPolicy::Credential && ace.Mask != FILE_ALL_ACCESS {
         return Err(unsafe_credential_acl());
     }
-    let ace_sid = std::ptr::addr_of!(ace.SidStart).cast_mut().cast::<c_void>();
+    // SAFETY: the validated ACE contains the fixed SID header at `sid_offset`. Derive the
+    // variable-length SID from the original allocation pointer, not the four-byte SidStart
+    // field of the narrower ACCESS_ALLOWED_ACE reference.
+    let ace_sid = unsafe { ace_pointer.cast::<u8>().add(sid_offset).cast::<c_void>() };
     // SAFETY: the preceding size check proves the complete fixed SID header is inside this valid
     // ACE, so its one-byte subauthority count at offset one can be inspected without overread.
     let subauthority_count = usize::from(unsafe { *ace_sid.cast::<u8>().add(1) });

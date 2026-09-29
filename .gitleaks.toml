@@ -61,3 +61,24 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^tests/integration/matrix-v1\.json$''']
 regexes = ['''HANDOFF-AUTH-001"\s*,\s*"HANDOFF-RESULT-001''']
+
+[[allowlists]]
+description = "Qualification manifests bind tokenizer and API source files to public SHA-256 content digests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''^benches/context-012/qualified-2026-09-25\.json$''',
+  '''^reports/evidence/context-010(?:-pass2)?/manifest\.json$''',
+  '''^reports/evidence/context-sdk-010-(?:rc1|clean)/release\.json$''',
+  '''^reports/evidence/context-sdk-014-soak/plan\.json$''',
+]
+regexes = ['''(?:tokenizer\.rs|context-api\.(?:ts|(?:d\.ts|js)(?:\.map)?))"\s*:\s*"[0-9a-f]{64}"''']
+
+[[allowlists]]
+description = "The context explanation test asserts a public tokenizer algorithm identifier."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^crates/cigar-context/tests/explain\.rs$''']
+regexes = ['''explanation\.tokenizer, "cigar\.utf8-bytes\.v1"''']

@@ -200,7 +200,7 @@ jobs:
       - name: Test the locked Python SDK
         run: |
           rustup toolchain install 1.92.0 --profile minimal
-          cargo +1.92.0 build --locked --release -p cigar-context --features bpe --bin cigar-context-worker
+          cargo +1.92.0 build --locked --release -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
           rustc +1.92.0 sdk/fixtures/stalled-worker.rs -o "${RUNNER_TEMP}/cigar-stalled-worker"
           export CIGAR_TEST_WORKER="${GITHUB_WORKSPACE}/target/release/cigar-context-worker"
           export CIGAR_TEST_STALLED_WORKER="${RUNNER_TEMP}/cigar-stalled-worker"

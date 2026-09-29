@@ -76,7 +76,7 @@ jobs:
         env:
           CIGAR_ALLOW_PORTABLE_WHEEL: "1"
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-          CIGAR_TEST_WORKER: ${{ github.workspace }}/target/debug/cigar-context-worker${{ runner.os == 'Windows' && '.exe' || '' }}
+          CIGAR_TEST_WORKER: ${{ github.workspace }}/target/debug/${{ runner.os == 'Windows' && 'cigar-context-worker.exe' || 'cigar-context-worker' }}
           CIGAR_TEST_NODE_AGENT: ${{ github.workspace }}/sdk/typescript/dist/tests/broker-agent.js
         run: |
           cargo build --locked -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker

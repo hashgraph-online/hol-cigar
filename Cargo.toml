@@ -98,7 +98,7 @@ r2d2_postgres = { version = "=0.18.2" }
 s3 = { package = "cigar-rust-s3", version = "=0.37.2-cigar.1", path = "crates/cigar-rust-s3", default-features = false, features = ["sync-rustls-tls"] }
 rustix = { version = "=1.1.4", features = ["process"] }
 rusqlite = { version = "=0.39.0", features = ["backup", "bundled"] }
-rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 ed25519-dalek = { version = "=3.0.0" }
 fallible-iterator = { version = "=0.2.0" }
 getrandom = { version = "=0.4.3" }
