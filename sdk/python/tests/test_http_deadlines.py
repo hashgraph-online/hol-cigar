@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import io
+import ssl
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from email.message import Message
+from urllib.error import HTTPError
 
 import pytest
 from test_client import _UUID, FakeStream, FakeTransport, ok
+from test_transport_boundaries import transport as stub_transport
 
 from cigar_sdk import AsyncCigarClient, CallOptions, CigarClient, TypedOperationRequest, models
 from cigar_sdk.errors import CigarTimeoutError
@@ -74,7 +78,8 @@ class WireSocket:
 
 @pytest.mark.parametrize("phase", ["headers", "body", "chunked", "problem", "events"])
 @pytest.mark.parametrize("slow", [False, True])
-def test_absolute_deadline_covers_each_http_read_phase(monkeypatch, phase, slow):
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_absolute_deadline_covers_each_http_read_phase(monkeypatch, phase, slow, scheme):
     clock = Clock()
     status = b"400 Bad Request" if phase == "problem" else b"200 OK"
     payload = b": heartbeat\n\n" * 8 if phase == "events" else b"x" * 40
@@ -89,16 +94,25 @@ def test_absolute_deadline_covers_each_http_read_phase(monkeypatch, phase, slow)
     wire = WireSocket(head + body, clock, 0 if phase == "headers" else len(head), 0.04 if slow else 0)
     monkeypatch.setattr("time.monotonic", clock.monotonic)
     monkeypatch.setattr("socket.create_connection", lambda *args, **kwargs: wire)
+
+    def verified_tls(context, sock, *, server_hostname):
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname is True
+        assert server_hostname == "fixture.invalid"
+        return sock
+
+    monkeypatch.setattr(ssl.SSLContext, "wrap_socket", verified_tls)
     transport = UrllibTransport()
+    url = f"{scheme}://fixture.invalid/"
 
     def consume():
         if phase == "events":
-            response = transport.stream("GET", "http://127.0.0.1/", {}, 0.15)
+            response = transport.stream("GET", url, {}, 0.15)
             try:
                 return b"".join(response)
             finally:
                 response.close()
-        return transport.request("GET", "http://127.0.0.1/", {}, None, 0.15).body
+        return transport.request("GET", url, {}, None, 0.15).body
 
     if slow:
         with pytest.raises(CigarTimeoutError):
@@ -109,6 +123,38 @@ def test_absolute_deadline_covers_each_http_read_phase(monkeypatch, phase, slow)
     else:
         assert consume() == payload
     assert all(reader.closed for reader in wire.readers)
+
+
+def test_deadline_transport_rejects_redirect_without_opening_the_new_endpoint(monkeypatch):
+    wire = WireSocket(
+        b"HTTP/1.1 307 Temporary Redirect\r\nLocation: https://elsewhere.invalid/\r\nContent-Length: 0\r\n\r\n",
+        Clock(), 0, 0,
+    )
+    endpoints = []
+
+    def connect(endpoint, *args, **kwargs):
+        endpoints.append(endpoint)
+        return wire
+
+    monkeypatch.setattr("socket.create_connection", connect)
+    response = UrllibTransport().request("GET", "http://fixture.invalid/", {}, None, 1)
+    assert response.status == 307
+    assert endpoints == [("fixture.invalid", 80)]
+    assert all(reader.closed for reader in wire.readers)
+
+
+def test_socket_timeout_in_http_error_body_is_normalized_and_closed():
+    # An actual socket timeout is distinct from the monotonic deadline checks.
+    class TimedOutBody(io.BytesIO):
+        def read(self, *args):
+            raise TimeoutError("private response bytes")
+
+    body = TimedOutBody()
+    error = HTTPError("https://fixture.invalid/", 400, "problem", Message(), body)
+    with pytest.raises(CigarTimeoutError) as raised:
+        stub_transport(error=error).request("GET", "https://fixture.invalid/", {}, None, 1)
+    assert "private response bytes" not in str(raised.value)
+    assert body.closed
 
 
 def test_custom_transport_cannot_return_success_after_deadline(monkeypatch):
