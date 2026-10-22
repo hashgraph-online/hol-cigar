@@ -324,7 +324,7 @@ def _metadata_checks(
         and root_export == {"types": "./dist/index.d.ts", "import": "./dist/index.js"},
         "types": package.get("types") == "./dist/index.d.ts",
         "side_effects": package.get("sideEffects") is False,
-        "node_engine": package.get("engines") == {"node": ">=24.10.0 <25"},
+        "node_engine": package.get("engines") == {"node": ">=24.22.1 <25"},
         "package_manager": package.get("packageManager") == "pnpm@10.34.5",
         "files": package.get("files")
         == ["dist/", "fixtures/", "README.md", "LICENSE", "NOTICE"],

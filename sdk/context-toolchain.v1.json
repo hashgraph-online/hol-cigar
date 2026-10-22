@@ -2,6 +2,12 @@
   "schema": "cigar.context-toolchain.v1",
   "reviewed_at": "2026-09-25T16:40:00Z",
   "uv": "0.12.18",
+  "node": {
+    "minimum": "24.22.1",
+    "current": "24.22.1",
+    "engines": ">=24.22.1 <25",
+    "reviewed_at": "2026-10-22"
+  },
   "python": {
     "protobuf_minimum": "6.33.5",
     "protobuf_current": "7.36.2",

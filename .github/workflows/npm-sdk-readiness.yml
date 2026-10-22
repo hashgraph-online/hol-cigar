@@ -71,7 +71,7 @@ jobs:
       - id: track
         run: |
           version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1" || test "${version}" = "0.10.1" || test "${version}" = "0.11.0" || test "${version}" = "0.14.0"
+          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1" || test "${version}" = "0.10.1" || test "${version}" = "0.11.0" || test "${version}" = "0.14.1"
           printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   local-context-rc:
@@ -81,13 +81,13 @@ jobs:
 
   local-context-stable:
     needs: release-track
-    if: needs.release-track.outputs.version == '0.14.0'
+    if: needs.release-track.outputs.version == '0.14.1'
     uses: ./.github/workflows/context-distribution.yml
 
   qualify:
     needs: release-track
     if: needs.release-track.outputs.version == '0.9.4'
-    name: source, pack, consumers, and dry-run / Node 24.10.0
+    name: source, pack, consumers, and dry-run / Node 24.22.1
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -100,7 +100,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24.10.0"
+          node-version: "24.22.1"
           check-latest: false
           registry-url: https://registry.npmjs.org
 
@@ -120,7 +120,7 @@ jobs:
           corepack enable
           corepack install --global pnpm@10.34.5
           npm install --global --ignore-scripts npm@11.6.0
-          test "$(node --version)" = "v24.10.0"
+          test "$(node --version)" = "v24.22.1"
           test "$(pnpm --version)" = "10.34.5"
           test "$(npm --version)" = "11.6.0"
           test "$(go version | awk '{print $3}')" = "go1.26.6"
@@ -199,14 +199,14 @@ jobs:
       - name: Select the staging CLI runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24.19.0"
+          node-version: "24.22.1"
           check-latest: false
           registry-url: https://registry.npmjs.org
 
       - name: Run npm stage dry-run only
         run: |
           npm install --global --ignore-scripts npm@12.0.2
-          test "$(node --version)" = "v24.19.0"
+          test "$(node --version)" = "v24.22.1"
           test "$(npm --version)" = "12.0.2"
           dry_run="${RUNNER_TEMP}/cigar-npm-stage-dry-run.json"
           npm stage publish \

@@ -9,7 +9,7 @@ Start with the [published npm beta quickstart](../README.md#local-npm-quickstart
 The [TypeScript](typescript/README.md) and [Python](python/README.md) guides describe
 the 0.11.0 distribution candidate, its native platform matrix, and the local
 `cigar-context doctor` and `demo` commands. The TypeScript package
-supports Node.js >=24.10.0 <25 and ESM. Reuse a graph across requests to retain its
+supports Node.js >=24.22.1 <25 and ESM. Reuse a graph across requests to retain its
 indexes and exact-token cache.
 
 ## Remote protocol clients

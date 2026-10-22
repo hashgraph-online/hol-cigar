@@ -36,8 +36,8 @@ from release_lib import (
 ROOT = distribution.ROOT
 require = distribution.require
 RUNTIMES = {
-    "minimum": {"node": "24.10.0", "python": "3.14.0"},
-    "current": {"node": "24.19.0", "python": "3.14.7"},
+    "minimum": {"node": "24.22.1", "python": "3.14.0"},
+    "current": {"node": "24.22.1", "python": "3.14.7"},
 }
 TOOL_POLICY = load_json(ROOT / "sdk/context-toolchain.v1.json")
 PROTOBUF_VERSIONS = {

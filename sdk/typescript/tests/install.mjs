@@ -10,7 +10,7 @@ const maps = (directory) => readdirSync(directory, { withFileTypes: true }).flat
   return entry.isDirectory() ? maps(path) : entry.name.endsWith(".map") ? [path] : [];
 });
 try {
-  assert.equal(process.versions.node, "24.10.0", "qualification must run on the frozen minimum Node runtime");
+  assert.equal(process.versions.node, "24.22.1", "qualification must run on the frozen minimum Node runtime");
   const output = execFileSync("pnpm", ["pack", "--pack-destination", temporary], { encoding: "utf8" });
   const archive = output.trim().split("\n").at(-1);
   assert.ok(archive);

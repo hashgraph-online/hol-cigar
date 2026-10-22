@@ -62,6 +62,7 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             versions.validate(expected="0.11.0")
         paths = [
+            "package.json",
             "sdk/local-context-release.v1.json",
             "sdk/python/pyproject.toml",
             "sdk/typescript/package.json",
@@ -98,6 +99,14 @@ class PolicyTests(unittest.TestCase):
                 with self.subTest(path=path), self.assertRaises(AssertionError):
                     versions.validate(root)
                 target.write_bytes(original)
+            target = root / "sdk/typescript/package.json"
+            original = target.read_bytes()
+            value = json.loads(original)
+            value["engines"]["node"] = ">=24.22.0 <25"
+            target.write_text(json.dumps(value))
+            with self.assertRaisesRegex(AssertionError, "Node engine policy drift"):
+                versions.validate(root)
+            target.write_bytes(original)
             if identity["channel"] == "stable":
                 for name in (
                     "context-sdk-release.yml",

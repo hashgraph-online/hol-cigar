@@ -13,6 +13,13 @@ Node client RSS kept growing within the cap. HUMIDOR adoption and broader
 Hiero/task evidence remain pending.
 Qualification applies to the exact artifacts named in the signed release receipts.
 
+## 0.14.1 security candidate
+
+The next patch release adds aggregate compilation limits and Python HTTP deadlines,
+and requires Node.js `>=24.22.1 <25`. See the [0.14.1 release notes](../../docs/release/context-sdk-0.14.1-notes.md).
+It is prepared for review and is not yet published. Historical qualification below
+applies to the named 0.14.0 artifacts. Upgrade and restart Node consumers now.
+
 ## Install and check
 
 Version 0.14.0 targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
@@ -174,7 +181,7 @@ Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
 `pip install --no-binary hol-cigar` source installs. These builds retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.14.0 Rust source using Rust 1.92+:
+0.14.1 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker

@@ -101,7 +101,7 @@ class NpmSdkVerifierTests(unittest.TestCase):
             },
             "type": "module",
             "packageManager": "pnpm@10.34.5",
-            "engines": {"node": ">=24.10.0 <25"},
+            "engines": {"node": ">=24.22.1 <25"},
             "exports": {
                 ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}
             },

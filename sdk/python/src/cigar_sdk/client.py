@@ -8,6 +8,7 @@ import json
 import re
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import suppress
 from typing import Any, Self
 from urllib.parse import urlencode, urlsplit
 
@@ -34,7 +35,7 @@ from cigar_sdk.models_runtime import (
     encode_operation_payload,
     payload_value,
 )
-from cigar_sdk.transport import HttpResponse, HttpTransport, StreamResponse, UrllibTransport
+from cigar_sdk.transport import HttpResponse, HttpTransport, StreamResponse, UrllibTransport, _remaining
 from cigar_sdk.types import (
     CallOptions,
     OperationEvent,
@@ -108,9 +109,22 @@ def _parameters(values: tuple[PathParameter, ...]) -> tuple[PathParameter, ...]:
     return ordered
 
 
-def _bounded_stream_body(stream: StreamResponse, maximum: int) -> bytes:
+def _deadline_lines(stream: StreamResponse, deadline: float) -> Iterator[bytes]:
+    lines = iter(stream)
+    while True:
+        _remaining(deadline)
+        try:
+            raw = next(lines)
+        except StopIteration:
+            _remaining(deadline)
+            return
+        _remaining(deadline)
+        yield raw
+
+
+def _bounded_stream_body(stream: StreamResponse, maximum: int, deadline: float) -> bytes:
     retained = bytearray()
-    for chunk in stream:
+    for chunk in _deadline_lines(stream, deadline):
         if len(chunk) > maximum - len(retained):
             raise TransportError("stream response exceeds its bound")
         retained.extend(chunk)
@@ -326,7 +340,9 @@ class _Core:
             if remaining <= 0:
                 raise CigarTimeoutError("CIGAR request deadline elapsed")
             try:
-                return self._call_once(definition, request, remaining)
+                response = self._call_once(definition, request, deadline)
+                _remaining(deadline)
+                return response
             except (CigarApiError, TransportError, CigarTimeoutError) as error:
                 if attempt == attempts or not is_retryable(error):
                     raise
@@ -343,9 +359,9 @@ class _Core:
         self,
         definition: OperationDefinition,
         request: OperationRequest,
-        timeout: float,
+        deadline: float,
     ) -> OperationResponse:
-        timeout = _timeout(timeout)
+        timeout = _remaining(deadline)
         parameters = _parameters(request.path_parameters)
         path = _path(definition.http_path, parameters)
         headers = self.headers(definition.operation_id, timeout)
@@ -400,8 +416,9 @@ class _Core:
             self.base_url + path,
             headers,
             body,
-            timeout,
+            _remaining(deadline),
         )
+        _remaining(deadline)
         return _response(definition.operation_id, response)
 
 
@@ -470,20 +487,21 @@ class _EventStream(Iterator[OperationEvent]):
                 headers["last-event-id"] = self._last_event_id
             current: StreamResponse | None = None
             try:
-                current = self._core.transport.stream("GET", self._core.base_url + path, headers, remaining)
+                current = self._core.transport.stream("GET", self._core.base_url + path, headers, _remaining(deadline))
                 self._current = current
+                _remaining(deadline)
                 if not 200 <= current.status < 300:
                     declared = current.headers.get("content-length")
                     if declared is not None and (
                         not declared.isascii() or not declared.isdigit() or int(declared) > _MAX_PROBLEM
                     ):
                         raise TransportError("stream problem Content-Length exceeds its bound")
-                    body = _bounded_stream_body(current, _MAX_PROBLEM)
+                    body = _bounded_stream_body(current, _MAX_PROBLEM, deadline)
                     raise _problem(HttpResponse(current.status, current.headers, body))
                 content_type = current.headers.get("content-type", "").split(";", 1)[0].strip()
                 if content_type != "text/event-stream":
                     raise TransportError("stream response must use text/event-stream")
-                yield from self._parse(iter(current))
+                yield from self._parse(_deadline_lines(current, deadline))
             except (CigarApiError, TransportError, CigarTimeoutError) as error:
                 if attempt == attempts or not is_retryable(error):
                     raise
@@ -579,13 +597,18 @@ class _AsyncEventStream(AsyncIterator[OperationEvent]):
         return self
 
     async def __anext__(self) -> OperationEvent:
-        present, event = await asyncio.to_thread(_next_event, self._stream)
+        try:
+            present, event = await asyncio.to_thread(_next_event, self._stream)
+        except asyncio.CancelledError:
+            with suppress(Exception):
+                self._stream.close()
+            raise
         if not present or event is None:
             raise StopAsyncIteration
         return event
 
     async def aclose(self) -> None:
-        await asyncio.to_thread(self._stream.close)
+        self._stream.close()
 
     async def __aenter__(self) -> Self:
         return self
@@ -645,13 +668,18 @@ class _TypedAsyncEventStream[T](AsyncIterator[TypedOperationEvent[T]]):
         return self
 
     async def __anext__(self) -> TypedOperationEvent[T]:
-        present, event = await asyncio.to_thread(_next_typed_event, self._stream)
+        try:
+            present, event = await asyncio.to_thread(_next_typed_event, self._stream)
+        except asyncio.CancelledError:
+            with suppress(Exception):
+                self._stream.close()
+            raise
         if not present or event is None:
             raise StopAsyncIteration
         return event
 
     async def aclose(self) -> None:
-        await asyncio.to_thread(self._stream.close)
+        self._stream.close()
 
     async def __aenter__(self) -> Self:
         return self

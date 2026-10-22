@@ -711,7 +711,7 @@ def _load_configuration(root: Path) -> BuildConfiguration:
         }
         or package.get("type") != "module"
         or package.get("packageManager") != "pnpm@10.34.5"
-        or package.get("engines") != {"node": ">=24.10.0 <25"}
+        or package.get("engines") != {"node": ">=24.22.1 <25"}
         or package.get("files") != expected_package_files
         or package.get("sideEffects") is not False
         or package.get("dependencies") != expected_dependencies
@@ -1310,7 +1310,7 @@ def _default_package_builder(
         .strip()
     )
     if (
-        node_version != "v24.10.0"
+        node_version != "v24.22.1"
         or pnpm_version != "10.34.5"
         or npm_version != "11.6.0"
     ):

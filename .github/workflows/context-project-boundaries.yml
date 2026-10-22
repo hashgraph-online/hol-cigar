@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main, codex/cigar-0.14.0]
+    branches: [main, codex/cigar-0.14.1-security]
 
 permissions:
   contents: read

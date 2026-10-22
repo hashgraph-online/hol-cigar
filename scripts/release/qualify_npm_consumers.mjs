@@ -74,9 +74,10 @@ const arguments_ = parseArguments(process.argv.slice(2));
 requireRegular(arguments_.archive, "SDK archive", MAX_ARCHIVE_BYTES);
 requireRegular(arguments_["npm-cli"], "npm CLI", MAX_ARCHIVE_BYTES);
 requireRegular(arguments_.tsc, "TypeScript compiler", MAX_ARCHIVE_BYTES);
-const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
-if (nodeMajor !== 24 || !Number.isInteger(nodeMinor) || nodeMinor < 10) {
-  fail(`qualification requires supported Node >=24.10.0 <25; observed ${process.versions.node}`);
+const [nodeMajor, nodeMinor, nodePatch] = process.versions.node.split(".").map(Number);
+if (nodeMajor !== 24 || !Number.isInteger(nodeMinor) || !Number.isInteger(nodePatch)
+    || nodeMinor < 22 || (nodeMinor === 22 && nodePatch < 1)) {
+  fail(`qualification requires supported Node >=24.22.1 <25; observed ${process.versions.node}`);
 }
 
 const npmVersion = run(process.execPath, [arguments_["npm-cli"], "--version"]);

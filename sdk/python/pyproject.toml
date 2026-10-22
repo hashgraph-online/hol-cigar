@@ -1,6 +1,6 @@
 [project]
 name = "hol-cigar"
-version = "0.14.0"
+version = "0.14.1"
 description = "Local context graphs, exact token budgets, citations and answer review. No HOL service required."
 readme = "README.md"
 license = "Apache-2.0"
