@@ -316,7 +316,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         "npm publication target mismatch",
     )
     require(
-        package["engines"]["node"] == ">=24.10.0 <25" and package["type"] == "module",
+        package["engines"]["node"] == ">=24.22.1 <25" and package["type"] == "module",
         "npm runtime contract mismatch",
     )
     require(

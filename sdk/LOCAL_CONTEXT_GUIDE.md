@@ -7,7 +7,7 @@ your own process. The npm package is `@hol-org/cigar`; the PyPI distribution is
 
 ## Start with the installed package
 
-For Node.js 24 ESM, import `LocalContextGraph` from `@hol-org/cigar/context`.
+For Node.js `>=24.22.1 <25` ESM, import `LocalContextGraph` from `@hol-org/cigar/context`.
 For Python 3.14, import it from `cigar_sdk` or `cigar_sdk.context`.
 Run `npx --no-install cigar-context doctor --json` in the npm consumer, or
 `python -m cigar_sdk.local_cli doctor --json` in the Python environment. The diagnostic
@@ -27,12 +27,16 @@ credentials are required from either error. Never silently fall back to a server
 The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
-The 0.14.0 candidate retains these seven targets. Development native workers have
-passed two independent builds on all seven; the final versioned installed matrix
-and continuous soak remain release gates. The platform inventory alone does not
-certify qualification. See the current release notes and execution checklist.
+The 0.14.1 security candidate retains these seven targets. Its final versioned
+installed matrix remains a release gate. Historical qualification receipts apply
+only to their named artifacts. See the current release notes and execution checklist.
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
+
+Compilation and explanation enforce a fixed aggregate preparation budget before
+copying or rendering dependency closures. A complex query can return `LimitExceeded`
+even when its requested output is small. Narrow its candidates or source graph;
+an agent request cannot increase the implementation's work budget.
 
 Run `cigar-context demo --json` through the same environment to exercise the entire
 workflow. Its fixture reviewer is explicitly scripted; it is not a model or general

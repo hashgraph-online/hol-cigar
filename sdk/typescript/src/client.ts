@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { assertUniqueJsonKeys } from "./strict-json.js";
+import { requirePatchedNodeFetch } from "./runtime-policy.js";
 
 import {
   CigarApiError,
@@ -340,6 +341,9 @@ export class CigarClient {
     }
     if (options.fetch === undefined && ambientProxyConfigured()) {
       throw new ValidationError("ambient proxy configuration requires an explicitly trusted custom fetch");
+    }
+    if (options.fetch === undefined) {
+      requirePatchedNodeFetch(process.versions.node);
     }
     this.#fetch = options.fetch ?? globalThis.fetch;
     if (options.apiVersion !== undefined && options.apiVersion !== "1") {

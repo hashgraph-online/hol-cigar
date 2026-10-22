@@ -55,7 +55,7 @@ jobs:
         with:
           architecture: arm64
           check-latest: false
-          node-version: "24.10.0"
+          node-version: "24.22.1"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -72,7 +72,7 @@ jobs:
         run: |
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
-          test "$(node --version)" = "v24.10.0"
+          test "$(node --version)" = "v24.22.1"
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
@@ -296,7 +296,7 @@ jobs:
         with:
           architecture: arm64
           check-latest: false
-          node-version: "24.10.0"
+          node-version: "24.22.1"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -311,7 +311,7 @@ jobs:
           test "$(rustc --version | awk '{print $2}')" = "1.92.0"
           test "$(cargo --version | awk '{print $2}')" = "1.92.0"
           test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
-          test "$(node --version)" = "v24.10.0"
+          test "$(node --version)" = "v24.22.1"
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOARCH)" = "arm64"
           test "$(go env GOOS)" = "darwin"
@@ -384,7 +384,7 @@ jobs:
         with:
           architecture: arm64
           check-latest: false
-          node-version: "24.10.0"
+          node-version: "24.22.1"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -407,7 +407,7 @@ jobs:
           test "$(rustc --version | awk '{print $2}')" = "1.92.0"
           test "$(cargo --version | awk '{print $2}')" = "1.92.0"
           test "$(rustc --version --verbose | awk '/^host:/ {print $2}')" = "aarch64-apple-darwin"
-          test "$(node --version)" = "v24.10.0"
+          test "$(node --version)" = "v24.22.1"
           test "$(python3 -c 'import platform; print(platform.python_version())')" = "3.14.6"
           test "$(go env GOOS)" = "darwin"
           test "$(go env GOARCH)" = "arm64"

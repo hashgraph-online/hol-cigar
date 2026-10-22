@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1 — security candidate
+
+- Bound aggregate compilation traversal, evidence copying, rendering and scoring before allocation; excessive work returns `LimitExceeded`.
+- Enforce Python HTTP response deadlines through headers, bodies and event streams; close active reads on async stream cancellation.
+- Require patched Node.js `>=24.22.1 <25` and reject older runtimes for built-in remote fetch (CVE-2026-111497). Operators must upgrade Node and restart consumers.
+- Prepare matching native/Python/npm 0.14.1 packages; publication and platform qualification are pending.
+
 ## 0.13.0-alpha.1
 
 - Add bounded host-scoped views on one graph/index, source write limits and revocation.

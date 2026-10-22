@@ -84,6 +84,14 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
         "missing current release notes"
     )
     policy = json.loads((root / "sdk/context-toolchain.v1.json").read_bytes())
+    assert node["engines"]["node"] == policy["node"]["engines"], (
+        "Node engine policy drift"
+    )
+    assert (
+        json.loads((root / "package.json").read_bytes())["engines"]["node"]
+        == policy["node"]["engines"]
+    ), "workspace Node engine policy drift"
+    assert policy["node"]["minimum"] == "24.22.1", "Node security floor drift"
     dev = python["dependency-groups"]["dev"]
     for name in ("pytest", "mypy", "ruff"):
         assert f"{name}=={policy['python'][name]}" in dev, f"{name} tool drift"
@@ -97,6 +105,16 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     checked = 0
     for path in (root / ".github/workflows").glob("*.yml"):
         source = path.read_text()
+        for runtime in re.findall(
+            r'node(?:-version)?:\s*["\']([0-9]+\.[0-9]+\.[0-9]+)["\']', source
+        ):
+            assert runtime in {policy["node"]["minimum"], policy["node"]["current"]}, (
+                f"Node runtime pin drift: {path.name}"
+            )
+        for runtime in re.findall(r"node:([0-9]+\.[0-9]+\.[0-9]+)-", source):
+            assert runtime in {policy["node"]["minimum"], policy["node"]["current"]}, (
+                f"Node container pin drift: {path.name}"
+            )
         for block in re.findall(
             r"uses: astral-sh/setup-uv@[^\n]+\n((?:[ \t]+[^\n]*\n){1,8})", source
         ):

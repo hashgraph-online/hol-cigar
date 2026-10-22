@@ -111,6 +111,62 @@ struct Witnesses {
     content: BTreeSet<String>,
 }
 
+// These limits belong to the host implementation, never to ContextRequest. Output and
+// retained-ticket limits cannot bound preparation of overlapping dependency closures.
+struct CompileBudget {
+    work: usize,
+    bytes: usize,
+    exhausted: bool,
+}
+
+impl CompileBudget {
+    fn new() -> Self {
+        Self {
+            work: 1_000_000,
+            bytes: 64 * 1024 * 1024,
+            exhausted: false,
+        }
+    }
+
+    fn charge(&mut self, work: usize, bytes: usize) -> Result<(), ContextError> {
+        match (self.work.checked_sub(work), self.bytes.checked_sub(bytes)) {
+            (Some(work), Some(bytes)) if !self.exhausted => {
+                self.work = work;
+                self.bytes = bytes;
+                Ok(())
+            }
+            _ => {
+                self.exhausted = true;
+                Err(ContextError::LimitExceeded)
+            }
+        }
+    }
+
+    fn count(
+        &mut self,
+        blocks: &[EvidenceBlock],
+        tokenizer: &impl TokenCounter,
+    ) -> Result<usize, ContextError> {
+        // JSON strings can expand sixfold. Charge before render creates intermediate
+        // strings, including every citation, even when identical text is coalesced.
+        for block in blocks {
+            self.charge(1, block.text.len().saturating_mul(6).saturating_add(128))?;
+            for citation in &block.citations {
+                self.charge(
+                    1,
+                    citation
+                        .node_id
+                        .len()
+                        .saturating_add(citation.source.len())
+                        .saturating_mul(6)
+                        .saturating_add(128),
+                )?;
+            }
+        }
+        tokenizer.count(&crate::snapshot::render(blocks))
+    }
+}
+
 impl ContextGraph {
     fn scored_roots<'a>(
         &'a self,
@@ -266,6 +322,7 @@ impl ContextGraph {
         mut trace: Option<&mut Vec<SelectionStep>>,
     ) -> Result<ContextSnapshot, ContextError> {
         validate(request, tokenizer)?;
+        let mut budget = CompileBudget::new();
         let available = request.max_tokens - request.reserve_tokens;
         let terms = query_terms(&request.query);
         if terms.len() > 64 {
@@ -337,12 +394,12 @@ impl ContextGraph {
         let mut blocks = Vec::new();
         let mut coverage = BTreeMap::<String, Witnesses>::new();
         for id in &request.required {
-            let closure = self.hard_closure(id, request)?;
+            let closure = self.hard_closure(id, request, &mut budget)?;
             if selected.union(&closure).count() > request.max_candidates {
                 return Err(ContextError::LimitExceeded);
             }
-            let additions = self.blocks_for(&closure, &selected, &terms, None)?;
-            append_coalesced(&mut blocks, additions);
+            let additions = self.blocks_for(&closure, &selected, &terms, None, &mut budget)?;
+            append_coalesced(&mut blocks, additions, &mut budget)?;
             if let Some(steps) = trace.as_deref_mut()
                 && !closure.is_subset(&selected)
             {
@@ -357,43 +414,54 @@ impl ContextGraph {
                 return Err(ContextError::BudgetUnsatisfiable);
             }
         }
-        if blocks.len() > request.max_blocks
-            || tokenizer.count(&crate::snapshot::render(&blocks))? > available
-        {
+        if blocks.len() > request.max_blocks || budget.count(&blocks, tokenizer)? > available {
             return Err(ContextError::BudgetUnsatisfiable);
         }
         self.add_coverage(&blocks, &terms, &mut coverage);
         let mut unavailable = 0;
         let mut limit_rejected = 0;
         let mut budget_rejected = 0;
-        let hard_nodes = self
-            .edges
+        let mut hard_nodes = request
+            .required
             .iter()
-            .filter(|_| request.excerpt_mode == ExcerptMode::QueryWindows)
-            .filter(|(id, _)| allowed(id))
-            .flat_map(|(from, edges)| {
-                edges
-                    .iter()
-                    .filter(|(kind, _)| matches!(kind, EdgeKind::Requires | EdgeKind::Contradicts))
-                    .flat_map(move |(_, to)| [from.clone(), to.clone()])
-            })
-            .chain(request.required.iter().cloned())
+            .map(String::as_str)
             .collect::<BTreeSet<_>>();
+        if request.excerpt_mode == ExcerptMode::QueryWindows {
+            for (from, edges) in self.edges.iter().filter(|(id, _)| allowed(id)) {
+                for (kind, to) in edges {
+                    budget.charge(1, 0)?;
+                    if matches!(kind, EdgeKind::Requires | EdgeKind::Contradicts) {
+                        hard_nodes.insert(from.as_str());
+                        hard_nodes.insert(to.as_str());
+                    }
+                }
+            }
+        }
         // Build and tokenize root closures once. Coverage changes only utility, not source bytes.
         let mut prepared = Vec::new();
         for root in roots {
             if selected.contains(root.id) {
                 continue;
             }
-            match self.hard_closure(root.id, request) {
+            let closure = self.hard_closure(root.id, request, &mut budget);
+            // A per-root candidate limit can reject an optional root. Exhausting the
+            // aggregate budget must abort the entire call, including optional roots.
+            budget.charge(0, 0)?;
+            match closure {
                 Ok(closure) => {
                     let excerpt_root = (request.excerpt_mode == ExcerptMode::QueryWindows
                         && closure.len() == 1
                         && !hard_nodes.contains(root.id))
                     .then_some(root.id);
-                    let values =
-                        self.blocks_for(&closure, &BTreeSet::new(), &terms, excerpt_root)?;
-                    let cost = tokenizer.count(&crate::snapshot::render(&values))?.max(1);
+                    let values = self.blocks_for(
+                        &closure,
+                        &BTreeSet::new(),
+                        &terms,
+                        excerpt_root,
+                        &mut budget,
+                    )?;
+                    let cost = budget.count(&values, tokenizer)?.max(1);
+                    budget.charge(closure.len().saturating_mul(terms.len().max(1)), 0)?;
                     let retained = if excerpt_root.is_none() {
                         closure
                             .iter()
@@ -439,6 +507,12 @@ impl ContextGraph {
                 .collect::<BTreeSet<_>>();
             let mut best = None;
             for (index, (root, closure, _, cost, retained)) in prepared.iter().enumerate() {
+                budget.charge(
+                    closure
+                        .len()
+                        .saturating_mul(terms.len().saturating_mul(2).saturating_add(1)),
+                    0,
+                )?;
                 if closure.is_subset(&selected) {
                     continue;
                 }
@@ -496,6 +570,16 @@ impl ContextGraph {
                 break;
             };
             let (root, closure, additions, _, _) = prepared.remove(index);
+            // Charge the selected-block copy before cloning it for this proposal.
+            for block in &blocks {
+                budget.charge(
+                    1,
+                    block
+                        .text
+                        .len()
+                        .saturating_add(block.citations.len().saturating_mul(2304)),
+                )?;
+            }
             let mut proposed = blocks.clone();
             append_coalesced(
                 &mut proposed,
@@ -508,9 +592,10 @@ impl ContextGraph {
                             .all(|citation| selected.contains(&citation.node_id))
                     })
                     .collect(),
-            );
+                &mut budget,
+            )?;
             if proposed.len() > request.max_blocks
-                || tokenizer.count(&crate::snapshot::render(&proposed))? > available
+                || budget.count(&proposed, tokenizer)? > available
             {
                 budget_rejected += 1;
                 continue;
@@ -543,7 +628,7 @@ impl ContextGraph {
             selected.extend(closure);
             self.add_coverage(&blocks, &terms, &mut coverage);
         }
-        let tokens = tokenizer.count(&crate::snapshot::render(&blocks))?;
+        let tokens = budget.count(&blocks, tokenizer)?;
         let stats = SelectionStats {
             documents: total,
             lexical_matches,
@@ -574,10 +659,12 @@ impl ContextGraph {
         &self,
         root: &str,
         request: &ContextRequest,
+        budget: &mut CompileBudget,
     ) -> Result<BTreeSet<String>, ContextError> {
         let mut seen = BTreeSet::new();
         let mut pending = vec![root.to_owned()];
         while let Some(id) = pending.pop() {
+            budget.charge(1, id.len())?;
             if !seen.insert(id.clone()) {
                 continue;
             }
@@ -594,6 +681,7 @@ impl ContextGraph {
             }
             if let Some(edges) = self.edges.get(&id) {
                 for (kind, target) in edges {
+                    budget.charge(1, target.len())?;
                     if matches!(kind, EdgeKind::Requires | EdgeKind::Contradicts) {
                         pending.push(target.clone());
                     }
@@ -632,6 +720,7 @@ impl ContextGraph {
         selected: &BTreeSet<String>,
         terms: &BTreeSet<String>,
         excerpt_root: Option<&str>,
+        budget: &mut CompileBudget,
     ) -> Result<Vec<EvidenceBlock>, ContextError> {
         let mut blocks = Vec::new();
         for id in ids.difference(selected) {
@@ -640,6 +729,15 @@ impl ContextGraph {
                 .get(id)
                 .ok_or(ContextError::RequiredUnavailable)?;
             let text = &node.document.text;
+            // Account for copied text, citation metadata, and excerpt line/index
+            // work before allocating any representation of this document.
+            budget.charge(
+                terms.len().saturating_add(1),
+                text.len()
+                    .saturating_add(node.document.source.len())
+                    .saturating_add(id.len())
+                    .saturating_add(256),
+            )?;
             if excerpt_root != Some(id.as_str()) {
                 blocks.push(EvidenceBlock::new(
                     text.clone(),
@@ -653,13 +751,42 @@ impl ContextGraph {
                 )?);
                 continue;
             }
+            let line_count = text.lines().count();
+            budget.charge(
+                line_count,
+                line_count.saturating_mul(std::mem::size_of::<&str>()),
+            )?;
             let lines = text.lines().collect::<Vec<_>>();
-            let matching_lines = terms
+            let mut matching_lines = BTreeSet::new();
+            for line in terms
                 .iter()
                 .filter_map(|term| node.terms.get(term))
                 .flat_map(|value| value.lines())
-                .collect::<BTreeSet<_>>();
+            {
+                budget.charge(1, 64)?;
+                matching_lines.insert(line);
+            }
+            budget.charge(
+                matching_lines.len(),
+                matching_lines
+                    .len()
+                    .saturating_mul(2 * std::mem::size_of::<usize>()),
+            )?;
             let ranges = windows(lines.len(), matching_lines);
+            // A single document can produce many disjoint excerpts. Every window
+            // owns its own citation; charge all metadata before any of those copies.
+            let citation_bytes = id
+                .len()
+                .saturating_add(node.document.source.len())
+                .saturating_add(node.digest.len())
+                .saturating_add(128);
+            budget.charge(
+                ranges.len(),
+                ranges
+                    .len()
+                    .saturating_mul(citation_bytes)
+                    .saturating_add(text.len().saturating_mul(2)),
+            )?;
             let mut excerpts = Vec::new();
             let mut citations = Vec::new();
             for (start, end) in ranges {
@@ -716,12 +843,39 @@ impl ContextGraph {
     }
 }
 
-fn append_coalesced(blocks: &mut Vec<EvidenceBlock>, additions: Vec<EvidenceBlock>) {
+fn append_coalesced(
+    blocks: &mut Vec<EvidenceBlock>,
+    additions: Vec<EvidenceBlock>,
+    budget: &mut CompileBudget,
+) -> Result<(), ContextError> {
     for block in additions {
-        if let Some(existing) = blocks
-            .iter_mut()
-            .find(|existing| existing.text == block.text)
-        {
+        let mut duplicate = None;
+        for (index, existing) in blocks.iter().enumerate() {
+            // Equal-length bodies can share an arbitrarily long prefix. Bound
+            // repeated comparisons as well as allocations before max_blocks is checked.
+            budget.charge(
+                1,
+                if existing.text.len() == block.text.len() {
+                    block.text.len()
+                } else {
+                    0
+                },
+            )?;
+            if existing.text == block.text {
+                duplicate = Some(index);
+                break;
+            }
+        }
+        if let Some(index) = duplicate {
+            let existing = blocks.get_mut(index).ok_or(ContextError::Integrity)?;
+            let citations = existing
+                .citations
+                .len()
+                .saturating_add(block.citations.len());
+            budget.charge(
+                citations.saturating_mul((usize::BITS - citations.leading_zeros()) as usize),
+                0,
+            )?;
             existing.citations.extend(block.citations);
             existing.citations.sort();
             existing.citations.dedup();
@@ -729,6 +883,7 @@ fn append_coalesced(blocks: &mut Vec<EvidenceBlock>, additions: Vec<EvidenceBloc
             blocks.push(block);
         }
     }
+    Ok(())
 }
 
 fn windows(line_count: usize, matching_lines: BTreeSet<usize>) -> Vec<(usize, usize)> {

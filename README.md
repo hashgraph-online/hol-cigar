@@ -11,6 +11,11 @@ Use `LocalContextGraph` from Python's `cigar_sdk` or npm's `@hol-org/cigar/conte
 Both packages run a bundled Rust worker locally; their separate `CigarClient`
 APIs connect to a caller-selected CIGAR server.
 
+The [0.14.1 security release candidate](docs/release/context-sdk-0.14.1-notes.md)
+adds compilation work limits and Python HTTP deadlines, and requires patched
+Node.js `>=24.22.1 <25`. Upgrade and restart Node consumers now; the package update
+alone does not replace Node. The candidate is not yet published.
+
 ## 0.14.0: shared context for independent agents
 
 One local broker can serve independent Python and Node agent processes with
@@ -114,7 +119,7 @@ The current npm registry release is 0.14.0 and includes local graphs and the sha
 npm install --save-exact @hol-org/cigar@0.14.0
 ```
 
-Use **Node.js >=24.10.0 <25** on macOS ARM64/x64, Linux ARM64/x64 with glibc or musl,
+Use **Node.js >=24.22.1 <25** on macOS ARM64/x64, Linux ARM64/x64 with glibc or musl,
 or Windows x64. Save this as
 `context.mjs` and run `node context.mjs`:
 

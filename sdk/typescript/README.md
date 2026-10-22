@@ -13,9 +13,16 @@ Node client RSS kept growing within the cap; broader application qualification
 remains open.
 Qualification applies to the exact artifacts named in their receipts.
 
+## 0.14.1 security candidate
+
+The next patch release adds aggregate compilation limits and Python HTTP deadlines,
+and requires Node.js `>=24.22.1 <25`. See the [0.14.1 release notes](../../docs/release/context-sdk-0.14.1-notes.md).
+It is prepared for review and is not yet published. Historical qualification below
+applies to the named 0.14.0 artifacts. Upgrade and restart Node consumers now.
+
 ## Install and check
 
-Version 0.14.0 is published on npm for ESM on Node.js `>=24.10.0 <25`:
+Version 0.14.0 is published on npm for ESM on Node.js `>=24.22.1 <25`:
 
 ```text
 npm install --save-exact @hol-org/cigar@0.14.0
@@ -102,7 +109,7 @@ for this inventory; complete release qualification is still in progress. Browser
 edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
-the matching Rust 0.14.0 source. There is no install script, runtime download, PATH
+the matching Rust 0.14.1 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize

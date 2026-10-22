@@ -1,4 +1,4 @@
-# cigar-context 0.14.0 candidate
+# cigar-context 0.14.1 security candidate
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
