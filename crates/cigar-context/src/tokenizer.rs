@@ -4,6 +4,10 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "bpe")]
 mod ordinary;
+#[cfg(all(test, feature = "bpe"))]
+mod ordinary_patterns;
+#[cfg(feature = "bpe")]
+mod segmenter;
 #[cfg(feature = "bpe")]
 mod vocabulary;
 #[cfg(feature = "bpe")]

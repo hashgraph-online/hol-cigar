@@ -8,6 +8,8 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+#[path = "src/tokenizer/ordinary_patterns.rs"]
+mod ordinary_patterns;
 #[path = "src/tokenizer/vocabulary_hash.rs"]
 mod vocabulary_hash;
 
@@ -26,6 +28,7 @@ fn invalid() -> io::Error {
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=src/tokenizer/o200k_base.tiktoken");
     println!("cargo:rerun-if-changed=src/tokenizer/vocabulary_hash.rs");
+    println!("cargo:rerun-if-changed=src/tokenizer/ordinary_patterns.rs");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_BPE");
     if std::env::var_os("CARGO_FEATURE_BPE").is_none() {
         return Ok(());
@@ -93,5 +96,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             pool.len(),
         ),
     )?;
+    let dfa = regex_automata::dfa::dense::Builder::new()
+        .configure(
+            regex_automata::dfa::dense::Config::new()
+                .start_kind(regex_automata::dfa::StartKind::Anchored)
+                .match_kind(regex_automata::MatchKind::LeftmostFirst)
+                .dfa_size_limit(Some(64 * 1024 * 1024))
+                .determinize_size_limit(Some(128 * 1024 * 1024)),
+        )
+        .build_many(&ordinary_patterns::REGULAR)?
+        .to_sparse()?;
+    let bytes = match std::env::var("CARGO_CFG_TARGET_ENDIAN")?.as_str() {
+        "little" => dfa.to_bytes_little_endian(),
+        "big" => dfa.to_bytes_big_endian(),
+        _ => return Err(invalid().into()),
+    };
+    fs::write(directory.join("ordinary-segmenter.bin"), bytes)?;
     Ok(())
 }

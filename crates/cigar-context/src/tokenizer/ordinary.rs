@@ -5,9 +5,9 @@
 //! tiktoken, MIT; see LICENSE.tiktoken). Rank/start tie-breaking is unchanged.
 //! Long pieces retain the upstream heap algorithm rather than quadratic splitting.
 
+use super::segmenter::Segmenter;
 use super::vocabulary::Encoder;
 use crate::ContextError;
-use fancy_regex::Regex;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use tiktoken_rs::Rank;
@@ -19,7 +19,7 @@ const ORDINARY_TOKENS: usize = 199_998;
 
 pub(super) struct OrdinaryCounter {
     encoder: Encoder,
-    regex: Regex,
+    regex: Segmenter,
 }
 
 impl OrdinaryCounter {
@@ -28,18 +28,14 @@ impl OrdinaryCounter {
         // then embeds a deterministic, read-only table. No text parsing, map
         // construction, cache widening or external vocabulary I/O at startup.
         let encoder = Encoder::new()?;
-        let regex =
-            Regex::new(tiktoken_rs::O200K_BASE_PAT_STR).map_err(|_| ContextError::Tokenizer)?;
+        let regex = Segmenter::new()?;
         Ok(Self { encoder, regex })
     }
 
     pub(super) fn count(&self, text: &str) -> Result<usize, ContextError> {
         let mut count = 0usize;
-        for matched in self.regex.find_iter(text) {
-            let piece = matched
-                .map_err(|_| ContextError::Tokenizer)?
-                .as_str()
-                .as_bytes();
+        for matched in self.regex.pieces(text) {
+            let piece = matched?.as_bytes();
             let tokens = if self.encoder.get(piece)?.is_some() {
                 1
             } else if piece.len() < 100 {
