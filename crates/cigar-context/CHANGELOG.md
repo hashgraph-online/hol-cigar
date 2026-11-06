@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.2 — query performance candidate, unpublished
+
+- Load only the encoder and regex required for exact ordinary o200k counts,
+  avoiding unused decoder, special-token and per-thread tokenizer construction.
+- Preserve the pinned vocabulary, token identity, merge ordering, bounded cache,
+  snapshot/delta semantics, authorization and work limits. Long pieces retain
+  heap merging; regex errors fail closed.
+- Add upstream differential, vocabulary identity and concurrent counting tests.
+  See `docs/performance/0.14.2-protocol.md` for the paired measurement gates.
+- Keep the 0.14.1 security fixes and runtime floors. Local validation does not
+  qualify untested platforms or authorize publication.
+
 ## 0.14.1 — security candidate
 
 - Bound aggregate compilation traversal, evidence copying, rendering and scoring before allocation; excessive work returns `LimitExceeded`.

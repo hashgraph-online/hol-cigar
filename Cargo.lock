@@ -894,12 +894,15 @@ dependencies = [
 
 [[package]]
 name = "cigar-context"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
+ "base64",
  "cigar-windows-ipc",
+ "fancy-regex",
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "rusqlite",
+ "rustc-hash",
  "rustix",
  "serde",
  "serde_json",
