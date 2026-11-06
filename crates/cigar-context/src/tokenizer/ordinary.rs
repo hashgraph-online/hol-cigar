@@ -61,7 +61,7 @@ impl OrdinaryCounter {
                 // the immutable vocabulary, so a non-token piece has at least 2 bytes.
                 tiktoken_rs::byte_pair_split(piece, &self.encoder).len()
             } else {
-                count_large(piece, &self.encoder)
+                count_large(piece, &self.encoder)?
             };
             count = count.checked_add(tokens).ok_or(ContextError::Tokenizer)?;
         }
@@ -97,7 +97,10 @@ struct State {
     next_rank: Rank,
 }
 
-fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> usize {
+fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> Result<usize, ContextError> {
+    if piece.len() < 2 {
+        return Err(ContextError::Tokenizer);
+    }
     let mut state = Vec::with_capacity(piece.len());
     state.push(State {
         prev: usize::MAX,
@@ -106,10 +109,10 @@ fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> usize {
         next_rank: Rank::MAX,
     });
     let mut heap = BinaryHeap::with_capacity(piece.len());
-    for i in 0..piece.len() - 1 {
-        if let Some(&rank) = ranks.get(&piece[i..i + 2]) {
+    for (i, pair) in piece.windows(2).enumerate() {
+        if let Some(&rank) = ranks.get(pair) {
             heap.push(Merge { start: i, rank });
-            state[i].next_rank = rank;
+            state.get_mut(i).ok_or(ContextError::Tokenizer)?.next_rank = rank;
         }
         state.push(State {
             prev: i,
@@ -120,41 +123,54 @@ fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> usize {
     }
     let potential_merge =
         |state: &mut Vec<State>, heap: &mut BinaryHeap<Merge>, start: usize, next_end: usize| {
-            state[start].next_end = next_end;
-            state[start].next_rank = Rank::MAX;
-            if next_end <= piece.len()
-                && let Some(&rank) = ranks.get(&piece[start..next_end])
-            {
-                heap.push(Merge { start, rank });
-                state[start].next_rank = rank;
+            let current = state.get_mut(start).ok_or(ContextError::Tokenizer)?;
+            current.next_end = next_end;
+            current.next_rank = Rank::MAX;
+            if next_end <= piece.len() {
+                let span = piece.get(start..next_end).ok_or(ContextError::Tokenizer)?;
+                if let Some(&rank) = ranks.get(span) {
+                    heap.push(Merge { start, rank });
+                    current.next_rank = rank;
+                }
             }
+            Ok::<(), ContextError>(())
         };
     let mut tokens = piece.len();
     while let Some(left) = heap.pop() {
         if left.rank == Rank::MAX {
             break;
         }
-        if left.rank != state[left.start].next_rank {
+        let current = state.get(left.start).ok_or(ContextError::Tokenizer)?;
+        if left.rank != current.next_rank {
             continue;
         }
         let start = left.start;
-        let right_start = state[start].end;
-        let right_end = state[start].next_end;
-        debug_assert_eq!(right_end, state[right_start].end);
-        let right_next_end = state[right_start].next_end;
-        state[start].end = right_end;
-        potential_merge(&mut state, &mut heap, start, right_next_end);
+        let previous = current.prev;
+        let right_start = current.end;
+        let right_end = current.next_end;
+        let right = state.get(right_start).ok_or(ContextError::Tokenizer)?;
+        if right_end != right.end {
+            return Err(ContextError::Tokenizer);
+        }
+        let right_next_end = right.next_end;
+        state.get_mut(start).ok_or(ContextError::Tokenizer)?.end = right_end;
+        potential_merge(&mut state, &mut heap, start, right_next_end)?;
         if right_end < state.len() {
-            state[right_end].prev = start;
+            state
+                .get_mut(right_end)
+                .ok_or(ContextError::Tokenizer)?
+                .prev = start;
         }
         if start > 0 {
-            let previous = state[start].prev;
-            potential_merge(&mut state, &mut heap, previous, right_end);
+            potential_merge(&mut state, &mut heap, previous, right_end)?;
         }
-        state[right_start].next_rank = Rank::MAX;
-        tokens -= 1;
+        state
+            .get_mut(right_start)
+            .ok_or(ContextError::Tokenizer)?
+            .next_rank = Rank::MAX;
+        tokens = tokens.checked_sub(1).ok_or(ContextError::Tokenizer)?;
     }
-    tokens
+    Ok(tokens)
 }
 
 #[cfg(test)]
@@ -197,7 +213,11 @@ mod tests {
                 seed ^= seed << 13;
                 seed ^= seed >> 7;
                 seed ^= seed << 17;
-                text.push(alphabet[(seed % alphabet.len() as u64) as usize]);
+                text.push(
+                    *alphabet
+                        .get((seed % alphabet.len() as u64) as usize)
+                        .ok_or("alphabet index")?,
+                );
             }
             texts.push(text);
         }
@@ -211,7 +231,11 @@ mod tests {
                     seed ^= seed << 13;
                     seed ^= seed >> 7;
                     seed ^= seed << 17;
-                    text.push(alphabet[(seed % alphabet.len() as u64) as usize] as char);
+                    text.push(
+                        *alphabet
+                            .get((seed % alphabet.len() as u64) as usize)
+                            .ok_or("alphabet index")? as char,
+                    );
                 }
                 texts.push(text);
             }
