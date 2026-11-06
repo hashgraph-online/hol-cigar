@@ -229,12 +229,10 @@ class _WorkerChannel:
                 self._jobs.put_nowait(None)
             except queue.Full:
                 pass
-            try:
-                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
-            except OSError, subprocess.TimeoutExpired:
-                # Keep reaping retryable; cleanup must not replace the API error.
-                pass
             if self._thread.ident is not None:
+                # The pipe owner wakes on EOF after kill. Joining it first avoids
+                # Popen's timed wait polling while the process is still exiting.
+                # Both operations retain the same single cleanup deadline.
                 self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
             else:
                 # Thread creation failed; no thread can own these buffers.
@@ -245,6 +243,11 @@ class _WorkerChannel:
                         pipe.close()
                     except (OSError, ValueError):  # fmt: skip
                         pass
+            try:
+                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except OSError, subprocess.TimeoutExpired:
+                # Keep reaping retryable; cleanup must not replace the API error.
+                pass
             try:
                 self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
             except OSError:
