@@ -6,6 +6,7 @@ import json
 import math
 import os
 import queue
+import select
 import subprocess
 import threading
 import time
@@ -63,6 +64,7 @@ from cigar_sdk.local_runtime import (
 
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
+_DIRECT_IO = os.name == "posix" and hasattr(select, "poll")
 
 
 class _WorkerChannel:
@@ -88,6 +90,7 @@ class _WorkerChannel:
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._next_id = 0
+        self._direct_io = _DIRECT_IO
         self._jobs: queue.Queue[tuple[bytes, queue.Queue[bytes | None]] | None] = queue.Queue(maxsize=1)
         self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
@@ -102,10 +105,89 @@ class _WorkerChannel:
         except OSError:
             raise LocalContextError("WorkerUnavailable") from None
         try:
-            self._thread.start()
+            if self._direct_io:
+                assert self._process.stdin is not None and self._process.stdout is not None
+                os.set_blocking(self._process.stdin.fileno(), False)
+                os.set_blocking(self._process.stdout.fileno(), False)
+            else:
+                self._thread.start()
         except BaseException:
             self.close()
             raise
+
+    def _exchange(self, frame: bytes, deadline: float) -> bytes | None:
+        if not self._direct_io:
+            response: queue.Queue[bytes | None] = queue.Queue(maxsize=1)
+            self._jobs.put_nowait((frame, response))
+            return response.get(timeout=max(0.0, deadline - time.monotonic()))
+
+        # Lease independent descriptors under the close lock. Concurrent close
+        # can close the unused buffered streams while these raw I/O handles stay
+        # owned until this call finishes; descriptor reuse cannot redirect I/O.
+        leased: list[int] = []
+        try:
+            if not self._close_lock.acquire(timeout=max(0.0, min(self._timeout, deadline - time.monotonic()))):
+                raise LocalContextError("Busy")
+            try:
+                if self._closed:
+                    return None
+                assert self._process.stdin is not None and self._process.stdout is not None
+                leased.append(os.dup(self._process.stdin.fileno()))
+                leased.append(os.dup(self._process.stdout.fileno()))
+            finally:
+                self._close_lock.release()
+            writer, reader = leased
+            readiness = select.poll()
+
+            def wait(descriptor: int, event: int) -> None:
+                readiness.register(descriptor, event)
+                try:
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise queue.Empty
+                        # poll uses signed-int milliseconds, unlike Python's
+                        # larger accepted threading timeout range.
+                        if readiness.poll(min(2_147_483_647, math.ceil(remaining * 1000))):
+                            return
+                finally:
+                    readiness.unregister(descriptor)
+
+            sent = 0
+            view = memoryview(frame)
+            while sent < len(frame):
+                wait(writer, select.POLLOUT)
+                try:
+                    written = os.write(writer, view[sent:])
+                except BlockingIOError:
+                    continue
+                if not written:
+                    return None
+                sent += written
+            result = bytearray()
+            while len(result) <= _MAX_RESPONSE:
+                wait(reader, select.POLLIN)
+                try:
+                    chunk = os.read(reader, min(65536, _MAX_RESPONSE + 1 - len(result)))
+                except BlockingIOError:
+                    continue
+                if not chunk:
+                    return None
+                result.extend(chunk)
+                if b"\n" in chunk:
+                    if result.find(b"\n") != len(result) - 1:
+                        return None
+                    return bytes(result)
+            return bytes(result)
+        except (OSError, ValueError):  # fmt: skip
+            return None
+        finally:
+            while leased:
+                descriptor = leased.pop()
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
     def _exchange_loop(self) -> None:
         stdin, stdout = self._process.stdin, self._process.stdout
@@ -163,17 +245,25 @@ class _WorkerChannel:
                 raise LocalContextError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalContextError("LimitExceeded")
-            response: queue.Queue[bytes | None] = queue.Queue(maxsize=1)
             try:
-                self._jobs.put_nowait((frame, response))
+                value = self._exchange(frame, deadline)
             except queue.Full:
                 self.close()
                 raise LocalContextError("Transport") from None
-            try:
-                value = response.get(timeout=max(0.0, deadline - time.monotonic()))
             except queue.Empty:
                 self.close()
                 raise LocalContextError("Timeout") from None
+            except LocalContextError:
+                # A lease-lock Busy response occurs before any I/O dispatch.
+                raise
+            except BaseException:
+                # Interrupted raw I/O has an unknown framing/mutation outcome.
+                # Never permit a subsequent request to reuse that stream.
+                try:
+                    self.close()
+                except BaseException:
+                    pass
+                raise
             if not value or len(value) > _MAX_RESPONSE or not value.endswith(b"\n"):
                 self.close()
                 raise LocalContextError("Transport")
@@ -235,7 +325,8 @@ class _WorkerChannel:
                 # Both operations retain the same single cleanup deadline.
                 self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
             else:
-                # Thread creation failed; no thread can own these buffers.
+                # Direct I/O never uses buffered stream locks. This also covers
+                # thread creation failure before a portable I/O owner starts.
                 for pipe in (self._process.stdin, self._process.stdout):
                     if pipe is None:
                         continue

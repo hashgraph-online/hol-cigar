@@ -412,14 +412,7 @@ def test_host_malformed_reply_closes_worker_without_echo(broker, corruption):
         wire = wire[:-1] + b',"id":2}'
     elif corruption == "nonfinite":
         wire = wire.replace(b'"result": null', b'"result": NaN')
-    original = broker._jobs.put_nowait
-
-    def receive(job):
-        if job is None:
-            return original(job)
-        job[1].put_nowait(wire + b"\n")
-
-    with patch.object(broker._jobs, "put_nowait", side_effect=receive):
+    with patch.object(broker, "_exchange", return_value=wire + b"\n"):
         with pytest.raises(LocalBrokerError) as caught:
             broker.source_revision("PRIVATE_PATH")
     assert caught.value.code == "Transport" and caught.value.dispatched is None

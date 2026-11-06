@@ -12,6 +12,12 @@ import pytest
 from cigar_sdk import LocalContextError, LocalContextGraph, context
 
 
+@pytest.fixture(autouse=True)
+def threaded_transport_fault_injection(monkeypatch):
+    """These queue fault injections exercise the portable threaded backend."""
+    monkeypatch.setattr(context, "_DIRECT_IO", False)
+
+
 @pytest.fixture
 def graph():
     value = LocalContextGraph("boundaries", worker_path=os.environ.get("CIGAR_TEST_WORKER"))
