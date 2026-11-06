@@ -902,7 +902,6 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "rusqlite",
- "rustc-hash",
  "rustix",
  "serde",
  "serde_json",

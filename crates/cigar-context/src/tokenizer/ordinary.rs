@@ -5,43 +5,29 @@
 //! tiktoken, MIT; see LICENSE.tiktoken). Rank/start tie-breaking is unchanged.
 //! Long pieces retain the upstream heap algorithm rather than quadratic splitting.
 
+use super::vocabulary::Encoder;
 use crate::ContextError;
-use base64::{Engine as _, engine::general_purpose};
 use fancy_regex::Regex;
-use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use tiktoken_rs::Rank;
 
+#[cfg(test)]
 const VOCABULARY: &str = include_str!("o200k_base.tiktoken");
+#[cfg(test)]
 const ORDINARY_TOKENS: usize = 199_998;
 
 pub(super) struct OrdinaryCounter {
-    encoder: FxHashMap<Vec<u8>, Rank>,
+    encoder: Encoder,
     regex: Regex,
 }
 
 impl OrdinaryCounter {
     pub(super) fn new() -> Result<Self, ContextError> {
-        let mut encoder = FxHashMap::with_capacity_and_hasher(ORDINARY_TOKENS, Default::default());
-        for (index, line) in VOCABULARY.lines().enumerate() {
-            let (encoded, rank) = line.split_once(' ').ok_or(ContextError::Tokenizer)?;
-            let rank: Rank = rank.parse().map_err(|_| ContextError::Tokenizer)?;
-            if usize::try_from(rank).map_err(|_| ContextError::Tokenizer)? != index {
-                return Err(ContextError::Tokenizer);
-            }
-            let token = general_purpose::STANDARD
-                .decode(encoded)
-                .map_err(|_| ContextError::Tokenizer)?;
-            if token.is_empty() || encoder.insert(token, rank).is_some() {
-                return Err(ContextError::Tokenizer);
-            }
-        }
-        if encoder.len() != ORDINARY_TOKENS
-            || !(0..=u8::MAX).all(|b| encoder.contains_key(&[b][..]))
-        {
-            return Err(ContextError::Tokenizer);
-        }
+        // The build validates the pinned source identity and every rank/byte,
+        // then embeds a deterministic, read-only table. No text parsing, map
+        // construction, cache widening or external vocabulary I/O at startup.
+        let encoder = Encoder::new()?;
         let regex =
             Regex::new(tiktoken_rs::O200K_BASE_PAT_STR).map_err(|_| ContextError::Tokenizer)?;
         Ok(Self { encoder, regex })
@@ -54,12 +40,10 @@ impl OrdinaryCounter {
                 .map_err(|_| ContextError::Tokenizer)?
                 .as_str()
                 .as_bytes();
-            let tokens = if self.encoder.contains_key(piece) {
+            let tokens = if self.encoder.get(piece)?.is_some() {
                 1
             } else if piece.len() < 100 {
-                // Same short-piece merge as the upstream encoder. Every byte is in
-                // the immutable vocabulary, so a non-token piece has at least 2 bytes.
-                tiktoken_rs::byte_pair_split(piece, &self.encoder).len()
+                count_short(piece, &self.encoder)?
             } else {
                 count_large(piece, &self.encoder)?
             };
@@ -67,6 +51,55 @@ impl OrdinaryCounter {
         }
         Ok(count)
     }
+}
+
+// Same greedy rank/leftmost ordering as upstream's short-piece merge. It is
+// deliberately bounded to fewer than 100 bytes; long input uses the heap.
+fn count_short(piece: &[u8], ranks: &Encoder) -> Result<usize, ContextError> {
+    if !(2..100).contains(&piece.len()) {
+        return Err(ContextError::Tokenizer);
+    }
+    let mut parts = Vec::with_capacity(piece.len() + 1);
+    for (start, pair) in piece.windows(2).enumerate() {
+        parts.push((start, ranks.get(pair)?.unwrap_or(Rank::MAX)));
+    }
+    parts.push((piece.len() - 1, Rank::MAX));
+    parts.push((piece.len(), Rank::MAX));
+    loop {
+        let mut best = (Rank::MAX, usize::MAX);
+        for (index, &(_, rank)) in parts.iter().take(parts.len() - 1).enumerate() {
+            if rank < best.0 {
+                best = (rank, index);
+            }
+        }
+        if best.0 == Rank::MAX {
+            break;
+        }
+        let rank_after_merge = |index: usize| -> Result<Rank, ContextError> {
+            let Some(&(end, _)) = parts.get(index + 3) else {
+                return Ok(Rank::MAX);
+            };
+            let start = parts.get(index).ok_or(ContextError::Tokenizer)?.0;
+            let span = piece.get(start..end).ok_or(ContextError::Tokenizer)?;
+            Ok(ranks.get(span)?.unwrap_or(Rank::MAX))
+        };
+        let index = best.1;
+        let current = rank_after_merge(index)?;
+        let previous = if index > 0 {
+            Some(rank_after_merge(index - 1)?)
+        } else {
+            None
+        };
+        if let Some(rank) = previous {
+            parts.get_mut(index - 1).ok_or(ContextError::Tokenizer)?.1 = rank;
+        }
+        parts.get_mut(index).ok_or(ContextError::Tokenizer)?.1 = current;
+        if index + 1 >= parts.len() - 1 {
+            return Err(ContextError::Tokenizer);
+        }
+        parts.remove(index + 1);
+    }
+    parts.len().checked_sub(1).ok_or(ContextError::Tokenizer)
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -97,7 +130,7 @@ struct State {
     next_rank: Rank,
 }
 
-fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> Result<usize, ContextError> {
+fn count_large(piece: &[u8], ranks: &Encoder) -> Result<usize, ContextError> {
     if piece.len() < 2 {
         return Err(ContextError::Tokenizer);
     }
@@ -110,7 +143,7 @@ fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> Result<usize, 
     });
     let mut heap = BinaryHeap::with_capacity(piece.len());
     for (i, pair) in piece.windows(2).enumerate() {
-        if let Some(&rank) = ranks.get(pair) {
+        if let Some(rank) = ranks.get(pair)? {
             heap.push(Merge { start: i, rank });
             state.get_mut(i).ok_or(ContextError::Tokenizer)?.next_rank = rank;
         }
@@ -128,7 +161,7 @@ fn count_large(piece: &[u8], ranks: &FxHashMap<Vec<u8>, Rank>) -> Result<usize, 
             current.next_rank = Rank::MAX;
             if next_end <= piece.len() {
                 let span = piece.get(start..next_end).ok_or(ContextError::Tokenizer)?;
-                if let Some(&rank) = ranks.get(span) {
+                if let Some(rank) = ranks.get(span)? {
                     heap.push(Merge { start, rank });
                     current.next_rank = rank;
                 }

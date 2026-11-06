@@ -4,6 +4,10 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "bpe")]
 mod ordinary;
+#[cfg(feature = "bpe")]
+mod vocabulary;
+#[cfg(feature = "bpe")]
+mod vocabulary_hash;
 
 /// Exact token accounting for the rendered context text, excluding the provider chat envelope.
 /// Implementations must use an immutable identity for their algorithm and vocabulary.
