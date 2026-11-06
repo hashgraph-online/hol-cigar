@@ -32,3 +32,21 @@ else:
     raise AssertionError('unknown module export')
 """
     subprocess.run([sys.executable, "-c", code], check=True, timeout=30, env=os.environ.copy())
+
+
+def test_fresh_module_star_import_retains_lazy_types_and_original_public_members():
+    code = """
+import sys
+import cigar_sdk.context as context
+assert 'cigar_sdk.context_types' not in sys.modules
+namespace = {}
+exec('from cigar_sdk.context import *', namespace)
+from cigar_sdk.context_types import LocalDocument, LocalContextResult
+assert namespace['LocalDocument'] is LocalDocument
+assert namespace['LocalContextResult'] is LocalContextResult
+assert namespace['LocalContextGraph'] is context.LocalContextGraph
+assert namespace['queue'].Queue is context.queue.Queue
+assert namespace['Path'] is context.Path
+assert set(context._WIRE_NAMES) <= namespace.keys()
+"""
+    subprocess.run([sys.executable, "-c", code], check=True, timeout=30)

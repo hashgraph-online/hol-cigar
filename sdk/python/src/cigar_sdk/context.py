@@ -699,3 +699,7 @@ def _defer_wire_annotations() -> None:
 
 
 _defer_wire_annotations()
+
+# Preserve the module's historical star-import surface while keeping fixed wire
+# names lazy for ordinary explicit imports and data calls.
+__all__ = sorted({name for name in globals() if not name.startswith("_")} | set(_WIRE_NAMES) | {"queue"})
