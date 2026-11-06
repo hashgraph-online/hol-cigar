@@ -71,7 +71,7 @@ jobs:
       - id: track
         run: |
           version="$(node -p 'require("./sdk/typescript/package.json").version')"
-          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1" || test "${version}" = "0.10.1" || test "${version}" = "0.11.0" || test "${version}" = "0.14.1"
+          test "${version}" = "0.9.4" || test "${version}" = "0.10.0-rc.1" || test "${version}" = "0.10.0-beta.1" || test "${version}" = "0.10.1" || test "${version}" = "0.11.0" || test "${version}" = "0.14.1" || test "${version}" = "0.14.2"
           printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
 
   local-context-rc:
@@ -81,7 +81,7 @@ jobs:
 
   local-context-stable:
     needs: release-track
-    if: needs.release-track.outputs.version == '0.14.1'
+    if: needs.release-track.outputs.version == '0.14.1' || needs.release-track.outputs.version == '0.14.2'
     uses: ./.github/workflows/context-distribution.yml
 
   qualify:
