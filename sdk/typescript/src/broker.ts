@@ -311,6 +311,9 @@ export class LocalContextClient {
   /** Explain own selected evidence after current grant, provenance and ticket checks. */
   explain(ticket: string): Promise<LocalSelectionExplanation> { return this.call({op: "explain", ticket}); }
   async revalidate(ticket: string): Promise<void> { await this.call({op: "revalidate", ticket}); }
+  /** Atomically revalidate and forget an own ticket. Requires consume_ticket.v1;
+   * never authorizes effects, emulates with two calls, or retries an unknown outcome. */
+  async consumeTicket(ticket: string): Promise<void> { await this.call({op: "consume_ticket", ticket}); }
   citations(ticket: string, nodeId: string): Promise<readonly LocalCitation[]> { return this.call({op: "citations", ticket, node_id: nodeId}); }
   sourceRevision(source: string): Promise<LocalBrokerSourceRevision> { return this.call({op: "source_revision", source}); }
   proposeSource(requestKey: string, source: string, expected: LocalBrokerSourceRevision,

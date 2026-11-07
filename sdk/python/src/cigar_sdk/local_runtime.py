@@ -12,7 +12,7 @@ from typing import Literal, TypedDict
 from cigar_sdk.native_platforms import NATIVE_PLATFORMS
 
 LOCAL_CONTEXT_PROTOCOL = "cigar.context-worker.v1"
-LOCAL_CONTEXT_CORE_VERSION = "0.14.2"
+LOCAL_CONTEXT_CORE_VERSION = "0.14.2-rc.2"
 
 _GUIDANCE = {
     "WorkerUnavailable": (
@@ -143,7 +143,7 @@ def get_local_context_capabilities(*, worker_path: str | Path | None = None) -> 
     except LocalContextError as error:
         failure = error
     return {
-        "package_version": LOCAL_CONTEXT_CORE_VERSION.replace("-alpha.", "a"),
+        "package_version": LOCAL_CONTEXT_CORE_VERSION.replace("-alpha.", "a").replace("-rc.", "rc"),
         "core_version": LOCAL_CONTEXT_CORE_VERSION,
         "protocol": LOCAL_CONTEXT_PROTOCOL,
         "runtime": f"python {platform.python_version()}",

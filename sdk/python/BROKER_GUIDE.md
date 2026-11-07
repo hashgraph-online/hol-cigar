@@ -342,6 +342,17 @@ The host must close the broker; Python context managers and Node `await using`
 do so. Clients own no persistent worker or socket. Explicit ticket/proposal
 forget operations release retained records, subject to their ownership checks.
 
+Workers advertising `consume_ticket.v1` also accept Python
+`client.consume_ticket(ticket)` and Node `await client.consumeTicket(ticket)`.
+They revalidate current authority, provenance, source state and expiry, then remove
+the ticket and its draft/binding in one serialized operation. This avoids the
+source-update window between separate revalidate and forget calls. Consumption is
+owner-bound and single-use; it neither reviews an answer nor authorizes an external
+effect. On a stale/denied ticket the operation fails without consumption. Explicit
+forget remains available for cleanup. A lost acknowledgement has an unknown outcome;
+neither SDK retries or emulates consumption using two calls. Continue to use the
+host-only reviewed execution-handoff path for external effects.
+
 This is a same-host application boundary. It does not encrypt traffic or sandbox
 code with access to host memory, pipes or credentials. Separate unrelated hostile
 tenants using OS/container isolation and distinct brokers. HUMIDOR owns model

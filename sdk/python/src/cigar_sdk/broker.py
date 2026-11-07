@@ -590,6 +590,14 @@ class LocalContextClient:
     def revalidate(self, ticket: str) -> None:
         self._call({"op": "revalidate", "ticket": ticket})
 
+    def consume_ticket(self, ticket: str) -> None:
+        """Atomically revalidate and forget an own ticket; does not authorize effects.
+
+        Requires ``consume_ticket.v1``. No emulation or automatic retry is performed;
+        after a lost response the outcome is unknown. Stale/denied tickets fail closed.
+        """
+        self._call({"op": "consume_ticket", "ticket": ticket})
+
     def explain(self, ticket: str) -> LocalSelectionExplanation:
         """Explain own selected evidence after current grant, provenance and ticket checks."""
         return cast(LocalSelectionExplanation, self._call({"op": "explain", "ticket": ticket}))

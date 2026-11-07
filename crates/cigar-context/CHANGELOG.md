@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.2-rc.2 (unpublished)
+
+- Add owner-bound, single-use `consume_ticket`: current authority/evidence
+  validation and ticket removal occur in one serialized broker operation.
+  It never authorizes effects, retries unknown outcomes or skips freshness checks.
+- Expose the additive command in Python and TypeScript and advertise its capability.
+- Preserve existing query, revalidate, forget and execution-handoff semantics.
+
 ## 0.14.2 — query performance candidate, unpublished
 
 - Load only the encoder and regex required for exact ordinary o200k counts,
