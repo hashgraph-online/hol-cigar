@@ -19,7 +19,15 @@ unchanged; this candidate does not authorize a stable publication.
 
 ## Benchmark status
 
-Candidate measurements and compatibility/security checks must be recorded before
-claiming the requested 80-point / 100% Safe Workflow Completion target. Historical
-0.14.2 reports stay unchanged. Reader-runtime and prompt experiments are separate
-declared treatments, not evidence of an engine-only improvement.
+The completed isolated-reader development study scores **89.34/100**, with
+**100% Safe Workflow Completion (20/20)**, 58/58 correct answerable outcomes and
+2/2 correct abstentions. It retains the full one-hour schedule, all first attempts,
+unchanged grade rules and the 20% token-efficiency weight. Both original source
+reports and the aggregate replay; installed SDK/compatibility checks pass.
+
+[Results, artifacts and qualification limits](../performance/0.14.2-rc.2-results.md).
+Historical 0.14.2 reports stay unchanged. The separately declared reader prompt
+and isolated load profile prevent an engine-only causal improvement claim. Public
+development examples were used for reader tuning; industry and multi-platform
+release qualification remain open. PR 42 stays draft/unmerged and nothing is
+published.
