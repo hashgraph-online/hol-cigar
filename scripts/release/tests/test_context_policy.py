@@ -65,6 +65,7 @@ class PolicyTests(unittest.TestCase):
             "package.json",
             "sdk/local-context-release.v1.json",
             "sdk/python/pyproject.toml",
+            "sdk/python/uv.lock",
             "sdk/typescript/package.json",
             "crates/cigar-context/Cargo.toml",
             "Cargo.lock",
@@ -87,6 +88,22 @@ class PolicyTests(unittest.TestCase):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(versions.ROOT / path, target)
             self.assertEqual(versions.validate(root)["status"], "passed")
+            target = root / "sdk/python/uv.lock"
+            original = target.read_text()
+            changed = original.replace(
+                'name = "hol-cigar"\nversion = "'
+                + identity["versions"]["python"]
+                + '"',
+                'name = "hol-cigar"\nversion = "0.0.0"',
+                1,
+            )
+            self.assertNotEqual(changed, original)
+            target.write_text(changed)
+            with self.assertRaisesRegex(
+                AssertionError, "Python lock project version drift"
+            ):
+                versions.validate(root)
+            target.write_text(original)
             for path, field in (
                 ("sdk/typescript/package.json", "version"),
                 ("sdk/context-toolchain.v1.json", "uv"),

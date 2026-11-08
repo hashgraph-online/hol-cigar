@@ -126,7 +126,7 @@ wheels = [
 
 [[package]]
 name = "hol-cigar"
-version = "0.14.2rc2"
+version = "0.14.2"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.2 (unpublished release candidate)
+
+- Prepare consistent stable core, Python and TypeScript identities and lockfiles
+  after RC2 qualification. Keep publication disabled until the release gates pass.
+- Include the exact-token query optimizations and additive atomic ticket
+  consumption from the development and RC2 entries below.
+- Preserve context ABI/protocol v1, authorization, freshness checks, token
+  identity, bounded caches, limits, persistence and existing SDK operations.
+- Correct package validation formatting and normalize Python prerelease identity
+  in the separate Honey compatibility test. No benchmark definition changes.
+- See `docs/release/context-sdk-0.14.2-readiness.md` for the retained RC2 timing
+  evidence, registry state and unresolved release blockers.
+
 ## 0.14.2-rc.2 (unpublished)
 
 - Add owner-bound, single-use `consume_ticket`: current authority/evidence
@@ -8,7 +21,7 @@
 - Expose the additive command in Python and TypeScript and advertise its capability.
 - Preserve existing query, revalidate, forget and execution-handoff semantics.
 
-## 0.14.2 — query performance candidate, unpublished
+## 0.14.2 development work (before RC2)
 
 - Load only the encoder and regex required for exact ordinary o200k counts,
   avoiding unused decoder, special-token and per-thread tokenizer construction.

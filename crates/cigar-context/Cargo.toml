@@ -1,6 +1,6 @@
 [package]
 name = "cigar-context"
-version = "0.14.2-rc.2"
+version = "0.14.2"
 description = "Incremental, token-budgeted local context graphs with citations and verified deltas"
 edition.workspace = true
 rust-version.workspace = true

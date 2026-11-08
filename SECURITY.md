@@ -6,9 +6,11 @@ Only an exact release whose authenticated release announcement explicitly marks 
 eligible for security fixes. Development snapshots, unsigned artifacts, locally rebuilt packages,
 and releases outside their announced support window are unsupported.
 
-The current Python local SDK release is `hol-cigar==0.12.0`; the npm registry
-release remains `@hol-org/cigar@0.11.0` until separately published. Reports against
-these releases are accepted through the private channel below. Registry
+Registry readback on 2026-11-08 identifies `hol-cigar==0.14.1` on PyPI and
+`@hol-org/cigar@0.14.0` under npm's `latest` tag. GitHub release `v0.14.1` exists,
+but npm does not yet contain `0.14.1`. The `0.14.2` branch is an unpublished
+candidate; a stable version string does not establish publication or support.
+Reports against published releases are accepted through the private channel below. Registry
 publication receipts and signed release announcements identify published artifacts.
 No calendar support window or extended-maintenance commitment is implied here;
 the publisher records those commitments in authenticated release announcements.

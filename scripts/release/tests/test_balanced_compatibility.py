@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import json
+import sys
 import tomllib
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from check_context_version import local_version  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -100,9 +104,9 @@ class BalancedCompatibilityContractTests(unittest.TestCase):
             (ROOT / "sdk/local-context-release.v1.json").read_bytes()
         )
         self.assertEqual(local_release["remote_workspace_version"], "0.9.4")
-        self.assertEqual(
-            local_release["versions"]["python"], local_release["core_version"]
-        )
+        python_version, channel = local_version(local_release["core_version"])
+        self.assertEqual(local_release["versions"]["python"], python_version)
+        self.assertEqual(local_release["channel"], channel)
         self.assertNotEqual(local_release["core_version"], product["version"])
         self.assertEqual(
             python_project["project"]["version"], local_release["versions"]["python"]

@@ -38,9 +38,11 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     )
     python = tomllib.loads((root / "sdk/python/pyproject.toml").read_text())
     python_lock = tomllib.loads((root / "sdk/python/uv.lock").read_text())
-    assert [item["version"] for item in python_lock["package"] if item["name"] == "hol-cigar"] == [python_version], (
-        "Python lock project version drift"
-    )
+    assert [
+        item["version"]
+        for item in python_lock["package"]
+        if item["name"] == "hol-cigar"
+    ] == [python_version], "Python lock project version drift"
     node = json.loads((root / "sdk/typescript/package.json").read_bytes())
     cargo = tomllib.loads((root / "crates/cigar-context/Cargo.toml").read_text())
     lock = tomllib.loads((root / "Cargo.lock").read_text())
