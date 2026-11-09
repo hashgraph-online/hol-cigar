@@ -58,6 +58,9 @@ def test_cleanup_kill_failure_remains_retryable(graph):
     with (
         patch.object(graph._process, "kill", side_effect=OSError),
         patch.object(graph._process, "wait", side_effect=subprocess.TimeoutExpired("worker", 5)),
+        # Model an unreaped child throughout the injected OS failures. A real
+        # worker can otherwise finish on EOF while the kill/wait calls fail.
+        patch.object(graph._process, "poll", return_value=None),
     ):
         graph.close()
     assert not graph.cleanup_complete
