@@ -52,6 +52,7 @@ policy. Preserve both historic profiles and their artifacts.
 | Package tooling failures | Initial distribution build failed in SDK generator RC validation; stable release tests also rejected the RC identity. Preparation uses the already supported stable identity, fixes the two Ruff formatting errors, normalizes the Honey test's Python version comparison and repairs the policy fixture's missing Python lock. Its negative check still rejects lock version drift. Re-run exact CI at the new commit. |
 | Native workers | At prior head `f01561cc655e6c660ab7e3db2723aa50507ea229`, all 14 native jobs (seven platforms, two builders) passed in [run 42425989736](https://github.com/hashgraph-online/hol-cigar/actions/runs/42425989736). That does not qualify the newly versioned candidate or prove matching builds/installed consumers. |
 | Final archive qualification | Previous packaging failed before archive comparison and the 14 installed runtime/platform combinations. Require successful `context-sdk-release` branch CI on the exact candidate head; no skipped qualification counts as a pass. |
+| Python coverage | Candidate `fa9c619a` passed 539 functional tests in hosted packaging but `context.py` statement coverage was 93.0851%, below the unchanged 95% floor. Tests now exercise lazy runtime exports/type identities and the real stalled worker through the portable transport. Local source validation passes 541 tests plus 39 subtests, and the unchanged coverage gate passes with 95.2128% statements / 95.4545% branches for `context.py`. Hosted confirmation is still required. |
 | Trusted xtask bootstrap | `fast-ci` source quality and security coverage fail because no protected command-specific tool authority is configured. The operator must provide independently reviewed executable and authority digests as documented in [xtask's bootstrap contract](../../crates/xtask/README.md#hosted-macos-ci-bootstrap-contract). Do not self-approve generated digests, remove the guard or mark diagnostic receipts as release evidence. |
 | Repository dependency security | Initial live Dependabot read found 36 open alerts, including four critical Wasmtime alerts. The root Cargo deny job also flags Rustls/WebPKI, parser and compression dependencies; Go audit flags the pinned Go standard library and `x/net`. Update and qualify affected dependency/tool chains; do not suppress advisories or claim a green repository audit from SDK-only evidence. |
 | SDK pnpm auditor | CI's pinned pnpm 11 auditor distribution digest does not match the hydrated tool. Independently verify official distribution provenance and the full inventory before changing a trusted digest. The original failure remains a blocker. |
@@ -62,6 +63,15 @@ The recorded macOS RC2 native dependency inventory contains 59 packages and
 excludes Wasmtime, Rustls, WebPKI, zstd and pulldown-cmark. This narrows the known
 alert exposure for that artifact only; it does not close repository alerts,
 audit other platforms or substitute for scanning final release dependencies.
+
+At candidate `fa9c619ae32273064cf31917e2493081514b64f1`, clean packaged macOS
+native validation passed 154 tests; installed Python passed 539 tests plus 39
+subtests and installed Node passed 168 tests with zero skips. The 172-case RC2
+comparison preserved 111 exports and verified all 155 successful snapshot/delta
+pairs in both directions. A 61-query OSV lookup of the recorded macOS native
+inventory and qualified Python/npm runtime dependencies found no listed
+advisories. This does not resolve the separate repository security failures.
+The added coverage tests change no shipping runtime code or benchmark inputs.
 
 ## Reproduction and evidence
 

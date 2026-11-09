@@ -3,6 +3,27 @@
 import os
 import subprocess
 import sys
+import typing
+
+import pytest
+
+
+def test_runtime_type_exports_keep_identity_after_lazy_resolution(monkeypatch):
+    import queue
+
+    import cigar_sdk.context as context
+    from cigar_sdk import context_types
+
+    # Re-open a lazy public export even if another test already imported it.
+    monkeypatch.delattr(context, "LocalDocument", raising=False)
+    monkeypatch.delattr(context, "queue", raising=False)
+    assert "LocalDocument" in dir(context)
+    assert context.LocalDocument is context_types.LocalDocument
+    assert context.queue is queue
+    assert typing.get_type_hints(context.LocalContextGraph.upsert)["document"] is context_types.LocalDocument
+    assert typing.get_type_hints(context.LocalContextGraph.compile)["return"] is context_types.LocalContextResult
+    with pytest.raises(AttributeError, match="unknown_runtime_type"):
+        _ = context.unknown_runtime_type
 
 
 def test_queries_avoid_unused_type_construction_and_introspection_still_resolves():
