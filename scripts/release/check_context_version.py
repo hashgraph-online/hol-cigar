@@ -25,6 +25,31 @@ def local_version(version: str) -> tuple[str, str]:
     return base + ("a" if channel == "alpha" else "rc") + number, channel
 
 
+def validate_registry_readmes(root: Path, version: str, python_version: str) -> None:
+    """Package installation instructions must select the artifact being built."""
+    for name, relative, pattern, expected in (
+        (
+            "Python",
+            "sdk/python/README.md",
+            r"hol-cigar==([0-9][0-9A-Za-z.+-]*)",
+            python_version,
+        ),
+        (
+            "npm",
+            "sdk/typescript/README.md",
+            r"@hol-org/cigar@([0-9][0-9A-Za-z.+-]*)",
+            version,
+        ),
+    ):
+        text = (root / relative).read_text()
+        assert f"## {version} local Context SDK" in text, (
+            f"{name} README release identity drift"
+        )
+        pins = re.findall(pattern, text)
+        assert pins and set(pins) == {expected}, f"{name} installation version drift"
+        assert f"releases/tag/v{version}" in text, f"{name} README release link drift"
+
+
 def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     if sys.flags.optimize:
         raise RuntimeError("release checks require assertions enabled")
@@ -95,6 +120,7 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     assert (root / f"docs/release/context-sdk-{version}-notes.md").is_file(), (
         "missing current release notes"
     )
+    validate_registry_readmes(root, version, python_version)
     policy = json.loads((root / "sdk/context-toolchain.v1.json").read_bytes())
     assert node["engines"]["node"] == policy["node"]["engines"], (
         "Node engine policy drift"

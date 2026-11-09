@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.14.2 (unpublished release candidate)
+## 0.14.2 — query performance and atomic ticket consumption
 
 - Prepare consistent stable core, Python and TypeScript identities and lockfiles
   after RC2 qualification. Keep publication disabled until the release gates pass.
@@ -10,6 +10,8 @@
   identity, bounded caches, limits, persistence and existing SDK operations.
 - Correct package validation formatting and normalize Python prerelease identity
   in the separate Honey compatibility test. No benchmark definition changes.
+- Align packaged Python/npm installation guides and agent documentation with
+  0.14.2, preserving historical evidence labels and exact-archive qualification.
 - See `docs/release/context-sdk-0.14.2-readiness.md` for the retained RC2 timing
   evidence, registry state and unresolved release blockers.
 

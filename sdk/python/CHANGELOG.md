@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.14.2 — query performance candidate, unpublished
+## 0.14.2 — query performance and atomic ticket consumption
 
 - Use the matching 0.14.2 worker with faster exact ordinary tokenizer setup.
+- Add owner-bound, single-use atomic ticket consumption while preserving current
+  authority, evidence and freshness checks.
+- Pin Python/npm installation guides and packaged agent documentation to 0.14.2;
+  historical soak and comparison evidence retain their original version labels.
   Context selection, counts, citations, snapshots, deltas and the v1 API remain
   compatible; the bounded cache and 0.14.1 security controls are retained.
 - Include the embedded vocabulary's MIT attribution. Performance results and

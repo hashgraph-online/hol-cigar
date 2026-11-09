@@ -1,10 +1,11 @@
-# CIGAR 0.14.2 — unpublished release candidate
+# CIGAR 0.14.2 — query performance and atomic ticket consumption
 
-The candidate on `codex/cigar-0.14.2-speed` prepares native, Python and TypeScript
-version `0.14.2`, based on main/release `0.14.1`. It includes RC2's query
-optimizations and additive atomic ticket consumption. Stable package identities
-are preparation for qualification; this document does not announce publication.
-See [release readiness](context-sdk-0.14.2-readiness.md) for outstanding gates.
+The local Context SDK uses native, Python and TypeScript version `0.14.2`, based
+on `0.14.1`. It includes exact-token query optimizations and additive atomic ticket
+consumption. Install `hol-cigar==0.14.2` from PyPI or `@hol-org/cigar@0.14.2` from
+npm after the signed release and registry publication complete. Availability and
+qualification are established by the exact signed release/registry receipts;
+see [release readiness](context-sdk-0.14.2-readiness.md) for the preparation record.
 
 ## Changes
 
@@ -37,22 +38,25 @@ The fixed paired SDK study recorded **55.24% lower median-of-task-medians**
 [the paired results](../performance/0.14.2-results.md) for its workload, samples,
 compatibility checks and limits.
 
-The latest sealed RC2 one-hour swarm run `20261108-005709-18540c` recorded
-**4.71 ms p50, 11.44 ms p95 and 20.47 ms p99** across 8,640 warm persistent
-context queries. It completed 20/20 safe workflows and 58/58 answerable model
-tasks, with 2/2 correct abstentions. Startup and model generation are separate
-metrics. These percentiles are not a guaranteed 4–11 ms response range.
+The retained final-version one-hour swarm run `20261109-010530-8faa41` recorded
+**4.73 ms p50, 11.80 ms p95 and 22.44 ms p99** across 8,640 warm persistent
+context queries, with 20/20 safe workflows, 58/58 answerable tasks, 2/2 abstentions
+and 174/174 authority checks. Its standalone development composite is
+**89.2563/100**, with 20% token efficiency; all source and aggregate replays pass.
+The evaluator, v6 reader/model/prompt, workload, targets, budgets and schedule
+stay fixed. Earlier shared-reader/prompt-v1 results use different conditions and
+cannot establish an engine-only gain. See [the RC2 history](../performance/0.14.2-rc.2-results.md).
 
-On the matched isolated three-library development benchmark, the RC2 score is
-**89.2849/100**, with token efficiency weighted at 20%. That score is specific to
-the fixed v6 isolated-model profile. Earlier shared-model/prompt-v1 runs have
-different conditions; their score changes cannot establish an engine-only gain.
-See [the current RC2 evidence](../performance/0.14.2-rc.2-results.md).
-
-The above swarm timings and score belong to the retained RC2 worker with SHA-256
-`4a8e4c2b0ea70d151a609b3c1ffe7645865b1ec030b2deabc242d0ead8e318f6`.
-They are not a fresh measurement of the final-version `0.14.2` archives.
-Qualification and performance confirmation must bind the actual release bytes.
+This measurement belongs to source `59bfc20be83236245d319a14507d43ba2acab2b3`,
+wheel SHA-256 `9d0b4af81e4fcf8ae1137af6d356ecdf9ef48ef74931bd871e6be11e4efc30a6`
+and worker SHA-256 `9ed9f5b441ba517df82b56039e10493b7f8872b01a703c70b70a1fdd9fb9e67c`.
+Subsequent registry-guide corrections require newly qualified archives; retain
+these original identities and verify any runtime-byte equivalence explicitly.
+This is retained measurement evidence, not a new timing run of a rebuilt archive.
+Warm query percentiles exclude startup and model generation and are not a
+guaranteed 4–11 ms range. Cold per-query SDK and native-adapter profiles remain
+separate. One host and public development cases do not establish an industry
+ranking, general performance guarantee or security certification.
 
 ## Release requirements
 

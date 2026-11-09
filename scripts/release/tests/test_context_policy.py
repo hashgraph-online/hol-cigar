@@ -66,7 +66,9 @@ class PolicyTests(unittest.TestCase):
             "sdk/local-context-release.v1.json",
             "sdk/python/pyproject.toml",
             "sdk/python/uv.lock",
+            "sdk/python/README.md",
             "sdk/typescript/package.json",
+            "sdk/typescript/README.md",
             "crates/cigar-context/Cargo.toml",
             "Cargo.lock",
             "sdk/python/src/cigar_sdk/release.json",
@@ -142,6 +144,51 @@ class PolicyTests(unittest.TestCase):
                     ):
                         versions.validate(root)
                     target.write_text(original)
+
+    def test_registry_readmes_reject_old_install_pins_and_release_headers(self):
+        identity = json.loads(
+            (versions.ROOT / "sdk/local-context-release.v1.json").read_bytes()
+        )
+        version = identity["core_version"]
+        python_version = identity["versions"]["python"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in ("sdk/python/README.md", "sdk/typescript/README.md"):
+                target = root / relative
+                target.parent.mkdir(parents=True)
+                shutil.copyfile(versions.ROOT / relative, target)
+            versions.validate_registry_readmes(root, version, python_version)
+            for relative, old, new, message in (
+                (
+                    "sdk/python/README.md",
+                    "hol-cigar==" + python_version,
+                    "hol-cigar==0.0.0",
+                    "Python installation version drift",
+                ),
+                (
+                    "sdk/typescript/README.md",
+                    "@hol-org/cigar@" + version,
+                    "@hol-org/cigar@0.0.0",
+                    "npm installation version drift",
+                ),
+                (
+                    "sdk/typescript/README.md",
+                    f"## {version} local Context SDK",
+                    "## 0.0.0 local Context SDK",
+                    "npm README release identity drift",
+                ),
+            ):
+                target = root / relative
+                original = target.read_text()
+                changed = original.replace(old, new)
+                self.assertNotEqual(changed, original)
+                target.write_text(changed)
+                with self.subTest(relative=relative, message=message):
+                    with self.assertRaisesRegex(AssertionError, message):
+                        versions.validate_registry_readmes(
+                            root, version, python_version
+                        )
+                target.write_text(original)
 
     def test_wheel_without_native_requires_explicit_source_build_opt_in(self):
         # Load the actual hook with only Hatch's base interface replaced. The
