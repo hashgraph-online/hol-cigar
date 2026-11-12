@@ -108,7 +108,7 @@ jobs:
         with:
           cache: false
           check-latest: false
-          go-version: "1.26.6"
+          go-version: "1.26.11"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -123,7 +123,7 @@ jobs:
           test "$(node --version)" = "v24.22.1"
           test "$(pnpm --version)" = "10.34.5"
           test "$(npm --version)" = "11.6.0"
-          test "$(go version | awk '{print $3}')" = "go1.26.6"
+          test "$(go version | awk '{print $3}')" = "go1.26.11"
           pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run API parity, strict type, runtime, and verifier tests

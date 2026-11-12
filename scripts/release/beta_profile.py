@@ -306,7 +306,7 @@ EXPECTED_CONTRACT_SHA256 = {
 }
 
 EXPECTED_CARGO_RESOLUTION_SHA256 = (
-    "486879346f723babc1c9de481dfbd04f4f0610dca29799de0fcd24e1f7ef95b5"
+    "0e9b86d96acb3b5c093ccfe335a674182367fe1be4628ca1a847a80a8dedf832"
 )
 
 
@@ -384,10 +384,10 @@ def expected_cargo_resolution() -> dict[str, Any]:
         "component_count": 45,
         "dependency_edge_count": 66,
         "sbom_resolution_sha256": (
-            "0daf6f21ba9d65f4ef081b3737997bd0d968dce6c03c009bd50a3c2b8bafd8b6"
+            "0576436ea56e54a6214c149b38459369e87481f207c1cf7ecfda9f614cfa5db8"
         ),
         "metadata_resolution_sha256": (
-            "d09930c3934c0741e49e1fb3e6778d3857df84fe7e9524ae6e38392e316e4d75"
+            "9547fa0f530c0414a885275b40b8044828e38c8513317684f7c9058b2e0fb39e"
         ),
     }
 

@@ -9,7 +9,6 @@ wildcards = "deny"
 # duplicate versions remain denied.
 skip = [
   { name = "block-buffer", version = "=0.10.4" },
-  { name = "cipher", version = "=0.4.4" },
   { name = "const-oid", version = "=0.9.6" },
   { name = "cpufeatures", version = "=0.2.17" },
   { name = "crypto-common", version = "=0.1.7" },
@@ -23,16 +22,18 @@ skip = [
   { name = "hashbrown", version = "=0.14.5" },
   { name = "hmac", version = "=0.12.1" },
   { name = "io-lifetimes", version = "=2.0.4" },
-  { name = "inout", version = "=0.1.4" },
   { name = "r-efi", version = "=5.3.0" },
   { name = "rand_core", version = "=0.6.4" },
   { name = "rand_core", version = "=0.9.5" },
   { name = "rand", version = "=0.9.5" },
   { name = "sha2", version = "=0.10.9" },
+  # zbus 6 and futures-macro use syn 3; the remaining pinned proc macros
+  # require syn 2. Keep this build-time compatibility split exact.
+  { name = "syn", version = "=2.0.118" },
   { name = "tower-http", version = "=0.6.11" },
   { name = "wasi", version = "=0.11.1+wasi-snapshot-preview1" },
   { name = "windows-sys", version = "=0.52.0" },
-  # Wasmtime 36.0.16 is the vendor-patched line compatible with the
+  # Wasmtime 36.0.20 is the vendor-patched line compatible with the
   # frozen Rust 1.92 toolchain. Its Windows-only support graph remains on the
   # 0.60/0.53 family while the rest of the workspace has advanced to 0.61.
   { name = "windows-sys", version = "=0.60.2" },
@@ -56,6 +57,9 @@ confidence-threshold = 0.93
 allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
+  # Also accepted by packaging/licenses/third-party-policy.v1.json. The
+  # patched zstd-sys records its bundled algorithms as BSD-3-Clause AND BSD-2-Clause.
+  "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
   "MIT",

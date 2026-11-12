@@ -52,8 +52,9 @@ MAX_COMMAND_OUTPUT = 16 * 1024 * 1024
 EXPECTED_QUICKSTART_IDENTITY = (
     "1220d7af77d795d93d836e493e18a574f87daa7b8c40561ce6349bd3d4aa01dedb84"
 )
-MINIMUM_GO_VERSION = (1, 26, 6)
+MINIMUM_GO_VERSION = (1, 26, 11)
 MINIMUM_GO_VERSION_TEXT = ".".join(str(component) for component in MINIMUM_GO_VERSION)
+GO_SECURITY_PATCH_FLOORS = {(1, 26): 11, (1, 27): 4}
 NATIVE_GO_VERSION_PATTERN = re.compile(
     r"go version go(?P<major>[0-9]+)\.(?P<minor>[0-9]+)"
     r"(?:\.(?P<patch>[0-9]+))? darwin/arm64"
@@ -224,10 +225,13 @@ def _require_supported_go_toolchain(version_output: str) -> tuple[int, int, int]
         int(match.group("minor")),
         int(match.group("patch") or "0"),
     )
-    if version < MINIMUM_GO_VERSION:
+    if version < MINIMUM_GO_VERSION or version[2] < GO_SECURITY_PATCH_FLOORS.get(
+        version[:2], 0
+    ):
         raise ReleaseError(
             "Go SDK packaging requires Go "
-            f">={MINIMUM_GO_VERSION_TEXT} because earlier toolchains contain "
+            f">={MINIMUM_GO_VERSION_TEXT} (Go 1.27 requires >=1.27.4) "
+            "because earlier toolchains contain "
             f"known standard-library vulnerabilities; observed {version_output}"
         )
     return version

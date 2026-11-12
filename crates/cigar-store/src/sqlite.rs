@@ -1441,7 +1441,11 @@ impl SqliteStore {
             return Err(StoreError::new(StoreErrorCode::InvalidContext));
         }
         self.lock()?
-            .backup(rusqlite::MAIN_DB, destination, None)
+            .backup(
+                rusqlite::MAIN_DB,
+                destination,
+                None::<fn(rusqlite::backup::Progress)>,
+            )
             .map_err(unavailable)
     }
 
@@ -1783,7 +1787,11 @@ impl SqliteStore {
             .map_err(unavailable)
             .map_err(E::from)?;
         source
-            .backup(rusqlite::MAIN_DB, destination, None)
+            .backup(
+                rusqlite::MAIN_DB,
+                destination,
+                None::<fn(rusqlite::backup::Progress)>,
+            )
             .map_err(unavailable)
             .map_err(E::from)?;
         let result = operation(revision)?;

@@ -1,5 +1,51 @@
 # CIGAR 0.14.2 release readiness
 
+## November 12 dependency refresh
+
+The release-hardening candidate updates bundled SQLite (`rusqlite 0.41.1` /
+`libsqlite3-sys 0.39.1`), `rustix 1.1.6`, the compatible Wasmtime 36.0.20 line,
+capability filesystem, TLS/root trust, parser and compression dependencies.
+All ten tracked Rust lockfiles pass the November 12 advisory database with zero
+vulnerability findings and zero advisory warnings. The root dependency, duplicate
+version, license and source checks pass without advisory exclusions. The full
+633-component license inventory and the beta projection's inventory were
+regenerated from the locked inputs; stale versions are removed.
+
+Go qualification now uses 1.26.11 and `x/net 0.62.0`. SDK tests and both SDK/demo
+vulnerability scans pass. The pnpm auditor's `.mjs` launch inventory was checked
+against the signed official tarball before updating its expected digest; its
+15 policy tests and actual tool verification pass.
+
+Local Rust validation passes 155 native-context tests, 158 storage/extension
+tests, 62 crypto/Rust SDK tests and 44 xtask tests. Four existing storage tests
+remain ignored; the native crash child is invoked by its parent test. This is
+development evidence, not a replacement for exact-commit hosted qualification.
+The SQLite backup API adjustment retains both online backup paths.
+
+The Linux OS-keystore adapter retains the encrypted Secret Service protocol,
+`service`/`username` attributes, default collection and binary credential format.
+It uses the maintained zbus 6 line through the explicitly pinned upstream
+`secret-service 6.0.0-rc.1`; that dependency is a release candidate and requires
+Linux integration validation. A separate CI job checks an externally seeded
+legacy credential, encrypted-keystore reopen, new credentials, malformed keys
+and ambiguous matches inside a fresh private D-Bus session. macOS and Windows
+retain their previous native store implementations.
+
+**Release remains blocked pending the new hosted qualification, final archive
+verification and performance/endurance confirmation.** The completed 24-hour
+run and 89.256271 score qualify their recorded old source/worker bytes; these
+dependency changes require new evidence. Historical benchmark definitions,
+labels, peers, budgets and the 20% token weight remain unchanged.
+
+The CIGAR workspace search found version/bootstrap records, but no independently
+approved command-specific xtask executable manifest or source-bound authority
+digest for this candidate. The existing protected-authority gate remains in
+force. Its required format and approval steps are in the
+[hosted macOS bootstrap contract](../../crates/xtask/README.md#hosted-macos-ci-bootstrap-contract).
+No merge, tag or registry publication is authorized by these local checks.
+
+## Earlier candidate history
+
 Status on 2026-11-08: **unpublished candidate; release blocked**.
 PR [#42](https://github.com/hashgraph-online/hol-cigar/pull/42) remains draft
 and unmerged on `codex/cigar-0.14.2-speed`. Release preparation aligns the core,
