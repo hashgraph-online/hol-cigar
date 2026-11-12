@@ -15,22 +15,59 @@ from release_lib import reject_evidence_directory
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def local_version(version: str) -> tuple[str, str]:
+    """Map closed SemVer release channels to Python without accepting arbitrary suffixes."""
+    matched = re.fullmatch(r"(0\.\d+\.\d+)(?:-(alpha|rc)\.([1-9]\d*))?", version)
+    assert matched, "invalid local SDK version"
+    base, channel, number = matched.groups()
+    if channel is None:
+        return base, "stable"
+    return base + ("a" if channel == "alpha" else "rc") + number, channel
+
+
+def validate_registry_readmes(root: Path, version: str, python_version: str) -> None:
+    """Package installation instructions must select the artifact being built."""
+    for name, relative, pattern, expected in (
+        (
+            "Python",
+            "sdk/python/README.md",
+            r"hol-cigar==([0-9][0-9A-Za-z.+-]*)",
+            python_version,
+        ),
+        (
+            "npm",
+            "sdk/typescript/README.md",
+            r"@hol-org/cigar@([0-9][0-9A-Za-z.+-]*)",
+            version,
+        ),
+    ):
+        text = (root / relative).read_text()
+        assert f"## {version} local Context SDK" in text, (
+            f"{name} README release identity drift"
+        )
+        pins = re.findall(pattern, text)
+        assert pins and set(pins) == {expected}, f"{name} installation version drift"
+        assert f"releases/tag/v{version}" in text, f"{name} README release link drift"
+
+
 def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     if sys.flags.optimize:
         raise RuntimeError("release checks require assertions enabled")
     identity = json.loads((root / "sdk/local-context-release.v1.json").read_bytes())
     version = identity["core_version"]
     assert expected is None or version == expected, "unexpected local SDK release"
-    assert re.fullmatch(r"0\.\d+\.\d+(?:-alpha\.[1-9]\d*)?", version), (
-        "invalid local SDK version"
-    )
-    python_version = version.replace("-alpha.", "a")
-    channel = "alpha" if "-alpha." in version else "stable"
+    python_version, channel = local_version(version)
     assert identity["channel"] == channel, "release channel drift"
     assert identity["versions"] == {"python": python_version, "typescript": version}, (
         "SDK identity drift"
     )
     python = tomllib.loads((root / "sdk/python/pyproject.toml").read_text())
+    python_lock = tomllib.loads((root / "sdk/python/uv.lock").read_text())
+    assert [
+        item["version"]
+        for item in python_lock["package"]
+        if item["name"] == "hol-cigar"
+    ] == [python_version], "Python lock project version drift"
     node = json.loads((root / "sdk/typescript/package.json").read_bytes())
     cargo = tomllib.loads((root / "crates/cigar-context/Cargo.toml").read_text())
     lock = tomllib.loads((root / "Cargo.lock").read_text())
@@ -39,7 +76,7 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
         and python["project"]["version"] == python_version
     ), "package version drift"
     assert node["publishConfig"]["tag"] == (
-        "alpha" if channel == "alpha" else "latest"
+        channel if channel in {"alpha", "rc"} else "latest"
     ), "npm tag drift"
     assert [
         item["version"] for item in lock["package"] if item["name"] == "cigar-context"
@@ -83,6 +120,7 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
     assert (root / f"docs/release/context-sdk-{version}-notes.md").is_file(), (
         "missing current release notes"
     )
+    validate_registry_readmes(root, version, python_version)
     policy = json.loads((root / "sdk/context-toolchain.v1.json").read_bytes())
     assert node["engines"]["node"] == policy["node"]["engines"], (
         "Node engine policy drift"

@@ -8,6 +8,7 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest import mock
 
 from cigar_sdk import LocalContextError, LocalContextGraph
 
@@ -156,6 +157,22 @@ class LocalContextTests(unittest.TestCase):
         graph.upsert({"id": "a", "source": "a", "text": "alpha"})
         graph.compile({"query": "alpha"})
         self.assertEqual(graph.stats()["cache"]["entries"], 0)
+
+    @unittest.skipUnless(os.environ.get("CIGAR_TEST_STALLED_WORKER"), "release transport fixture required")
+    def test_portable_deadline_closes_the_stalled_worker_and_exchange_thread(self):
+        with mock.patch("cigar_sdk.context._DIRECT_IO", False):
+            graph = LocalContextGraph(
+                "portable-deadline", worker_path=os.environ["CIGAR_TEST_STALLED_WORKER"], timeout=0.25
+            )
+        self.addCleanup(graph.close)
+        started = time.monotonic()
+        with self.assertRaises(LocalContextError) as raised:
+            graph.stats()
+        self.assertEqual(raised.exception.code, "Timeout")
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertIsNotNone(graph._process.poll())
+        self.assertFalse(graph._thread.is_alive())
+        self.assertTrue(graph.cleanup_complete)
 
     @unittest.skipUnless(os.environ.get("CIGAR_TEST_STALLED_WORKER"), "release transport fixture required")
     def test_deadline_kills_worker_including_blocked_pipe_writes(self):

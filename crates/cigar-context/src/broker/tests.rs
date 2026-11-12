@@ -62,6 +62,54 @@ fn request() -> ContextRequest {
     }
 }
 
+#[test]
+fn consume_ticket_is_current_owner_bound_and_single_use() {
+    let mut broker = broker();
+    ingest(&mut broker, "shared", "fact", "meaningful evidence");
+    let a = broker.host_grant(spec("a", &["shared"], &[])).unwrap();
+    let b = broker.host_grant(spec("b", &["shared"], &[])).unwrap();
+    let context = compile(&mut broker, &a);
+    assert_eq!(
+        broker.consume_ticket(&b, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+    assert!(broker.tickets.contains_key(&context.ticket));
+    broker
+        .consume_ticket(&a, &context.ticket, &Utf8ByteCounter)
+        .unwrap();
+    assert!(!broker.tickets.contains_key(&context.ticket));
+    assert_eq!(
+        broker.consume_ticket(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+}
+
+#[test]
+fn consume_ticket_does_not_consume_stale_expired_or_revoked_authority() {
+    let mut broker = broker();
+    ingest(&mut broker, "shared", "fact", "meaningful evidence");
+    let a = broker.host_grant(spec("a", &["shared"], &[])).unwrap();
+    let context = compile(&mut broker, &a);
+    ingest(&mut broker, "shared", "fact", "changed evidence");
+    assert_eq!(
+        broker.consume_ticket(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::Stale)
+    );
+    assert!(broker.tickets.contains_key(&context.ticket));
+    broker.forget_ticket(&a, &context.ticket).unwrap();
+    let context = compile(&mut broker, &a);
+    broker.tickets.get_mut(&context.ticket).unwrap().expires = Instant::now();
+    assert_eq!(
+        broker.consume_ticket(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+    broker.host_revoke("a");
+    assert_eq!(
+        broker.consume_ticket(&a, &context.ticket, &Utf8ByteCounter),
+        Err(BrokerError::AccessDenied)
+    );
+}
+
 pub(super) fn compile(broker: &mut ContextBroker, credential: &BrokerCredential) -> BrokerContext {
     broker
         .compile(credential, &request(), &Utf8ByteCounter)

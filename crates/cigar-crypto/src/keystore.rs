@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use zeroize::Zeroize;
 
+mod native_keychain;
+
 const KEYSTORE_MAGIC: &[u8; 16] = b"CIGAR-KEYS-v1\0\0\0";
 const KEYSTORE_SALT_BYTES: usize = 16;
 const MAX_KEYSTORE_BYTES: u64 = 16_777_216;
@@ -297,26 +299,9 @@ impl OsKeychainKeyProvider {
     pub fn open(service: &str, account: &str, path: impl AsRef<Path>) -> Result<Self, CryptoError> {
         validate_keychain_selector(service)?;
         validate_keychain_selector(account)?;
-        let entry = keyring::Entry::new(service, account)
-            .map_err(|_error| CryptoError::new(CryptoErrorCode::ProviderUnavailable))?;
-        let secret = match entry.get_secret() {
-            Ok(secret) => secret,
-            Err(keyring::Error::NoEntry) => {
-                let mut secret = vec![0_u8; 32];
-                getrandom::fill(&mut secret)
-                    .map_err(|_error| CryptoError::new(CryptoErrorCode::RandomUnavailable))?;
-                entry
-                    .set_secret(&secret)
-                    .map_err(|_error| CryptoError::new(CryptoErrorCode::ProviderUnavailable))?;
-                secret
-            }
-            Err(_error) => return Err(CryptoError::new(CryptoErrorCode::ProviderUnavailable)),
-        };
-        if secret.len() != 32 {
-            return Err(CryptoError::new(CryptoErrorCode::InvalidKey));
-        }
+        let secret = native_keychain::load_or_create(service, account)?;
         Ok(Self {
-            inner: EncryptedDevelopmentKeystore::open(path, SecretBytes::new(secret))?,
+            inner: EncryptedDevelopmentKeystore::open(path, secret)?,
         })
     }
 }

@@ -12,11 +12,13 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 import zipfile
+import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import context_distribution as distribution  # noqa: E402
 import context_platforms  # noqa: E402
 import context_sdk_inputs  # noqa: E402
+import qualify_context_distribution as qualification  # noqa: E402
 from context_sdk_cases import build_cases  # noqa: E402
 from release_lib import ReleaseError  # noqa: E402
 
@@ -202,6 +204,89 @@ class DistributionBoundaryTests(unittest.TestCase):
             else:
                 with self.assertRaisesRegex(ReleaseError, "non-system DLL"):
                     context_platforms.inspect_binary(path, "win32-x64")
+
+
+class InstalledPythonPlatformSkipTests(unittest.TestCase):
+    def setUp(self):
+        self.observed = json.loads(
+            (
+                Path(__file__).parent / "fixtures/context-windows-test-skips.v1.json"
+            ).read_text()
+        )
+
+    def report(self, rows):
+        root = ET.Element("testsuite")
+        for row in rows:
+            case = ET.SubElement(
+                root, "testcase", name=row["name"], classname=row["classname"]
+            )
+            if "reason" in row:
+                ET.SubElement(case, "skipped", message=row["reason"])
+        return ET.ElementTree(root)
+
+    def test_actual_windows_run_retains_declared_posix_gaps_and_portable_execution(
+        self,
+    ):
+        rows = self.observed["skipped"] + self.observed["portable_passed"]
+        qualification.validate_python_test_skips(self.report(rows), windows=True)
+        with self.assertRaisesRegex(ReleaseError, "unexpectedly skipped"):
+            qualification.validate_python_test_skips(self.report(rows), windows=False)
+        qualification.validate_python_test_skips(
+            self.report(self.observed["portable_passed"]), windows=False
+        )
+
+    def test_portable_deadline_and_unknown_test_skips_are_rejected(self):
+        for extra in (
+            {**self.observed["portable_passed"][0], "reason": "POSIX poll transport"},
+            {
+                "classname": "tests.test_context",
+                "name": "unknown",
+                "reason": "POSIX fork contract",
+            },
+        ):
+            with (
+                self.subTest(case=extra["name"]),
+                self.assertRaisesRegex(ReleaseError, "unexpectedly skipped"),
+            ):
+                qualification.validate_python_test_skips(
+                    self.report(self.observed["skipped"] + [extra]), windows=True
+                )
+
+    def test_skip_reason_module_inventory_and_duplicate_drift_are_rejected(self):
+        original = self.observed["skipped"]
+        for rows in (
+            [{**original[0], "reason": "fixture missing"}, *original[1:]],
+            [
+                {**original[0], "classname": "other.test_direct_transport"},
+                *original[1:],
+            ],
+            original[1:],
+            [*original, original[0]],
+        ):
+            with self.subTest(rows=len(rows)), self.assertRaises(ReleaseError):
+                qualification.validate_python_test_skips(
+                    self.report(rows), windows=True
+                )
+
+    def test_windows_requires_the_portable_deadline_tests_to_pass_exactly_once(self):
+        skipped = self.observed["skipped"]
+        portable = self.observed["portable_passed"]
+        for passed in ([], portable[1:], portable + [portable[0]]):
+            with (
+                self.subTest(passed=len(passed)),
+                self.assertRaisesRegex(ReleaseError, "portable transport"),
+            ):
+                qualification.validate_python_test_skips(
+                    self.report(skipped + passed), windows=True
+                )
+        for outcome in ("failure", "error"):
+            report = self.report(skipped + portable)
+            ET.SubElement(list(report.iter("testcase"))[-1], outcome)
+            with (
+                self.subTest(outcome=outcome),
+                self.assertRaisesRegex(ReleaseError, "portable transport"),
+            ):
+                qualification.validate_python_test_skips(report, windows=True)
 
 
 if __name__ == "__main__":

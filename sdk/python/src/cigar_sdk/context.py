@@ -5,37 +5,43 @@ from __future__ import annotations
 import json
 import math
 import os
-import queue
+import select
 import subprocess
 import threading
 import time
+from annotationlib import Format
+from collections.abc import Callable
 from pathlib import Path
-from types import TracebackType
-from typing import Any, Self, cast
+from types import FunctionType, TracebackType
+from typing import TYPE_CHECKING, Any, Self, cast
 
-from cigar_sdk.context_types import (
-    LocalAnswerAssessment,
-    LocalAnswerDraft,
-    LocalAnswerPolicy,
-    LocalCitation,
-    LocalClaimReview,
-    LocalContextDelta,
-    LocalContextLimits,
-    LocalContextPrompt,
-    LocalContextRequest,
-    LocalContextResult,
-    LocalContextSnapshot,
-    LocalDocument,
-    LocalEdgeKind,
-    LocalGraphStats,
-    LocalSelectionExplanation,
-    LocalSourceUpdate,
-    LocalViewAssessment,
-    LocalViewContext,
-    LocalViewHandle,
-    LocalViewResult,
-    LocalViewSpec,
-)
+if TYPE_CHECKING:
+    import queue
+
+    from cigar_sdk.context_types import (
+        LocalAnswerAssessment,
+        LocalAnswerDraft,
+        LocalAnswerPolicy,
+        LocalCitation,
+        LocalClaimReview,
+        LocalContextDelta,
+        LocalContextLimits,
+        LocalContextPrompt,
+        LocalContextRequest,
+        LocalContextResult,
+        LocalContextSnapshot,
+        LocalDocument,
+        LocalEdgeKind,
+        LocalGraphStats,
+        LocalSelectionExplanation,
+        LocalSourceUpdate,
+        LocalViewAssessment,
+        LocalViewContext,
+        LocalViewHandle,
+        LocalViewResult,
+        LocalViewSpec,
+    )
+
 from cigar_sdk.local_runtime import (
     LOCAL_CONTEXT_CORE_VERSION as LOCAL_CONTEXT_CORE_VERSION,
 )
@@ -63,6 +69,62 @@ from cigar_sdk.local_runtime import (
 
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
+_DIRECT_IO = os.name == "posix" and hasattr(select, "poll")
+_WIRE_NAMES = (
+    "LocalAnswerAssessment",
+    "LocalAnswerDraft",
+    "LocalAnswerPolicy",
+    "LocalCitation",
+    "LocalClaimReview",
+    "LocalContextDelta",
+    "LocalContextLimits",
+    "LocalContextPrompt",
+    "LocalContextRequest",
+    "LocalContextResult",
+    "LocalContextSnapshot",
+    "LocalDocument",
+    "LocalEdgeKind",
+    "LocalGraphStats",
+    "LocalSelectionExplanation",
+    "LocalSourceUpdate",
+    "LocalViewAssessment",
+    "LocalViewContext",
+    "LocalViewHandle",
+    "LocalViewResult",
+    "LocalViewSpec",
+)
+
+
+class _ExchangeTimeout(Exception):
+    pass
+
+
+class _ExchangeFull(Exception):
+    pass
+
+
+def _load_wire_types() -> dict[str, Any]:
+    from cigar_sdk import context_types
+
+    # A fixed allowlist preserves runtime type exports and annotation identities.
+    wire_types = {name: getattr(context_types, name) for name in _WIRE_NAMES}
+    globals().update(wire_types)
+    return wire_types
+
+
+def __getattr__(name: str) -> Any:
+    if name == "queue":
+        import queue
+
+        globals()["queue"] = queue
+        return queue
+    if name not in _WIRE_NAMES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return _load_wire_types()[name]
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_WIRE_NAMES) | {"queue"})
 
 
 class _WorkerChannel:
@@ -88,7 +150,17 @@ class _WorkerChannel:
         self._lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._next_id = 0
-        self._jobs: queue.Queue[tuple[bytes, queue.Queue[bytes | None]] | None] = queue.Queue(maxsize=1)
+        self._direct_io = _DIRECT_IO
+        self._jobs: queue.Queue[tuple[bytes, queue.Queue[bytes | None]] | None] | None = None
+        self._make_response: Callable[[], queue.Queue[bytes | None]] | None = None
+        self._queue_empty: type[Exception] = _ExchangeTimeout
+        self._queue_full: type[Exception] = _ExchangeFull
+        if not self._direct_io:
+            import queue
+
+            self._jobs = queue.Queue(maxsize=1)
+            self._make_response = lambda: queue.Queue(maxsize=1)
+            self._queue_empty, self._queue_full = queue.Empty, queue.Full
         self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
             self._process = subprocess.Popen(
@@ -102,19 +174,106 @@ class _WorkerChannel:
         except OSError:
             raise LocalContextError("WorkerUnavailable") from None
         try:
-            self._thread.start()
+            if self._direct_io:
+                assert self._process.stdin is not None and self._process.stdout is not None
+                os.set_blocking(self._process.stdin.fileno(), False)
+                os.set_blocking(self._process.stdout.fileno(), False)
+            else:
+                self._thread.start()
         except BaseException:
             self.close()
             raise
 
+    def _exchange(self, frame: bytes, deadline: float) -> bytes | None:
+        if not self._direct_io:
+            assert self._jobs is not None and self._make_response is not None
+            response = self._make_response()
+            try:
+                self._jobs.put_nowait((frame, response))
+                return response.get(timeout=max(0.0, min(self._timeout, deadline - time.monotonic())))
+            except self._queue_full:
+                raise _ExchangeFull from None
+            except self._queue_empty:
+                raise _ExchangeTimeout from None
+
+        # Lease independent descriptors under the close lock. Concurrent close
+        # can close the unused buffered streams while these raw I/O handles stay
+        # owned until this call finishes; descriptor reuse cannot redirect I/O.
+        leased: list[int] = []
+        try:
+            if not self._close_lock.acquire(timeout=max(0.0, min(self._timeout, deadline - time.monotonic()))):
+                raise LocalContextError("Busy")
+            try:
+                if self._closed:
+                    return None
+                assert self._process.stdin is not None and self._process.stdout is not None
+                leased.append(os.dup(self._process.stdin.fileno()))
+                leased.append(os.dup(self._process.stdout.fileno()))
+            finally:
+                self._close_lock.release()
+            writer, reader = leased
+            readiness = select.poll()
+
+            def wait(descriptor: int, event: int) -> None:
+                readiness.register(descriptor, event)
+                try:
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise _ExchangeTimeout
+                        # poll uses signed-int milliseconds, unlike Python's
+                        # larger accepted threading timeout range.
+                        if readiness.poll(min(2_147_483_647, math.ceil(remaining * 1000))):
+                            return
+                finally:
+                    readiness.unregister(descriptor)
+
+            sent = 0
+            view = memoryview(frame)
+            while sent < len(frame):
+                wait(writer, select.POLLOUT)
+                try:
+                    written = os.write(writer, view[sent:])
+                except BlockingIOError:
+                    continue
+                if not written:
+                    return None
+                sent += written
+            result = bytearray()
+            while len(result) <= _MAX_RESPONSE:
+                wait(reader, select.POLLIN)
+                try:
+                    chunk = os.read(reader, min(65536, _MAX_RESPONSE + 1 - len(result)))
+                except BlockingIOError:
+                    continue
+                if not chunk:
+                    return None
+                result.extend(chunk)
+                if b"\n" in chunk:
+                    if result.find(b"\n") != len(result) - 1:
+                        return None
+                    return bytes(result)
+            return bytes(result)
+        except (OSError, ValueError):  # fmt: skip
+            return None
+        finally:
+            while leased:
+                descriptor = leased.pop()
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
     def _exchange_loop(self) -> None:
         stdin, stdout = self._process.stdin, self._process.stdout
         assert stdin is not None and stdout is not None
+        jobs = self._jobs
+        assert jobs is not None
         try:
             while not self._stop.is_set():
                 try:
-                    job = self._jobs.get(timeout=0.1)
-                except queue.Empty:
+                    job = jobs.get(timeout=0.1)
+                except self._queue_empty:
                     continue
                 if job is None or self._stop.is_set():
                     break
@@ -163,17 +322,25 @@ class _WorkerChannel:
                 raise LocalContextError("InvalidInput") from None
             if len(frame) > _MAX_FRAME:
                 raise LocalContextError("LimitExceeded")
-            response: queue.Queue[bytes | None] = queue.Queue(maxsize=1)
             try:
-                self._jobs.put_nowait((frame, response))
-            except queue.Full:
+                value = self._exchange(frame, deadline)
+            except _ExchangeFull:
                 self.close()
                 raise LocalContextError("Transport") from None
-            try:
-                value = response.get(timeout=max(0.0, deadline - time.monotonic()))
-            except queue.Empty:
+            except _ExchangeTimeout:
                 self.close()
                 raise LocalContextError("Timeout") from None
+            except LocalContextError:
+                # A lease-lock Busy response occurs before any I/O dispatch.
+                raise
+            except BaseException:
+                # Interrupted raw I/O has an unknown framing/mutation outcome.
+                # Never permit a subsequent request to reuse that stream.
+                try:
+                    self.close()
+                except BaseException:
+                    pass
+                raise
             if not value or len(value) > _MAX_RESPONSE or not value.endswith(b"\n"):
                 self.close()
                 raise LocalContextError("Transport")
@@ -225,19 +392,19 @@ class _WorkerChannel:
                 self._process.kill()
             except OSError:
                 pass
-            try:
-                self._jobs.put_nowait(None)
-            except queue.Full:
-                pass
-            try:
-                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
-            except OSError, subprocess.TimeoutExpired:
-                # Keep reaping retryable; cleanup must not replace the API error.
-                pass
+            if self._jobs is not None:
+                try:
+                    self._jobs.put_nowait(None)
+                except self._queue_full:
+                    pass
             if self._thread.ident is not None:
+                # The pipe owner wakes on EOF after kill. Joining it first avoids
+                # Popen's timed wait polling while the process is still exiting.
+                # Both operations retain the same single cleanup deadline.
                 self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
             else:
-                # Thread creation failed; no thread can own these buffers.
+                # Direct I/O never uses buffered stream locks. This also covers
+                # thread creation failure before a portable I/O owner starts.
                 for pipe in (self._process.stdin, self._process.stdout):
                     if pipe is None:
                         continue
@@ -245,6 +412,11 @@ class _WorkerChannel:
                         pipe.close()
                     except (OSError, ValueError):  # fmt: skip
                         pass
+            try:
+                self._process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except OSError, subprocess.TimeoutExpired:
+                # Keep reaping retryable; cleanup must not replace the API error.
+                pass
             try:
                 self._cleanup_complete = self._process.poll() is not None and not self._thread.is_alive()
             except OSError:
@@ -341,7 +513,7 @@ class LocalContextGraph(_WorkerChannel):
         Sources are indexed once. Keep the root graph and this method outside agent control;
         a view is not a sandbox or a replacement for authenticated CIGAR service capabilities.
         """
-        handle = cast(LocalViewHandle, self._view_call({"op": "define_view", "spec": spec}))
+        handle = cast("LocalViewHandle", self._view_call({"op": "define_view", "spec": spec}))
         return LocalContextView(self, handle)
 
     def revoke_view(self, view_id: str) -> bool:
@@ -350,7 +522,7 @@ class LocalContextGraph(_WorkerChannel):
 
     def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
         """Atomically replace one source; [] withdraws it. Hard edges remain fail-closed."""
-        return cast(LocalSourceUpdate, self._call({"op": "replace_source", "source": source, "documents": documents}))
+        return cast("LocalSourceUpdate", self._call({"op": "replace_source", "source": source, "documents": documents}))
 
     def remove(self, node_id: str) -> bool:
         return cast(bool, self._call({"op": "remove", "node_id": node_id}))
@@ -363,16 +535,18 @@ class LocalContextGraph(_WorkerChannel):
 
     def compile(self, request: LocalContextRequest) -> LocalContextResult:
         """Return a verified snapshot and Rust-rendered data-role context (not instructions)."""
-        return cast(LocalContextResult, self._call({"op": "compile", "request": request}))
+        return cast("LocalContextResult", self._call({"op": "compile", "request": request}))
 
     def explain(self, request: LocalContextRequest, snapshot: LocalContextSnapshot) -> LocalSelectionExplanation:
         """Recompile and explain an exact current snapshot. No rejected IDs or truth probabilities."""
         self._require_explanation()
-        return cast(LocalSelectionExplanation, self._call({"op": "explain", "request": request, "snapshot": snapshot}))
+        return cast(
+            "LocalSelectionExplanation", self._call({"op": "explain", "request": request, "snapshot": snapshot})
+        )
 
     def chunks(self, document: LocalDocument, max_lines: int, overlap_lines: int = 0) -> list[LocalDocument]:
         return cast(
-            list[LocalDocument],
+            "list[LocalDocument]",
             self._call({"op": "chunks", "document": document, "max_lines": max_lines, "overlap_lines": overlap_lines}),
         )
 
@@ -380,7 +554,9 @@ class LocalContextGraph(_WorkerChannel):
         """Partition exact text at caller-supplied syntax boundaries. No parser, I/O or graph mutation."""
         if "document_boundaries.v1" not in self.capabilities()["features"]:
             raise LocalContextError("IncompatibleWorker")
-        return cast(list[LocalDocument], self._call({"op": "chunks_at_lines", "document": document, "starts": starts}))
+        return cast(
+            "list[LocalDocument]", self._call({"op": "chunks_at_lines", "document": document, "starts": starts})
+        )
 
     def review_keys(self, draft: LocalAnswerDraft) -> list[str]:
         """Bind exact claims to their snapshot for a separate trusted reviewer; no truth judgment."""
@@ -399,40 +575,40 @@ class LocalContextGraph(_WorkerChannel):
         Confidence is telemetry, not permission. This does not run a semantic judge.
         """
         return cast(
-            LocalAnswerAssessment,
+            "LocalAnswerAssessment",
             self._call(
                 {"op": "check_answer", "request": request, "draft": draft, "reviews": reviews, "policy": policy or {}}
             ),
         )
 
     def verify(self, snapshot: LocalContextSnapshot) -> LocalContextResult:
-        return cast(LocalContextResult, self._call({"op": "verify", "snapshot": snapshot}))
+        return cast("LocalContextResult", self._call({"op": "verify", "snapshot": snapshot}))
 
     def prompt_view(self, snapshot: LocalContextSnapshot, max_tokens: int) -> LocalContextPrompt:
         """Compact data-role rendering; retain its citation map and the complete snapshot."""
         return cast(
-            LocalContextPrompt, self._call({"op": "prompt_view", "snapshot": snapshot, "max_tokens": max_tokens})
+            "LocalContextPrompt", self._call({"op": "prompt_view", "snapshot": snapshot, "max_tokens": max_tokens})
         )
 
     def verify_prompt(self, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot) -> LocalContextPrompt:
-        return cast(LocalContextPrompt, self._call({"op": "verify_prompt", "prompt": prompt, "snapshot": snapshot}))
+        return cast("LocalContextPrompt", self._call({"op": "verify_prompt", "prompt": prompt, "snapshot": snapshot}))
 
     def resolve_citation(
         self, reference: str, prompt: LocalContextPrompt, snapshot: LocalContextSnapshot
     ) -> list[LocalCitation]:
         return cast(
-            list[LocalCitation],
+            "list[LocalCitation]",
             self._call({"op": "resolve_citation", "reference": reference, "prompt": prompt, "snapshot": snapshot}),
         )
 
     def delta(self, base: LocalContextSnapshot, target: LocalContextSnapshot) -> LocalContextDelta:
-        return cast(LocalContextDelta, self._call({"op": "delta", "base": base, "target": target}))
+        return cast("LocalContextDelta", self._call({"op": "delta", "base": base, "target": target}))
 
     def apply_delta(self, base: LocalContextSnapshot, delta: LocalContextDelta) -> LocalContextResult:
-        return cast(LocalContextResult, self._call({"op": "apply_delta", "base": base, "delta": delta}))
+        return cast("LocalContextResult", self._call({"op": "apply_delta", "base": base, "delta": delta}))
 
     def stats(self) -> LocalGraphStats:
-        return cast(LocalGraphStats, self._call({"op": "stats"}))
+        return cast("LocalGraphStats", self._call({"op": "stats"}))
 
     def clear_cache(self) -> None:
         self._call({"op": "clear_cache"})
@@ -453,21 +629,21 @@ class LocalContextView:
     def compile(self, request: LocalContextRequest) -> LocalViewResult:
         """Compile authorized current sources; request access may narrow but cannot widen scope."""
         return cast(
-            LocalViewResult,
+            "LocalViewResult",
             self._graph._view_call({"op": "compile_view", "view": self._handle, "request": request}),
         )
 
     def explain(self, context: LocalViewContext) -> LocalSelectionExplanation:
         """Explain selected IDs only after revalidating this view and all its readable evidence."""
         return cast(
-            LocalSelectionExplanation,
+            "LocalSelectionExplanation",
             self._graph._view_call({"op": "explain_view", "view": self._handle, "context": context}),
         )
 
     def replace_source(self, source: str, documents: list[LocalDocument]) -> LocalSourceUpdate:
         """Atomically replace a writable source. Cross-source document ID collisions are denied."""
         return cast(
-            LocalSourceUpdate,
+            "LocalSourceUpdate",
             self._graph._view_call(
                 {"op": "replace_view_source", "view": self._handle, "source": source, "documents": documents}
             ),
@@ -490,7 +666,7 @@ class LocalContextView:
         This transient assessment grants no external effect authority or durable approval.
         """
         return cast(
-            LocalViewAssessment,
+            "LocalViewAssessment",
             self._graph._view_call(
                 {
                     "op": "check_view_answer",
@@ -502,3 +678,29 @@ class LocalContextView:
                 }
             ),
         )
+
+
+def _lazy_wire_annotations(original: Callable[[Format], dict[str, Any]]) -> Callable[[Format], dict[str, Any]]:
+    def annotations(format: Format) -> dict[str, Any]:
+        _load_wire_types()
+        return original(format)
+
+    return annotations
+
+
+def _defer_wire_annotations() -> None:
+    # Python 3.14's public annotation callback keeps normal introspection exact
+    # while ordinary data calls avoid constructing unused TypedDict classes.
+    for kind in (_WorkerChannel, LocalContextGraph, LocalContextView):
+        for member in vars(kind).values():
+            methods = (member.fget, member.fset, member.fdel) if isinstance(member, property) else (member,)
+            for method in methods:
+                if isinstance(method, FunctionType) and method.__annotate__ is not None:
+                    method.__annotate__ = _lazy_wire_annotations(method.__annotate__)
+
+
+_defer_wire_annotations()
+
+# Preserve the module's historical star-import surface while keeping fixed wire
+# names lazy for ordinary explicit imports and data calls.
+__all__ = sorted({name for name in globals() if not name.startswith("_")} | set(_WIRE_NAMES) | {"queue"})

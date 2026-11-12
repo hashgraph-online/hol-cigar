@@ -24,12 +24,12 @@ inspect the diagnostic's platform and error code. Reinstall the matching distrib
 or explicitly supply a trusted matching worker. Do not infer that HOL services or
 credentials are required from either error. Never silently fall back to a server.
 
-The 0.12.0 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
+The 0.14.2 native matrix is macOS ARM64/x64, Linux x64/ARM64 on glibc or musl, and
 Windows x64. The npm archive includes platform workers; each Python wheel includes
 one platform worker. A source installation needs an explicit matching worker.
-The 0.14.1 security candidate retains these seven targets. Its final versioned
-installed matrix remains a release gate. Historical qualification receipts apply
-only to their named artifacts. See the current release notes and execution checklist.
+The installed matrix and independent build comparison remain release gates.
+Qualification receipts apply only to their exact named artifacts. See the
+[0.14.2 release notes](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/docs/release/context-sdk-0.14.2-notes.md).
 Node environments must permit local subprocesses; browser/edge execution is a
 different runtime contract. These are local executables, not an OS security sandbox.
 

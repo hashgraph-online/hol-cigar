@@ -81,6 +81,10 @@ def _inventory_inputs(root: Path) -> list[Path]:
 _UPSTREAM_EVIDENCE_SCHEMA = "cigar.locked-upstream-license-evidence.v1"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SHA512 = re.compile(r"^[0-9a-f]{128}$")
+_LICENSE_EXPRESSION_ALIASES = {
+    "3-Clause BSD License": "BSD-3-Clause",
+    "Apache 2.0": "Apache-2.0",
+}
 
 
 def _strict_json(path: Path) -> dict[str, Any]:
@@ -797,7 +801,7 @@ def _python_metadata(root: Path) -> dict[tuple[str, str], tuple[str, list[str]]]
             elif "Apache Software License" in classifiers:
                 expression = "Apache-2.0"
         result[(_normalize_name(name), version)] = (
-            expression or "NOASSERTION",
+            _LICENSE_EXPRESSION_ALIASES.get(expression, expression) or "NOASSERTION",
             _notice_digests(path.parent),
         )
     return result
@@ -877,8 +881,9 @@ def _go(root: Path) -> list[dict[str, Any]]:
 def _status(expression: str, accepted: set[str], review: set[str]) -> str:
     if expression == "NOASSERTION":
         return "review-required"
-    aliases = {"3-Clause BSD License": "BSD-3-Clause"}
-    normalized = aliases.get(expression, expression).replace(" / ", " OR ")
+    normalized = _LICENSE_EXPRESSION_ALIASES.get(expression, expression).replace(
+        " / ", " OR "
+    )
     normalized = normalized.replace("MIT/Apache-2.0", "MIT OR Apache-2.0").replace(
         "Unlicense/MIT", "Unlicense OR MIT"
     )

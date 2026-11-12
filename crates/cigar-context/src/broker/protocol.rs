@@ -313,6 +313,11 @@ pub enum AgentCommand {
         /// Own ticket ID.
         ticket: String,
     },
+    /// Revalidate and consume one own ticket atomically; never authorizes an effect.
+    ConsumeTicket {
+        /// Own current ticket ID. A successful call cannot be repeated.
+        ticket: String,
+    },
     /// Revalidate and explain only the caller's selected evidence; no arbitrary graph query.
     Explain {
         /// Own current ticket ID.

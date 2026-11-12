@@ -436,6 +436,24 @@ impl ContextBroker {
         self.current_ticket(&owner, ticket, tokenizer).map(|_| ())
     }
 
+    /// Revalidate and consume one own ticket in the same serialized broker operation.
+    ///
+    /// A successful call observes current authority, provenance, expiry and evidence and
+    /// removes the ticket and its draft/binding. It does not authorize an external effect
+    /// or certify the model's answer. Failures leave retention unchanged; callers may
+    /// explicitly forget a stale ticket. A lost response has an uncertain outcome and
+    /// must never be retried as though the first call did not execute.
+    pub fn consume_ticket(
+        &mut self,
+        credential: &BrokerCredential,
+        ticket: &str,
+        tokenizer: &impl TokenCounter,
+    ) -> Result<(), BrokerError> {
+        self.revalidate(credential, ticket, tokenizer)?;
+        self.tickets.remove(ticket);
+        Ok(())
+    }
+
     /// Explain selected evidence only after current owner, grant, provenance and scope checks.
     /// Agents cannot substitute a request/snapshot or inspect another caller's ticket.
     pub fn explain(

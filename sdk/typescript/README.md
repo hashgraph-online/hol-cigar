@@ -4,35 +4,38 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Node.js applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-Version 0.14.0 contains a broker for independent agent processes. See the
-packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
-reviews and failure semantics. Installed package tests have passed across seven
-native targets. The [24-hour installed soak](../../docs/release/context-sdk-0.14.0-soak.md)
-and independent replay passed on macOS ARM64 with twelve Python/Node clients.
-Node client RSS kept growing within the cap; broader application qualification
-remains open.
-Qualification applies to the exact artifacts named in their receipts.
+The broker supports independent agent processes. See the
+[broker guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/sdk/LOCAL_BROKER_GUIDE.md)
+for host/client authority, provenance, reviews and failure semantics.
+Qualification applies to the exact artifacts named in the signed release receipts.
 
-## 0.14.1 security candidate
+## 0.14.2 local Context SDK
 
-The next patch release adds aggregate compilation limits and Python HTTP deadlines,
-and requires Node.js `>=24.22.1 <25`. See the [0.14.1 release notes](../../docs/release/context-sdk-0.14.1-notes.md).
-It is prepared for review and is not yet published. Historical qualification below
-applies to the named 0.14.0 artifacts. Upgrade and restart Node consumers now.
+This patch reduces exact-token initialization and SDK transport overhead and adds
+atomic, owner-bound single-use ticket consumption. It preserves existing SDK
+operations, exact budgets, citations, authorization, freshness checks, work limits,
+persistence and context ABI/protocol v1. Compilation limits, Python HTTP deadlines
+and the patched Node runtime floor from 0.14.1 remain in place. See the
+[0.14.2 release notes](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/docs/release/context-sdk-0.14.2-notes.md).
 
 ## Install and check
 
-Version 0.14.0 is published on npm for ESM on Node.js `>=24.22.1 <25`:
+Version 0.14.2 supports ESM on Node.js `>=24.22.1 <25`:
 
 ```text
-npm install --save-exact @hol-org/cigar@0.14.0
+npm install --save-exact @hol-org/cigar@0.14.2
 npx --no-install cigar-context doctor
 npx --no-install cigar-context demo
 ```
 
-Public registry readback matched the signed release archive. The release retains
-the canonical-CBOR union decoding repair, bounded worker hashing and seven native
-build targets. HUMIDOR adoption and broader task qualification remain open.
+Exact archive hashes and qualification receipts accompany the
+[GitHub release](https://github.com/hashgraph-online/hol-cigar/releases/tag/v0.14.2).
+The release retains canonical-CBOR union decoding, bounded worker hashing and
+seven native build targets. HUMIDOR adoption and broader task qualification remain open.
+
+The [historical 0.14.0 24-hour soak](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/docs/release/context-sdk-0.14.0-soak.md)
+and its independent replay apply to those named macOS ARM64 artifacts, not a new
+24-hour qualification of 0.14.2. Node client RSS grew within its cap.
 
 `doctor` verifies a real local compile. `demo` runs ingestion, dependency selection,
 citations, cache reuse, trusted fixture reviews, source updates and stale-review
@@ -104,12 +107,12 @@ the expected authorized snapshot. A separate exact budget fails without truncati
 Token savings depend on citation overhead. Source replacement reuses unchanged indexed documents.
 
 The native inventory covers macOS ARM64/x64, Linux glibc/musl ARM64/x64 and
-Windows x64. Candidate installed tests and independent archive comparison pass
-for this inventory; complete release qualification is still in progress. Browser,
+Windows x64. Use the signed receipt for your exact archive to identify its
+installed tests, independent build comparison and offline qualification. Browser,
 edge runtimes that prohibit subprocesses, and
 CommonJS are outside this package's runtime contract. On an unsupported platform,
 an explicitly supplied, trusted absolute `workerPath` can select a worker built from
-the matching Rust 0.14.1 source. There is no install script, runtime download, PATH
+the matching Rust 0.14.2 source. There is no install script, runtime download, PATH
 lookup, shell, or implicit file ingestion. The worker is a persistent subprocess, not a native
 Node addon or sandbox; it inherits your environment and OS privileges. Bundled bytes are checked
 against their package manifest, not independently authenticated. Reuse a graph to amortize
@@ -164,7 +167,7 @@ or `cigar-context doctor --worker /absolute/path`.
 
 The installed package includes `AGENT_GUIDE.md`, `BROKER_GUIDE.md`,
 `SELECTION_EXPLANATIONS.md`, `SYNTAX_INGESTION.md` and `llms.txt`. The
-[agent integration guide](AGENT_GUIDE.md)
+[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/sdk/LOCAL_CONTEXT_GUIDE.md)
 covers explicit file ingestion, graph relationships, authorization and the answer-review flow.
 
 ## Compatible remote client
