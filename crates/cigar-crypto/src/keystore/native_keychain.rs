@@ -1,6 +1,14 @@
 //! Maintained platform credential stores behind the existing OS-keystore API.
 
-use crate::{CryptoError, CryptoErrorCode, SecretBytes};
+#[cfg(any(
+    test,
+    not(unix),
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "android"
+))]
+use crate::CryptoErrorCode;
+use crate::{CryptoError, SecretBytes};
 #[cfg(not(all(
     unix,
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
