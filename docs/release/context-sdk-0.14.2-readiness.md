@@ -26,10 +26,33 @@ The Linux OS-keystore adapter retains the encrypted Secret Service protocol,
 `service`/`username` attributes, default collection and binary credential format.
 It uses the maintained zbus 6 line through the explicitly pinned upstream
 `secret-service 6.0.0-rc.1`; that dependency is a release candidate and requires
-Linux integration validation. A separate CI job checks an externally seeded
+Linux integration validation. That job now passes at `bbf8dceb`: it checks an externally seeded
 legacy credential, encrypted-keystore reopen, new credentials, malformed keys
 and ambiguous matches inside a fresh private D-Bus session. macOS and Windows
 retain their previous native store implementations.
+
+The seven-platform distribution workflow passes at `c4b49e38`, including both
+native builds, reproducibility comparison and installed-consumer qualification.
+Its artifacts retain that source binding; the final candidate still needs its
+own exact-commit distribution pass. Hosted dependency checks now pass Cargo
+advisory/license policy, Python and pnpm audits, and the Go SDK/demo audit.
+
+Scanner integration exposed two stale bindings: Trivy still required WebPKI
+0.103.15, and the official Semgrep registry's mutable ruleset changed. Require
+the actual fixed WebPKI 0.103.17 and pin the freshly retrieved complete 1,074-rule
+snapshot by its exact canonical and effective hashes. Keep the sole exact legal
+notice transform. A 30-second rule timeout on generated models becomes a
+120-second budget; the complete rule runs rather than excluding those models.
+The focused rule check passes without errors, all 24 scanner-policy tests pass,
+and 56 Python lazy-export/API/TLS/deadline regression tests pass.
+
+The lazy type loader now reads its fixed export map instead of indexing module
+globals. The HTTPS constructor audit is an explicitly documented false positive
+for supported Python 3.14 defaults: retain peer/hostname verification, with one
+same-line audit annotation bound by tests to that exact constructor and file.
+The real HTTP-parser tests assert `CERT_REQUIRED` and hostname verification.
+This is not a claimed certificate-verification vulnerability or a broad rule
+exclusion. The full final-candidate scanner receipts remain required.
 
 **Release remains blocked pending the new hosted qualification, final archive
 verification and performance/endurance confirmation.** The completed 24-hour

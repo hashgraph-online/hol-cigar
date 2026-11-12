@@ -103,23 +103,24 @@ class _ExchangeFull(Exception):
     pass
 
 
-def _load_wire_types() -> None:
+def _load_wire_types() -> dict[str, Any]:
     from cigar_sdk import context_types
 
     # A fixed allowlist preserves runtime type exports and annotation identities.
-    globals().update({name: getattr(context_types, name) for name in _WIRE_NAMES})
+    wire_types = {name: getattr(context_types, name) for name in _WIRE_NAMES}
+    globals().update(wire_types)
+    return wire_types
 
 
 def __getattr__(name: str) -> Any:
     if name == "queue":
         import queue
 
-        globals()[name] = queue
+        globals()["queue"] = queue
         return queue
     if name not in _WIRE_NAMES:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    _load_wire_types()
-    return globals()[name]
+    return _load_wire_types()[name]
 
 
 def __dir__() -> list[str]:

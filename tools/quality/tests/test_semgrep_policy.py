@@ -33,11 +33,11 @@ class SemgrepPolicyTests(unittest.TestCase):
             self.policy["upstream_ruleset"],
             {
                 "canonical": {
-                    "bytes": 2423491,
-                    "sha256": "0cfcba111781ed0d7f8d4da5bf93e954ac7913066adb1ac554f6e9de38cc7de5",
+                    "bytes": 2520189,
+                    "sha256": "99d480ce3fabef95a530b84a2fbae9a915245b5d5f86ff3466eae5cf01cc34af",
                 },
                 "canonicalization": "cigar.semgrep-rule-block-order.v1",
-                "retrieved_utc": "2026-07-28T03:01:23Z",
+                "retrieved_utc": "2026-11-12T20:51:57Z",
                 "rule_count": 1074,
                 "url": "https://semgrep.dev/c/p/default",
             },
@@ -45,8 +45,8 @@ class SemgrepPolicyTests(unittest.TestCase):
         self.assertEqual(
             self.policy["effective_ruleset"],
             {
-                "bytes": 2423567,
-                "sha256": "4414ba8e83cf38b74eab4484cdb44f83d12f0c3ddd0b0cd9e92082859ec283cc",
+                "bytes": 2520265,
+                "sha256": "95b9068b5922ad503557f836ff523e7793339ce969a52eadbc72859c2997ae95",
             },
         )
         self.assertFalse(self.policy["scan"]["use_git_ignore"])
@@ -268,6 +268,7 @@ class SemgrepPolicyTests(unittest.TestCase):
             "go.grpc.security.grpc-server-insecure-connection.grpc-server-insecure-connection",
             "python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
             "python.lang.security.audit.insecure-file-permissions.insecure-file-permissions",
+            "python.lang.security.audit.httpsconnection-detected.httpsconnection-detected",
             "python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1",
             "python.lang.security.audit.non-literal-import.non-literal-import",
             "python.lang.security.use-defused-xml-parse.use-defused-xml-parse",
@@ -291,7 +292,17 @@ class SemgrepPolicyTests(unittest.TestCase):
                 ]
                 self.assertTrue(any(len(candidate) >= 30 for candidate in rationale))
 
-                if rule.endswith("insecure-file-permissions"):
+                if rule.endswith("httpsconnection-detected"):
+                    self.assertEqual(
+                        relative, Path("sdk/python/src/cigar_sdk/transport.py")
+                    )
+                    self.assertEqual(
+                        line.strip(),
+                        "conn = http.client.HTTPSConnection(host, **kwargs)"
+                        f"  # noqa: E501, RUF100 # nosemgrep: {rule}",
+                    )
+
+                elif rule.endswith("insecure-file-permissions"):
                     self.assertIn("os.chmod(", line)
                     # The qualifier must be on Semgrep's match-start line. Include the
                     # complete nearby multiline call while validating its exact mode.
