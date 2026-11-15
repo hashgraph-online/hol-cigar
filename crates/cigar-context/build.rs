@@ -96,21 +96,29 @@ fn main() -> Result<(), Box<dyn Error>> {
             pool.len(),
         ),
     )?;
-    let dfa = regex_automata::dfa::dense::Builder::new()
-        .configure(
-            regex_automata::dfa::dense::Config::new()
-                .start_kind(regex_automata::dfa::StartKind::Anchored)
-                .match_kind(regex_automata::MatchKind::LeftmostFirst)
-                .dfa_size_limit(Some(64 * 1024 * 1024))
-                .determinize_size_limit(Some(128 * 1024 * 1024)),
-        )
-        .build_many(&ordinary_patterns::REGULAR)?
-        .to_sparse()?;
-    let bytes = match std::env::var("CARGO_CFG_TARGET_ENDIAN")?.as_str() {
-        "little" => dfa.to_bytes_little_endian(),
-        "big" => dfa.to_bytes_big_endian(),
-        _ => return Err(invalid().into()),
-    };
-    fs::write(directory.join("ordinary-segmenter.bin"), bytes)?;
+    for (name, patterns) in [
+        ("ordinary-segmenter.bin", &ordinary_patterns::REGULAR),
+        (
+            "ordinary-ascii-segmenter.bin",
+            &ordinary_patterns::ASCII_REGULAR,
+        ),
+    ] {
+        let dfa = regex_automata::dfa::dense::Builder::new()
+            .configure(
+                regex_automata::dfa::dense::Config::new()
+                    .start_kind(regex_automata::dfa::StartKind::Anchored)
+                    .match_kind(regex_automata::MatchKind::LeftmostFirst)
+                    .dfa_size_limit(Some(64 * 1024 * 1024))
+                    .determinize_size_limit(Some(128 * 1024 * 1024)),
+            )
+            .build_many(patterns)?
+            .to_sparse()?;
+        let bytes = match std::env::var("CARGO_CFG_TARGET_ENDIAN")?.as_str() {
+            "little" => dfa.to_bytes_little_endian(),
+            "big" => dfa.to_bytes_big_endian(),
+            _ => return Err(invalid().into()),
+        };
+        fs::write(directory.join(name), bytes)?;
+    }
     Ok(())
 }

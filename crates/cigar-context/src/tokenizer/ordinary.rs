@@ -34,7 +34,7 @@ impl OrdinaryCounter {
 
     pub(super) fn count(&self, text: &str) -> Result<usize, ContextError> {
         let mut count = 0usize;
-        for matched in self.regex.pieces(text) {
+        for matched in self.regex.pieces(text)? {
             let piece = matched?.as_bytes();
             let tokens = if self.encoder.get(piece)?.is_some() {
                 1

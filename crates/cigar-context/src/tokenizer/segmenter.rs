@@ -8,36 +8,51 @@ use regex_automata::{
 use std::sync::OnceLock;
 
 const DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ordinary-segmenter.bin"));
+const ASCII_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ordinary-ascii-segmenter.bin"));
 type Dfa = sparse::DFA<&'static [u8]>;
 static AUTOMATON: OnceLock<Result<Dfa, ContextError>> = OnceLock::new();
+static ASCII_AUTOMATON: OnceLock<Result<Dfa, ContextError>> = OnceLock::new();
 
 pub(super) struct Segmenter(&'static Dfa);
 
 impl Segmenter {
     pub(super) fn new() -> Result<Self, ContextError> {
-        // Use the checked loader. Never use from_bytes_unchecked: every state,
-        // transition and start-state list must validate before search is possible.
-        let dfa = AUTOMATON
-            .get_or_init(|| {
-                let (dfa, consumed) =
-                    sparse::DFA::from_bytes(DATA).map_err(|_| ContextError::Tokenizer)?;
-                if consumed != DATA.len() || dfa.pattern_len() != 6 || dfa.has_empty() {
-                    return Err(ContextError::Tokenizer);
-                }
-                Ok(dfa)
-            })
-            .as_ref()
-            .map_err(|_| ContextError::Tokenizer)?;
-        Ok(Self(dfa))
+        Ok(Self(checked(&ASCII_AUTOMATON, ASCII_DATA)?))
     }
 
-    pub(super) fn pieces<'text>(&self, text: &'text str) -> Pieces<'text> {
-        Pieces {
-            dfa: self.0,
+    pub(super) fn pieces<'text>(&self, text: &'text str) -> Result<Pieces<'text>, ContextError> {
+        // Select once for the complete input, never from a prefix or a byte within
+        // Unicode. Both tables validate before any transition is searched.
+        let dfa = if text.is_ascii() {
+            self.0
+        } else {
+            checked(&AUTOMATON, DATA)?
+        };
+        Ok(Pieces {
+            dfa,
             text,
             position: 0,
-        }
+        })
     }
+}
+
+fn checked(
+    cache: &'static OnceLock<Result<Dfa, ContextError>>,
+    bytes: &'static [u8],
+) -> Result<&'static Dfa, ContextError> {
+    // Use the checked loader. Never use from_bytes_unchecked: every state,
+    // transition and start-state list must validate before search is possible.
+    cache
+        .get_or_init(|| {
+            let (dfa, consumed) =
+                sparse::DFA::from_bytes(bytes).map_err(|_| ContextError::Tokenizer)?;
+            if consumed != bytes.len() || dfa.pattern_len() != 6 || dfa.has_empty() {
+                return Err(ContextError::Tokenizer);
+            }
+            Ok(dfa)
+        })
+        .as_ref()
+        .map_err(|_| ContextError::Tokenizer)
 }
 
 pub(super) struct Pieces<'text> {
@@ -101,7 +116,7 @@ mod tests {
         let segmenter = Segmenter::new()?;
         let oracle = Regex::new(tiktoken_rs::O200K_BASE_PAT_STR)?;
         let verify = |text: &str| -> Result<(), Box<dyn std::error::Error>> {
-            let actual = segmenter.pieces(text).collect::<Result<Vec<_>, _>>()?;
+            let actual = segmenter.pieces(text)?.collect::<Result<Vec<_>, _>>()?;
             let expected = oracle
                 .find_iter(text)
                 .map(|m| m.map(|m| m.as_str()))
@@ -168,6 +183,26 @@ mod tests {
                 );
             }
             verify(&text)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn every_ascii_byte_pair_matches_upstream_boundaries() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let segmenter = Segmenter::new()?;
+        let oracle = Regex::new(tiktoken_rs::O200K_BASE_PAT_STR)?;
+        for first in 0..=127u8 {
+            for second in 0..=127u8 {
+                let text = format!("a{}{}Z's 1234\r\n", char::from(first), char::from(second));
+                let actual = segmenter.pieces(&text)?.collect::<Result<Vec<_>, _>>()?;
+                let expected = oracle
+                    .find_iter(&text)
+                    .map(|m| m.map(|m| m.as_str()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                assert_eq!(actual, expected, "ASCII boundary mismatch: {text:?}");
+                assert_eq!(actual.concat(), text);
+            }
         }
         Ok(())
     }

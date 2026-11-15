@@ -132,6 +132,11 @@ Staging needs additional memory proportional to the replacement source, not a cl
 counted exactly; counts are never estimated or added across blocks. This helps both repeated
 requests and repeated checks within one request. Cold requests still perform BPE work.
 
+Entirely ASCII input uses a small precompiled segmentation table. Unicode input loads the
+complete precompiled Unicode table on first use. Both tables use checked loading before
+search; exact ordinary boundaries, vocabulary, token counts and tokenizer identity are the
+same. These immutable tables retain no caller text and do not widen the cache limits.
+
 `O200kTokenizer::with_cache_limits(TokenCacheLimits { max_entries: 0, max_text_bytes: 0 })`
 disables caching. `cache_stats()` reports hits, misses, entries and retained text bytes;
 `clear_cache()` drops retained strings and resets counters. Keep one tokenizer/cache per privacy
