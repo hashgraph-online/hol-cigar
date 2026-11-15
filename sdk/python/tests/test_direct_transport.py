@@ -173,3 +173,46 @@ def test_multichunk_valid_response_at_exact_limit_and_one_byte_over(tmp_path, ex
             else:
                 assert graph.stats() == result
     assert graph.cleanup_complete
+
+
+def test_expired_exchange_does_not_dispatch_or_poison_the_next_request():
+    with LocalContextGraph("expired-dispatch", worker_path=os.environ.get("CIGAR_TEST_WORKER")) as graph:
+        with patch.object(os, "write", wraps=os.write) as write:
+            with pytest.raises(context._ExchangeTimeout):
+                graph._exchange(b'{}\n', time.monotonic() - 1)
+            write.assert_not_called()
+        assert graph.stats()["documents"] == 0
+    assert graph.cleanup_complete
+
+
+@pytest.mark.parametrize("blocked_operation", ["read", "write"])
+def test_transient_would_block_preserves_the_complete_exchange(blocked_operation):
+    with LocalContextGraph("would-block", worker_path=os.environ.get("CIGAR_TEST_WORKER")) as graph:
+        original = getattr(os, blocked_operation)
+        blocked = False
+
+        def once(*arguments):
+            nonlocal blocked
+            if not blocked:
+                blocked = True
+                raise BlockingIOError
+            return original(*arguments)
+
+        with patch.object(os, blocked_operation, side_effect=once):
+            assert graph.stats()["documents"] == 0
+        assert blocked
+        assert graph.stats()["documents"] == 0
+    assert graph.cleanup_complete
+
+
+def test_short_raw_writes_preserve_one_frame_and_keep_the_graph_usable():
+    with LocalContextGraph("short-write", worker_path=os.environ.get("CIGAR_TEST_WORKER")) as graph:
+        original_write = os.write
+
+        def short_write(descriptor, data):
+            return original_write(descriptor, data[:3])
+
+        with patch.object(os, "write", side_effect=short_write):
+            assert graph.upsert({"id": "one", "source": "public.md", "text": "Authorized source evidence."})
+        assert graph.stats()["documents"] == 1
+    assert graph.cleanup_complete

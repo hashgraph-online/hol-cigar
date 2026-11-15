@@ -231,20 +231,24 @@ class _WorkerChannel:
             sent = 0
             view = memoryview(frame)
             while sent < len(frame):
-                wait(writer, select.POLLOUT)
+                if time.monotonic() >= deadline:
+                    raise _ExchangeTimeout
                 try:
                     written = os.write(writer, view[sent:])
                 except BlockingIOError:
+                    wait(writer, select.POLLOUT)
                     continue
                 if not written:
                     return None
                 sent += written
             result = bytearray()
             while len(result) <= _MAX_RESPONSE:
-                wait(reader, select.POLLIN)
+                if time.monotonic() >= deadline:
+                    raise _ExchangeTimeout
                 try:
                     chunk = os.read(reader, min(65536, _MAX_RESPONSE + 1 - len(result)))
                 except BlockingIOError:
+                    wait(reader, select.POLLIN)
                     continue
                 if not chunk:
                     return None
