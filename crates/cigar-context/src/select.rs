@@ -330,6 +330,14 @@ impl ContextGraph {
         if terms.len() > 64 {
             return Err(ContextError::LimitExceeded);
         }
+        // A compound record name is not a request for each component record. Seek extra
+        // locator witnesses only for explicitly listed or conjoined query subjects.
+        let multiple_records = request.query.contains(',')
+            || request.query.contains(';')
+            || request
+                .query
+                .split_whitespace()
+                .any(|word| word.eq_ignore_ascii_case("and"));
         let allowed = |id: &str| request.allowed.as_ref().is_none_or(|ids| ids.contains(id));
         let total = request
             .allowed
@@ -419,7 +427,7 @@ impl ContextGraph {
         if blocks.len() > request.max_blocks || budget.count(&blocks, tokenizer)? > available {
             return Err(ContextError::BudgetUnsatisfiable);
         }
-        self.add_coverage(&blocks, &terms, &mut coverage);
+        self.add_coverage(&blocks, &terms, &mut coverage, multiple_records);
         let mut unavailable = 0;
         let mut limit_rejected = 0;
         let mut budget_rejected = 0;
@@ -536,7 +544,9 @@ impl ContextGraph {
                     let witnesses = coverage.get(term);
                     let witnessed = witnesses.map_or(0, |v| v.sources.len());
                     let enough_witnesses = witnessed >= request.evidence_per_term;
-                    if enough_witnesses && witnesses.is_some_and(|v| v.source_match) {
+                    if enough_witnesses
+                        && (!multiple_records || witnesses.is_some_and(|v| v.source_match))
+                    {
                         continue;
                     }
                     if closure.iter().any(|id| {
@@ -632,7 +642,7 @@ impl ContextGraph {
             }
             blocks = proposed;
             selected.extend(closure);
-            self.add_coverage(&blocks, &terms, &mut coverage);
+            self.add_coverage(&blocks, &terms, &mut coverage, multiple_records);
         }
         let tokens = budget.count(&blocks, tokenizer)?;
         let stats = SelectionStats {
@@ -702,14 +712,17 @@ impl ContextGraph {
         blocks: &[EvidenceBlock],
         terms: &BTreeSet<String>,
         coverage: &mut BTreeMap<String, Witnesses>,
+        source_witnesses: bool,
     ) {
         for (id, retained) in self.retained_terms(blocks, terms) {
             if let Some(node) = self.documents.get(&id) {
                 for term in terms {
                     if retained.contains(term) {
                         let witnesses = coverage.entry(term.clone()).or_default();
-                        witnesses.source_match |=
-                            node.terms.get(term).is_some_and(|value| value.in_source);
+                        if source_witnesses {
+                            witnesses.source_match |=
+                                node.terms.get(term).is_some_and(|value| value.in_source);
+                        }
                         if !witnesses.sources.contains(&node.document.source)
                             && !witnesses.content.contains(&node.text_digest)
                         {

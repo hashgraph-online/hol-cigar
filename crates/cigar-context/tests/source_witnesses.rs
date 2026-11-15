@@ -104,6 +104,47 @@ fn a_single_record_query_does_not_collect_unrequested_records() -> Result<(), Co
 }
 
 #[test]
+fn a_compound_record_name_does_not_request_its_component_record() -> Result<(), ContextError> {
+    let graph = graph()?;
+    for budget in [512, 2048, 4096] {
+        let snapshot = graph.compile(
+            &ContextRequest {
+                query: "What is the Atlas deployment rollback image?".into(),
+                ..request(budget)
+            },
+            &Utf8ByteCounter,
+        )?;
+        assert_eq!(ids(&snapshot), BTreeSet::from(["rollback".into()]));
+    }
+    Ok(())
+}
+
+#[test]
+fn conjoined_record_names_keep_their_separate_witnesses() -> Result<(), ContextError> {
+    let graph = graph()?;
+    for query in [
+        "Provide the Atlas deployment image and rollback records.",
+        "Provide the Atlas deployment image AND rollback records.",
+        "Provide the Atlas deployment image; rollback records.",
+    ] {
+        for budget in [512, 2048, 4096] {
+            let snapshot = graph.compile(
+                &ContextRequest {
+                    query: query.into(),
+                    ..request(budget)
+                },
+                &Utf8ByteCounter,
+            )?;
+            assert_eq!(
+                ids(&snapshot),
+                BTreeSet::from(["primary".into(), "rollback".into()])
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn copied_text_does_not_gain_a_second_witness_from_its_locator() -> Result<(), ContextError> {
     let mut graph = ContextGraph::new("copied-record", GraphLimits::default())?;
     let text = "The deployment image is app-42.";

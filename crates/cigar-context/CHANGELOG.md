@@ -3,12 +3,13 @@
 ## 0.14.2 — query performance and atomic ticket consumption
 
 - Keep distinct source-locator matches when another selected document only mentions the same
-  query word. This corrects multi-record evidence omissions without appending every lexical
-  match. Reuse the witness lookup during selection; preserve copied-text deduplication, caller
+  query word in an explicitly listed or conjoined request. Preserve single compound-record
+  queries without appending their component records. Reuse the witness lookup and retain the
+  ordinary single-record scoring path; preserve copied-text deduplication, caller
   scope, hard closure, exact tokens, aggregate work limits and the existing protocol/API.
 - Add regressions for multi-record retrieval under byte/BPE budgets, unrequested topics,
-  copied text, authorization, withdrawn dependencies and physical block limits. Benchmark
-  definitions and historical qualification results remain unchanged.
+  compound names, conjunctions, copied text, authorization, withdrawn dependencies and physical
+  block limits. Benchmark definitions and historical qualification results remain unchanged.
 - Prepare consistent stable core, Python and TypeScript identities and lockfiles
   after RC2 qualification. Keep publication disabled until the release gates pass.
 - Include the exact-token query optimizations and additive atomic ticket
