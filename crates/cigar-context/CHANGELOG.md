@@ -2,8 +2,8 @@
 
 ## 0.14.2 — query performance and atomic ticket consumption
 
-- Use an exact ASCII segmentation table for entirely ASCII text and load the complete
-  Unicode table at its first use. Retain checked loading for both, pinned ordinary token
+- Use an exact dense ASCII segmentation table for entirely ASCII text and load the complete
+  sparse Unicode table at its first use. Retain checked loading for both, pinned ordinary token
   boundaries/counts/identity and unchanged instance-local source-text cache bounds.
 - Keep distinct source-locator matches when another selected document only mentions the same
   query word in an explicitly listed or conjoined request. Preserve single compound-record

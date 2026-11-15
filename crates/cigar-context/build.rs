@@ -111,12 +111,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .dfa_size_limit(Some(64 * 1024 * 1024))
                     .determinize_size_limit(Some(128 * 1024 * 1024)),
             )
-            .build_many(patterns)?
-            .to_sparse()?;
-        let bytes = match std::env::var("CARGO_CFG_TARGET_ENDIAN")?.as_str() {
-            "little" => dfa.to_bytes_little_endian(),
-            "big" => dfa.to_bytes_big_endian(),
-            _ => return Err(invalid().into()),
+            .build_many(patterns)?;
+        let endian = std::env::var("CARGO_CFG_TARGET_ENDIAN")?;
+        let bytes = if name == "ordinary-ascii-segmenter.bin" {
+            let (bytes, padding) = match endian.as_str() {
+                "little" => dfa.to_bytes_little_endian(),
+                "big" => dfa.to_bytes_big_endian(),
+                _ => return Err(invalid().into()),
+            };
+            // Runtime embedding explicitly aligns to u32. Remove allocator-
+            // dependent leading padding from the deterministic artifact.
+            bytes.get(padding..).ok_or_else(invalid)?.to_vec()
+        } else {
+            let dfa = dfa.to_sparse()?;
+            match endian.as_str() {
+                "little" => dfa.to_bytes_little_endian(),
+                "big" => dfa.to_bytes_big_endian(),
+                _ => return Err(invalid().into()),
+            }
         };
         fs::write(directory.join(name), bytes)?;
     }

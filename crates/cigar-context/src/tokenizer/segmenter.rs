@@ -3,30 +3,47 @@
 use crate::ContextError;
 use regex_automata::{
     Anchored, Input,
-    dfa::{Automaton, sparse},
+    dfa::{Automaton, dense, sparse},
+    util::wire::AlignAs,
 };
 use std::sync::OnceLock;
 
 const DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ordinary-segmenter.bin"));
-const ASCII_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ordinary-ascii-segmenter.bin"));
+static ASCII_DATA: &AlignAs<[u8], u32> = &AlignAs {
+    _align: [],
+    bytes: *include_bytes!(concat!(env!("OUT_DIR"), "/ordinary-ascii-segmenter.bin")),
+};
 type Dfa = sparse::DFA<&'static [u8]>;
+type AsciiDfa = dense::DFA<&'static [u32]>;
 static AUTOMATON: OnceLock<Result<Dfa, ContextError>> = OnceLock::new();
-static ASCII_AUTOMATON: OnceLock<Result<Dfa, ContextError>> = OnceLock::new();
+static ASCII_AUTOMATON: OnceLock<Result<AsciiDfa, ContextError>> = OnceLock::new();
 
-pub(super) struct Segmenter(&'static Dfa);
+pub(super) struct Segmenter(&'static AsciiDfa);
 
 impl Segmenter {
     pub(super) fn new() -> Result<Self, ContextError> {
-        Ok(Self(checked(&ASCII_AUTOMATON, ASCII_DATA)?))
+        let dfa = ASCII_AUTOMATON
+            .get_or_init(|| {
+                let bytes = &ASCII_DATA.bytes;
+                let (dfa, consumed) =
+                    dense::DFA::from_bytes(bytes).map_err(|_| ContextError::Tokenizer)?;
+                if consumed != bytes.len() || dfa.pattern_len() != 6 || dfa.has_empty() {
+                    return Err(ContextError::Tokenizer);
+                }
+                Ok(dfa)
+            })
+            .as_ref()
+            .map_err(|_| ContextError::Tokenizer)?;
+        Ok(Self(dfa))
     }
 
     pub(super) fn pieces<'text>(&self, text: &'text str) -> Result<Pieces<'text>, ContextError> {
         // Select once for the complete input, never from a prefix or a byte within
         // Unicode. Both tables validate before any transition is searched.
         let dfa = if text.is_ascii() {
-            self.0
+            Matcher::Ascii(self.0)
         } else {
-            checked(&AUTOMATON, DATA)?
+            Matcher::Unicode(checked(&AUTOMATON, DATA)?)
         };
         Ok(Pieces {
             dfa,
@@ -56,9 +73,15 @@ fn checked(
 }
 
 pub(super) struct Pieces<'text> {
-    dfa: &'static Dfa,
+    dfa: Matcher,
     text: &'text str,
     position: usize,
+}
+
+#[derive(Clone, Copy)]
+enum Matcher {
+    Ascii(&'static AsciiDfa),
+    Unicode(&'static Dfa),
 }
 
 impl<'text> Iterator for Pieces<'text> {
@@ -70,15 +93,15 @@ impl<'text> Iterator for Pieces<'text> {
         }
         let start = self.position;
         let result = (|| {
-            let found = self
-                .dfa
-                .try_search_fwd(
-                    &Input::new(self.text)
-                        .span(start..self.text.len())
-                        .anchored(Anchored::Yes),
-                )
-                .map_err(|_| ContextError::Tokenizer)?
-                .ok_or(ContextError::Tokenizer)?;
+            let input = Input::new(self.text)
+                .span(start..self.text.len())
+                .anchored(Anchored::Yes);
+            let found = match self.dfa {
+                Matcher::Ascii(dfa) => dfa.try_search_fwd(&input),
+                Matcher::Unicode(dfa) => dfa.try_search_fwd(&input),
+            }
+            .map_err(|_| ContextError::Tokenizer)?
+            .ok_or(ContextError::Tokenizer)?;
             let mut end = found.offset();
             let matched = self.text.get(start..end).ok_or(ContextError::Tokenizer)?;
             if matched.is_empty() {
@@ -210,5 +233,28 @@ mod tests {
     #[test]
     fn checked_loader_rejects_malformed_automata() {
         assert!(sparse::DFA::from_bytes(&[0u8; 64]).is_err());
+        assert!(dense::DFA::from_bytes(&[0u8; 64]).is_err());
+    }
+
+    #[test]
+    fn dense_ascii_embedding_is_aligned_and_rejects_truncation_and_misalignment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let bytes = &ASCII_DATA.bytes;
+        let (dfa, consumed) = dense::DFA::from_bytes(bytes)?;
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(dfa.pattern_len(), 6);
+        for length in [0, 1, bytes.len() - 1] {
+            assert!(dense::DFA::from_bytes(&bytes[..length]).is_err());
+        }
+        let mut unaligned = vec![0u8; bytes.len() + 4];
+        let offset = if (unaligned.as_ptr() as usize + 1).is_multiple_of(4) {
+            2
+        } else {
+            1
+        };
+        let slice = &mut unaligned[offset..offset + bytes.len()];
+        slice.copy_from_slice(bytes);
+        assert!(dense::DFA::from_bytes(slice).is_err());
+        Ok(())
     }
 }
