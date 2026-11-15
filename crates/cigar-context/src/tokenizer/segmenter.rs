@@ -244,7 +244,8 @@ mod tests {
         assert_eq!(consumed, bytes.len());
         assert_eq!(dfa.pattern_len(), 6);
         for length in [0, 1, bytes.len() - 1] {
-            assert!(dense::DFA::from_bytes(&bytes[..length]).is_err());
+            let truncated = bytes.get(..length).ok_or("truncated fixture bounds")?;
+            assert!(dense::DFA::from_bytes(truncated).is_err());
         }
         let mut unaligned = vec![0u8; bytes.len() + 4];
         let offset = if (unaligned.as_ptr() as usize + 1).is_multiple_of(4) {
@@ -252,7 +253,9 @@ mod tests {
         } else {
             1
         };
-        let slice = &mut unaligned[offset..offset + bytes.len()];
+        let slice = unaligned
+            .get_mut(offset..offset + bytes.len())
+            .ok_or("misaligned fixture bounds")?;
         slice.copy_from_slice(bytes);
         assert!(dense::DFA::from_bytes(slice).is_err());
         Ok(())
