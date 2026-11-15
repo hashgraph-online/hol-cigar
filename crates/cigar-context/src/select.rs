@@ -109,6 +109,8 @@ struct Root<'a> {
 struct Witnesses {
     sources: BTreeSet<String>,
     content: BTreeSet<String>,
+    // An incidental text mention must not suppress a distinct matching source locator.
+    source_match: bool,
 }
 
 // These limits belong to the host implementation, never to ContextRequest. Output and
@@ -531,14 +533,18 @@ impl ContextGraph {
                     }
                 }
                 for (term, weight) in &weights {
-                    let witnessed = coverage.get(term).map_or(0, |v| v.sources.len());
-                    if witnessed >= request.evidence_per_term {
+                    let witnesses = coverage.get(term);
+                    let witnessed = witnesses.map_or(0, |v| v.sources.len());
+                    let enough_witnesses = witnessed >= request.evidence_per_term;
+                    if enough_witnesses && witnesses.is_some_and(|v| v.source_match) {
                         continue;
                     }
                     if closure.iter().any(|id| {
                         self.documents.get(id).is_some_and(|node| {
                             retained.get(id).is_some_and(|terms| terms.contains(term))
-                                && !coverage.get(term).is_some_and(|v| {
+                                && (!enough_witnesses
+                                    || node.terms.get(term).is_some_and(|value| value.in_source))
+                                && !witnesses.is_some_and(|v| {
                                     v.sources.contains(&node.document.source)
                                         || v.content.contains(&node.text_digest)
                                 })
@@ -702,6 +708,8 @@ impl ContextGraph {
                 for term in terms {
                     if retained.contains(term) {
                         let witnesses = coverage.entry(term.clone()).or_default();
+                        witnesses.source_match |=
+                            node.terms.get(term).is_some_and(|value| value.in_source);
                         if !witnesses.sources.contains(&node.document.source)
                             && !witnesses.content.contains(&node.text_digest)
                         {

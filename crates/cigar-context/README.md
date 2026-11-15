@@ -68,6 +68,12 @@ extends retrieval to synonyms and paraphrases without coupling the library to a 
 database, similarity scale, or paid API. IDs still pass the authorization filter and hard-closure
 checks. Lexical coverage statistics are not semantic confidence scores. Set `evidence_per_term`
 to 2–4 when independent corroboration matters; exact copied text is not counted as a second witness.
+Source-locator matches receive a separate coverage witness: a word mentioned in another document
+does not automatically suppress a distinct matching source. For example, a rollback-image record
+does not replace the primary-image record in a request for both. This remains a lexical relevance
+hint; it does not establish factual support. Copied text, access checks, complete hard closures and
+exact output budgets retain their existing rules. Unrequested source topics are not added merely
+to fill the available budget.
 Graph edges and semantic leads must come from your application's trusted ingestion/retrieval path;
 the library does not discover factual contradictions automatically.
 
