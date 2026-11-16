@@ -210,7 +210,7 @@ class InstalledPythonPlatformSkipTests(unittest.TestCase):
     def setUp(self):
         self.observed = json.loads(
             (
-                Path(__file__).parent / "fixtures/context-windows-test-skips.v1.json"
+                Path(__file__).parent / "fixtures/context-windows-test-skips.v2.json"
             ).read_text()
         )
 
@@ -251,6 +251,15 @@ class InstalledPythonPlatformSkipTests(unittest.TestCase):
                 qualification.validate_python_test_skips(
                     self.report(self.observed["skipped"] + [extra]), windows=True
                 )
+
+    def test_previous_inventory_cannot_hide_the_added_posix_regression_cases(self):
+        original = json.loads(
+            (Path(__file__).parent / "fixtures/context-windows-test-skips.v1.json").read_text()
+        )
+        with self.assertRaisesRegex(ReleaseError, "unexpectedly skipped"):
+            qualification.validate_python_test_skips(
+                self.report(original["skipped"] + original["portable_passed"]), windows=True
+            )
 
     def test_skip_reason_module_inventory_and_duplicate_drift_are_rejected(self):
         original = self.observed["skipped"]

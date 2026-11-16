@@ -71,6 +71,10 @@ def validate_python_test_skips(report: ET.ElementTree, *, windows: bool) -> None
             "test_full_accepted_timeout_range_is_supported_by_poll",
             "test_multichunk_valid_response_at_exact_limit_and_one_byte_over[0]",
             "test_multichunk_valid_response_at_exact_limit_and_one_byte_over[1]",
+            "test_expired_exchange_does_not_dispatch_or_poison_the_next_request",
+            "test_transient_would_block_preserves_the_complete_exchange[read]",
+            "test_transient_would_block_preserves_the_complete_exchange[write]",
+            "test_short_raw_writes_preserve_one_frame_and_keep_the_graph_usable",
         ):
             expected[("tests.test_direct_transport", name)] = "POSIX poll transport"
     actual = {}
