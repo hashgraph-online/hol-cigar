@@ -67,14 +67,80 @@ impl std::fmt::Display for ContextError {
 impl std::error::Error for ContextError {}
 
 pub(crate) fn digest<T: serde::Serialize>(domain: &str, value: &T) -> Result<String, ContextError> {
-    let bytes = serde_json::to_vec(value).map_err(|_| ContextError::Integrity)?;
     let mut hash = Sha256::new();
     hash.update(domain.as_bytes());
     hash.update([0]);
-    hash.update(bytes);
+    // Preserve the exact serde_json byte stream without retaining a second
+    // serialized copy of source text alongside the graph/snapshot/rendering.
+    serde_json::to_writer(HashWriter(&mut hash), value).map_err(|_| ContextError::Integrity)?;
     let mut output = String::with_capacity(64);
     for byte in hash.finalize() {
         write!(&mut output, "{byte:02x}").map_err(|_| ContextError::Integrity)?;
     }
     Ok(output)
+}
+
+struct HashWriter<'a>(&'a mut Sha256);
+
+impl std::io::Write for HashWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::*;
+
+    fn legacy_digest<T: serde::Serialize>(
+        domain: &str,
+        value: &T,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let mut hash = Sha256::new();
+        hash.update(domain.as_bytes());
+        hash.update([0]);
+        hash.update(serde_json::to_vec(value)?);
+        Ok(hash
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
+    #[test]
+    fn streamed_commitments_preserve_legacy_bytes_and_domain_separation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for index in 0..256_u64 {
+            let value = serde_json::json!({
+                "record": [index, u64::MAX - index],
+                "text": format!("café 🦀 \"quote\"\\slash\n\t\0 {index}"),
+                "nested": {"empty": [], "optional": null, "boolean": index % 2 == 0},
+            });
+            for domain in ["cigar.document.v1", "cigar.context-snapshot.v1", ""] {
+                assert_eq!(digest(domain, &value)?, legacy_digest(domain, &value)?);
+            }
+        }
+        let large = "source \"quoted\" café 🦀\n".repeat(65_536);
+        assert_eq!(digest("large", &large)?, legacy_digest("large", &large)?);
+        assert_ne!(digest("a", &"bc")?, digest("ab", &"c")?);
+        Ok(())
+    }
+
+    #[test]
+    fn serialization_failure_still_returns_content_free_integrity_error() {
+        struct Invalid;
+        impl serde::Serialize for Invalid {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom(
+                    "caller-controlled failure detail",
+                ))
+            }
+        }
+        assert_eq!(digest("failure", &Invalid), Err(ContextError::Integrity));
+    }
 }
