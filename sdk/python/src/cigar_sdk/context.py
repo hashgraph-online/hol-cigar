@@ -7,6 +7,7 @@ import math
 import os
 import select
 import subprocess
+import sys
 import threading
 import time
 from annotationlib import Format
@@ -70,6 +71,32 @@ from cigar_sdk.local_runtime import (
 _MAX_FRAME = 32 * 1024 * 1024
 _MAX_RESPONSE = 64 * 1024 * 1024
 _DIRECT_IO = os.name == "posix" and hasattr(select, "poll")
+_POPEN_ARGUMENTS = (
+    "self",
+    "args",
+    "executable",
+    "preexec_fn",
+    "close_fds",
+    "pass_fds",
+    "cwd",
+    "env",
+    "startupinfo",
+    "creationflags",
+    "shell",
+    "p2cread",
+    "p2cwrite",
+    "c2pread",
+    "c2pwrite",
+    "errread",
+    "errwrite",
+    "restore_signals",
+    "gid",
+    "gids",
+    "uid",
+    "umask",
+    "start_new_session",
+    "process_group",
+)
 _WIRE_NAMES = (
     "LocalAnswerAssessment",
     "LocalAnswerDraft",
@@ -101,6 +128,32 @@ class _ExchangeTimeout(Exception):
 
 class _ExchangeFull(Exception):
     pass
+
+
+def _worker_process(command: list[str]) -> subprocess.Popen[bytes]:
+    factory: type[subprocess.Popen[bytes]] = subprocess.Popen
+    execute = getattr(factory, "_execute_child", None)
+    code = getattr(execute, "__code__", None)
+    if (
+        sys.platform == "darwin"
+        and sys.implementation.name == "cpython"
+        and getattr(sys, "_is_gil_enabled", lambda: False)()
+        and getattr(factory, "__module__", None) == "subprocess"
+        and getattr(code, "co_varnames", ())[: getattr(code, "co_argcount", 0)] == _POPEN_ARGUMENTS
+    ):
+        try:
+            from cigar_sdk._macos_spawn import ClosedFdPopen
+        except ImportError, AttributeError, OSError:
+            # Optional backend unavailable, before any worker was launched.
+            pass
+        else:
+            # Preserve caller instrumentation/interposition of the standard
+            # factory rather than bypassing it with a cached subclass.
+            if ClosedFdPopen.__mro__[1] is factory:
+                factory = ClosedFdPopen
+    return factory(
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, shell=False, close_fds=True
+    )
 
 
 def _load_wire_types() -> dict[str, Any]:
@@ -163,14 +216,7 @@ class _WorkerChannel:
             self._queue_empty, self._queue_full = queue.Empty, queue.Full
         self._thread = threading.Thread(target=self._exchange_loop, name="cigar-context-stdio", daemon=True)
         try:
-            self._process = subprocess.Popen(
-                [str(binary), *arguments],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                shell=False,
-                close_fds=True,
-            )
+            self._process = _worker_process([str(binary), *arguments])
         except OSError:
             raise LocalContextError("WorkerUnavailable") from None
         try:
