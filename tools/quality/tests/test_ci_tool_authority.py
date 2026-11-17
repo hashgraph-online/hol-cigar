@@ -189,6 +189,40 @@ class CiToolAuthorityTests(unittest.TestCase):
             with self.assertRaises(MODULE.authority.ToolAuthorityError):
                 MODULE.observed_payload(source)
 
+    def test_shared_bootstrap_source_is_copy_only_and_private_targets_still_require_review(
+        self,
+    ) -> None:
+        shared = self.base / "package-manager"
+        shared.mkdir(mode=0o775)
+        shared.chmod(0o775)
+        source = shared / "rustup"
+        payload = b'#!/bin/sh\nprintf "%s\\n" "$0"\n'
+        source.write_bytes(payload)
+        source.chmod(0o775)
+        with self.assertRaises(MODULE.authority.ToolAuthorityError):
+            MODULE.observed_payload(source)
+        with mock.patch.object(MODULE.shutil, "which", return_value=str(source)):
+            result = MODULE.stage_launchers(
+                argparse.Namespace(
+                    root=self.root, lane=self.lane, github_path=self.path_file
+                )
+            )
+        self.assertEqual(result["approval_status"], "unapproved-observation")
+        target = self.root / "launchers/cargo"
+        MODULE.authority._reviewed_tool(
+            {"path": str(target), "sha256": hashlib.sha256(payload).hexdigest()},
+            "cargo",
+        )
+        self.assertEqual(target.stat().st_mode & 0o777, 0o500)
+        self.proposal()
+        with (
+            mock.patch.dict(os.environ, {"CIGAR_CI_TOOL_APPROVAL": ""}),
+            mock.patch.object(MODULE.subprocess, "run") as execute,
+        ):
+            with self.assertRaises(MODULE.authority.ToolAuthorityError):
+                MODULE.run(self.args("run"))
+            execute.assert_not_called()
+
     def test_collection_is_unapproved_and_does_not_export_selectors_or_execute(
         self,
     ) -> None:

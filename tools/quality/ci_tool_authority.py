@@ -170,9 +170,10 @@ def runner() -> dict[str, str]:
     return result
 
 
-def observed_payload(path: Path) -> bytes:
+def observed_payload(path: Path, *, copy_for_review: bool = False) -> bytes:
     """Read bounded, stable executable bytes without executing or approving them."""
-    authority._protected_lineage(path, "observed CI executable")
+    if not copy_for_review:
+        authority._protected_lineage(path, "observed CI executable")
     descriptor = os.open(
         path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     )
@@ -182,7 +183,7 @@ def observed_payload(path: Path) -> bytes:
             not stat.S_ISREG(before.st_mode)
             or not 0 < before.st_size <= authority.MAX_TOOL_BYTES
             or before.st_uid not in {0, os.geteuid()}
-            or stat.S_IMODE(before.st_mode) & 0o022
+            or (not copy_for_review and stat.S_IMODE(before.st_mode) & 0o022)
             or not before.st_mode & stat.S_IXUSR
         ):
             raise authority.ToolAuthorityError(
@@ -231,7 +232,11 @@ def stage_launchers(arguments: argparse.Namespace) -> dict[str, Any]:
         raise authority.ToolAuthorityError(
             "the pinned bootstrap Rustup launcher is unavailable"
         )
-    payload = observed_payload(Path(found).resolve(strict=True))
+    # A package-manager bootstrap path may have shared ancestors or hardlinks.
+    # Reading stable bounded bytes for an unapproved copy grants no execution
+    # authority: every private target must still pass the unchanged protected
+    # identity checks and later independent digest approval.
+    payload = observed_payload(Path(found).resolve(strict=True), copy_for_review=True)
     digest = hashlib.sha256(payload).hexdigest()
     directory = private(arguments.root / "launchers")
     for name in RUST_LAUNCHERS:
@@ -537,6 +542,10 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except authority.ToolAuthorityError as error:
+        # Authority errors contain fixed labels/tool names, never input contents.
+        print(f"CI tool authority rejected input: {error}", file=sys.stderr)
+        raise SystemExit(2)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError):
         print(
             "CI tool authority failed: missing, unsafe, stale or unapproved input; no diagnostic fallback",
