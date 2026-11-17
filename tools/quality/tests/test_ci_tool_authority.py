@@ -22,6 +22,27 @@ SPEC.loader.exec_module(MODULE)
 
 
 class CiToolAuthorityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.native_fixture = tempfile.TemporaryDirectory(
+            prefix="cigar-native-proxy-", dir="/private/tmp"
+        )
+        root = Path(cls.native_fixture.name).resolve(strict=True)
+        root.chmod(0o700)
+        target = root / "native-proxy"
+        MODULE.subprocess.run(
+            ["/usr/bin/clang", "-x", "c", "-", "-o", str(target)],
+            input=b"#include <stdio.h>\n#include <string.h>\nint main(int argc,char **argv){(void)argc;const char *p=strrchr(argv[0],'/');puts(p?p+1:argv[0]);return 0;}\n",
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        cls.native_payload = target.read_bytes()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.native_fixture.cleanup()
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(
             prefix="cigar-ci-authority-", dir="/private/tmp"
@@ -138,7 +159,7 @@ class CiToolAuthorityTests(unittest.TestCase):
         self,
     ) -> None:
         source = self.base / "rustup-source"
-        payload = b'#!/bin/sh\nprintf "%s\\n" "$0"\n'
+        payload = self.native_payload
         source.write_bytes(payload)
         source.chmod(0o500)
         os.link(source, self.base / "rustup-source-hardlink")
@@ -150,6 +171,7 @@ class CiToolAuthorityTests(unittest.TestCase):
                 )
             )
         self.assertEqual(result["approval_status"], "unapproved-observation")
+        self.assertTrue(result["staged_python3"])
         for name in MODULE.RUST_LAUNCHERS:
             target = self.root / "launchers" / name
             self.assertEqual(target.resolve(strict=True), target)
@@ -196,7 +218,7 @@ class CiToolAuthorityTests(unittest.TestCase):
         shared.mkdir(mode=0o775)
         shared.chmod(0o775)
         source = shared / "rustup"
-        payload = b'#!/bin/sh\nprintf "%s\\n" "$0"\n'
+        payload = self.native_payload
         source.write_bytes(payload)
         source.chmod(0o775)
         with self.assertRaises(MODULE.authority.ToolAuthorityError):
@@ -222,6 +244,52 @@ class CiToolAuthorityTests(unittest.TestCase):
             with self.assertRaises(MODULE.authority.ToolAuthorityError):
                 MODULE.run(self.args("run"))
             execute.assert_not_called()
+
+    def test_homebrew_wrapper_selects_native_sibling_and_unknown_scripts_fail(
+        self,
+    ) -> None:
+        prefix = self.base / "homebrew"
+        scripts = prefix / "bin"
+        native = prefix / "libexec/bin"
+        scripts.mkdir(parents=True, mode=0o700)
+        native.mkdir(parents=True, mode=0o700)
+        wrapper = scripts / "rustup"
+        wrapper.write_bytes(b"#!/bin/sh\nexit 91\n")
+        wrapper.chmod(0o700)
+        binary = native / "rustup"
+        binary.write_bytes(self.native_payload)
+        binary.chmod(0o500)
+        with mock.patch.object(
+            MODULE.shutil,
+            "which",
+            side_effect=lambda name: str(wrapper if name == "rustup" else binary),
+        ):
+            result = MODULE.stage_launchers(
+                argparse.Namespace(
+                    root=self.root, lane=self.lane, github_path=self.path_file
+                )
+            )
+        self.assertEqual(result["source_kind"], "native-macho")
+        self.assertTrue(result["staged_python3"])
+        self.assertEqual(
+            (self.root / "launchers/python3").read_bytes(), self.native_payload
+        )
+        cargo = self.root / "launchers/cargo"
+        self.assertEqual(cargo.read_bytes(), self.native_payload)
+        actual = MODULE.subprocess.run(
+            [str(cargo)], check=True, capture_output=True, text=True, timeout=5
+        )
+        self.assertEqual(actual.stdout.strip(), "cargo")
+        unknown = self.base / "unknown-wrapper"
+        unknown.write_bytes(wrapper.read_bytes())
+        unknown.chmod(0o700)
+        with mock.patch.object(MODULE.shutil, "which", return_value=str(unknown)):
+            with self.assertRaises(MODULE.authority.ToolAuthorityError):
+                MODULE.stage_launchers(
+                    argparse.Namespace(
+                        root=self.root, lane=self.lane, github_path=self.path_file
+                    )
+                )
 
     def test_collection_is_unapproved_and_does_not_export_selectors_or_execute(
         self,

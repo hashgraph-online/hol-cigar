@@ -169,8 +169,13 @@ outside the checkout and hydrates the pinned Rust toolchain there. Existing lock
 populate these roots before collection. The generation route explicitly includes Node because
 `protoc-gen-es` is a JavaScript executable; pnpm copies package files so the generator is not an
 unreviewable hardlink into a shared store. Setup also stages byte-identical Rustup launchers as
-private, canonical, single-link executable files named `cargo`, `rustc`, `cargo-fmt` and the other
-Rust tools. This preserves multicall dispatch and `+nightly` selection without relaxing the existing
+private, canonical, single-link native Mach-O files named `cargo`, `rustc`, `cargo-fmt` and the other
+Rust tools. When Homebrew supplies environment scripts in `bin`, setup selects the actual native
+`libexec/bin/rustup` sibling; copying a wrapper script would preserve its hardcoded `rustup` dispatch.
+Unknown script layouts are rejected. The source-quality lane also stages a byte-identical private
+native Python executable because framework-package installation paths may be group-writable; no
+global permissions, Python version or prefix override is changed. Its transitive framework/stdlib
+files remain outside this top-level executable attestation. This preserves multicall dispatch and `+nightly` selection without relaxing the existing
 no-alias/no-hardlink execution contract. Staging is unapproved observation: the exact staged paths
 and bytes still require independent approval. The coverage route includes Rustup because its fixed
 toolchain probe invokes `rustup component list`. Every route's bootstrap must:

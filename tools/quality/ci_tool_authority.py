@@ -60,6 +60,17 @@ RUST_LAUNCHERS = (
     "rustfmt",
     "rustup",
 )
+MACHO_MAGICS = frozenset(
+    bytes.fromhex(value)
+    for value in (
+        "cffaedfe",
+        "feedfacf",
+        "cafebabe",
+        "bebafeca",
+        "cafebabf",
+        "bfbafeca",
+    )
+)
 
 
 def write_new(path: Path, document: Any) -> None:
@@ -236,17 +247,50 @@ def stage_launchers(arguments: argparse.Namespace) -> dict[str, Any]:
     # Reading stable bounded bytes for an unapproved copy grants no execution
     # authority: every private target must still pass the unchanged protected
     # identity checks and later independent digest approval.
-    payload = observed_payload(Path(found).resolve(strict=True), copy_for_review=True)
+    selected = Path(found).resolve(strict=True)
+    payload = observed_payload(selected, copy_for_review=True)
+    if payload.startswith(b"#!"):
+        # Homebrew bin/* are environment scripts which exec a fixed basename.
+        # Renaming that script does not rename its Rustup proxy. Its documented
+        # libexec/bin sibling contains the actual multicall Mach-O executable.
+        if selected.parent.name != "bin":
+            raise authority.ToolAuthorityError("unknown bootstrap wrapper layout")
+        selected = (selected.parent.parent / "libexec/bin/rustup").resolve(strict=True)
+        payload = observed_payload(selected, copy_for_review=True)
+    if payload[:4] not in MACHO_MAGICS:
+        raise authority.ToolAuthorityError(
+            "bootstrap launcher must be native Mach-O, not a wrapper script"
+        )
     digest = hashlib.sha256(payload).hexdigest()
     directory = private(arguments.root / "launchers")
     for name in RUST_LAUNCHERS:
         target = directory / name
         write_bytes_new(target, payload, 0o500)
         authority._reviewed_tool({"path": str(target), "sha256": digest}, name)
+    requires_python = any(
+        "python3" in authority.ROUTE_TOOLS[route] for route in LANES[arguments.lane]
+    )
+    if requires_python:
+        found_python = shutil.which("python3")
+        if found_python is None:
+            raise authority.ToolAuthorityError("pinned bootstrap Python is unavailable")
+        python_payload = observed_payload(
+            Path(found_python).resolve(strict=True), copy_for_review=True
+        )
+        if python_payload[:4] not in MACHO_MAGICS:
+            raise authority.ToolAuthorityError("bootstrap Python must be native Mach-O")
+        target = directory / "python3"
+        write_bytes_new(target, python_payload, 0o500)
+        authority._reviewed_tool(
+            {"path": str(target), "sha256": hashlib.sha256(python_payload).hexdigest()},
+            "python3",
+        )
     append_actions(arguments.github_path, [str(directory)])
     return {
         "staged_launchers": list(RUST_LAUNCHERS),
         "approval_status": "unapproved-observation",
+        "source_kind": "native-macho",
+        "staged_python3": requires_python,
     }
 
 
