@@ -296,7 +296,10 @@ def stage_launchers(arguments: argparse.Namespace) -> dict[str, Any]:
 
 def observed_tool(name: str) -> dict[str, str]:
     if name == "protoc-gen-es":
-        selected = ROOT / "node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+        selected = (
+            ROOT
+            / "sdk/typescript/node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+        )
     else:
         found = shutil.which(name)
         if found is None:
@@ -304,7 +307,12 @@ def observed_tool(name: str) -> dict[str, str]:
                 f"required CI tool is unavailable: {name}"
             )
         selected = Path(found)
-    path = selected.resolve(strict=True)
+    try:
+        path = selected.resolve(strict=True)
+    except OSError as error:
+        raise authority.ToolAuthorityError(
+            f"required CI tool cannot be located: {name}"
+        ) from error
     # This is observation, not authorization. Reuse the race/ownership/size checks.
     entry = {
         "path": str(path),

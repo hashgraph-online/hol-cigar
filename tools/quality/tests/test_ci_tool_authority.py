@@ -19,6 +19,7 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+REAL_OBSERVED_TOOL = MODULE.observed_tool
 
 
 class CiToolAuthorityTests(unittest.TestCase):
@@ -307,6 +308,32 @@ class CiToolAuthorityTests(unittest.TestCase):
             self.assertEqual(
                 hashlib.sha256(path.read_bytes()).hexdigest(), entry["authority_sha256"]
             )
+
+    def test_generator_uses_sdk_workspace_not_root_decoy(self) -> None:
+        repository = self.base / "repo"
+        selected = (
+            repository
+            / "sdk/typescript/node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+        )
+        decoy = repository / "node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+        for path in (selected, decoy):
+            path.parent.mkdir(parents=True, mode=0o700)
+        selected.write_bytes(b"#!/usr/bin/env node\n// actual SDK package fixture\n")
+        decoy.write_bytes(b"#!/usr/bin/env node\n// wrong root fixture\n")
+        selected.chmod(0o500)
+        decoy.chmod(0o500)
+        with mock.patch.object(MODULE, "ROOT", repository):
+            result = REAL_OBSERVED_TOOL("protoc-gen-es")
+        self.assertEqual(result["path"], str(selected))
+        self.assertEqual(
+            result["sha256"], hashlib.sha256(selected.read_bytes()).hexdigest()
+        )
+        selected.unlink()
+        with mock.patch.object(MODULE, "ROOT", repository):
+            with self.assertRaisesRegex(
+                MODULE.authority.ToolAuthorityError, "protoc-gen-es"
+            ):
+                REAL_OBSERVED_TOOL("protoc-gen-es")
 
     def test_observations_alone_and_missing_approval_never_launch(self) -> None:
         proposal = self.proposal()
