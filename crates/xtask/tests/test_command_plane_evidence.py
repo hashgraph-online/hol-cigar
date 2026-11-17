@@ -20,6 +20,7 @@ if str(XTASK) not in sys.path:
     sys.path.insert(0, str(XTASK))
 
 import command_plane_evidence as evidence  # noqa: E402
+from tools.quality import ci_tool_authority  # noqa: E402
 
 
 def source_binding(*, clean: bool = True) -> dict[str, object]:
@@ -386,14 +387,16 @@ print("python39-helper-plane-ok")
     ) -> None:
         fast_ci = (ROOT / ".github/workflows/fast-ci.yml").read_text(encoding="utf-8")
         expected_fast_routes = {
-            '"${evidence_parent}/fmt" fmt --check',
-            '"${evidence_parent}/generate" generate --check',
-            '"${evidence_parent}/test-vectors" test vectors',
-            '"${evidence_parent}/lint" lint',
-            '"${evidence_parent}/docs" docs --check',
+            "format-check": ("fmt", ("fmt", "--check")),
+            "generate-check": ("generate", ("generate", "--check")),
+            "test-vectors": ("test-vectors", ("test", "vectors")),
+            "lint": ("lint", ("lint",)),
+            "docs-check": ("docs", ("docs", "--check")),
         }
-        for route in expected_fast_routes:
+        for command_id, (directory, exact_command) in expected_fast_routes.items():
+            route = f'--command-id {command_id} --evidence-dir "${{evidence_parent}}/{directory}"'
             self.assertEqual(fast_ci.count(route), 1)
+            self.assertEqual(ci_tool_authority.COMMANDS[command_id], exact_command)
         self.assertGreaterEqual(
             fast_ci.count("--evidence-dir"), len(expected_fast_routes)
         )
@@ -404,7 +407,7 @@ print("python39-helper-plane-ok")
         dependency_job = security.split("  static-security:", 1)[0]
         self.assertIn("runs-on: macos-15", dependency_job)
         self.assertIn(
-            'cargo xtask --evidence-dir "${evidence_parent}/lint" lint',
+            '--command-id lint --evidence-dir "${evidence_parent}/lint"',
             dependency_job,
         )
         self.assertIn('test ! -e "${evidence_parent}"', dependency_job)
@@ -551,7 +554,14 @@ print("python39-helper-plane-ok")
         self.assertIn("59800466c5c41c444d264b1010b4d57e85a7117f", coverage)
         self.assertIn("tests/properties/Cargo.toml", coverage)
         self.assertIn("CIGAR_COVERAGE_REPORT_DIR", coverage)
-        self.assertIn("test coverage --verify", coverage)
+        self.assertIn(
+            '--command-id test-coverage-verify --evidence-dir "${evidence_parent}/coverage"',
+            coverage,
+        )
+        self.assertEqual(
+            ci_tool_authority.COMMANDS["test-coverage-verify"],
+            ("test", "coverage", "--verify"),
+        )
         self.assertNotIn("cargo llvm-cov --workspace --all-targets --lcov", coverage)
 
     def test_coverage_totals_reject_inconsistent_or_nonfinite_percentages(self) -> None:

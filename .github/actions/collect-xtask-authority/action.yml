@@ -1,0 +1,40 @@
+name: Collect unapproved xtask review inputs
+description: Publish exact source and runner proposals without authorizing execution
+inputs:
+  lane:
+    description: Exact CI lane from ci_tool_authority.py
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Collect observed route tools and source-bound authority proposals
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CIGAR_CI_LANE: ${{ inputs.lane }}
+      run: |
+        python3 -B -I tools/quality/ci_tool_authority.py collect \
+          --lane "${CIGAR_CI_LANE}" --root "${CIGAR_CI_TOOL_ROOT}"
+    - name: Preserve unapproved review inputs
+      if: ${{ always() }}
+      id: review_inputs
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: xtask-tool-review-${{ inputs.lane }}
+        path: ${{ env.CIGAR_CI_TOOL_ROOT }}/review
+        if-no-files-found: error
+        include-hidden-files: false
+        retention-days: 14
+    - name: Require the artifact service digest
+      if: ${{ always() && steps.review_inputs.outcome == 'success' }}
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CIGAR_REVIEW_ARTIFACT_DIGEST: ${{ steps.review_inputs.outputs.artifact-digest }}
+      run: |
+        python3 -B -I - <<'PY'
+        import os
+        import re
+        digest = os.environ["CIGAR_REVIEW_ARTIFACT_DIGEST"]
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise SystemExit("missing or malformed review artifact service digest")
+        print("Unapproved review artifact SHA-256:", digest)
+        PY

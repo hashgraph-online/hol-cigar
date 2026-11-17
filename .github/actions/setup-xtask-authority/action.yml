@@ -1,0 +1,35 @@
+name: Prepare private xtask tool inputs
+description: Hydrate pinned Rust and private cache roots before collecting review inputs
+inputs:
+  lane:
+    description: Exact CI lane from ci_tool_authority.py
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Create private external authority and cache roots
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CIGAR_CI_LANE: ${{ inputs.lane }}
+      run: |
+        canonical_temp="$(cd "${RUNNER_TEMP}" && pwd -P)"
+        python3 -B -I tools/quality/ci_tool_authority.py prepare \
+          --lane "${CIGAR_CI_LANE}" \
+          --root "${canonical_temp}/cigar-ci-authority-${CIGAR_CI_LANE}" \
+          --github-env "${GITHUB_ENV}" --github-path "${GITHUB_PATH}"
+    - name: Hydrate the pinned private Rust toolchain
+      shell: bash --noprofile --norc -euo pipefail {0}
+      run: |
+        rustup toolchain install 1.92.0-aarch64-apple-darwin \
+          --profile minimal --component clippy,rustfmt
+        rustup default 1.92.0-aarch64-apple-darwin
+        test "$(rustc --version | awk '{print $2}')" = "1.92.0"
+        test "$(cargo --version | awk '{print $2}')" = "1.92.0"
+    - name: Stage unapproved single-link multicall launchers with exact tool names
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CIGAR_CI_LANE: ${{ inputs.lane }}
+      run: |
+        python3 -B -I tools/quality/ci_tool_authority.py stage-launchers \
+          --lane "${CIGAR_CI_LANE}" --root "${CIGAR_CI_TOOL_ROOT}" \
+          --github-path "${GITHUB_PATH}"

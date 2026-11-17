@@ -28,6 +28,7 @@
     "format-check": ["cargo", "cargo-fmt", "rustfmt"],
     "fuzz-smoke": [],
     "generate-check": [
+      "node",
       "protoc",
       "protoc-gen-es",
       "protoc-gen-go",
@@ -81,6 +82,7 @@
       "cargo-llvm-cov",
       "cargo-nextest",
       "rustc",
+      "rustup",
       "sandbox-exec"
     ],
     "test-e2e": ["cargo", "cargo-nextest", "python3", "rustc"],

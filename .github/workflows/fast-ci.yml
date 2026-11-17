@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 75
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      CIGAR_CI_TOOL_APPROVAL: ${{ vars.CIGAR_CI_SOURCE_QUALITY_APPROVAL }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -84,6 +85,11 @@ jobs:
             "${canonical_temp}/cigar-fast-source-target" \
             >>"${GITHUB_ENV}"
 
+      - name: Prepare private source-quality tool inputs
+        uses: ./.github/actions/setup-xtask-authority
+        with:
+          lane: source-quality
+
       - name: Install pinned generation tools
         run: |
           umask 077
@@ -121,9 +127,14 @@ jobs:
       - name: Hydrate locked dependency caches
         run: |
           cargo fetch --locked
-          corepack pnpm install --frozen-lockfile
+          corepack pnpm install --frozen-lockfile --package-import-method=copy
           CIGAR_ALLOW_PORTABLE_WHEEL=1 uv sync --project sdk/python --frozen
           env GOWORK=off go -C sdk/go mod download
+
+      - name: Collect source-quality tool review proposal
+        uses: ./.github/actions/collect-xtask-authority
+        with:
+          lane: source-quality
 
       - name: Check formatting, generated sources, vectors, and architecture offline
         env:
@@ -139,11 +150,17 @@ jobs:
           evidence_parent="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-fast-command-evidence"
           test ! -e "${evidence_parent}"
           mkdir -m 0700 "${evidence_parent}"
-          cargo xtask --evidence-dir "${evidence_parent}/fmt" fmt --check
-          cargo xtask --evidence-dir "${evidence_parent}/generate" generate --check
+          python3 -B -I tools/quality/ci_tool_authority.py run \
+            --lane source-quality --root "${CIGAR_CI_TOOL_ROOT}" \
+            --command-id format-check --evidence-dir "${evidence_parent}/fmt"
+          python3 -B -I tools/quality/ci_tool_authority.py run \
+            --lane source-quality --root "${CIGAR_CI_TOOL_ROOT}" \
+            --command-id generate-check --evidence-dir "${evidence_parent}/generate"
           cargo xtask vectors check
           cargo xtask architecture-check
-          cargo xtask --evidence-dir "${evidence_parent}/test-vectors" test vectors
+          python3 -B -I tools/quality/ci_tool_authority.py run \
+            --lane source-quality --root "${CIGAR_CI_TOOL_ROOT}" \
+            --command-id test-vectors --evidence-dir "${evidence_parent}/test-vectors"
 
       # The Cargo graph is locked, but cargo-deny intentionally refreshes its advisory
       # database in this diagnostic CI lane. Candidate scans are separately revision-pinned.
@@ -151,7 +168,9 @@ jobs:
         run: |
           evidence_parent="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-fast-command-evidence"
           test -d "${evidence_parent}"
-          cargo xtask --evidence-dir "${evidence_parent}/lint" lint
+          python3 -B -I tools/quality/ci_tool_authority.py run \
+            --lane source-quality --root "${CIGAR_CI_TOOL_ROOT}" \
+            --command-id lint --evidence-dir "${evidence_parent}/lint"
 
       - name: Check documentation offline
         env:
@@ -159,7 +178,9 @@ jobs:
         run: |
           evidence_parent="$(cd "${RUNNER_TEMP}" && pwd -P)/cigar-fast-command-evidence"
           test -d "${evidence_parent}"
-          cargo xtask --evidence-dir "${evidence_parent}/docs" docs --check
+          python3 -B -I tools/quality/ci_tool_authority.py run \
+            --lane source-quality --root "${CIGAR_CI_TOOL_ROOT}" \
+            --command-id docs-check --evidence-dir "${evidence_parent}/docs"
 
       - name: Assert source checks left the checkout clean
         if: ${{ always() }}
