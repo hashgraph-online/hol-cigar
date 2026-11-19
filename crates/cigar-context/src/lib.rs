@@ -17,8 +17,6 @@ mod select;
 mod snapshot;
 mod tokenizer;
 mod views;
-/// The stdio worker protocol behind the `cigar-context-worker` binary, for
-/// applications that host it in their own process.
 #[cfg(feature = "bpe")]
 #[path = "worker/mod.rs"]
 pub mod worker;
