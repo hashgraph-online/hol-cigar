@@ -162,6 +162,23 @@ Run `cargo test --locked -p cigar-context --features bpe` and
 The optional `cigar-context` JSON CLI reads explicit documents from stdin; `--help` describes its
 input. The existing Honey daemon/SDK ABI and release artifacts remain separate from this library.
 
+### Hosting the worker in your own process
+
+With the `bpe` feature, `cigar_context::worker` serves the `cigar.context-worker.v1` protocol
+that the `cigar-context-worker` binary speaks. An application that already ships a native
+process can run the worker from that process instead of shipping the separate binary:
+
+```rust,ignore
+# fn main() -> std::io::Result<()> {
+// In a child process the application starts for CIGAR:
+cigar_context::worker::serve(&mut std::io::stdin().lock(), &mut std::io::stdout().lock())
+# }
+```
+
+`worker::main(&args)` takes the binary's arguments (`--version`, and `--broker` with the `broker`
+feature). Keep the worker in its own child process, as the binary is: it owns its graph and cache
+for the life of the session, and the caller's timeouts end it by ending the process.
+
 From this source checkout:
 
 ```sh

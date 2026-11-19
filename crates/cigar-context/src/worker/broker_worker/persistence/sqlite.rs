@@ -1,10 +1,10 @@
 //! Bounded evidence checkpoints and a rolling receipt chain in one SQLite transaction.
 //! The chain detects inconsistent bytes, not a privileged replacement of the whole database.
 use super::{Event, Operation};
-use cigar_context::broker::{
+use crate::broker::{
     BrokerCheckpoint, BrokerError, BrokerLimits, BrokerStorageOptions, ContextBroker,
 };
-use cigar_context::{ContextError, GraphLimits};
+use crate::{ContextError, GraphLimits};
 use rusqlite::config::DbConfig;
 use rusqlite::limits::Limit;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};

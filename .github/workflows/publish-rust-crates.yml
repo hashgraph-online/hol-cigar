@@ -1,0 +1,61 @@
+name: publish-rust-crates
+
+# Publishes the Rust context library to crates.io. Manual only: the crates.io
+# trusted publisher for this repository and workflow must be set up first.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "dry run" to package and check only, or "publish cigar-context 0.14.2" to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+concurrency:
+  group: publish-rust-crates
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: inputs.confirm == 'dry run' || inputs.confirm == 'publish cigar-context 0.14.2'
+    name: package and publish cigar-windows-ipc, then cigar-context
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.92.0 --profile minimal
+      - name: Check the version being published
+        run: |
+          version=$(cargo metadata --locked --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "cigar-context") | .version')
+          test "$version" = "0.14.2"
+      - name: Package (dry run)
+        run: |
+          cargo publish --locked -p cigar-windows-ipc --dry-run
+          cargo package --locked -p cigar-context --no-verify --list > /dev/null
+      - name: Get a short-lived crates.io token
+        if: inputs.confirm == 'publish cigar-context 0.14.2'
+        id: auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - name: Publish
+        if: inputs.confirm == 'publish cigar-context 0.14.2'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          if ! cargo search cigar-windows-ipc --limit 1 | grep -q '^cigar-windows-ipc = "0.9.4"'; then
+            cargo publish --locked -p cigar-windows-ipc
+          fi
+          cargo publish --locked -p cigar-context
