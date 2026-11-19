@@ -23,6 +23,9 @@ mod broker_worker;
 
 /// The worker protocol this module speaks.
 pub const PROTOCOL: &str = "cigar.context-worker.v1";
+/// The `cigar-context` release this worker was built from, reported as
+/// `core_version` in the `init` reply.
+pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_RESPONSE: usize = 64 * 1024 * 1024;
 
@@ -318,7 +321,7 @@ fn handle(session: &mut Option<Session>, command: Command) -> Result<Value, Cont
     }
     if let Command::Init { domain, limits } = command {
         let value = Session::new(domain, limits)?;
-        let reply = json!({"protocol": PROTOCOL, "core_version": env!("CARGO_PKG_VERSION"),
+        let reply = json!({"protocol": PROTOCOL, "core_version": CORE_VERSION,
         "tokenizer": value.tokenizer.identity(), "max_frame_bytes": MAX_FRAME,
         "max_response_bytes": MAX_RESPONSE, "capabilities": [
             "context_graph.v1", "source_replace.v1", "snapshot_integrity.v1",
