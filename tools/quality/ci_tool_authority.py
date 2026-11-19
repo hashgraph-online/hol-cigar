@@ -3,7 +3,11 @@
 
 Collection never exports an xtask selector. Execution requires a separately
 maintained repository variable; neither observed hashes nor a diagnostic receipt
-are accepted as approval. The underlying xtask authority and receipt contracts
+are accepted as approval. The approval names the reviewed tool paths and digests
+for each route and the runner family. It is not tied to one commit or one runner
+image patch version: each run drafts its authority against the exact checked-out
+source with the approved tools, xtask refuses any tool whose bytes differ, and the
+receipt must bind that source and those tools. The underlying xtask authority and receipt contracts
 remain authoritative, including their explicit non-release-eligible status.
 """
 
@@ -28,7 +32,7 @@ import tool_authority as authority  # noqa: E402
 from command_plane_evidence import verify_record  # noqa: E402
 
 
-APPROVAL_SCHEMA = "cigar.ci-xtask-approval.v1"
+APPROVAL_SCHEMA = "cigar.ci-xtask-approval.v2"
 PROPOSAL_SCHEMA = "cigar.ci-xtask-review-proposal.v1"
 LANES = {
     "source-quality": (
@@ -181,6 +185,16 @@ def runner() -> dict[str, str]:
     return result
 
 
+def runner_family(image: dict[str, str]) -> dict[str, str]:
+    """The runner identity an approval names: image family, OS and architecture.
+
+    Hosted runner image patch versions rotate between runs. A rotation that
+    changes a reviewed tool changes its digest, which still blocks execution.
+    """
+
+    return {name: image[name] for name in ("image_os", "system", "architecture")}
+
+
 def observed_payload(path: Path, *, copy_for_review: bool = False) -> bytes:
     """Read bounded, stable executable bytes without executing or approving them."""
     if not copy_for_review:
@@ -327,6 +341,7 @@ def collect(arguments: argparse.Namespace) -> dict[str, Any]:
     authority._validate_source(source, source)
     image = runner()
     routes = {}
+    observed_authorities = {}
     review = private(arguments.root / "review")
     for command_id in LANES[arguments.lane]:
         tools = {
@@ -344,20 +359,22 @@ def collect(arguments: argparse.Namespace) -> dict[str, Any]:
                 output=review / f"{command_id}.observed-authority.json",
             )
         )
-        routes[command_id] = {
-            "reviewed_tools": observed,
-            "authority_sha256": result["sha256"],
-        }
+        routes[command_id] = {"reviewed_tools": observed}
+        observed_authorities[command_id] = result["sha256"]
     proposal = {
         "schema_version": PROPOSAL_SCHEMA,
         "approval_status": "unapproved-observation",
         "release_eligible": False,
         "independent_review_required": True,
+        "observed": {
+            "source": source,
+            "runner": image,
+            "authority_sha256": observed_authorities,
+        },
         "approval_candidate": {
             "schema_version": APPROVAL_SCHEMA,
             "lane": arguments.lane,
-            "source": source,
-            "runner": image,
+            "runner": runner_family(image),
             "routes": routes,
         },
     }
@@ -386,21 +403,17 @@ def approval(lane: str) -> dict[str, Any]:
     if not isinstance(document, dict) or set(document) != {
         "schema_version",
         "lane",
-        "source",
         "runner",
         "routes",
     }:
         raise authority.ToolAuthorityError("independent CI approval shape is invalid")
-    source = authority.source_binding(ROOT)
-    authority._validate_source(source, source)
     if (
         document["schema_version"] != APPROVAL_SCHEMA
         or document["lane"] != lane
-        or document["source"] != source
-        or document["runner"] != runner()
+        or document["runner"] != runner_family(runner())
     ):
         raise authority.ToolAuthorityError(
-            "independent CI approval is stale or for another source, lane or image"
+            "independent CI approval is stale or for another lane or runner family"
         )
     routes = document["routes"]
     if not isinstance(routes, dict) or set(routes) != set(LANES[lane]):
@@ -408,12 +421,7 @@ def approval(lane: str) -> dict[str, Any]:
             "independent CI approval route inventory is not exact"
         )
     for command_id, entry in routes.items():
-        if (
-            not isinstance(entry, dict)
-            or set(entry) != {"reviewed_tools", "authority_sha256"}
-            or not isinstance(entry["authority_sha256"], str)
-            or re.fullmatch(r"[0-9a-f]{64}", entry["authority_sha256"]) is None
-        ):
+        if not isinstance(entry, dict) or set(entry) != {"reviewed_tools"}:
             raise authority.ToolAuthorityError(
                 "independent CI approval route is malformed"
             )
@@ -430,7 +438,11 @@ def approval(lane: str) -> dict[str, Any]:
     return document
 
 
-def approved_authority(arguments: argparse.Namespace) -> tuple[dict[str, Any], Path]:
+def approved_authority(
+    arguments: argparse.Namespace,
+) -> tuple[dict[str, Any], Path, str]:
+    """Draft (run) or reopen (verify) this route's authority for the exact
+    checked-out source and the approved tools, and return its digest."""
     if arguments.command_id not in LANES[arguments.lane]:
         raise authority.ToolAuthorityError("command is not in this CI lane")
     values = environment(arguments.root, arguments.lane)
@@ -440,7 +452,7 @@ def approved_authority(arguments: argparse.Namespace) -> tuple[dict[str, Any], P
     if arguments.action == "run":
         tools_path = arguments.root / f"{arguments.command_id}.approved-tools.json"
         write_new(tools_path, entry["reviewed_tools"])
-        authority.draft(
+        drafted = authority.draft(
             argparse.Namespace(
                 command_id=arguments.command_id,
                 reviewed_tools=tools_path,
@@ -448,14 +460,27 @@ def approved_authority(arguments: argparse.Namespace) -> tuple[dict[str, Any], P
                 output=target,
             )
         )
-    authority.validate(
-        argparse.Namespace(authority=target, expected_sha256=entry["authority_sha256"])
-    )
-    return reviewed, target
+        digest = drafted["sha256"]
+    else:
+        _document, payload = authority._protected_document(target, "tool authority")
+        digest = hashlib.sha256(payload).hexdigest()
+    # Validation rereads the file, requires the current clean source and
+    # rehashes every approved tool on disk.
+    authority.validate(argparse.Namespace(authority=target, expected_sha256=digest))
+    document, _payload = authority._protected_document(target, "tool authority")
+
+    def pinned(tools: dict[str, Any]) -> dict[str, tuple[str, str]]:
+        return {name: (tool["path"], tool["sha256"]) for name, tool in tools.items()}
+
+    if pinned(document["tools"]) != pinned(entry["reviewed_tools"]["tools"]):
+        raise authority.ToolAuthorityError(
+            "tool authority differs from the independently reviewed tools"
+        )
+    return reviewed, target, digest
 
 
 def verify(arguments: argparse.Namespace) -> dict[str, Any]:
-    reviewed, target = approved_authority(arguments)
+    reviewed, target, digest = approved_authority(arguments)
     entry = reviewed["routes"][arguments.command_id]
     receipt_path = (
         arguments.evidence_dir
@@ -473,8 +498,7 @@ def verify(arguments: argparse.Namespace) -> dict[str, Any]:
         not isinstance(binding, dict)
         or binding.get("command_id") != arguments.command_id
         or binding.get("review_status") != "operator-reviewed"
-        or binding.get("manifest")
-        != {"bytes": target.stat().st_size, "sha256": entry["authority_sha256"]}
+        or binding.get("manifest") != {"bytes": target.stat().st_size, "sha256": digest}
         or binding.get("tools") != expected_tools
         or not binding.get("executions")
     ):
@@ -485,7 +509,7 @@ def verify(arguments: argparse.Namespace) -> dict[str, Any]:
         root=ROOT,
         evidence_directory=arguments.evidence_dir,
         command_id=arguments.command_id,
-        expected_source=reviewed["source"],
+        expected_source=authority.source_binding(ROOT),
         attachment_relative=None,
         tool_authority=binding,
     )
@@ -502,14 +526,14 @@ def verify(arguments: argparse.Namespace) -> dict[str, Any]:
 
 
 def run(arguments: argparse.Namespace) -> dict[str, Any]:
-    reviewed, target = approved_authority(arguments)
+    reviewed, target, digest = approved_authority(arguments)
     entry = reviewed["routes"][arguments.command_id]
     child_environment = dict(os.environ)
     child_environment.pop("CIGAR_CI_TOOL_APPROVAL", None)
     for selector in SELECTORS:
         child_environment.pop(selector, None)
     child_environment[SELECTORS[0]] = str(target)
-    child_environment[SELECTORS[1]] = entry["authority_sha256"]
+    child_environment[SELECTORS[1]] = digest
     child_environment.update(environment(arguments.root, arguments.lane))
     cargo = (
         entry["reviewed_tools"]["tools"]["cargo"]["path"]
