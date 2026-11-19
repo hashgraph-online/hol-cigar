@@ -575,6 +575,86 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
         "default_features": True,
         "features": ("migration-fault-injection", "projection-fault-injection"),
     },
+    {
+        "id": "cigar-retrieval-experimental-profiles",
+        "scope": "cigar-retrieval",
+        "arguments": (
+            "--package",
+            "cigar-retrieval",
+            "--features",
+            "experimental-profiles",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("experimental-profiles",),
+    },
+    {
+        "id": "cigar-context-bpe-broker-persistence",
+        "scope": "cigar-context",
+        "arguments": (
+            "--package",
+            "cigar-context",
+            "--features",
+            "bpe,broker-persistence",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("bpe", "broker-persistence"),
+    },
+    {
+        "id": "cigar-cli-migration-fault-injection",
+        "scope": "cigar-cli",
+        "arguments": (
+            "--package",
+            "cigar-cli",
+            "--features",
+            "migration-fault-injection",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("migration-fault-injection",),
+    },
+    {
+        "id": "cigar-daemon-optional-features",
+        "scope": "cigar-daemon",
+        "arguments": (
+            "--package",
+            "cigar-daemon",
+            "--features",
+            "experimental-profiles,fuzzing,qualification-miri-isolated",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("experimental-profiles", "fuzzing", "qualification-miri-isolated"),
+    },
+    {
+        "id": "cigarbench-consumer-honey-compat",
+        "scope": "cigarbench-consumer",
+        "arguments": (
+            "--package",
+            "cigarbench-consumer",
+            "--features",
+            "honey-0-9-1-compat",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("honey-0-9-1-compat",),
+    },
+)
+
+
+# Coverage-only compositions: each turns on optional test or qualification
+# features of one package on top of its defaults. They have no lint profile of
+# their own because the workspace lint already compiles that package.
+COVERAGE_FEATURE_ONLY_COLLECTIONS = frozenset(
+    {
+        "cigar-store-fault-injection",
+        "cigar-retrieval-experimental-profiles",
+        "cigar-context-bpe-broker-persistence",
+        "cigar-cli-migration-fault-injection",
+        "cigar-daemon-optional-features",
+        "cigarbench-consumer-honey-compat",
+    }
 )
 
 

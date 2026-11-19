@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -308,12 +309,78 @@ def stage_launchers(arguments: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def observed_tool(name: str) -> dict[str, str]:
-    if name == "protoc-gen-es":
-        selected = (
-            ROOT
-            / "sdk/typescript/node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+NODE_PLUGIN = "@bufbuild/protoc-gen-es"
+NODE_PLUGIN_ENTRY = "bin/protoc-gen-es"
+NODE_PLUGIN_DIRECTORY = "node-tools"
+
+
+def _package_name(path: Path) -> str:
+    parent = path.parent
+    return f"{parent.name}/{path.name}" if parent.name.startswith("@") else path.name
+
+
+def stage_node_plugin(source_root: Path, tool_root: Path) -> Path:
+    """Copy protoc-gen-es and its installed dependency closure out of the
+    checkout into a flat node_modules under the private tool root.
+
+    The tool authority refuses executables inside the repository, and pnpm
+    links each package's dependencies beside it in the store rather than
+    beneath it, so the plugin directory alone would not load. Every package
+    is copied (symlinks resolved) once; two versions of one package fail.
+    """
+    entry = source_root / "sdk/typescript/node_modules" / NODE_PLUGIN
+    try:
+        start = entry.resolve(strict=True)
+    except OSError as error:
+        raise authority.ToolAuthorityError(
+            "required CI tool cannot be located: protoc-gen-es"
+        ) from error
+    (tool_root / NODE_PLUGIN_DIRECTORY).mkdir(mode=0o700, exist_ok=True)
+    destination = private(tool_root / NODE_PLUGIN_DIRECTORY) / "node_modules"
+    if destination.exists():
+        target = destination / NODE_PLUGIN / NODE_PLUGIN_ENTRY
+        if not target.is_file():
+            raise authority.ToolAuthorityError("staged protoc-gen-es is incomplete")
+        return target
+    destination.mkdir(mode=0o700)
+    copied: dict[str, Path] = {}
+    pending = [start]
+    while pending:
+        package = pending.pop()
+        name = _package_name(package)
+        if name in copied:
+            if copied[name] != package:
+                raise authority.ToolAuthorityError(
+                    f"protoc-gen-es needs two versions of {name}"
+                )
+            continue
+        copied[name] = package
+        shutil.copytree(
+            package,
+            destination / name,
+            ignore=shutil.ignore_patterns("node_modules"),
         )
+        manifest = json.loads((package / "package.json").read_text("utf-8"))
+        # pnpm places a package's dependencies in the node_modules folder that
+        # holds the package itself.
+        store = package.parent.parent if name.startswith("@") else package.parent
+        for field in ("dependencies", "optionalDependencies"):
+            for dependency in sorted(manifest.get(field) or {}):
+                candidate = store / dependency
+                if not candidate.exists() and field == "optionalDependencies":
+                    continue
+                try:
+                    pending.append(candidate.resolve(strict=True))
+                except OSError as error:
+                    raise authority.ToolAuthorityError(
+                        f"protoc-gen-es dependency is missing: {dependency}"
+                    ) from error
+    return destination / NODE_PLUGIN / NODE_PLUGIN_ENTRY
+
+
+def observed_tool(name: str, tool_root: Path) -> dict[str, str]:
+    if name == "protoc-gen-es":
+        selected = stage_node_plugin(ROOT, tool_root)
     else:
         found = shutil.which(name)
         if found is None:
@@ -345,7 +412,7 @@ def collect(arguments: argparse.Namespace) -> dict[str, Any]:
     review = private(arguments.root / "review")
     for command_id in LANES[arguments.lane]:
         tools = {
-            name: observed_tool(name)
+            name: observed_tool(name, arguments.root)
             for name in sorted(authority.ROUTE_TOOLS[command_id])
         }
         observed = {"schema_version": authority.REVIEW_SCHEMA, "tools": tools}
