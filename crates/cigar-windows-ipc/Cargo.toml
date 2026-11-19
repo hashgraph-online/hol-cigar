@@ -3,7 +3,7 @@ name = "cigar-windows-ipc"
 description = "Audited Windows local IPC and credential ACL adapter for CIGAR"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+rust-version = "1.89"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -16,8 +16,8 @@ default = ["named-pipe"]
 named-pipe = ["dep:tokio"]
 
 [target.'cfg(windows)'.dependencies]
-tokio = { workspace = true, optional = true }
-windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+tokio = { version = "1.53.3", optional = true, features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [target.'cfg(windows)'.dev-dependencies]
 tempfile.workspace = true
