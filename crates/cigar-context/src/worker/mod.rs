@@ -1,12 +1,12 @@
 //! The `cigar.context-worker.v1` stdio worker, as a library.
 //!
 //! Applications that ship their own native process can serve the worker protocol
-//! without the separate `cigar-context-worker` binary: call [`serve`](self::serve) with the
-//! process's stdin and stdout (or any line-based reader and writer), or [`main`](self::main)
+//! without the separate `cigar-context-worker` binary: call [`serve`] with the
+//! process's stdin and stdout (or any line-based reader and writer), or [`main`]
 //! to take the same arguments as the binary. The protocol, limits and replies are
-//! the binary's; the binary itself is a thin wrapper around [`main`](self::main).
+//! the binary's; the binary itself is a thin wrapper around [`main`].
 //!
-//! One caller-owned graph and cache per call to [`serve`](self::serve). Frames are bounded,
+//! One caller-owned graph and cache per call to [`serve`]. Frames are bounded,
 //! unknown fields are refused, and errors never echo input.
 use crate::{
     AnswerDraft, AnswerPolicy, ClaimReview, ContextDelta, ContextError, ContextGraph,
