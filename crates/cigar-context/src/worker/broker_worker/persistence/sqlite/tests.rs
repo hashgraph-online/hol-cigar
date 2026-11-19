@@ -357,7 +357,7 @@ fn interrupted_transactions_restore_only_the_last_commit() {
         let mut child = Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
-                "broker_worker::persistence::sqlite::tests::crash_child",
+                "worker::broker_worker::persistence::sqlite::tests::crash_child",
                 "--ignored",
                 "--nocapture",
             ])
