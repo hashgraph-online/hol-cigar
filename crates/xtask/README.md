@@ -156,10 +156,10 @@ development debugging but is not launch qualification. Supplying a malformed or 
 always fails. Release workflows must require `review_status: "operator-reviewed"`.
 
 One authority is valid for one command ID and one exact clean Git source only. CI therefore needs
-an operator-maintained digest set for the pinned macOS runner image and must draft a distinct
-authority after tool installation for every xtask route it invokes. Until those external reviewed
-digests are configured, affected hosted xtask jobs are an explicit bootstrap blocker rather than
-release evidence.
+an operator-maintained digest set for the macOS runner family and drafts a distinct authority after
+tool installation, for the checked-out source, for every xtask route it invokes. Until those
+external reviewed digests are configured, affected hosted xtask jobs are an explicit bootstrap
+blocker rather than release evidence.
 
 ### Hosted macOS CI bootstrap contract
 
@@ -185,23 +185,25 @@ toolchain probe invokes `rustup component list`. Every route's bootstrap must:
 3. obtain each canonical executable path and SHA-256 from an independent operator-controlled
    review channel, then create the protected `cigar.xtask-reviewed-tools.v1` input;
 4. create all eight external mode-`0700` environment directories and use `tool_authority.py draft`
-   to produce one source-bound authority document;
-5. compare that document's SHA-256 through the independent channel and run
-   `tool_authority.py validate --expected-sha256 ...` before exporting both selector variables;
+   to produce one authority document bound to the checked-out source and the reviewed tools;
+5. run `tool_authority.py validate --expected-sha256 ...` with the drafted digest, which rereads
+   the document, requires the current clean source and rehashes every tool, and confirm its tool
+   paths and digests equal the reviewed ones before exporting both selector variables;
 6. invoke exactly one matching xtask route, unset both selectors, and independently reopen the
    receipt; and
 7. reject launch qualification unless the receipt binds the expected source, route, manifest,
    exact tool set, execution digests, and `review_status: "operator-reviewed"`.
 
-Because the authority embeds the Git source object, neither an authority document nor its approval
-digest may be reused for a different commit. Runner-image or tool-byte changes also require a new
-review. Omitting only `CIGAR_XTASK_TOOL_INPUTS_SHA256` is an explicit development diagnostic; it can
+Because the authority embeds the Git source object, an authority document is never reused for a
+different commit; each run drafts its own. The approval is the reviewed tool set, which does carry
+over between commits. Tool-byte, tool-path or runner-family changes require a new review. Omitting only `CIGAR_XTASK_TOOL_INPUTS_SHA256` is an explicit development diagnostic; it can
 never satisfy this bootstrap contract. Omitting `CIGAR_XTASK_TOOL_INPUTS`, using an authority for a
 different route, or supplying a stale/wrong digest always blocks execution.
 
 Collection publishes `xtask-tool-review-source-quality`, `xtask-tool-review-dependency-policy`
 and `xtask-tool-review-coverage` artifacts. Each contains canonical observed tool manifests,
-source-bound authority proposals and `proposal.json`. Its `approval_status` is always
+source-bound authority proposals and `proposal.json` (the observed source, runner image and
+authority digests are recorded under `observed` for the reviewer). Its `approval_status` is always
 `unapproved-observation`; collection exports no execution selector and cannot turn a missing
 approval into a green guarded check. Artifact-service SHA-256 validation identifies the uploaded
 bundle; it does not approve the executables inside it.
@@ -217,19 +219,23 @@ repository Actions variable:
 | `dependency-policy` | `CIGAR_CI_DEPENDENCY_POLICY_APPROVAL` |
 | `coverage` | `CIGAR_CI_COVERAGE_APPROVAL` |
 
-The JSON schema is `cigar.ci-xtask-approval.v1`, with exactly `schema_version`, `lane`, `source`,
-`runner` and `routes`. Each route contains exactly `reviewed_tools` (the existing reviewed-tools
-schema) and an independently approved `authority_sha256`. Do not copy an observation into a variable
+The JSON schema is `cigar.ci-xtask-approval.v2`, with exactly `schema_version`, `lane`, `runner`
+and `routes`. `runner` names the runner family (`image_os`, `system`, `architecture`), not the
+hosted image patch version, which GitHub rotates between runs. Each route contains exactly
+`reviewed_tools` (the existing reviewed-tools schema). An approval is not tied to one commit: the
+earlier `v1` shape bound the exact source revision and image version, so it went stale on every
+push and every image rotation and no hosted run could pass. Do not copy an observation into a variable
 without that review. Do not commit approvals to the PR, synthesize approved hashes from a local
 observation, create an unprotected environment, or reuse npm/PyPI credentials for this bootstrap.
 The current integration uses administrator-maintained repository variables; it neither creates nor
 claims protected-environment reviewer enforcement. If the project's policy requires that additional
 enforcement, an administrator must provision and approve it separately before qualification.
 
-Rerun the failed jobs on the same exact source and runner/tool bytes. The normal PR merge checkout
-remains the integration target: its source revision may differ from the PR head. Any source,
-runner image, executable byte or cache-root-path change requires a fresh review. The helper checks
-the external approval before drafting the execution authority, independently validates its digest,
+The normal PR merge checkout remains the integration target: its source revision may differ from
+the PR head, and the authority drafted for it binds that revision. Any runner-family, executable
+byte, tool-path or cache-root-path change requires a fresh review. The helper checks the external
+approval before drafting the execution authority, validates the drafted authority against the
+current source and the reviewed tool digests,
 exports both selectors only to one matching child, and reopens the resulting command receipt with
 the fixed system-Python producer runtime. Missing, malformed, stale or cross-lane approvals fail
 before launch. A diagnostic/self-observed receipt is rejected. No secrets are requested or printed.

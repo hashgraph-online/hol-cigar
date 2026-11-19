@@ -303,10 +303,18 @@ class CiToolAuthorityTests(unittest.TestCase):
         self.assertIs(proposal["independent_review_required"], True)
         for selector in MODULE.SELECTORS:
             self.assertNotIn(selector, self.env_file.read_text())
-        for command_id, entry in proposal["approval_candidate"]["routes"].items():
+        candidate = proposal["approval_candidate"]
+        self.assertEqual(
+            candidate["runner"],
+            {"image_os": "macos15", "system": "Darwin", "architecture": "arm64"},
+        )
+        self.assertNotIn("source", candidate)
+        for command_id, entry in candidate["routes"].items():
+            self.assertEqual(set(entry), {"reviewed_tools"})
             path = self.root / "review" / f"{command_id}.observed-authority.json"
             self.assertEqual(
-                hashlib.sha256(path.read_bytes()).hexdigest(), entry["authority_sha256"]
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+                proposal["observed"]["authority_sha256"][command_id],
             )
 
     def test_generator_uses_sdk_workspace_not_root_decoy(self) -> None:
@@ -362,21 +370,43 @@ class CiToolAuthorityTests(unittest.TestCase):
         self.assertEqual(execute.call_count, 2)
         first, second = execute.call_args_list
         self.assertEqual(first.args[0][-2:], ["fmt", "--check"])
+        drafted = self.root / "format-check.approved-authority.json"
         self.assertEqual(
             first.kwargs["env"][MODULE.SELECTORS[1]],
-            document["routes"]["format-check"]["authority_sha256"],
+            hashlib.sha256(drafted.read_bytes()).hexdigest(),
         )
+        self.assertEqual(json.loads(drafted.read_bytes())["source"], self.source)
         self.assertNotIn("CIGAR_CI_TOOL_APPROVAL", first.kwargs["env"])
         self.assertEqual(second.args[0][:3], ["/usr/bin/python3", "-B", "-I"])
         self.assertIn("verify", second.args[0])
 
-    def test_stale_source_image_lane_or_route_inventory_blocks_before_launch(
+    def test_approval_carries_over_new_commits_and_runner_image_patches(
+        self,
+    ) -> None:
+        document = self.proposal()["approval_candidate"]
+        self.source["revision"] = "3" * 40
+        self.source["tree"] = "4" * 40
+        self.image["image_version"] = "test-2"
+        with (
+            self.approved(document),
+            mock.patch.object(MODULE.subprocess, "run") as execute,
+        ):
+            MODULE.run(self.args("run"))
+        self.assertEqual(execute.call_count, 2)
+        drafted = self.root / "format-check.approved-authority.json"
+        self.assertEqual(
+            json.loads(drafted.read_bytes())["source"]["revision"], "3" * 40
+        )
+
+    def test_wrong_runner_family_lane_route_inventory_or_shape_blocks_before_launch(
         self,
     ) -> None:
         original = self.proposal()["approval_candidate"]
         for field, value in (
-            ("source", {**self.source, "revision": "3" * 40}),
-            ("runner", {**self.image, "image_version": "other"}),
+            ("runner", {**original["runner"], "image_os": "macos14"}),
+            ("runner", {**original["runner"], "architecture": "x86_64"}),
+            ("runner", self.image),
+            ("source", self.source),
             ("lane", "coverage"),
             ("routes", {}),
         ):
@@ -390,10 +420,12 @@ class CiToolAuthorityTests(unittest.TestCase):
                     MODULE.run(self.args("run"))
                 execute.assert_not_called()
 
-    def test_changed_executable_and_wrong_authority_digest_block(self) -> None:
+    def test_changed_executable_and_wrong_reviewed_digest_block(self) -> None:
         document = self.proposal()["approval_candidate"]
         wrong_digest = copy.deepcopy(document)
-        wrong_digest["routes"]["format-check"]["authority_sha256"] = "0" * 64
+        wrong_digest["routes"]["format-check"]["reviewed_tools"]["tools"]["cargo"][
+            "sha256"
+        ] = "0" * 64
         with (
             self.approved(wrong_digest),
             mock.patch.object(MODULE.subprocess, "run") as execute,
