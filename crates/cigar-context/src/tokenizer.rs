@@ -2,6 +2,17 @@ use crate::ContextError;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "bpe")]
+mod ordinary;
+#[cfg(all(test, feature = "bpe"))]
+mod ordinary_patterns;
+#[cfg(feature = "bpe")]
+mod segmenter;
+#[cfg(feature = "bpe")]
+mod vocabulary;
+#[cfg(feature = "bpe")]
+mod vocabulary_hash;
+
 /// Exact token accounting for the rendered context text, excluding the provider chat envelope.
 /// Implementations must use an immutable identity for their algorithm and vocabulary.
 pub trait TokenCounter {
@@ -155,12 +166,13 @@ impl TokenCounter for Utf8ByteCounter {
     }
 }
 
-/// Offline o200k_base BPE using the vocabulary embedded in pinned tiktoken-rs 0.12.0.
+/// Exact ordinary o200k counts using the vocabulary and merge rules from pinned
+/// tiktoken-rs 0.12.0, without constructing unused decoding/special-token tables.
 #[cfg(feature = "bpe")]
 pub struct O200kTokenizer(CachedTokenCounter<RawO200kTokenizer>);
 
 #[cfg(feature = "bpe")]
-struct RawO200kTokenizer(tiktoken_rs::CoreBPE);
+struct RawO200kTokenizer(ordinary::OrdinaryCounter);
 
 #[cfg(feature = "bpe")]
 impl O200kTokenizer {
@@ -171,7 +183,7 @@ impl O200kTokenizer {
 
     /// Loads the same exact vocabulary with explicit cache bounds (zero disables caching).
     pub fn with_cache_limits(limits: TokenCacheLimits) -> Result<Self, ContextError> {
-        tiktoken_rs::o200k_base()
+        ordinary::OrdinaryCounter::new()
             .map(|bpe| Self(CachedTokenCounter::new(RawO200kTokenizer(bpe), limits)))
             .map_err(|_| ContextError::Tokenizer)
     }
@@ -204,6 +216,6 @@ impl TokenCounter for RawO200kTokenizer {
     }
 
     fn count(&self, text: &str) -> Result<usize, ContextError> {
-        Ok(self.0.count_ordinary(text))
+        self.0.count(text)
     }
 }

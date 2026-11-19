@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.14.2 — query performance and atomic ticket consumption
+
+- Use an exact dense ASCII segmentation table for entirely ASCII text and load the complete
+  sparse Unicode table at its first use. Retain checked loading for both, pinned ordinary token
+  boundaries/counts/identity and unchanged instance-local source-text cache bounds.
+- Keep distinct source-locator matches when another selected document only mentions the same
+  query word in an explicitly listed or conjoined request. Preserve single compound-record
+  queries without appending their component records. Reuse the witness lookup and retain the
+  ordinary single-record scoring path; preserve copied-text deduplication, caller
+  scope, hard closure, exact tokens, aggregate work limits and the existing protocol/API.
+- Add regressions for multi-record retrieval under byte/BPE budgets, unrequested topics,
+  compound names, conjunctions, copied text, authorization, withdrawn dependencies and physical
+  block limits. Benchmark definitions and historical qualification results remain unchanged.
+- Prepare consistent stable core, Python and TypeScript identities and lockfiles
+  after RC2 qualification. Keep publication disabled until the release gates pass.
+- Include the exact-token query optimizations and additive atomic ticket
+  consumption from the development and RC2 entries below.
+- Preserve context ABI/protocol v1, authorization, freshness checks, token
+  identity, bounded caches, limits, persistence and existing SDK operations.
+- Correct package validation formatting and normalize Python prerelease identity
+  in the separate Honey compatibility test. No benchmark definition changes.
+- Align packaged Python/npm installation guides and agent documentation with
+  0.14.2, preserving historical evidence labels and exact-archive qualification.
+- See `docs/release/context-sdk-0.14.2-readiness.md` for the retained RC2 timing
+  evidence, registry state and unresolved release blockers.
+
+## 0.14.2-rc.2 (unpublished)
+
+- Add owner-bound, single-use `consume_ticket`: current authority/evidence
+  validation and ticket removal occur in one serialized broker operation.
+  It never authorizes effects, retries unknown outcomes or skips freshness checks.
+- Expose the additive command in Python and TypeScript and advertise its capability.
+- Preserve existing query, revalidate, forget and execution-handoff semantics.
+
+## 0.14.2 development work (before RC2)
+
+- Load only the encoder and regex required for exact ordinary o200k counts,
+  avoiding unused decoder, special-token and per-thread tokenizer construction.
+- Preserve the pinned vocabulary, token identity, merge ordering, bounded cache,
+  snapshot/delta semantics, authorization and work limits. Long pieces retain
+  heap merging; regex errors fail closed.
+- Add upstream differential, vocabulary identity and concurrent counting tests.
+  See `docs/performance/0.14.2-protocol.md` for the paired measurement gates.
+- Keep the 0.14.1 security fixes and runtime floors. Local validation does not
+  qualify untested platforms or authorize publication.
+
 ## 0.14.1 — security candidate
 
 - Bound aggregate compilation traversal, evidence copying, rendering and scoring before allocation; excessive work returns `LimitExceeded`.

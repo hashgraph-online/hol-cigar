@@ -1,0 +1,180 @@
+# CIGAR 0.14.2 release readiness
+
+## November 12 dependency refresh
+
+The release-hardening candidate updates bundled SQLite (`rusqlite 0.41.1` /
+`libsqlite3-sys 0.39.1`), `rustix 1.1.6`, the compatible Wasmtime 36.0.20 line,
+capability filesystem, TLS/root trust, parser and compression dependencies.
+All ten tracked Rust lockfiles pass the November 12 advisory database with zero
+vulnerability findings and zero advisory warnings. The root dependency, duplicate
+version, license and source checks pass without advisory exclusions. The full
+633-component license inventory and the beta projection's inventory were
+regenerated from the locked inputs; stale versions are removed.
+
+Go qualification now uses 1.26.11 and `x/net 0.62.0`. SDK tests and both SDK/demo
+vulnerability scans pass. The pnpm auditor's `.mjs` launch inventory was checked
+against the signed official tarball before updating its expected digest; its
+15 policy tests and actual tool verification pass.
+
+Local Rust validation passes 155 native-context tests, 158 storage/extension
+tests, 62 crypto/Rust SDK tests and 44 xtask tests. Four existing storage tests
+remain ignored; the native crash child is invoked by its parent test. This is
+development evidence, not a replacement for exact-commit hosted qualification.
+The SQLite backup API adjustment retains both online backup paths.
+
+The Linux OS-keystore adapter retains the encrypted Secret Service protocol,
+`service`/`username` attributes, default collection and binary credential format.
+It uses the maintained zbus 6 line through the explicitly pinned upstream
+`secret-service 6.0.0-rc.1`; that dependency is a release candidate and requires
+Linux integration validation. That job now passes at `bbf8dceb`: it checks an externally seeded
+legacy credential, encrypted-keystore reopen, new credentials, malformed keys
+and ambiguous matches inside a fresh private D-Bus session. macOS and Windows
+retain their previous native store implementations.
+
+The seven-platform distribution workflow passes at `c4b49e38`, including both
+native builds, reproducibility comparison and installed-consumer qualification.
+Its artifacts retain that source binding; the final candidate still needs its
+own exact-commit distribution pass. Hosted dependency checks now pass Cargo
+advisory/license policy, Python and pnpm audits, and the Go SDK/demo audit.
+
+Scanner integration exposed two stale bindings: Trivy still required WebPKI
+0.103.15, and the official Semgrep registry's mutable ruleset changed. Require
+the actual fixed WebPKI 0.103.17 and pin the freshly retrieved complete 1,074-rule
+snapshot by its exact canonical and effective hashes. Keep the sole exact legal
+notice transform. A 30-second rule timeout on generated models becomes a
+120-second budget; the complete rule runs rather than excluding those models.
+The focused rule check passes without errors, all 24 scanner-policy tests pass,
+and 56 Python lazy-export/API/TLS/deadline regression tests pass.
+
+The lazy type loader now reads its fixed export map instead of indexing module
+globals. The HTTPS constructor audit is an explicitly documented false positive
+for supported Python 3.14 defaults: retain peer/hostname verification, with one
+same-line audit annotation bound by tests to that exact constructor and file.
+The real HTTP-parser tests assert `CERT_REQUIRED` and hostname verification.
+This is not a claimed certificate-verification vulnerability or a broad rule
+exclusion. The full final-candidate scanner receipts remain required.
+
+**Release remains blocked pending the new hosted qualification, final archive
+verification and performance/endurance confirmation.** The completed 24-hour
+run and 89.256271 score qualify their recorded old source/worker bytes; these
+dependency changes require new evidence. Historical benchmark definitions,
+labels, peers, budgets and the 20% token weight remain unchanged.
+
+The CIGAR workspace search found version/bootstrap records, but no independently
+approved command-specific xtask executable manifest or source-bound authority
+digest for this candidate. The existing protected-authority gate remains in
+force. Its required format and approval steps are in the
+[hosted macOS bootstrap contract](../../crates/xtask/README.md#hosted-macos-ci-bootstrap-contract).
+No merge, tag or registry publication is authorized by these local checks.
+
+## Earlier candidate history
+
+Status on 2026-11-08: **unpublished candidate; release blocked**.
+PR [#42](https://github.com/hashgraph-online/hol-cigar/pull/42) remains draft
+and unmerged on `codex/cigar-0.14.2-speed`. Release preparation aligns the core,
+Python and npm package identities to `0.14.2`, with `published: false`, without
+changing the benchmark or granting publication permission.
+
+## Published versions
+
+Live registry reads on 2026-11-08 found:
+
+| Channel | Published state |
+| --- | --- |
+| [GitHub](https://github.com/hashgraph-online/hol-cigar/releases/tag/v0.14.1) | Latest release `v0.14.1` |
+| [PyPI](https://pypi.org/pypi/hol-cigar/json) | Latest `0.14.1`; neither `0.14.2` nor RC2 exists |
+| [npm](https://registry.npmjs.org/%40hol-org%2Fcigar) | `latest` is `0.14.0`; neither `0.14.1`, `0.14.2` nor RC2 exists |
+
+A GitHub release does not prove npm publication. The final release must verify
+both registries against the authenticated release bytes and expected dist-tag.
+
+## What the timing claim means
+
+The sealed RC2 hour `20261108-005709-18540c` has 8,640 warm persistent query
+samples: p50 **4.707916989 ms**, p95 **11.442875024 ms**, p99 **20.467208 ms**,
+maximum **36.903667 ms**. Initial owner startup was **764.02 ms**, separately
+recorded. Query time excludes local model generation.
+
+The fresh cold per-query SDK profile `20261108-063531-f48ef7` instead recorded
+26.7674 ms p50 / 134.893 ms p95 at the primary 2,048-token budget. These profiles
+have different process lifetimes. Never replace the cold measurements with the
+warm percentiles or advertise 4–11 ms as a universal end-to-end range.
+
+The retained RC2 worker SHA-256 is
+`4a8e4c2b0ea70d151a609b3c1ffe7645865b1ec030b2deabc242d0ead8e318f6`.
+Its latest swarm result SHA-256 is
+`84988a91fce0e1747b335dd776ff95f9900b41a3dd55435153e0b9a29f0e3694`.
+The matched aggregate is **89.2849349274**, with Safe Workflow Completion
+**100%** and token efficiency weighted at **20%**. NetworkX and rustworkx score
+78.0622 and 77.1235 in that same isolated comparison.
+
+Earlier shared-model/prompt-v1 and newer isolated-model/prompt-v6 composite
+scores are different cohorts. Compare engine revisions only under one frozen
+workload, prompt, reader, adapters, model, hardware/load, budgets and scoring
+policy. Preserve both historic profiles and their artifacts.
+
+## Gates and next actions
+
+| Gate | Evidence / required action |
+| --- | --- |
+| Stable source identity | Preparation aligns the core manifest, root Cargo lock, Python manifest/lock/runtime metadata, Node manifest/runtime metadata, worker fixtures and release contract to `0.14.2`. Run `python3 -B scripts/release/check_context_version.py --expected 0.14.2`. |
+| Package tooling failures | Initial distribution build failed in SDK generator RC validation; stable release tests also rejected the RC identity. Preparation uses the already supported stable identity, fixes the two Ruff formatting errors, normalizes the Honey test's Python version comparison and repairs the policy fixture's missing Python lock. Its negative check still rejects lock version drift. Re-run exact CI at the new commit. |
+| Native workers | At candidate `39ed8532258d7a1599f7aacdb96473e3bdd09273`, all 14 native jobs (seven platforms, two builders), both SDK builders and the independent archive comparison passed in [run 42538974640](https://github.com/hashgraph-online/hol-cigar/actions/runs/42538974640). Exact-head installed/offline qualification remains required. |
+| Final archive qualification | Require successful `context-sdk-release` branch CI on the exact candidate head, including the 14 installed runtime/platform combinations; no skipped qualification counts as a pass. The local current macOS ARM64 wheel/sdist/npm installation and network-denied qualification passed 172 cases / 516 SDK comparisons with equal rendered outputs, full workflows and the five-agent shared-view example. This diagnostic one-platform evidence is not release eligibility. |
+| Python coverage | Candidate `fa9c619a` passed 539 functional tests in hosted packaging but `context.py` statement coverage was 93.0851%, below the unchanged 95% floor. Tests now exercise lazy runtime exports/type identities and the real stalled worker through the portable transport. Local source validation passes 541 tests plus 39 subtests, and the unchanged coverage gate passes with 95.2128% statements / 95.4545% branches for `context.py`. Both hosted Linux SDK builders also passed this gate at `39ed8532`. |
+| Windows test classification | Candidate `39ed8532` passed 527 Windows wheel tests plus 39 subtests, but qualification rejected 14 existing POSIX-only skips. The gate now binds the exact module, parametrized name and reason for those 13 POSIX-poll cases and one POSIX-fork case. Unexpected or duplicated skips remain fatal; both portable deadline/blocked-write tests must execute and pass exactly once. macOS/Linux still permit zero skipped tests. Regression tests use the retained Windows JUnit observations and reject missing portable execution, changed reasons/modules, duplicate cases and unknown skips. Re-run the complete matrix at the corrected head. |
+| Legacy lifecycle fixture | A hosted source-test run exposed an EOF race in the kill/wait failure fixture: the real worker could exit while those calls were mocked to fail, making completed cleanup correct. The fixture now also holds `poll()` at an unreaped state during injected failures, then restores the real process and requires a successful retry. This preserves the incomplete-cleanup assertion and changes no runtime behavior. All six lifecycle cases and a bounded repeated failure-injection check pass locally. |
+| Trusted xtask bootstrap | `fast-ci` source quality and security coverage fail because no protected command-specific tool authority is configured. The operator must provide independently reviewed executable and authority digests as documented in [xtask's bootstrap contract](../../crates/xtask/README.md#hosted-macos-ci-bootstrap-contract). Do not self-approve generated digests, remove the guard or mark diagnostic receipts as release evidence. |
+| Repository dependency security | Initial live Dependabot read found 36 open alerts, including four critical Wasmtime alerts. The root Cargo deny job also flags Rustls/WebPKI, parser and compression dependencies; Go audit flags the pinned Go standard library and `x/net`. Update and qualify affected dependency/tool chains; do not suppress advisories or claim a green repository audit from SDK-only evidence. |
+| SDK pnpm auditor | CI's pinned pnpm 11 auditor distribution digest does not match the hydrated tool. Independently verify official distribution provenance and the full inventory before changing a trusted digest. The original failure remains a blocker. |
+| Final performance confirmation | Run the unchanged isolated benchmark against a descriptor bound to the final candidate archives. Retain the RC2 result and all peers. The RC2 result alone cannot certify the final-version package timing. |
+| Publication and support | Keep PR draft/unmerged. After the above gates pass, review the exact candidate commit, hashes, SBOMs, provenance and notes before any separately authorized merge, `v0.14.2` tag or publication. Read back GitHub, PyPI and npm bytes and npm's `latest` tag. |
+
+The recorded macOS RC2 native dependency inventory contains 59 packages and
+excludes Wasmtime, Rustls, WebPKI, zstd and pulldown-cmark. This narrows the known
+alert exposure for that artifact only; it does not close repository alerts,
+audit other platforms or substitute for scanning final release dependencies.
+
+At candidate `fa9c619ae32273064cf31917e2493081514b64f1`, clean packaged macOS
+native validation passed 154 tests; installed Python passed 539 tests plus 39
+subtests and installed Node passed 168 tests with zero skips. The 172-case RC2
+comparison preserved 111 exports and verified all 155 successful snapshot/delta
+pairs in both directions. A 61-query OSV lookup of the recorded macOS native
+inventory and qualified Python/npm runtime dependencies found no listed
+advisories. This does not resolve the separate repository security failures.
+The added coverage tests change no shipping runtime code or benchmark inputs.
+
+## Reproduction and evidence
+
+Use Rust/Cargo `1.92.0`, Node `24.22.1`, the committed pnpm `10.34.5` toolchain,
+Python 3.14 and the checked Python tooling lock. SDK CI commands are in
+`context-distribution.yml`; production publication remains restricted to the
+exact stable tag and its signed source digest.
+
+For the clean committed macOS ARM64 candidate, the existing builder writes
+create-new native, package, test and dependency evidence:
+
+```sh
+python3 -B scripts/release/build_context_worker.py \
+  --platform darwin-arm64 \
+  --cargo /absolute/path/to/rust-1.92.0/bin/cargo \
+  --output /absolute/new/evidence/native \
+  --target-dir /absolute/new/evidence/target
+```
+
+Local checks and one platform remain development evidence. The hosted matrix,
+independent-build comparison, dependency gates, installed/offline consumers and
+signed provenance are mandatory before a release claim.
+
+An exploratory discovery of all release-tool tests ran 495 tests and failed
+(5 failures, 57 errors, 31 skips). It mixed historical Honey publication and
+reviewed-inventory contracts with the local SDK track and initially lacked the
+required Cargo/Go/OpenSSL environment. Its full failure log is retained; no
+repository-wide test pass is claimed. Local SDK source checks and their
+corrected policy fixture are recorded independently and do not waive those gaps.
+
+The local working evidence directory for this pass is
+`../releases/cigar-0.14.2-readiness-20261108/` relative to this checkout. It retains
+the initial GitHub failures, live registry readback, source checks and new build
+results separately from all existing benchmark evidence. Do not check in package
+binaries or replace sealed benchmark results with this release work.

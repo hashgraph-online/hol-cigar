@@ -118,6 +118,59 @@ def assert_upload_digests(document: str) -> None:
 
 
 class MacosCiWorkflowPolicyTests(unittest.TestCase):
+    def test_guarded_ci_lanes_collect_then_require_independent_route_approval(
+        self,
+    ) -> None:
+        fast = workflow(WORKFLOWS / "fast-ci.yml")
+        security = workflow(SECURITY)
+        sections = (
+            (
+                job_section(fast, "source-quality", "python-package"),
+                "source-quality",
+                "SOURCE_QUALITY",
+                (
+                    "format-check",
+                    "generate-check",
+                    "test-vectors",
+                    "lint",
+                    "docs-check",
+                ),
+            ),
+            (
+                job_section(security, "dependency-policy", "static-security"),
+                "dependency-policy",
+                "DEPENDENCY_POLICY",
+                ("lint",),
+            ),
+            (
+                job_section(security, "coverage", "nightly-production-sanitizers"),
+                "coverage",
+                "COVERAGE",
+                ("test-coverage-verify",),
+            ),
+        )
+        for section, lane, variable, routes in sections:
+            with self.subTest(lane=lane):
+                self.assertIn("uses: ./.github/actions/setup-xtask-authority", section)
+                self.assertIn(
+                    "uses: ./.github/actions/collect-xtask-authority", section
+                )
+                self.assertIn(f"vars.CIGAR_CI_{variable}_APPROVAL", section)
+                self.assertLess(
+                    section.index("uses: ./.github/actions/collect-xtask-authority"),
+                    section.index("ci_tool_authority.py run"),
+                )
+                for route in routes:
+                    self.assertIn(f"--command-id {route} --evidence-dir", section)
+                self.assertNotRegex(section, r"cargo xtask[^\n]*--evidence-dir")
+                self.assertNotIn("CIGAR_XTASK_TOOL_INPUTS_SHA256=", section)
+        self.assertIn("--package-import-method=copy", sections[0][0])
+        collect = workflow(ROOT / ".github/actions/collect-xtask-authority/action.yml")
+        assert_immutable_actions(collect)
+        self.assertIn("if-no-files-found: error", collect)
+        self.assertIn("outputs.artifact-digest", collect)
+        self.assertNotIn("ci_tool_authority.py run", collect)
+
     def test_typescript_production_audit_uses_isolated_pnpm11_on_native_macos(
         self,
     ) -> None:

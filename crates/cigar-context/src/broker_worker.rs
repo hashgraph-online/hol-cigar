@@ -216,7 +216,7 @@ impl Runtime {
             "capabilities": ["broker_scopes.v1", "source_cas.v1", "proposal_admission.v1",
                 "provenance_freshness.v1", "exact_answer_review.v1", "fair_admission.v1",
                 "mutual_grant_proof.v1", "execution_handoff.v1", "selection_explanation.v1", "document_boundaries.v1",
-                "source_batches.v1"],
+                "source_batches.v1", "consume_ticket.v1"],
             "transport_limits": transport,
             "storage": {"mode": if persistence.active() { "sqlite-checkpoint.v1" } else { "memory" },
                 "restored": restored},
@@ -644,6 +644,10 @@ fn execute_agent(
         }
         AgentCommand::Revalidate { ticket } => {
             broker.revalidate(credential, &ticket, tokenizer)?;
+            Ok(Value::Null)
+        }
+        AgentCommand::ConsumeTicket { ticket } => {
+            broker.consume_ticket(credential, &ticket, tokenizer)?;
             Ok(Value::Null)
         }
         AgentCommand::Explain { ticket } => {

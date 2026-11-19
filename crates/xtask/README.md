@@ -163,9 +163,22 @@ release evidence.
 
 ### Hosted macOS CI bootstrap contract
 
-The current `fast-ci.yml` and `security.yml` route invocations do not manufacture or approve tool
-authority. They therefore fail closed before delegated execution until the release operator adds a
-trusted bootstrap step. That step must run separately for each command ID and must:
+The guarded `fast-ci.yml` source-quality and `security.yml` dependency-policy/coverage jobs use
+`tools/quality/ci_tool_authority.py`. The shared setup action creates eight private cache roots
+outside the checkout and hydrates the pinned Rust toolchain there. Existing locked hydration steps
+populate these roots before collection. The generation route explicitly includes Node because
+`protoc-gen-es` is a JavaScript executable; pnpm copies package files so the generator is not an
+unreviewable hardlink into a shared store. Setup also stages byte-identical Rustup launchers as
+private, canonical, single-link native Mach-O files named `cargo`, `rustc`, `cargo-fmt` and the other
+Rust tools. When Homebrew supplies environment scripts in `bin`, setup selects the actual native
+`libexec/bin/rustup` sibling; copying a wrapper script would preserve its hardcoded `rustup` dispatch.
+Unknown script layouts are rejected. The source-quality lane also stages a byte-identical private
+native Python executable because framework-package installation paths may be group-writable; no
+global permissions, Python version or prefix override is changed. Its transitive framework/stdlib
+files remain outside this top-level executable attestation. This preserves multicall dispatch and `+nightly` selection without relaxing the existing
+no-alias/no-hardlink execution contract. Staging is unapproved observation: the exact staged paths
+and bytes still require independent approval. The coverage route includes Rustup because its fixed
+toolchain probe invokes `rustup component list`. Every route's bootstrap must:
 
 1. start from the exact checked-out clean commit and pinned macOS arm64 runner/tool installation;
 2. obtain the route's exact tool names from `route-tools.v1.json`, with no global superset;
@@ -186,9 +199,46 @@ review. Omitting only `CIGAR_XTASK_TOOL_INPUTS_SHA256` is an explicit developmen
 never satisfy this bootstrap contract. Omitting `CIGAR_XTASK_TOOL_INPUTS`, using an authority for a
 different route, or supplying a stale/wrong digest always blocks execution.
 
-The remaining live-proof prerequisite is one clean committed checkout plus that externally
-approved route authority. The shared integration checkout is intentionally unsuitable while it has
-concurrent edits: source snapshotting must reject it instead of issuing a launch receipt.
+Collection publishes `xtask-tool-review-source-quality`, `xtask-tool-review-dependency-policy`
+and `xtask-tool-review-coverage` artifacts. Each contains canonical observed tool manifests,
+source-bound authority proposals and `proposal.json`. Its `approval_status` is always
+`unapproved-observation`; collection exports no execution selector and cannot turn a missing
+approval into a green guarded check. Artifact-service SHA-256 validation identifies the uploaded
+bundle; it does not approve the executables inside it.
+
+An independent operator must review each actual executable path/hash, the exact clean source
+binding, runner image and private environment roots through the independent channel. Only after
+that review may an administrator store the reviewed `approval_candidate` JSON in the corresponding
+repository Actions variable:
+
+| Artifact lane | Independently maintained Actions variable |
+|---|---|
+| `source-quality` | `CIGAR_CI_SOURCE_QUALITY_APPROVAL` |
+| `dependency-policy` | `CIGAR_CI_DEPENDENCY_POLICY_APPROVAL` |
+| `coverage` | `CIGAR_CI_COVERAGE_APPROVAL` |
+
+The JSON schema is `cigar.ci-xtask-approval.v1`, with exactly `schema_version`, `lane`, `source`,
+`runner` and `routes`. Each route contains exactly `reviewed_tools` (the existing reviewed-tools
+schema) and an independently approved `authority_sha256`. Do not copy an observation into a variable
+without that review. Do not commit approvals to the PR, synthesize approved hashes from a local
+observation, create an unprotected environment, or reuse npm/PyPI credentials for this bootstrap.
+The current integration uses administrator-maintained repository variables; it neither creates nor
+claims protected-environment reviewer enforcement. If the project's policy requires that additional
+enforcement, an administrator must provision and approve it separately before qualification.
+
+Rerun the failed jobs on the same exact source and runner/tool bytes. The normal PR merge checkout
+remains the integration target: its source revision may differ from the PR head. Any source,
+runner image, executable byte or cache-root-path change requires a fresh review. The helper checks
+the external approval before drafting the execution authority, independently validates its digest,
+exports both selectors only to one matching child, and reopens the resulting command receipt with
+the fixed system-Python producer runtime. Missing, malformed, stale or cross-lane approvals fail
+before launch. A diagnostic/self-observed receipt is rejected. No secrets are requested or printed.
+
+Successful operator-reviewed command receipts remain unsigned and `release_eligible: false`, as
+specified by the existing contract; this bootstrap does not attest transitive toolchain files or
+network isolation and does not replace package signing, other release checks or performance gates.
+The remaining live-proof prerequisite is independent approval of actual hosted proposals followed
+by passing guarded commands. A checkout with concurrent edits must still fail source snapshotting.
 
 ## External benchmark, package, and release inputs
 

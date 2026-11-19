@@ -99,8 +99,11 @@ class _HTTPSHandler(urllib.request.HTTPSHandler):
 
         def connection(host: str, **kwargs: Any) -> http.client.HTTPSConnection:
             kwargs["timeout"] = _remaining(deadline)
-            # HTTPSConnection's default context verifies certificates and hostnames.
-            conn = http.client.HTTPSConnection(host, **kwargs)
+            # Safety: supported Python 3.14 verifies certificates and hostnames
+            # by default; real HTTP-parser tests assert both TLS verification flags.
+            # fmt: off
+            conn = http.client.HTTPSConnection(host, **kwargs)  # noqa: E501, RUF100 # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
+            # fmt: on
             conn.response_class = _response_class(deadline)
             return conn
 

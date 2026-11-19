@@ -27,6 +27,7 @@ import zipfile
 import context_native_sources
 import context_platforms
 import context_sdk_inputs
+from check_context_version import local_version
 from release_lib import (
     ReleaseError,
     canonical_json_bytes,
@@ -47,6 +48,13 @@ MAX_TOTAL = 512 * 1024 * 1024
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ReleaseError(message)
+
+
+def npm_publication_tag(version: str, channel: str) -> str:
+    """An RC must be an RC in both identity and package, never a latest-tag alias."""
+    _, expected = local_version(version)
+    require(channel == expected, "release channel differs from version")
+    return {"stable": "latest", "alpha": "alpha", "rc": "rc"}[expected]
 
 
 def file_record(path: Path) -> dict:
@@ -311,7 +319,7 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
         == {
             "access": "public",
             "registry": "https://registry.npmjs.org/",
-            "tag": "alpha" if IDENTITY["channel"] == "alpha" else "latest",
+            "tag": npm_publication_tag(VERSION, IDENTITY["channel"]),
         },
         "npm publication target mismatch",
     )

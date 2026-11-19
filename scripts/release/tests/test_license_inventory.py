@@ -45,6 +45,44 @@ def external_locked_cargo_purls(root: Path) -> set[str]:
     }
 
 
+class PythonLicenseMetadataTests(unittest.TestCase):
+    def test_legacy_license_names_normalize_but_unknown_names_require_review(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            site = root / "sdk/python/.venv/lib/python3.14/site-packages"
+            for name, declared, expected in (
+                ("sortedcontainers", "Apache 2.0", "Apache-2.0"),
+                ("protobuf", "3-Clause BSD License", "BSD-3-Clause"),
+                (
+                    "unknown",
+                    "Apache-like private license",
+                    "Apache-like private license",
+                ),
+            ):
+                directory = site / f"{name}-1.0.dist-info"
+                directory.mkdir(parents=True)
+                (directory / "METADATA").write_text(
+                    f"Name: {name}\nVersion: 1.0\nLicense: {declared}\n",
+                    encoding="utf-8",
+                )
+                expression, _notices = license_inventory._python_metadata(root)[
+                    (name, "1.0")
+                ]
+                self.assertEqual(expression, expected)
+                self.assertEqual(
+                    license_inventory._status(
+                        expression, {"Apache-2.0", "BSD-3-Clause"}, set()
+                    ),
+                    "review-required" if name == "unknown" else "accepted-by-policy",
+                )
+            self.assertEqual(
+                license_inventory._status("NOASSERTION", {"Apache-2.0"}, set()),
+                "review-required",
+            )
+
+
 class CargoLicenseClosureTests(unittest.TestCase):
     def test_cargo_metadata_uses_all_features_and_rejects_partial_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -44,7 +44,7 @@ rustls = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = { workspace = true, optional = true }
-tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt", "signal", "sync", "time"] }
+tokio = { version = "=1.53.3", default-features = false, features = ["macros", "rt", "signal", "sync", "time"] }
 toml.workspace = true
 
 [dev-dependencies]

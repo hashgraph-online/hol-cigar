@@ -73,6 +73,17 @@ class SourceBindingTests(unittest.TestCase):
             inputs.capture(self.root)
         self.assertFalse(inputs.capture(self.root, allow_dirty=True)["clean"])
 
+    def test_embedded_vocabulary_mutation_invalidates_the_source_binding(self):
+        path = self.root / "crates/cigar-context/src/tokenizer/o200k_base.tiktoken"
+        path.parent.mkdir(parents=True)
+        path.write_text("YQ== 0\n")
+        self.names += b"crates/cigar-context/src/tokenizer/o200k_base.tiktoken\0"
+        first = inputs.capture(self.root)
+        self.assertIn(str(path.relative_to(self.root)), first["files"])
+        path.write_text("Yg== 0\n")
+        with self.assertRaisesRegex(ReleaseError, "source changed"):
+            inputs.require_unchanged(self.root, first)
+
     def test_missing_tracked_input_fails(self):
         self.names = b""
         with self.assertRaisesRegex(ReleaseError, "missing a tracked"):

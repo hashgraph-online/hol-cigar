@@ -4,29 +4,27 @@ Local context graphs, exact token budgets, source citations and reviewed answers
 Python applications. **No HOL service, account, API key, daemon or database is required.**
 CIGAR owns a Rust graph in a persistent local worker process.
 
-Version 0.14.0 contains a broker for independent agent processes. See the
-packaged [broker guide](BROKER_GUIDE.md) for host/client authority, provenance,
-reviews and failure semantics. Installed package tests have passed across seven
-native targets. The [24-hour installed soak](../../docs/release/context-sdk-0.14.0-soak.md)
-and independent replay passed on macOS ARM64 with twelve Python/Node clients.
-Node client RSS kept growing within the cap. HUMIDOR adoption and broader
-Hiero/task evidence remain pending.
+The broker supports independent agent processes. See the
+[broker guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/sdk/LOCAL_BROKER_GUIDE.md)
+for host/client authority, provenance, reviews and failure semantics.
 Qualification applies to the exact artifacts named in the signed release receipts.
 
-## 0.14.1 security candidate
+## 0.14.2 local Context SDK
 
-The next patch release adds aggregate compilation limits and Python HTTP deadlines,
-and requires Node.js `>=24.22.1 <25`. See the [0.14.1 release notes](../../docs/release/context-sdk-0.14.1-notes.md).
-It is prepared for review and is not yet published. Historical qualification below
-applies to the named 0.14.0 artifacts. Upgrade and restart Node consumers now.
+This patch reduces exact-token initialization and Python worker transport overhead
+and adds atomic, owner-bound single-use ticket consumption. It preserves existing
+SDK operations, exact budgets, citations, authorization, freshness checks, work
+limits, persistence and context ABI/protocol v1. Python HTTP deadlines and the
+patched Node runtime floor from 0.14.1 remain in place. See the
+[0.14.2 release notes](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/docs/release/context-sdk-0.14.2-notes.md).
 
 ## Install and check
 
-Version 0.14.0 targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
+Version 0.14.2 targets Python `>=3.14 <3.15`. The distribution is `hol-cigar`;
 the Python import is `cigar_sdk`. The corresponding npm package is `@hol-org/cigar`.
 
 ```sh
-python3.14 -m pip install --upgrade 'hol-cigar==0.14.0'
+python3.14 -m pip install --upgrade 'hol-cigar==0.14.2'
 python3.14 -m cigar_sdk.local_cli doctor
 python3.14 -m cigar_sdk.local_cli demo
 python3.14 -m cigar_sdk.examples.shared_views
@@ -35,11 +33,17 @@ python3.14 -m cigar_sdk.examples.shared_views
 Pip selects the matching wheel for your supported platform. Seven native targets
 are included. Each native wheel bundles its worker; no Rust compiler or separate
 worker installation is required. Exact archive hashes and qualification receipts
-accompany the [GitHub release](https://github.com/hashgraph-online/hol-cigar/releases/tag/v0.14.0).
-See the bundled [changelog](CHANGELOG.md) for migration details. The supported
+accompany the [GitHub release](https://github.com/hashgraph-online/hol-cigar/releases/tag/v0.14.2).
+See the [changelog](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/sdk/python/CHANGELOG.md)
+for migration details. The supported
 protobuf requirement is `>=6.33.5,<8`, qualified at minimum/current versions.
 The environment also gets a `cigar-context` command. `doctor` verifies a real local
 compile; `demo` runs the complete workflow. Add `--json` for machine-readable results.
+
+The [historical 0.14.0 24-hour soak](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/docs/release/context-sdk-0.14.0-soak.md)
+and its independent replay apply to those named macOS ARM64 artifacts, not a new
+24-hour qualification of 0.14.2. Node client RSS grew within its cap. HUMIDOR
+adoption and broader Hiero/task evidence remain pending.
 
 ## Five agents sharing one graph in one host
 
@@ -181,7 +185,7 @@ Building a wheel from the portable source distribution without native staging
 requires explicit `CIGAR_ALLOW_PORTABLE_WHEEL=1`. This also applies to intentional
 `pip install --no-binary hol-cigar` source installs. These builds retain all SDK APIs,
 but local graphs require an **explicit trusted absolute** `worker_path`. Build it from the matching
-0.14.1 Rust source using Rust 1.92+:
+0.14.2 Rust source using Rust 1.92+:
 
 ```sh
 cargo build --locked --release -p cigar-context --features bpe,broker-persistence --bin cigar-context-worker
@@ -226,7 +230,7 @@ An explicitly supplied matching worker can be checked with
 
 The installed `cigar_sdk` package includes `AGENT_GUIDE.md`, `BROKER_GUIDE.md`,
 `SELECTION_EXPLANATIONS.md`, `SYNTAX_INGESTION.md` and `llms.txt`. The
-[agent integration guide](AGENT_GUIDE.md)
+[agent integration guide](https://github.com/hashgraph-online/hol-cigar/blob/v0.14.2/sdk/LOCAL_CONTEXT_GUIDE.md)
 explains explicit file ingestion, graph relationships, authorization and reviewed answers.
 
 ## Compatible remote client

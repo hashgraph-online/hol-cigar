@@ -1,6 +1,6 @@
 {
   "name": "@hol-org/cigar",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Local context graphs, exact token budgets, citations and answer review. No HOL service required.",
   "license": "Apache-2.0",
   "repository": {

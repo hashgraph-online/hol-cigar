@@ -149,16 +149,16 @@ class PnpmAuditPolicyTests(unittest.TestCase):
             {
                 "architecture": "arm64",
                 "node": {
-                    "bytes": 117561248,
+                    "bytes": 122545856,
                     "code_signing": {
-                        "candidate_cdhash_full_sha256": "e89ac81c24e645fa48a2c4ca49c10c58b9db488e4cd8229ee77d866b84882275",
+                        "candidate_cdhash_full_sha256": "7175c5b3761a2d5fbc7abac882c05f83c0f03f323c81dc1ebbbc2bf6958c4099",
                         "format": "Mach-O thin (arm64)",
                         "identifier": "node",
                         "leaf_authority": "Developer ID Application: Node.js Foundation (HX7739G8FX)",
                         "team_identifier": "HX7739G8FX",
                     },
-                    "sha256": "9e759d34d97af8a71b75854d20af297794611155406997f06d796b5e0f6d573b",
-                    "version": "24.10.0",
+                    "sha256": "6f32069480ec14d52b6d7b1f3c7124cfbbc46203abf5ddf5c65b127435f3f329",
+                    "version": "24.22.1",
                 },
                 "operating_system": "Darwin",
             },
@@ -319,7 +319,7 @@ class PnpmAuditPolicyTests(unittest.TestCase):
             }
             corepack = {
                 "locator": {"name": "pnpm", "reference": "11.13.0"},
-                "bin": {"pnpm": "./bin/pnpm.cjs", "pnpx": "./bin/pnpx.cjs"},
+                "bin": {"pnpm": "./bin/pnpm.mjs", "pnpx": "./bin/pnpx.mjs"},
                 "hash": policy["auditor"]["corepack_hash"],
             }
             (root / "package.json").write_bytes(

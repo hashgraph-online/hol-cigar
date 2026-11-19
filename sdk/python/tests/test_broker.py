@@ -56,6 +56,30 @@ def ingest(broker, source, node, text):
     )
 
 
+def test_consume_ticket_is_atomic_single_use_and_owner_bound(broker):
+    assert "consume_ticket.v1" in broker.capabilities()["capabilities"]
+    ingest(broker, "docs", "fact", "Current evidence.")
+    client = LocalContextClient(grant(broker, "consumer", ["docs"]))
+    other = LocalContextClient(grant(broker, "other", ["docs"]))
+    ticket = client.compile({"required": ["fact"]})["ticket"]
+    with pytest.raises(LocalBrokerError, match="AccessDenied"):
+        other.consume_ticket(ticket)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        def consume():
+            try:
+                client.consume_ticket(ticket)
+                return "consumed"
+            except LocalBrokerError as error:
+                return error.code
+        outcomes = list(pool.map(lambda _: consume(), range(2)))
+    assert outcomes.count("consumed") == 1 and outcomes.count("AccessDenied") == 1
+    stale = client.compile({"required": ["fact"]})["ticket"]
+    ingest(broker, "docs", "fact", "Changed current evidence.")
+    with pytest.raises(LocalBrokerError, match="Stale"):
+        client.consume_ticket(stale)
+    client.forget_ticket(stale)
+
+
 def execution_fixture(broker):
     ingest(broker, "docs", "fact", "Retry at most three times.")
     client = LocalContextClient(grant(broker, "execution-agent", ["docs"]))
@@ -412,14 +436,7 @@ def test_host_malformed_reply_closes_worker_without_echo(broker, corruption):
         wire = wire[:-1] + b',"id":2}'
     elif corruption == "nonfinite":
         wire = wire.replace(b'"result": null', b'"result": NaN')
-    original = broker._jobs.put_nowait
-
-    def receive(job):
-        if job is None:
-            return original(job)
-        job[1].put_nowait(wire + b"\n")
-
-    with patch.object(broker._jobs, "put_nowait", side_effect=receive):
+    with patch.object(broker, "_exchange", return_value=wire + b"\n"):
         with pytest.raises(LocalBrokerError) as caught:
             broker.source_revision("PRIVATE_PATH")
     assert caught.value.code == "Transport" and caught.value.dispatched is None

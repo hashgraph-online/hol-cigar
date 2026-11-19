@@ -17,6 +17,24 @@ const code = (expected: string) => (error: unknown): boolean => error instanceof
 const ingest = async (broker: LocalContextBroker, source: string, id: string, text: string) =>
   broker.replaceSource(source, await broker.sourceRevision(source), [{id, source, text}], provenance());
 
+test("ticket consumption is owner-bound, single-use and rejects stale context",async()=>{
+  await using broker = await LocalContextBroker.create("node-consume-ticket",options());
+  assert.ok(broker.capabilities().capabilities.includes("consume_ticket.v1"));
+  await ingest(broker,"docs","fact","Current evidence.");
+  const client = new LocalContextClient(await broker.grant({id:"consumer",allowed_sources:["docs"],policy_revision:"one"}));
+  const other = new LocalContextClient(await broker.grant({id:"other",allowed_sources:["docs"],policy_revision:"one"}));
+  const {ticket} = await client.compile({required:["fact"]});
+  await assert.rejects(other.consumeTicket(ticket),code("AccessDenied"));
+  const results = await Promise.allSettled([client.consumeTicket(ticket),client.consumeTicket(ticket)]);
+  assert.equal(results.filter(value=>value.status==="fulfilled").length,1);
+  const rejected = results.find(value=>value.status==="rejected");
+  assert.ok(rejected?.status==="rejected" && code("AccessDenied")(rejected.reason));
+  const stale = await client.compile({required:["fact"]});
+  await ingest(broker,"docs","fact","Changed evidence.");
+  await assert.rejects(client.consumeTicket(stale.ticket),code("Stale"));
+  await client.forgetTicket(stale.ticket);
+});
+
 async function executionFixture(broker: LocalContextBroker) {
   await ingest(broker,"docs","fact","Retry at most three times.");
   const client = new LocalContextClient(await broker.grant({id:"execution-agent",allowed_sources:["docs"],policy_revision:"one"}));

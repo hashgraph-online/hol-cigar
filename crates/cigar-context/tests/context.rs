@@ -64,6 +64,60 @@ fn graph_recovers_transitive_evidence_and_counterclaims() -> Result<(), Box<dyn 
 }
 
 #[test]
+fn verified_render_retains_exact_text_and_counts_once() -> Result<(), Box<dyn Error>> {
+    struct CountingCounter(std::cell::Cell<usize>);
+    impl cigar_context::TokenCounter for CountingCounter {
+        fn identity(&self) -> &str {
+            "cigar.utf8-bytes.v1"
+        }
+
+        fn count(&self, text: &str) -> Result<usize, ContextError> {
+            self.0.set(self.0.get() + 1);
+            Ok(text.len())
+        }
+    }
+
+    let mut graph = graph()?;
+    graph.upsert(Document::new(
+        "source",
+        "quoted/café.md",
+        "Authorized café 🦀 evidence.\nA \"quoted\" counterclaim stays visible.",
+    ))?;
+    let snapshot = graph.compile(&request("evidence"), &Utf8ByteCounter)?;
+    let counter = CountingCounter(std::cell::Cell::new(0));
+    assert_eq!(snapshot.render_verified(&counter)?, snapshot.render());
+    assert_eq!(counter.0.get(), 1);
+    snapshot.verify(&counter)?;
+    assert_eq!(counter.0.get(), 2);
+    Ok(())
+}
+
+#[test]
+fn verified_render_rejects_tampering_with_the_same_errors() -> Result<(), Box<dyn Error>> {
+    let mut graph = graph()?;
+    graph.upsert(Document::new("source", "source.md", "Authorized evidence."))?;
+    let snapshot = graph.compile(&request("evidence"), &Utf8ByteCounter)?;
+    let original = serde_json::to_value(&snapshot)?;
+    for field in ["id", "domain", "tokenizer", "rendered_tokens", "block_text"] {
+        let mut changed = original.clone();
+        let (pointer, replacement) = match field {
+            "id" => ("/id", "0".repeat(64).into()),
+            "domain" => ("/domain", "".into()),
+            "tokenizer" => ("/tokenizer", "different-tokenizer".into()),
+            "rendered_tokens" => ("/stats/rendered_tokens", 0.into()),
+            "block_text" => ("/blocks/0/text", "replaced unauthorized text".into()),
+            _ => return Err("unrecognized test mutation".into()),
+        };
+        *changed.pointer_mut(pointer).ok_or("missing test field")? = replacement;
+        let invalid: ContextSnapshot = serde_json::from_value(changed)?;
+        let expected = invalid.verify(&Utf8ByteCounter).err();
+        assert!(expected.is_some());
+        assert_eq!(invalid.render_verified(&Utf8ByteCounter).err(), expected);
+    }
+    Ok(())
+}
+
+#[test]
 fn access_is_checked_on_every_graph_hop() -> Result<(), Box<dyn Error>> {
     let mut graph = graph()?;
     graph.upsert(Document::new("public", "public.md", "retry"))?;

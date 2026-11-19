@@ -159,6 +159,23 @@ impl ContextSnapshot {
 
     /// Recomputes integrity, bounds, and exact final token count after loading or receiving data.
     pub fn verify(&self, tokenizer: &impl TokenCounter) -> Result<(), ContextError> {
+        let sources = self.verify_structure(tokenizer)?;
+        let tokens = tokenizer.count(&self.render())?;
+        self.verify_commitment_and_stats(tokens, sources)
+    }
+
+    /// Verifies the complete snapshot and returns its canonical rendered evidence.
+    /// Performs the same checks as [`Self::verify`] while rendering only once.
+    /// No text is returned when integrity, tokenizer or budget validation fails.
+    pub fn render_verified(&self, tokenizer: &impl TokenCounter) -> Result<String, ContextError> {
+        let sources = self.verify_structure(tokenizer)?;
+        let rendered = self.render();
+        let tokens = tokenizer.count(&rendered)?;
+        self.verify_commitment_and_stats(tokens, sources)?;
+        Ok(rendered)
+    }
+
+    fn verify_structure(&self, tokenizer: &impl TokenCounter) -> Result<usize, ContextError> {
         if self.domain.is_empty()
             || self.domain.len() > 256
             || self.policy_revision.is_empty()
@@ -184,10 +201,17 @@ impl ContextSnapshot {
             .iter()
             .flat_map(|b| b.citations.iter().map(|c| &c.node_id))
             .collect::<BTreeSet<_>>();
-        let tokens = tokenizer.count(&self.render())?;
+        Ok(sources.len())
+    }
+
+    fn verify_commitment_and_stats(
+        &self,
+        tokens: usize,
+        sources: usize,
+    ) -> Result<(), ContextError> {
         if self.commitment()? != self.id
             || self.stats.selected_blocks != self.blocks.len()
-            || self.stats.selected_sources != sources.len()
+            || self.stats.selected_sources != sources
             || self.stats.rendered_tokens != tokens
             || tokens > self.stats.available_tokens
         {

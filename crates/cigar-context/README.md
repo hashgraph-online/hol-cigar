@@ -1,4 +1,4 @@
-# cigar-context 0.14.1 security candidate
+# cigar-context 0.14.2 release candidate
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
@@ -68,6 +68,14 @@ extends retrieval to synonyms and paraphrases without coupling the library to a 
 database, similarity scale, or paid API. IDs still pass the authorization filter and hard-closure
 checks. Lexical coverage statistics are not semantic confidence scores. Set `evidence_per_term`
 to 2–4 when independent corroboration matters; exact copied text is not counted as a second witness.
+Explicitly listed or conjoined query subjects receive separate source-locator coverage witnesses:
+a word mentioned in another document does not automatically suppress a distinct matching source.
+For example, a rollback-image record does not replace the primary-image record in a request for
+both, while asking only for the rollback image does not request a second primary-image record.
+This remains a lexical relevance hint; it does not establish factual support. Copied text,
+access checks, complete hard closures and
+exact output budgets retain their existing rules. Unrequested source topics are not added merely
+to fill the available budget.
 Graph edges and semantic leads must come from your application's trusted ingestion/retrieval path;
 the library does not discover factual contradictions automatically.
 
@@ -123,6 +131,11 @@ Staging needs additional memory proportional to the replacement source, not a cl
 8 MiB of retained text, plus bounded entry/allocator overhead. Final complete renderings are still
 counted exactly; counts are never estimated or added across blocks. This helps both repeated
 requests and repeated checks within one request. Cold requests still perform BPE work.
+
+Entirely ASCII input uses a small precompiled segmentation table. Unicode input loads the
+complete precompiled Unicode table on first use. Both tables use checked loading before
+search; exact ordinary boundaries, vocabulary, token counts and tokenizer identity are the
+same. These immutable tables retain no caller text and do not widen the cache limits.
 
 `O200kTokenizer::with_cache_limits(TokenCacheLimits { max_entries: 0, max_text_bytes: 0 })`
 disables caching. `cache_stats()` reports hits, misses, entries and retained text bytes;

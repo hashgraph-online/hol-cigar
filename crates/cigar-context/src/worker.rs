@@ -180,8 +180,8 @@ impl Session {
     }
 
     fn rendered(&self, snapshot: ContextSnapshot) -> Result<Value, ContextError> {
-        snapshot.verify(&self.tokenizer)?;
-        Ok(json!({"rendered": snapshot.render(), "snapshot": snapshot}))
+        let rendered = snapshot.render_verified(&self.tokenizer)?;
+        Ok(json!({"rendered": rendered, "snapshot": snapshot}))
     }
 
     fn execute(&mut self, command: Command) -> Result<Value, ContextError> {

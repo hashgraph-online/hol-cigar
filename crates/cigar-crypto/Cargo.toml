@@ -21,10 +21,19 @@ ciborium.workspace = true
 cigar-canon.workspace = true
 ed25519-dalek.workspace = true
 getrandom.workspace = true
-keyring.workspace = true
+keyring-core.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 zeroize.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store.workspace = true
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+secret-service.workspace = true

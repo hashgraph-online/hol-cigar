@@ -33,15 +33,15 @@ cigar-api = { version = "=0.9.4", path = "../../crates/cigar-api" }
 cigar-canon = { version = "=0.9.4", path = "../../crates/cigar-canon" }
 cigar-daemon = { version = "=0.9.4", path = "../../crates/cigar-daemon", optional = true }
 cigar-protocol = { version = "=0.9.4", path = "../../crates/cigar-protocol" }
-futures-core = "=0.3.32"
-futures-util = "=0.3.32"
+futures-core = "=0.3.34"
+futures-util = "=0.3.34"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
-rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
-rustix = { version = "=1.1.4", features = ["fs", "process"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rustix = { version = "=1.1.6", features = ["fs", "process"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 sha2 = "=0.11.0"
-tokio = { version = "=1.52.3", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 zeroize = "=1.9.0"
 
 [dev-dependencies]

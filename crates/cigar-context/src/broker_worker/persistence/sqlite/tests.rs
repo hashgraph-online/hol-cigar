@@ -11,6 +11,18 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 use tempfile::TempDir;
 
+#[test]
+fn bundled_sqlite_includes_database_wal_memory_disclosure_fix() {
+    // RUSTSEC-2026-0459: the bundled engine must contain SQLite's DB/WAL
+    // page-size mismatch fix. Keep this gate in the shipped persistence feature
+    // composition, including platform builds that select a different SQLite VFS.
+    assert!(
+        rusqlite::version_number() >= 3_054_000,
+        "SQLite {} predates the database/WAL memory disclosure fix",
+        rusqlite::version()
+    );
+}
+
 struct TestDirectory {
     _parent: TempDir,
     path: PathBuf,

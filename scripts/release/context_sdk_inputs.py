@@ -53,6 +53,7 @@ EXACT_INPUTS = (
     "scripts/release/context_sdk_release.py",
     "docs/release/context-sdk-0.12.0-notes.md",
     "docs/release/context-sdk-0.14.1-notes.md",
+    "docs/release/context-sdk-0.14.2-notes.md",
     "docs/release/context-sdk-beta-notes.md",
     "scripts/release/release_lib.py",
     "scripts/release/evidence_workspace.py",
@@ -74,6 +75,7 @@ SOURCE_DIRECTORIES = (
     "sdk/typescript",
 )
 SOURCE_SUFFIXES = {
+    ".tiktoken",
     ".rs",
     ".py",
     ".ts",
