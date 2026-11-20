@@ -19,7 +19,8 @@ fn resolve(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 /// The launcher lowers its own file-size limit before it waits on the child. A
 /// coverage-instrumented launcher then writes profile data on exit, exceeds that
-/// limit and is killed, so the limit checks run only in uninstrumented builds.
+/// limit and is killed or leaves a truncated profile that breaks the coverage
+/// report, so the limit checks run only in uninstrumented builds.
 fn coverage_instrumented() -> bool {
     std::env::var_os("LLVM_PROFILE_FILE").is_some()
 }
@@ -125,6 +126,9 @@ fn private_launcher_enforces_file_size_and_open_file_limits()
 
 #[test]
 fn private_launcher_enforces_cpu_time_limit() -> Result<(), Box<dyn std::error::Error>> {
+    if coverage_instrumented() {
+        return Ok(());
+    }
     let launcher = env!("CARGO_BIN_EXE_cigar-dashboard");
     let python = resolve("python3")?.canonicalize()?;
     let started = Instant::now();
