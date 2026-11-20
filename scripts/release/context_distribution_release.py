@@ -406,7 +406,7 @@ def make_sbom(
                 ],
             }
             dependencies.setdefault(root, set()).add(
-                f"pkg:cargo/cigar-context@{distribution.VERSION}"
+                f"pkg:cargo/{distribution.context_native_sources.CONTEXT}@{distribution.VERSION}"
             )
             expected = (
                 set(requirements)
