@@ -138,7 +138,7 @@ def main() -> None:
             "clippy",
             "--locked",
             "-p",
-            "cigar-context",
+            "hol-cigar-context",
             "--all-targets",
             "--features",
             "bpe,broker-persistence",
@@ -154,7 +154,7 @@ def main() -> None:
             "test",
             "--locked",
             "-p",
-            "cigar-context",
+            "hol-cigar-context",
             "--features",
             "bpe,broker-persistence",
             "--",
@@ -168,7 +168,7 @@ def main() -> None:
             "test",
             "--locked",
             "-p",
-            "cigar-context",
+            "hol-cigar-context",
             "--no-default-features",
             "--",
             "--test-threads=1",
@@ -181,14 +181,17 @@ def main() -> None:
             "package",
             "--locked",
             "-p",
-            "cigar-windows-ipc",
+            "hol-cigar-windows-ipc",
             "-p",
-            "cigar-context",
+            "hol-cigar-context",
             *(["--allow-dirty"] if args.allow_dirty else []),
             "--no-verify",
         ],
     )
-    archive = args.target_dir / f"package/cigar-context-{core_version}.crate"
+    archive = (
+        args.target_dir
+        / f"package/{context_native_sources.CONTEXT}-{core_version}.crate"
+    )
     shutil.copy2(archive, artifacts / archive.name)
     # The historical handoff keeps its original archive inventory. The complete
     # distribution pipeline separately ships and verifies both native crates.

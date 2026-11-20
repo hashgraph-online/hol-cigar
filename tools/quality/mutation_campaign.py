@@ -60,7 +60,7 @@ EXPECTED_EXCLUDED_PACKAGES = (
     "cigar-sim",
     "cigar-soak",
     "cigar-testkit",
-    "cigar-windows-ipc",
+    "hol-cigar-windows-ipc",
     "cigarbench-consumer",
     "xtask",
 )

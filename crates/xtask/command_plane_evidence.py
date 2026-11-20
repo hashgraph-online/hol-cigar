@@ -244,7 +244,7 @@ COVERAGE_EXCLUDED_PACKAGES = {
         "out of reports"
     ),
     "cigar-soak": "soak execution is explicitly deferred for this qualification run",
-    "cigar-windows-ipc": "Windows-only implementation is not applicable to native macOS",
+    "hol-cigar-windows-ipc": "Windows-only implementation is not applicable to native macOS",
 }
 # Features that cannot build against this workspace, keyed by package.
 COVERAGE_EXCLUDED_FEATURES = {
@@ -373,7 +373,7 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
             "--exclude",
             "cigar-soak",
             "--exclude",
-            "cigar-windows-ipc",
+            "hol-cigar-windows-ipc",
             "--all-targets",
         ),
         "default_features": True,
@@ -571,10 +571,10 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
     },
     {
         "id": "cigar-context-bpe-broker-persistence",
-        "scope": "cigar-context",
+        "scope": "hol-cigar-context",
         "arguments": (
             "--package",
-            "cigar-context",
+            "hol-cigar-context",
             "--features",
             "bpe,broker-persistence",
             "--all-targets",

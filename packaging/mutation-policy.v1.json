@@ -49,7 +49,7 @@
       "reason": "test fixture support, not shipped production code"
     },
     {
-      "name": "cigar-windows-ipc",
+      "name": "hol-cigar-windows-ipc",
       "reason": "Windows-only implementation is outside the native macOS release cohort"
     },
     {

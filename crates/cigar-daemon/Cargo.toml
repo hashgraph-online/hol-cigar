@@ -52,7 +52,7 @@ zeroize.workspace = true
 sysinfo = "=0.37.2"
 
 [target.'cfg(windows)'.dependencies]
-cigar-windows-ipc = { version = "=0.9.4", path = "../cigar-windows-ipc" }
+hol-cigar-windows-ipc = { version = "=0.9.4", path = "../cigar-windows-ipc" }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }

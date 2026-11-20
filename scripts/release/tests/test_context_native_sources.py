@@ -27,14 +27,14 @@ class NativeSourceTests(unittest.TestCase):
                 "src/lib.rs": b"// native source\n",
             }
         self.contents[sources.CONTEXT]["Cargo.toml"] += (
-            '[target."cfg(windows)".dependencies.cigar-windows-ipc]\n'
+            '[target."cfg(windows)".dependencies.hol-cigar-windows-ipc]\n'
             'version = "=0.9.4"\ndefault-features = false\noptional = true\n'
         ).encode()
         adapter = self.archive(sources.ADAPTER)
         self.lock = (
-            '# Cargo lock fixture\nversion = 4\n\n[[package]]\nname = "cigar-context"\n'
-            'version = "0.14.0"\ndependencies = ["cigar-windows-ipc", "serde"]\n\n'
-            '[[package]]\nname = "cigar-windows-ipc"\nversion = "0.9.4"\n'
+            '# Cargo lock fixture\nversion = 4\n\n[[package]]\nname = "hol-cigar-context"\n'
+            'version = "0.14.0"\ndependencies = ["hol-cigar-windows-ipc", "serde"]\n\n'
+            '[[package]]\nname = "hol-cigar-windows-ipc"\nversion = "0.9.4"\n'
             f'source = "{sources.REGISTRY}"\n'
             f'checksum = "{hashlib.sha256(adapter.read_bytes()).hexdigest()}"\n'
             'dependencies = ["windows-sys"]\n\n'
@@ -75,7 +75,7 @@ class NativeSourceTests(unittest.TestCase):
         )
         self.assertEqual(
             config["patch"]["crates-io"][sources.ADAPTER]["path"],
-            "../cigar-windows-ipc-0.9.4",
+            "../hol-cigar-windows-ipc-0.9.4",
         )
         self.assertEqual(config["profile"]["release"], sources.RELEASE_PROFILE)
         self.assertEqual(receipt["release_profile"], sources.RELEASE_PROFILE)
@@ -83,7 +83,7 @@ class NativeSourceTests(unittest.TestCase):
             sources.prepare(self.root, self.root / "unpacked", self.versions)
 
     def test_missing_companion_fails_before_extraction(self):
-        (self.root / "cigar-windows-ipc-0.9.4.crate").unlink()
+        (self.root / "hol-cigar-windows-ipc-0.9.4.crate").unlink()
         with self.assertRaisesRegex(ReleaseError, "source archive"):
             sources.prepare(self.root, self.root / "unpacked", self.versions)
         self.assertFalse((self.root / "unpacked").exists())
@@ -118,17 +118,17 @@ class NativeSourceTests(unittest.TestCase):
         parsed = tomllib.loads(self.lock.decode())
         checksum = parsed["package"][1]["checksum"]
         for payload in (
-            self.lock.replace(b'"cigar-windows-ipc"', b'"another-package"'),
+            self.lock.replace(b'"hol-cigar-windows-ipc"', b'"another-package"'),
             self.lock.replace(b'"0.9.4"', b'"0.9.5"'),
             self.lock
-            + b'\n[[package]]\nname = "cigar-windows-ipc"\nversion = "0.9.4"\n',
+            + b'\n[[package]]\nname = "hol-cigar-windows-ipc"\nversion = "0.9.4"\n',
         ):
             with self.subTest(payload=payload), self.assertRaises(ReleaseError):
                 sources.local_adapter_lock(payload, "0.9.4", checksum)
 
     def test_archive_paths_and_special_files_are_rejected(self):
         path = self.root / "invalid.crate"
-        prefix = "cigar-windows-ipc-0.9.4"
+        prefix = "hol-cigar-windows-ipc-0.9.4"
         for name, kind in (
             ("../escape", tarfile.REGTYPE),
             (prefix + "/../escape", tarfile.REGTYPE),

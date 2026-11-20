@@ -18,7 +18,7 @@ Publish one crate at a time and wait until crates.io resolves the exact version 
 3. `cigar-canon = 0.9.4`
 4. `cigar-protocol = 0.9.4`
 5. `cigar-testkit = 0.9.4`
-6. `cigar-windows-ipc = 0.9.4`
+6. `hol-cigar-windows-ipc = 0.9.4`
 7. `cigar-crypto = 0.9.4`
 8. `cigar-replay = 0.9.4`
 9. `cigar-policy = 0.9.4`

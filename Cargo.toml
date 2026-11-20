@@ -169,4 +169,4 @@ cigar-rust-s3 = { path = "crates/cigar-rust-s3" }
 cigar-space = { path = "crates/cigar-space" }
 cigar-store = { path = "crates/cigar-store" }
 cigar-testkit = { path = "crates/cigar-testkit" }
-cigar-windows-ipc = { path = "crates/cigar-windows-ipc" }
+hol-cigar-windows-ipc = { path = "crates/cigar-windows-ipc" }

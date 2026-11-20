@@ -40,7 +40,7 @@ edition = "2024"
 [features]
 bpe = ["cigar-context/bpe"]
 [dependencies]
-cigar-context = { path = PATH }
+cigar-context = { package = "hol-cigar-context", path = PATH }
 [[bin]]
 name = "consumer"
 path = SOURCE

@@ -247,7 +247,9 @@ def validate_native(
         "native worker hash mismatch",
     )
     require(
-        file_record(directory / f"source/cigar-context-{VERSION}.crate")["sha256"]
+        file_record(
+            directory / f"source/{context_native_sources.CONTEXT}-{VERSION}.crate"
+        )["sha256"]
         == manifest["source_archive_sha256"],
         "native source archive mismatch",
     )
@@ -477,7 +479,9 @@ def verify_packages(artifacts: Path, workers: dict[str, dict]) -> dict:
             f"hol_cigar-{PYTHON_VERSION}/{name}" in sdist,
             "sdist standalone asset missing",
         )
-    source_hash = closure["archives"][f"cigar-context-{VERSION}.crate"]
+    source_hash = closure["archives"][
+        f"{context_native_sources.CONTEXT}-{VERSION}.crate"
+    ]
     require(
         all(
             row["worker"]["source_archive_sha256"] == source_hash

@@ -1,5 +1,5 @@
 [package]
-name = "cigar-windows-ipc"
+name = "hol-cigar-windows-ipc"
 description = "Audited Windows local IPC and credential ACL adapter for CIGAR"
 version.workspace = true
 edition.workspace = true
@@ -10,6 +10,9 @@ homepage.workspace = true
 authors.workspace = true
 publish = ["crates-io"]
 include = ["src/**", "Cargo.toml", "LICENSE", "NOTICE", "release.json"]
+
+[lib]
+name = "cigar_windows_ipc"
 
 [features]
 default = ["named-pipe"]
