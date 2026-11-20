@@ -34,11 +34,22 @@ impl Budget {
     }
 
     fn reserve(self: &Arc<Self>, bytes: usize) -> Option<Reservation> {
-        self.used
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                used.checked_add(bytes).filter(|total| *total <= self.limit)
-            })
-            .ok()?;
+        // An explicit compare-exchange loop: `fetch_update` is deprecated on
+        // newer toolchains, and its replacement is not available on the Rust
+        // versions this crate supports.
+        let mut used = self.used.load(Ordering::Acquire);
+        loop {
+            let total = used
+                .checked_add(bytes)
+                .filter(|total| *total <= self.limit)?;
+            match self
+                .used
+                .compare_exchange_weak(used, total, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => break,
+                Err(current) => used = current,
+            }
+        }
         Some(Reservation {
             budget: Arc::clone(self),
             bytes,
