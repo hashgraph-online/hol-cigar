@@ -1358,6 +1358,7 @@ def _tracked_worktree_state(
 
 _PERMITTED_GENERATED_ROOTS = frozenset(
     {
+        b"adapters/claude-code/node_modules/",
         b"apps/dashboard/node_modules/",
         b"node_modules/",
         b"sdk/python/.venv/",

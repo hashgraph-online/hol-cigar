@@ -313,7 +313,13 @@ impl EmbeddedFixture {
             .current_dir(&self.project)
             .env_clear()
             .env("LC_ALL", "C")
-            .env("TZ", "UTC")
+            .env("TZ", "UTC");
+        // Coverage builds write profile data on exit; keep it out of the
+        // project tree, which the discovery steps hash.
+        if let Some(profile) = std::env::var_os("LLVM_PROFILE_FILE") {
+            command.env("LLVM_PROFILE_FILE", profile);
+        }
+        command
             .args(arguments)
             .arg("--config")
             .arg(&self.cli_config)

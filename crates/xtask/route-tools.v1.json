@@ -82,7 +82,10 @@
       "cargo",
       "cargo-llvm-cov",
       "cargo-nextest",
+      "go",
+      "node",
       "protoc",
+      "python3",
       "rustc",
       "rustup",
       "sandbox-exec"
