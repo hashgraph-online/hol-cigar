@@ -239,6 +239,10 @@ COVERAGE_REPORT_DIRECTORY_ENV = "CIGAR_COVERAGE_REPORT_DIR"
 COVERAGE_RUST_TOOLCHAIN = "nightly-2026-07-13"
 COVERAGE_EXCLUDED_PACKAGES = {
     "cigar-sim": "placeholder crate with no executable code to instrument",
+    "cigarbench-consumer": (
+        "benchmark harness under benches/, which cargo-llvm-cov always filters "
+        "out of reports"
+    ),
     "cigar-soak": "soak execution is explicitly deferred for this qualification run",
     "cigar-windows-ipc": "Windows-only implementation is not applicable to native macOS",
 }
