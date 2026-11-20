@@ -20,6 +20,7 @@ assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 REAL_OBSERVED_TOOL = MODULE.observed_tool
+NODE_PLUGIN = MODULE.NODE_PLUGIN
 
 
 class CiToolAuthorityTests(unittest.TestCase):
@@ -104,7 +105,9 @@ class CiToolAuthorityTests(unittest.TestCase):
             ),
             mock.patch.object(MODULE, "runner", return_value=self.image),
             mock.patch.object(
-                MODULE, "observed_tool", side_effect=lambda name: self.tools[name]
+                MODULE,
+                "observed_tool",
+                side_effect=lambda name, _root: self.tools[name],
             ),
         ]
         for patch in self.patches:
@@ -303,37 +306,90 @@ class CiToolAuthorityTests(unittest.TestCase):
         self.assertIs(proposal["independent_review_required"], True)
         for selector in MODULE.SELECTORS:
             self.assertNotIn(selector, self.env_file.read_text())
-        for command_id, entry in proposal["approval_candidate"]["routes"].items():
+        candidate = proposal["approval_candidate"]
+        self.assertEqual(
+            candidate["runner"],
+            {"image_os": "macos15", "system": "Darwin", "architecture": "arm64"},
+        )
+        self.assertNotIn("source", candidate)
+        for command_id, entry in candidate["routes"].items():
+            self.assertEqual(set(entry), {"reviewed_tools"})
             path = self.root / "review" / f"{command_id}.observed-authority.json"
             self.assertEqual(
-                hashlib.sha256(path.read_bytes()).hexdigest(), entry["authority_sha256"]
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+                proposal["observed"]["authority_sha256"][command_id],
             )
 
-    def test_generator_uses_sdk_workspace_not_root_decoy(self) -> None:
+    def test_generator_is_staged_outside_the_checkout_with_its_dependencies(
+        self,
+    ) -> None:
         repository = self.base / "repo"
-        selected = (
-            repository
-            / "sdk/typescript/node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
+        store = repository / "node_modules/.pnpm"
+
+        def package(entry: str, name: str, dependencies: dict[str, str]) -> Path:
+            path = store / entry / "node_modules" / name
+            path.mkdir(parents=True, mode=0o700)
+            (path / "package.json").write_text(
+                json.dumps({"name": name, "dependencies": dependencies})
+            )
+            return path
+
+        plugin = package(
+            "@bufbuild+protoc-gen-es@2", NODE_PLUGIN, {"@bufbuild/protoplugin": "2"}
         )
+        helper = package(
+            "@bufbuild+protoplugin@2", "@bufbuild/protoplugin", {"typescript": "5"}
+        )
+        compiler = package("typescript@5", "typescript", {})
+        (helper / "index.js").write_text("module.exports = 1;\n")
+        (compiler / "typescript.js").write_text("module.exports = 2;\n")
+        nested = plugin / "node_modules"
+        nested.mkdir(mode=0o700)
+        (nested / "ignored.txt").write_text("not copied\n")
+        # pnpm links each dependency beside the package that needs it.
+        (plugin.parent / "protoplugin").symlink_to(helper)
+        (helper.parent.parent / "typescript").symlink_to(compiler)
+        entry = plugin / "bin/protoc-gen-es"
+        entry.parent.mkdir(mode=0o700)
+        entry.write_bytes(b"#!/usr/bin/env node\n// actual SDK package fixture\n")
+        entry.chmod(0o500)
+        linked = repository / "sdk/typescript/node_modules/@bufbuild"
+        linked.mkdir(parents=True, mode=0o700)
+        (linked / "protoc-gen-es").symlink_to(plugin)
         decoy = repository / "node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es"
-        for path in (selected, decoy):
-            path.parent.mkdir(parents=True, mode=0o700)
-        selected.write_bytes(b"#!/usr/bin/env node\n// actual SDK package fixture\n")
+        decoy.parent.mkdir(parents=True, mode=0o700)
         decoy.write_bytes(b"#!/usr/bin/env node\n// wrong root fixture\n")
-        selected.chmod(0o500)
         decoy.chmod(0o500)
+
         with mock.patch.object(MODULE, "ROOT", repository):
-            result = REAL_OBSERVED_TOOL("protoc-gen-es")
-        self.assertEqual(result["path"], str(selected))
+            result = REAL_OBSERVED_TOOL("protoc-gen-es", self.root)
+            again = REAL_OBSERVED_TOOL("protoc-gen-es", self.root)
+        staged = self.root / "node-tools/node_modules"
         self.assertEqual(
-            result["sha256"], hashlib.sha256(selected.read_bytes()).hexdigest()
+            result["path"], str((staged / NODE_PLUGIN / "bin/protoc-gen-es").resolve())
         )
-        selected.unlink()
+        self.assertEqual(result, again)
+        self.assertFalse(Path(result["path"]).is_relative_to(repository.resolve()))
+        self.assertEqual(
+            result["sha256"], hashlib.sha256(entry.read_bytes()).hexdigest()
+        )
+        self.assertTrue((staged / "@bufbuild/protoplugin/index.js").is_file())
+        self.assertTrue((staged / "typescript/typescript.js").is_file())
+        self.assertFalse((staged / NODE_PLUGIN / "node_modules").exists())
+
+        (helper.parent.parent / "typescript").unlink()
+        for fresh in ("fresh-root", "other-root"):
+            (self.base / fresh).mkdir(mode=0o700)
         with mock.patch.object(MODULE, "ROOT", repository):
+            with self.assertRaisesRegex(
+                MODULE.authority.ToolAuthorityError, "typescript"
+            ):
+                REAL_OBSERVED_TOOL("protoc-gen-es", self.base / "fresh-root")
+            (linked / "protoc-gen-es").unlink()
             with self.assertRaisesRegex(
                 MODULE.authority.ToolAuthorityError, "protoc-gen-es"
             ):
-                REAL_OBSERVED_TOOL("protoc-gen-es")
+                REAL_OBSERVED_TOOL("protoc-gen-es", self.base / "other-root")
 
     def test_observations_alone_and_missing_approval_never_launch(self) -> None:
         proposal = self.proposal()
@@ -362,21 +418,43 @@ class CiToolAuthorityTests(unittest.TestCase):
         self.assertEqual(execute.call_count, 2)
         first, second = execute.call_args_list
         self.assertEqual(first.args[0][-2:], ["fmt", "--check"])
+        drafted = self.root / "format-check.approved-authority.json"
         self.assertEqual(
             first.kwargs["env"][MODULE.SELECTORS[1]],
-            document["routes"]["format-check"]["authority_sha256"],
+            hashlib.sha256(drafted.read_bytes()).hexdigest(),
         )
+        self.assertEqual(json.loads(drafted.read_bytes())["source"], self.source)
         self.assertNotIn("CIGAR_CI_TOOL_APPROVAL", first.kwargs["env"])
         self.assertEqual(second.args[0][:3], ["/usr/bin/python3", "-B", "-I"])
         self.assertIn("verify", second.args[0])
 
-    def test_stale_source_image_lane_or_route_inventory_blocks_before_launch(
+    def test_approval_carries_over_new_commits_and_runner_image_patches(
+        self,
+    ) -> None:
+        document = self.proposal()["approval_candidate"]
+        self.source["revision"] = "3" * 40
+        self.source["tree"] = "4" * 40
+        self.image["image_version"] = "test-2"
+        with (
+            self.approved(document),
+            mock.patch.object(MODULE.subprocess, "run") as execute,
+        ):
+            MODULE.run(self.args("run"))
+        self.assertEqual(execute.call_count, 2)
+        drafted = self.root / "format-check.approved-authority.json"
+        self.assertEqual(
+            json.loads(drafted.read_bytes())["source"]["revision"], "3" * 40
+        )
+
+    def test_wrong_runner_family_lane_route_inventory_or_shape_blocks_before_launch(
         self,
     ) -> None:
         original = self.proposal()["approval_candidate"]
         for field, value in (
-            ("source", {**self.source, "revision": "3" * 40}),
-            ("runner", {**self.image, "image_version": "other"}),
+            ("runner", {**original["runner"], "image_os": "macos14"}),
+            ("runner", {**original["runner"], "architecture": "x86_64"}),
+            ("runner", self.image),
+            ("source", self.source),
             ("lane", "coverage"),
             ("routes", {}),
         ):
@@ -390,10 +468,12 @@ class CiToolAuthorityTests(unittest.TestCase):
                     MODULE.run(self.args("run"))
                 execute.assert_not_called()
 
-    def test_changed_executable_and_wrong_authority_digest_block(self) -> None:
+    def test_changed_executable_and_wrong_reviewed_digest_block(self) -> None:
         document = self.proposal()["approval_candidate"]
         wrong_digest = copy.deepcopy(document)
-        wrong_digest["routes"]["format-check"]["authority_sha256"] = "0" * 64
+        wrong_digest["routes"]["format-check"]["reviewed_tools"]["tools"]["cargo"][
+            "sha256"
+        ] = "0" * 64
         with (
             self.approved(wrong_digest),
             mock.patch.object(MODULE.subprocess, "run") as execute,

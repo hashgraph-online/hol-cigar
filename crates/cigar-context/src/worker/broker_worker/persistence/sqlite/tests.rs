@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 use super::*;
-use cigar_context::broker::{AgentGrantSpec, AgentLimits, SourceOrigin, SourceProvenance};
-use cigar_context::{ContextRequest, ContextViewSpec, Document, Utf8ByteCounter};
+use crate::broker::{AgentGrantSpec, AgentLimits, SourceOrigin, SourceProvenance};
+use crate::{ContextRequest, ContextViewSpec, Document, Utf8ByteCounter};
 use std::collections::BTreeSet;
 use std::fs;
 #[cfg(unix)]
@@ -91,7 +91,7 @@ fn change(broker: &mut ContextBroker, text: &str) -> Event {
         resulting: BTreeMap::from([("docs".into(), broker.host_source_revision("docs").unwrap())]),
     }
 }
-fn grant(broker: &mut ContextBroker) -> cigar_context::broker::BrokerCredential {
+fn grant(broker: &mut ContextBroker) -> crate::broker::BrokerCredential {
     broker
         .host_grant(AgentGrantSpec {
             view: ContextViewSpec {
@@ -139,7 +139,7 @@ fn windows_sqlite_vfs_preserves_pinned_private_file() {
 #[test]
 fn source_batches_write_one_committed_image_and_restore_no_pending_staging() {
     use super::super::Persistence;
-    use cigar_context::broker::protocol::HostCommand;
+    use crate::broker::protocol::HostCommand;
     let directory = private_directory();
     let mut opts = options(&directory);
     opts.max_journal_records = 16;
@@ -357,7 +357,7 @@ fn interrupted_transactions_restore_only_the_last_commit() {
         let mut child = Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
-                "broker_worker::persistence::sqlite::tests::crash_child",
+                "worker::broker_worker::persistence::sqlite::tests::crash_child",
                 "--ignored",
                 "--nocapture",
             ])
@@ -530,7 +530,7 @@ fn maximum_escaped_source_locators_fit_durable_relation_receipts() {
         .host_set_edge(
             "left",
             "right",
-            cigar_context::EdgeKind::Contradicts,
+            crate::EdgeKind::Contradicts,
             true,
             &expected,
         )

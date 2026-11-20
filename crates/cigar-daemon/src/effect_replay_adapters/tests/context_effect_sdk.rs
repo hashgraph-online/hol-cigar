@@ -527,8 +527,9 @@ async fn exercise(
         None => {
             let prepared = driver.receive()?;
             assert_eq!(prepared.get("phase"), Some(&json!("prepared")));
-            let declared_id = prepared["effect_id"]
-                .as_str()
+            let declared_id = prepared
+                .get("effect_id")
+                .and_then(serde_json::Value::as_str)
                 .ok_or("missing prepared effect ID")?;
             let effect_id = RecordId::new(declared_id)?;
             // Read the actual service repository before allowing dispatch. The application's
@@ -721,14 +722,32 @@ async fn exercise(
         "language":language,"scenario":scenario,"outcome":outcome,
         "dispatch_calls":facade.dispatch_calls.load(Ordering::SeqCst),
         "connector_calls":connector.calls.load(Ordering::SeqCst),"passed":true});
+    let fields = observation
+        .as_object_mut()
+        .ok_or("observation is not an object")?;
     if application {
-        observation["schema"] = json!("cigar.context-effect-application-observation.v1");
-        observation["authorize_calls"] = json!(facade.authorize_calls.load(Ordering::SeqCst));
-        observation["reconcile_calls"] = json!(facade.reconcile_calls.load(Ordering::SeqCst));
+        fields.insert(
+            "schema".to_owned(),
+            json!("cigar.context-effect-application-observation.v1"),
+        );
+        fields.insert(
+            "authorize_calls".to_owned(),
+            json!(facade.authorize_calls.load(Ordering::SeqCst)),
+        );
+        fields.insert(
+            "reconcile_calls".to_owned(),
+            json!(facade.reconcile_calls.load(Ordering::SeqCst)),
+        );
     }
     if gateway {
-        observation["schema"] = json!("cigar.context-gateway-application-observation.v1");
-        observation["prepare_calls"] = json!(facade.prepare_calls.load(Ordering::SeqCst));
+        fields.insert(
+            "schema".to_owned(),
+            json!("cigar.context-gateway-application-observation.v1"),
+        );
+        fields.insert(
+            "prepare_calls".to_owned(),
+            json!(facade.prepare_calls.load(Ordering::SeqCst)),
+        );
     }
     eprintln!("{observation}");
     Ok(())

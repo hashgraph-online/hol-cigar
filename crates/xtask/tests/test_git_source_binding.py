@@ -193,6 +193,7 @@ class GitSourceBindingTests(unittest.TestCase):
     def test_exact_protected_generated_roots_are_supported(self) -> None:
         repository = self._repository()
         for parent in (
+            repository / "adapters/claude-code",
             repository / "apps/dashboard",
             repository / "sdk/python",
             repository / "sdk/typescript",
@@ -201,6 +202,7 @@ class GitSourceBindingTests(unittest.TestCase):
             (parent / "README").write_bytes(b"tracked package\n")
         (repository / ".gitignore").write_bytes(
             b"/target/\n/node_modules/\n"
+            b"/adapters/claude-code/node_modules/\n"
             b"/apps/dashboard/node_modules/\n"
             b"/sdk/python/.venv/\n"
             b"/sdk/typescript/node_modules/\n"
@@ -210,6 +212,7 @@ class GitSourceBindingTests(unittest.TestCase):
         for generated in (
             repository / "target",
             repository / "node_modules",
+            repository / "adapters/claude-code/node_modules",
             repository / "apps/dashboard/node_modules",
             repository / "sdk/python/.venv",
             repository / "sdk/typescript/node_modules",

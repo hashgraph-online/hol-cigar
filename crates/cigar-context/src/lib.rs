@@ -17,6 +17,9 @@ mod select;
 mod snapshot;
 mod tokenizer;
 mod views;
+#[cfg(feature = "bpe")]
+#[path = "worker/mod.rs"]
+pub mod worker;
 
 pub use answer::{
     AnswerAssessment, AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimAssessment,

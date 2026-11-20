@@ -507,9 +507,14 @@ print("python39-helper-plane-ok")
         coverage_profiles = {
             str(collection["id"])
             for collection in evidence.COVERAGE_COLLECTIONS
-            if collection["id"] != "cigar-store-fault-injection"
+            if collection["id"] not in evidence.COVERAGE_FEATURE_ONLY_COLLECTIONS
         }
-        self.assertEqual(coverage_profiles, lint_profiles)
+        self.assertLessEqual(evidence.COVERAGE_LINT_ONLY_PROFILES, lint_profiles)
+        self.assertEqual(
+            coverage_profiles, lint_profiles - evidence.COVERAGE_LINT_ONLY_PROFILES
+        )
+        all_ids = {str(c["id"]) for c in evidence.COVERAGE_COLLECTIONS}
+        self.assertLessEqual(evidence.COVERAGE_FEATURE_ONLY_COLLECTIONS, all_ids)
 
     def test_coverage_environment_removes_external_execution_controls(self) -> None:
         injected = {

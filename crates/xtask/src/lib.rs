@@ -5402,7 +5402,16 @@ fn generate_wire_artifacts(root: &Path, check: bool) -> Result<(), TaskError> {
             println!("generated {}", target.display());
         }
     }
-    fs::remove_dir_all(staging)?;
+    fs::remove_dir_all(&staging)?;
+    // Do not leave an empty `.tmp/` behind: the clean-tree evidence check
+    // treats any ignored directory outside the generated roots as a change.
+    if let Some(parent) = staging.parent() {
+        match fs::remove_dir(parent) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
     Ok(())
 }
 

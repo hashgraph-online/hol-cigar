@@ -1,13 +1,13 @@
 //! Explicit opt-in broker process. Host stdio never shares an agent command decoder.
-use cigar_context::broker::authentication::{ClientHello, ClientProof, MAX_HANDSHAKE_FRAME};
-use cigar_context::broker::protocol::{
+use crate::broker::authentication::{ClientHello, ClientProof, MAX_HANDSHAKE_FRAME};
+use crate::broker::protocol::{
     AgentCommand, AgentRequest, BROKER_PROTOCOL, ErrorCode, HostCommand, HostRequest,
     MAX_AGENT_FRAME, MAX_AGENT_RESPONSE, MAX_HOST_FRAME, MAX_HOST_RESPONSE, Outcome, Reply, Timing,
     TransportLimits, decode_agent, decode_host, encode, read_frame, write_frame,
 };
-use cigar_context::broker::scheduler::{BrokerScheduler, Cancellation, DispatchStatus, Scheduled};
-use cigar_context::broker::{BrokerCredential, BrokerError, ContextBroker};
-use cigar_context::{O200kTokenizer, TokenCounter};
+use crate::broker::scheduler::{BrokerScheduler, Cancellation, DispatchStatus, Scheduled};
+use crate::broker::{BrokerCredential, BrokerError, ContextBroker};
+use crate::{O200kTokenizer, TokenCounter};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -34,11 +34,22 @@ impl Budget {
     }
 
     fn reserve(self: &Arc<Self>, bytes: usize) -> Option<Reservation> {
-        self.used
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                used.checked_add(bytes).filter(|total| *total <= self.limit)
-            })
-            .ok()?;
+        // An explicit compare-exchange loop: `fetch_update` is deprecated on
+        // newer toolchains, and its replacement is not available on the Rust
+        // versions this crate supports.
+        let mut used = self.used.load(Ordering::Acquire);
+        loop {
+            let total = used
+                .checked_add(bytes)
+                .filter(|total| *total <= self.limit)?;
+            match self
+                .used
+                .compare_exchange_weak(used, total, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => break,
+                Err(current) => used = current,
+            }
+        }
         Some(Reservation {
             budget: Arc::clone(self),
             bytes,

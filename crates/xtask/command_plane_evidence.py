@@ -238,9 +238,52 @@ NATIVE_BASE_DETAIL_KEYS = {
 COVERAGE_REPORT_DIRECTORY_ENV = "CIGAR_COVERAGE_REPORT_DIR"
 COVERAGE_RUST_TOOLCHAIN = "nightly-2026-07-13"
 COVERAGE_EXCLUDED_PACKAGES = {
+    "cigar-sim": "placeholder crate with no executable code to instrument",
+    "cigarbench-consumer": (
+        "benchmark harness under benches/, which cargo-llvm-cov always filters "
+        "out of reports"
+    ),
     "cigar-soak": "soak execution is explicitly deferred for this qualification run",
     "cigar-windows-ipc": "Windows-only implementation is not applicable to native macOS",
 }
+# Features that cannot build against this workspace, keyed by package.
+COVERAGE_EXCLUDED_FEATURES = {
+    "cigar-rust-s3": {
+        feature: (
+            "the async backend is unused in this workspace (cigar-store links the "
+            "sync rustls backend), and its test binaries crash llvm-cov export "
+            "(SIGSEGV) on the pinned coverage toolchain"
+        )
+        for feature in (
+            "block_on_proc",
+            "blocking",
+            "futures-util",
+            "reqwest",
+            "sysinfo",
+            "tokio",
+            "tokio-native-tls",
+            "tokio-rustls-tls",
+            "tokio-stream",
+            "with-tokio",
+        )
+    },
+    "cigarbench-consumer": {
+        "honey-0-9-1-compat": (
+            "targets the released 0.9.1 retrieval API and builds only in the "
+            "refinement source build, not against this workspace"
+        ),
+    },
+}
+# Clippy profiles that build only excluded features; they stay linted but are
+# not coverage collections.
+COVERAGE_LINT_ONLY_PROFILES = frozenset(
+    {
+        "cigar-rust-s3-tokio-native-tls",
+        "cigar-rust-s3-tokio-no-tls",
+        "cigar-rust-s3-tokio-orthogonal",
+        "cigar-rust-s3-tokio-rustls",
+    }
+)
 COVERAGE_PROPERTY_DEPENDENCIES = (
     "cigar-canon",
     "cigar-catalog",
@@ -501,68 +544,6 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
         "features": ("sync-rustls-tls", "fail-on-err", "http-credentials", "tags"),
     },
     {
-        "id": "cigar-rust-s3-tokio-no-tls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "with-tokio",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("with-tokio",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-native-tls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-native-tls",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("tokio-native-tls",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-rustls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-rustls-tls",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("tokio-rustls-tls",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-orthogonal",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-rustls-tls,blocking,fail-on-err,http-credentials,tags",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": (
-            "tokio-rustls-tls",
-            "blocking",
-            "fail-on-err",
-            "http-credentials",
-            "tags",
-        ),
-    },
-    {
         "id": "cigar-store-fault-injection",
         "scope": "cigar-store",
         "arguments": (
@@ -575,6 +556,72 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
         "default_features": True,
         "features": ("migration-fault-injection", "projection-fault-injection"),
     },
+    {
+        "id": "cigar-retrieval-experimental-profiles",
+        "scope": "cigar-retrieval",
+        "arguments": (
+            "--package",
+            "cigar-retrieval",
+            "--features",
+            "experimental-profiles",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("experimental-profiles",),
+    },
+    {
+        "id": "cigar-context-bpe-broker-persistence",
+        "scope": "cigar-context",
+        "arguments": (
+            "--package",
+            "cigar-context",
+            "--features",
+            "bpe,broker-persistence",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("bpe", "broker-persistence"),
+    },
+    {
+        "id": "cigar-cli-migration-fault-injection",
+        "scope": "cigar-cli",
+        "arguments": (
+            "--package",
+            "cigar-cli",
+            "--features",
+            "migration-fault-injection",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("migration-fault-injection",),
+    },
+    {
+        "id": "cigar-daemon-optional-features",
+        "scope": "cigar-daemon",
+        "arguments": (
+            "--package",
+            "cigar-daemon",
+            "--features",
+            "experimental-profiles,fuzzing,qualification-miri-isolated",
+            "--all-targets",
+        ),
+        "default_features": True,
+        "features": ("experimental-profiles", "fuzzing", "qualification-miri-isolated"),
+    },
+)
+
+
+# Coverage-only compositions: each turns on optional test or qualification
+# features of one package on top of its defaults. They have no lint profile of
+# their own because the workspace lint already compiles that package.
+COVERAGE_FEATURE_ONLY_COLLECTIONS = frozenset(
+    {
+        "cigar-store-fault-injection",
+        "cigar-retrieval-experimental-profiles",
+        "cigar-context-bpe-broker-persistence",
+        "cigar-cli-migration-fault-injection",
+        "cigar-daemon-optional-features",
+    }
 )
 
 
@@ -1278,6 +1325,7 @@ def _tracked_worktree_state(
 
 _PERMITTED_GENERATED_ROOTS = frozenset(
     {
+        b"adapters/claude-code/node_modules/",
         b"apps/dashboard/node_modules/",
         b"node_modules/",
         b"sdk/python/.venv/",
@@ -3129,7 +3177,11 @@ def _validate_coverage_feature_plan(
         feature_map = package["features"]
         if not isinstance(feature_map, dict):
             raise CommandPlaneError("coverage feature inventory is invalid")
-        expected = set(feature_map) - {"default"}
+        expected = (
+            set(feature_map)
+            - {"default"}
+            - set(COVERAGE_EXCLUDED_FEATURES.get(name, {}))
+        )
         missing = sorted(expected - covered[name])
         if missing:
             raise CommandPlaneError(

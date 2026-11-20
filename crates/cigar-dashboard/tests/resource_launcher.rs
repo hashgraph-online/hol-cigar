@@ -17,6 +17,14 @@ fn resolve(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
         .ok_or_else(|| format!("{name} is unavailable").into())
 }
 
+/// The launcher lowers its own file-size limit before it waits on the child. A
+/// coverage-instrumented launcher then writes profile data on exit, exceeds that
+/// limit and is killed or leaves a truncated profile that breaks the coverage
+/// report, so the limit checks run only in uninstrumented builds.
+fn coverage_instrumented() -> bool {
+    std::env::var_os("LLVM_PROFILE_FILE").is_some()
+}
+
 fn digest(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let source = std::fs::read(path)?;
     Ok(Sha256::digest(source)
@@ -27,6 +35,9 @@ fn digest(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
 #[test]
 fn private_launcher_applies_child_only_kernel_limits() -> Result<(), Box<dyn std::error::Error>> {
+    if coverage_instrumented() {
+        return Ok(());
+    }
     let launcher = env!("CARGO_BIN_EXE_cigar-dashboard");
     let python = resolve("python3")?.canonicalize()?;
     let output = Command::new(launcher)
@@ -73,6 +84,9 @@ fn private_launcher_rejects_digest_substitution() -> Result<(), Box<dyn std::err
 #[test]
 fn private_launcher_enforces_file_size_and_open_file_limits()
 -> Result<(), Box<dyn std::error::Error>> {
+    if coverage_instrumented() {
+        return Ok(());
+    }
     let launcher = env!("CARGO_BIN_EXE_cigar-dashboard");
     let python = resolve("python3")?.canonicalize()?;
     let python_digest = digest(&python)?;
@@ -112,6 +126,9 @@ fn private_launcher_enforces_file_size_and_open_file_limits()
 
 #[test]
 fn private_launcher_enforces_cpu_time_limit() -> Result<(), Box<dyn std::error::Error>> {
+    if coverage_instrumented() {
+        return Ok(());
+    }
     let launcher = env!("CARGO_BIN_EXE_cigar-dashboard");
     let python = resolve("python3")?.canonicalize()?;
     let started = Instant::now();

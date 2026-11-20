@@ -3,7 +3,7 @@
 ## November 12 dependency refresh
 
 The release-hardening candidate updates bundled SQLite (`rusqlite 0.41.1` /
-`libsqlite3-sys 0.39.1`), `rustix 1.1.6`, the compatible Wasmtime 36.0.20 line,
+`libsqlite3-sys 0.39.1`), `rustix 1.1.6`, the compatible Wasmtime 36.0.21 line,
 capability filesystem, TLS/root trust, parser and compression dependencies.
 All ten tracked Rust lockfiles pass the November 12 advisory database with zero
 vulnerability findings and zero advisory warnings. The root dependency, duplicate

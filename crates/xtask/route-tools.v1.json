@@ -24,10 +24,11 @@
       "sqlite3",
       "uv"
     ],
-    "docs-check": ["cargo", "python3", "rustc", "rustdoc"],
+    "docs-check": ["cargo", "gofmt", "protoc", "python3", "rustc", "rustdoc"],
     "format-check": ["cargo", "cargo-fmt", "rustfmt"],
     "fuzz-smoke": [],
     "generate-check": [
+      "gofmt",
       "node",
       "protoc",
       "protoc-gen-es",
@@ -81,6 +82,10 @@
       "cargo",
       "cargo-llvm-cov",
       "cargo-nextest",
+      "go",
+      "node",
+      "protoc",
+      "python3",
       "rustc",
       "rustup",
       "sandbox-exec"
