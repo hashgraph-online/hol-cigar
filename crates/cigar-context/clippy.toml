@@ -1,0 +1,4 @@
+# Published for hosts on Rust 1.89; lint against that floor instead of the
+# workspace toolchain so clippy and Cargo.toml agree.
+avoid-breaking-exported-api = true
+msrv = "1.89"
