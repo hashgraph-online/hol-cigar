@@ -241,6 +241,15 @@ COVERAGE_EXCLUDED_PACKAGES = {
     "cigar-soak": "soak execution is explicitly deferred for this qualification run",
     "cigar-windows-ipc": "Windows-only implementation is not applicable to native macOS",
 }
+# Features that cannot build against this workspace, keyed by package.
+COVERAGE_EXCLUDED_FEATURES = {
+    "cigarbench-consumer": {
+        "honey-0-9-1-compat": (
+            "targets the released 0.9.1 retrieval API and builds only in the "
+            "refinement source build, not against this workspace"
+        ),
+    },
+}
 COVERAGE_PROPERTY_DEPENDENCIES = (
     "cigar-canon",
     "cigar-catalog",
@@ -627,19 +636,6 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
         "default_features": True,
         "features": ("experimental-profiles", "fuzzing", "qualification-miri-isolated"),
     },
-    {
-        "id": "cigarbench-consumer-honey-compat",
-        "scope": "cigarbench-consumer",
-        "arguments": (
-            "--package",
-            "cigarbench-consumer",
-            "--features",
-            "honey-0-9-1-compat",
-            "--all-targets",
-        ),
-        "default_features": True,
-        "features": ("honey-0-9-1-compat",),
-    },
 )
 
 
@@ -653,7 +649,6 @@ COVERAGE_FEATURE_ONLY_COLLECTIONS = frozenset(
         "cigar-context-bpe-broker-persistence",
         "cigar-cli-migration-fault-injection",
         "cigar-daemon-optional-features",
-        "cigarbench-consumer-honey-compat",
     }
 )
 
@@ -3210,7 +3205,11 @@ def _validate_coverage_feature_plan(
         feature_map = package["features"]
         if not isinstance(feature_map, dict):
             raise CommandPlaneError("coverage feature inventory is invalid")
-        expected = set(feature_map) - {"default"}
+        expected = (
+            set(feature_map)
+            - {"default"}
+            - set(COVERAGE_EXCLUDED_FEATURES.get(name, {}))
+        )
         missing = sorted(expected - covered[name])
         if missing:
             raise CommandPlaneError(
