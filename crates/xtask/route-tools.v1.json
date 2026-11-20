@@ -24,7 +24,7 @@
       "sqlite3",
       "uv"
     ],
-    "docs-check": ["cargo", "gofmt", "python3", "rustc", "rustdoc"],
+    "docs-check": ["cargo", "gofmt", "protoc", "python3", "rustc", "rustdoc"],
     "format-check": ["cargo", "cargo-fmt", "rustfmt"],
     "fuzz-smoke": [],
     "generate-check": [
