@@ -249,7 +249,18 @@ COVERAGE_EXCLUDED_FEATURES = {
             "sync rustls backend), and its test binaries crash llvm-cov export "
             "(SIGSEGV) on the pinned coverage toolchain"
         )
-        for feature in ("blocking", "tokio-native-tls", "tokio-rustls-tls", "with-tokio")
+        for feature in (
+            "block_on_proc",
+            "blocking",
+            "futures-util",
+            "reqwest",
+            "sysinfo",
+            "tokio",
+            "tokio-native-tls",
+            "tokio-rustls-tls",
+            "tokio-stream",
+            "with-tokio",
+        )
     },
     "cigarbench-consumer": {
         "honey-0-9-1-compat": (
