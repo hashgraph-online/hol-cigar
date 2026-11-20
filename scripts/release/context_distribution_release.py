@@ -406,7 +406,7 @@ def make_sbom(
                 ],
             }
             dependencies.setdefault(root, set()).add(
-                f"pkg:cargo/cigar-context@{distribution.VERSION}"
+                f"pkg:cargo/{distribution.context_native_sources.CONTEXT}@{distribution.VERSION}"
             )
             expected = (
                 set(requirements)
@@ -503,7 +503,7 @@ def make_sbom(
 def advisories(sbom: dict) -> dict:
     queries = []
     for item in sbom["components"]:
-        if item["name"] == "cigar-context":
+        if item["name"] == "hol-cigar-context":
             continue
         ecosystem = (
             "crates.io"

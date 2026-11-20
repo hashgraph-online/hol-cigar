@@ -476,7 +476,7 @@ print("python39-helper-plane-ok")
             for index, value in enumerate(workspace)
             if value == "--exclude"
         ]
-        self.assertEqual(exclusions, ["cigar-soak", "cigar-windows-ipc"])
+        self.assertEqual(exclusions, ["cigar-soak", "hol-cigar-windows-ipc"])
         properties = dict(commands)["independent-properties"]
         self.assertEqual(
             properties[properties.index("--manifest-path") + 1],

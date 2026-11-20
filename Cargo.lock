@@ -760,26 +760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cigar-context"
-version = "0.14.2"
-dependencies = [
- "base64",
- "cigar-windows-ipc",
- "fancy-regex",
- "getrandom 0.4.3",
- "hmac 0.13.0",
- "regex-automata",
- "rusqlite",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
- "tiktoken-rs",
- "zeroize",
-]
-
-[[package]]
 name = "cigar-crypto"
 version = "0.9.4"
 dependencies = [
@@ -821,10 +801,10 @@ dependencies = [
  "cigar-space",
  "cigar-store",
  "cigar-testkit",
- "cigar-windows-ipc",
  "futures-core",
  "getrandom 0.4.3",
  "hmac 0.13.0",
+ "hol-cigar-windows-ipc",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-proto",
@@ -1106,15 +1086,6 @@ dependencies = [
  "cigar-protocol",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "cigar-windows-ipc"
-version = "0.9.4"
-dependencies = [
- "tempfile",
- "tokio",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2091,6 +2062,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6303bc9732ae41b04cb554b844a762b4115a61bfaa81e3e83050991eeb56863f"
 dependencies = [
  "digest 0.11.3",
+]
+
+[[package]]
+name = "hol-cigar-context"
+version = "0.14.2"
+dependencies = [
+ "base64",
+ "fancy-regex",
+ "getrandom 0.4.3",
+ "hmac 0.13.0",
+ "hol-cigar-windows-ipc",
+ "regex-automata",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "tiktoken-rs",
+ "zeroize",
+]
+
+[[package]]
+name = "hol-cigar-windows-ipc"
+version = "0.9.4"
+dependencies = [
+ "tempfile",
+ "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

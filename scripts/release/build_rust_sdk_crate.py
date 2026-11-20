@@ -137,7 +137,7 @@ PACKAGE_SPECS = (
     PackageSpec("cigar-canon", "crates/cigar-canon"),
     PackageSpec("cigar-protocol", "crates/cigar-protocol"),
     PackageSpec("cigar-testkit", "crates/cigar-testkit"),
-    PackageSpec("cigar-windows-ipc", "crates/cigar-windows-ipc"),
+    PackageSpec("hol-cigar-windows-ipc", "crates/cigar-windows-ipc"),
     PackageSpec("cigar-crypto", "crates/cigar-crypto"),
     PackageSpec("cigar-replay", "crates/cigar-replay"),
     PackageSpec("cigar-policy", "crates/cigar-policy"),

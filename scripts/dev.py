@@ -33,11 +33,11 @@ def main() -> int:
     environment = dict(os.environ)
     environment["PATH"] = str(cargo.parent) + os.pathsep + environment.get("PATH", "")
     selection = {
-        "context": ["-p", "cigar-context", "--all-features"],
+        "context": ["-p", "hol-cigar-context", "--all-features"],
         "compiler": ["-p", "cigar-compiler"],
         "workspace": ["--workspace"],
     }[args.suite]
-    fmt = ["fmt", "--all", "--", "--check"] if args.suite == "workspace" else ["fmt", "-p", "cigar-" + args.suite, "--", "--check"]
+    fmt = ["fmt", "--all", "--", "--check"] if args.suite == "workspace" else ["fmt", selection[0], selection[1], "--", "--check"]
     lint = ["clippy", "--locked", *selection, "--all-targets"]
     if args.suite == "workspace":
         lint += ["--exclude", "cigar-soak"]
@@ -45,7 +45,7 @@ def main() -> int:
     commands.append(["test", "--locked", *selection, "--all-targets", "--no-fail-fast"])
     commands.append(["test", "--locked", *selection, "--doc"])
     if args.suite == "context":
-        commands.append(["test", "--locked", "-p", "cigar-context", "--no-default-features"])
+        commands.append(["test", "--locked", "-p", "hol-cigar-context", "--no-default-features"])
     if args.test_threads is not None:
         for command in commands:
             if command[0] == "test": command.extend(["--", f"--test-threads={args.test_threads}"])

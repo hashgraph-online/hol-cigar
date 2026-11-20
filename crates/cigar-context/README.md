@@ -11,6 +11,14 @@ also adds an opt-in `broker` feature for authenticated independent processes,
 host-owned provenance/admission, bounded scheduling and optional durable recovery.
 The final release qualification is still in progress.
 
+The crate is published on crates.io as `hol-cigar-context`; the library name stays
+`cigar_context`:
+
+```toml
+[dependencies]
+hol-cigar-context = "0.14.2"
+```
+
 Views are logical host scopes, not authentication or an OS sandbox. Keep root graph,
 scope definitions and review authority outside agent control. Any readable document
 or edge change, even unselected evidence, requires a fresh review. Revocation and
@@ -157,8 +165,8 @@ context; delta reuse alone does not save model prompt tokens. Snapshots/deltas c
 and require the same handling as the source documents. Digests detect corruption, not forgery by
 an adversary able to rewrite and rehash the entire object.
 
-Run `cargo test --locked -p cigar-context --features bpe` and
-`cargo run --locked -p cigar-context --features bpe --example compare` for verification.
+Run `cargo test --locked -p hol-cigar-context --features bpe` and
+`cargo run --locked -p hol-cigar-context --features bpe --example compare` for verification.
 The optional `cigar-context` JSON CLI reads explicit documents from stdin; `--help` describes its
 input. The existing Honey daemon/SDK ABI and release artifacts remain separate from this library.
 
@@ -183,7 +191,7 @@ From this source checkout:
 
 ```sh
 python3 scripts/dev.py context
-cargo run --locked -p cigar-context --features bpe --bin cigar-context -- --help
+cargo run --locked -p hol-cigar-context --features bpe --bin cigar-context -- --help
 ```
 
 Example stdin (one object, not a path to be implicitly ingested):

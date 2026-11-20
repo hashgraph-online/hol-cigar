@@ -156,16 +156,16 @@ def main() -> None:
             "--locked",
             "--no-verify",
             "-p",
-            "cigar-windows-ipc",
+            "hol-cigar-windows-ipc",
             "-p",
-            "cigar-context",
+            "hol-cigar-context",
             *(["--allow-dirty"] if args.allow_dirty else []),
         ],
     )
     source_versions = context_native_sources.versions(ROOT)
     for name in sorted(context_native_sources.archive_names(source_versions)):
         shutil.copyfile(target_dir / "package" / name, sources / name)
-    archive = sources / f"cigar-context-{version}.crate"
+    archive = sources / f"{context_native_sources.CONTEXT}-{version}.crate"
     unpacked = output / "unpacked"
     crates, source_closure = context_native_sources.prepare(
         sources, unpacked, source_versions

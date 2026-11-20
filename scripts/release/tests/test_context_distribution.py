@@ -35,7 +35,7 @@ class DistributionBoundaryTests(unittest.TestCase):
         files = distribution.artifact_names(set(platforms))
         self.assertEqual(len(files), 11)
         self.assertIn(
-            f"cigar-windows-ipc-{distribution.SOURCE_VERSIONS['cigar-windows-ipc']}.crate",
+            f"hol-cigar-windows-ipc-{distribution.SOURCE_VERSIONS['hol-cigar-windows-ipc']}.crate",
             files,
         )
         self.assertEqual(sum(name.endswith(".whl") for name in files), 7)

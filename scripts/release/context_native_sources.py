@@ -18,8 +18,10 @@ import tomllib
 
 from release_lib import ReleaseError, canonical_json_bytes, reject_evidence_directory
 
-CONTEXT = "cigar-context"
-ADAPTER = "cigar-windows-ipc"
+CONTEXT = "hol-cigar-context"
+ADAPTER = "hol-cigar-windows-ipc"
+# Workspace directories keep the historical crate names.
+DIRECTORIES = {CONTEXT: "cigar-context", ADAPTER: "cigar-windows-ipc"}
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 MAX_BYTES = 64 * 1024 * 1024
 RELEASE_PROFILE = {
@@ -47,7 +49,9 @@ def versions(root: Path) -> dict[str, str]:
     )
     result = {}
     for name in (CONTEXT, ADAPTER):
-        manifest = tomllib.loads((root / "crates" / name / "Cargo.toml").read_text())
+        manifest = tomllib.loads(
+            (root / "crates" / DIRECTORIES[name] / "Cargo.toml").read_text()
+        )
         version = manifest["package"]["version"]
         if version == {"workspace": True}:
             version = workspace["workspace"]["package"]["version"]

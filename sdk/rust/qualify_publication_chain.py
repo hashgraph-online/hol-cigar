@@ -32,7 +32,7 @@ PRODUCT_PACKAGES = (
     "cigar-canon",
     "cigar-protocol",
     "cigar-testkit",
-    "cigar-windows-ipc",
+    "hol-cigar-windows-ipc",
     "cigar-crypto",
     "cigar-replay",
     "cigar-policy",

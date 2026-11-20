@@ -1,5 +1,5 @@
 [package]
-name = "cigar-context"
+name = "hol-cigar-context"
 version = "0.14.2"
 description = "Incremental, token-budgeted local context graphs with citations and verified deltas"
 edition.workspace = true
@@ -20,11 +20,15 @@ features = ["bpe"]
 [lints]
 workspace = true
 
+[lib]
+name = "cigar_context"
+path = "src/lib.rs"
+
 [features]
 default = []
 bpe = ["dep:tiktoken-rs", "dep:regex-automata"]
 broker = ["dep:getrandom", "dep:hmac", "dep:zeroize"]
-broker-persistence = ["broker", "dep:rusqlite", "dep:rustix", "dep:cigar-windows-ipc"]
+broker-persistence = ["broker", "dep:rusqlite", "dep:rustix", "dep:hol-cigar-windows-ipc"]
 
 [dependencies]
 # Caret requirements so applications can share these crates with their own
@@ -41,7 +45,7 @@ rusqlite = { version = "0.41.1", optional = true, features = ["backup", "bundled
 rustix = { version = "1.1.6", optional = true, features = ["process"] }
 
 [target.'cfg(windows)'.dependencies]
-cigar-windows-ipc = { version = "=0.9.4", path = "../cigar-windows-ipc", optional = true, default-features = false }
+hol-cigar-windows-ipc = { version = "=0.9.4", path = "../cigar-windows-ipc", optional = true, default-features = false }
 
 [dev-dependencies]
 tempfile.workspace = true

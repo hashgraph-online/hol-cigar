@@ -88,7 +88,7 @@ CARGO_DEPENDENCY_BINDINGS: dict[str, tuple[str, ...]] = {
         "cigar-effects",
         "cigar-replay",
         "cigar-space",
-        "cigar-windows-ipc",
+        "hol-cigar-windows-ipc",
     ),
     "sdk/rust/Cargo.toml": (
         "cigar-api",
@@ -125,7 +125,7 @@ ROOT_CARGO_PACKAGES = (
     "cigar-space",
     "cigar-store",
     "cigar-testkit",
-    "cigar-windows-ipc",
+    "hol-cigar-windows-ipc",
     "cigarbench-consumer",
     "xtask",
 )
@@ -169,7 +169,7 @@ CARGO_LOCK_BINDINGS: dict[str, tuple[str, ...]] = {
         "cigar-store",
         "cigar-code-intel",
         "cigar-api",
-        "cigar-windows-ipc",
+        "hol-cigar-windows-ipc",
     ),
     "demos/sdk-clients/rust-workflow/Cargo.lock": (
         "cigar-api",
@@ -234,7 +234,7 @@ PUBLISHABLE_PRODUCT_PACKAGES = (
     "cigar-canon",
     "cigar-protocol",
     "cigar-testkit",
-    "cigar-windows-ipc",
+    "hol-cigar-windows-ipc",
     "cigar-crypto",
     "cigar-replay",
     "cigar-policy",
@@ -888,7 +888,7 @@ def _update_toml_manifests(root: Path, version: str, *, write: bool) -> None:
             value = dependency_table.get(name)
             if (
                 relative == "crates/cigar-daemon/Cargo.toml"
-                and name == "cigar-windows-ipc"
+                and name == "hol-cigar-windows-ipc"
             ):
                 try:
                     value = document["target"]["cfg(windows)"]["dependencies"][name]

@@ -602,10 +602,10 @@ dependencies = [
  "cigar-retrieval",
  "cigar-space",
  "cigar-store",
- "cigar-windows-ipc",
  "futures-core",
  "getrandom 0.4.3",
  "hmac 0.13.0",
+ "hol-cigar-windows-ipc",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -810,14 +810,6 @@ dependencies = [
  "url",
  "webpki-roots",
  "zstd",
-]
-
-[[package]]
-name = "cigar-windows-ipc"
-version = "0.9.4"
-dependencies = [
- "tokio",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1652,6 +1644,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6303bc9732ae41b04cb554b844a762b4115a61bfaa81e3e83050991eeb56863f"
 dependencies = [
  "digest 0.11.3",
+]
+
+[[package]]
+name = "hol-cigar-windows-ipc"
+version = "0.9.4"
+dependencies = [
+ "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -103,7 +103,7 @@ edition = "2024"
 [features]
 pass2 = []
 [dependencies]
-cigar-context = {{ path = {json.dumps(str(package))}, features = ["bpe"] }}
+cigar-context = {{ package = "hol-cigar-context", path = {json.dumps(str(package))}, features = ["bpe"] }}
 serde = {{ version = "1", features = ["derive"] }}
 serde_json = "1"
 [[bin]]
