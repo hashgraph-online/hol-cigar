@@ -1,4 +1,4 @@
-use cigar_context::{Document, O200kTokenizer, TokenCounter};
+use hol_cigar::{Document, O200kTokenizer, TokenCounter};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 

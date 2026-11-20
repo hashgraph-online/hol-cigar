@@ -1,5 +1,5 @@
 //! Small output budgets must not permit unbounded preparation of overlapping closures.
-use cigar_context::{
+use hol_cigar::{
     ContextError, ContextGraph, ContextRequest, Document, EdgeKind, ExcerptMode, GraphLimits,
     Utf8ByteCounter,
 };

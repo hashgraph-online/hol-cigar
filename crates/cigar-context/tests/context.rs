@@ -1,7 +1,7 @@
 //! Local graph behavior, budget, update, and integrity acceptance tests.
 #[cfg(feature = "bpe")]
-use cigar_context::TokenCounter;
-use cigar_context::{
+use hol_cigar::TokenCounter;
+use hol_cigar::{
     ContextDelta, ContextError, ContextGraph, ContextRequest, ContextSnapshot, Document, EdgeKind,
     ExcerptMode, GraphLimits, Utf8ByteCounter,
 };
@@ -66,7 +66,7 @@ fn graph_recovers_transitive_evidence_and_counterclaims() -> Result<(), Box<dyn 
 #[test]
 fn verified_render_retains_exact_text_and_counts_once() -> Result<(), Box<dyn Error>> {
     struct CountingCounter(std::cell::Cell<usize>);
-    impl cigar_context::TokenCounter for CountingCounter {
+    impl hol_cigar::TokenCounter for CountingCounter {
         fn identity(&self) -> &str {
             "cigar.utf8-bytes.v1"
         }
@@ -656,7 +656,7 @@ fn budgets_include_framing_and_reserve_for_every_success() -> Result<(), Box<dyn
 #[test]
 fn bpe_counts_actual_rendered_text_and_treats_special_tokens_as_data() -> Result<(), Box<dyn Error>>
 {
-    let tokenizer = cigar_context::O200kTokenizer::new()?;
+    let tokenizer = hol_cigar::O200kTokenizer::new()?;
     let mut graph = graph()?;
     graph.upsert(Document::new("a", "a", "retry café 日本語 <|endoftext|>"))?;
     for max_tokens in 1..80 {

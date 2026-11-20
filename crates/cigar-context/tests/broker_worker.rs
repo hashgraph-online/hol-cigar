@@ -2,11 +2,11 @@
 #![cfg(all(feature = "bpe", feature = "broker"))]
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
-use cigar_context::broker::BrokerCredential;
-use cigar_context::broker::authentication::{
+use hol_cigar::broker::BrokerCredential;
+use hol_cigar::broker::authentication::{
     ClientHello, ClientProof, MAX_HANDSHAKE_FRAME, ServerProof,
 };
-use cigar_context::broker::protocol::{
+use hol_cigar::broker::protocol::{
     BROKER_PROTOCOL, MAX_AGENT_FRAME, MAX_AGENT_RESPONSE, read_frame, write_frame,
 };
 use serde_json::{Value, json};

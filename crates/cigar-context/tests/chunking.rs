@@ -1,7 +1,7 @@
 //! Parser-owned boundaries preserve exact source bytes; the native library makes no AST claim.
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
-use cigar_context::{ContextError, Document};
+use hol_cigar::{ContextError, Document};
 
 #[test]
 fn explicit_boundaries_partition_utf8_and_line_endings_with_absolute_citations() {

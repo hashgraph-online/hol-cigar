@@ -1,5 +1,5 @@
 //! Incremental source transactions and bounded exact-token cache regressions.
-use cigar_context::{
+use hol_cigar::{
     CachedTokenCounter, ContextError, ContextGraph, ContextRequest, Document, EdgeKind,
     GraphLimits, TokenCacheLimits, TokenCounter, Utf8ByteCounter,
 };
@@ -233,7 +233,7 @@ fn source_replacement_checks_final_capacity_not_transient_capacity() -> Result<(
 #[cfg(feature = "bpe")]
 #[test]
 fn cached_and_uncached_bpe_match_across_updates_and_access_changes() -> Result<(), ContextError> {
-    use cigar_context::O200kTokenizer;
+    use hol_cigar::O200kTokenizer;
     let cached = O200kTokenizer::new()?;
     let raw = O200kTokenizer::with_cache_limits(TokenCacheLimits {
         max_entries: 0,

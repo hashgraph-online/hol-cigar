@@ -1,5 +1,5 @@
 //! Exact retrieval and prompt-integrity regressions for the 0.10.1 release.
-use cigar_context::{
+use hol_cigar::{
     ContextError, ContextGraph, ContextPrompt, ContextRequest, Document, EdgeKind, GraphLimits,
     Utf8ByteCounter,
 };

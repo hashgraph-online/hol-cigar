@@ -1,7 +1,7 @@
 //! Shared-view isolation, freshness and review compatibility regressions.
 // Fixture construction and deliberately forged JSON must fail loudly on missing fields.
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
-use cigar_context::{
+use hol_cigar::{
     AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimReview, ClaimVerdict,
     ContextError, ContextGraph, ContextRequest, ContextView, ContextViewHandle, ContextViewSpec,
     ContextViews, Document, EdgeKind, GraphLimits, Utf8ByteCounter,

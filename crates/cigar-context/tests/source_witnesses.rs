@@ -1,6 +1,6 @@
 //! Distinct requested records must not collapse into one incidental word witness.
 
-use cigar_context::{
+use hol_cigar::{
     ContextError, ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, TokenCounter,
     Utf8ByteCounter,
 };
@@ -44,7 +44,7 @@ fn request(max_tokens: usize) -> ContextRequest {
     }
 }
 
-fn ids(snapshot: &cigar_context::ContextSnapshot) -> BTreeSet<String> {
+fn ids(snapshot: &hol_cigar::ContextSnapshot) -> BTreeSet<String> {
     snapshot
         .blocks()
         .iter()
@@ -86,7 +86,7 @@ fn distinct_source_records_survive_overlapping_query_words() -> Result<(), Conte
 #[cfg(feature = "bpe")]
 #[test]
 fn distinct_source_records_fit_unchanged_exact_token_budgets() -> Result<(), ContextError> {
-    check_complete_records(&cigar_context::O200kTokenizer::new()?)
+    check_complete_records(&hol_cigar::O200kTokenizer::new()?)
 }
 
 #[test]

@@ -1,16 +1,18 @@
 [package]
-name = "hol-cigar-context"
+name = "hol-cigar"
 version = "0.14.2"
-description = "Incremental, token-budgeted local context graphs with citations and verified deltas"
+description = "Open-source context engineering protocol for AI agents: governed retrieval, bounded multi-agent handoffs, MCP, provenance, recoverable effects, and replay."
 edition.workspace = true
 # Below the workspace toolchain so applications on an older stable Rust can
 # depend on this crate.
 rust-version = "1.89"
 license.workspace = true
 repository = "https://github.com/hashgraph-online/hol-cigar"
+homepage = "https://hol.org/cigar"
+documentation = "https://docs.rs/hol-cigar"
 readme = "README.md"
 publish = ["crates-io"]
-keywords = ["context", "retrieval", "graph", "tokens", "rag"]
+keywords = ["ai-agents", "context-engineering", "llm", "rag", "retrieval"]
 categories = ["text-processing", "data-structures"]
 include = ["build.rs", "src/**", "tests/**", "examples/**", "fixtures/**", "README.md", "CHANGELOG.md", "LICENSE", "LICENSE.tiktoken", "Cargo.toml"]
 
@@ -21,7 +23,7 @@ features = ["bpe"]
 workspace = true
 
 [lib]
-name = "cigar_context"
+name = "hol_cigar"
 path = "src/lib.rs"
 
 [features]

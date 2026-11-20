@@ -32,7 +32,7 @@ class NativeSourceTests(unittest.TestCase):
         ).encode()
         adapter = self.archive(sources.ADAPTER)
         self.lock = (
-            '# Cargo lock fixture\nversion = 4\n\n[[package]]\nname = "hol-cigar-context"\n'
+            '# Cargo lock fixture\nversion = 4\n\n[[package]]\nname = "hol-cigar"\n'
             'version = "0.14.0"\ndependencies = ["hol-cigar-windows-ipc", "serde"]\n\n'
             '[[package]]\nname = "hol-cigar-windows-ipc"\nversion = "0.9.4"\n'
             f'source = "{sources.REGISTRY}"\n'

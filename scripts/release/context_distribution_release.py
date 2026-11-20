@@ -503,7 +503,7 @@ def make_sbom(
 def advisories(sbom: dict) -> dict:
     queries = []
     for item in sbom["components"]:
-        if item["name"] == "hol-cigar-context":
+        if item["name"] == "hol-cigar":
             continue
         ecosystem = (
             "crates.io"

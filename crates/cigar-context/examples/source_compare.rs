@@ -1,5 +1,5 @@
 //! Real-source symbol retrieval and synthetic index-size diagnostics. No model or remote service.
-use cigar_context::{
+use hol_cigar::{
     ContextGraph, ContextRequest, Document, ExcerptMode, GraphLimits, O200kTokenizer, TokenCounter,
 };
 use std::error::Error;
