@@ -37,7 +37,7 @@ def main() -> int:
         "compiler": ["-p", "cigar-compiler"],
         "workspace": ["--workspace"],
     }[args.suite]
-    fmt = ["fmt", "--all", "--", "--check"] if args.suite == "workspace" else ["fmt", "-p", "cigar-" + args.suite, "--", "--check"]
+    fmt = ["fmt", "--all", "--", "--check"] if args.suite == "workspace" else ["fmt", selection[0], selection[1], "--", "--check"]
     lint = ["clippy", "--locked", *selection, "--all-targets"]
     if args.suite == "workspace":
         lint += ["--exclude", "cigar-soak"]
