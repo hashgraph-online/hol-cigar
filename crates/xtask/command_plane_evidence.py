@@ -243,6 +243,14 @@ COVERAGE_EXCLUDED_PACKAGES = {
 }
 # Features that cannot build against this workspace, keyed by package.
 COVERAGE_EXCLUDED_FEATURES = {
+    "cigar-rust-s3": {
+        feature: (
+            "the async backend is unused in this workspace (cigar-store links the "
+            "sync rustls backend), and its test binaries crash llvm-cov export "
+            "(SIGSEGV) on the pinned coverage toolchain"
+        )
+        for feature in ("blocking", "tokio-native-tls", "tokio-rustls-tls", "with-tokio")
+    },
     "cigarbench-consumer": {
         "honey-0-9-1-compat": (
             "targets the released 0.9.1 retrieval API and builds only in the "
@@ -250,6 +258,16 @@ COVERAGE_EXCLUDED_FEATURES = {
         ),
     },
 }
+# Clippy profiles that build only excluded features; they stay linted but are
+# not coverage collections.
+COVERAGE_LINT_ONLY_PROFILES = frozenset(
+    {
+        "cigar-rust-s3-tokio-native-tls",
+        "cigar-rust-s3-tokio-no-tls",
+        "cigar-rust-s3-tokio-orthogonal",
+        "cigar-rust-s3-tokio-rustls",
+    }
+)
 COVERAGE_PROPERTY_DEPENDENCIES = (
     "cigar-canon",
     "cigar-catalog",
@@ -508,68 +526,6 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
         ),
         "default_features": False,
         "features": ("sync-rustls-tls", "fail-on-err", "http-credentials", "tags"),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-no-tls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "with-tokio",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("with-tokio",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-native-tls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-native-tls",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("tokio-native-tls",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-rustls",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-rustls-tls",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": ("tokio-rustls-tls",),
-    },
-    {
-        "id": "cigar-rust-s3-tokio-orthogonal",
-        "scope": "cigar-rust-s3",
-        "arguments": (
-            "--package",
-            "cigar-rust-s3",
-            "--no-default-features",
-            "--features",
-            "tokio-rustls-tls,blocking,fail-on-err,http-credentials,tags",
-            "--all-targets",
-        ),
-        "default_features": False,
-        "features": (
-            "tokio-rustls-tls",
-            "blocking",
-            "fail-on-err",
-            "http-credentials",
-            "tags",
-        ),
     },
     {
         "id": "cigar-store-fault-injection",
