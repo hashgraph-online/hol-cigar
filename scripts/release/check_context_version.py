@@ -79,9 +79,7 @@ def validate(root: Path = ROOT, expected: str | None = None) -> dict:
         channel if channel in {"alpha", "rc"} else "latest"
     ), "npm tag drift"
     assert [
-        item["version"]
-        for item in lock["package"]
-        if item["name"] == "hol-cigar-context"
+        item["version"] for item in lock["package"] if item["name"] == "hol-cigar"
     ] == [version], "Cargo lock drift"
     for path in (
         "sdk/python/src/cigar_sdk/release.json",

@@ -1,7 +1,7 @@
 //! Selection observation must preserve exact legacy results and current disclosure boundaries.
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
-use cigar_context::{
+use hol_cigar::{
     ContextError, ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits,
     SelectionExplanation, SelectionSignal, Utf8ByteCounter,
 };

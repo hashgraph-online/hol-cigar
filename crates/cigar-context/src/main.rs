@@ -1,7 +1,5 @@
 //! JSON-in/JSON-out local context compilation; no network or implicit filesystem ingestion.
-use cigar_context::{
-    ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, O200kTokenizer,
-};
+use hol_cigar::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, O200kTokenizer};
 use serde::Deserialize;
 use std::error::Error;
 use std::io::{Read, Write};

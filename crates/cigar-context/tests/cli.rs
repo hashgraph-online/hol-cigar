@@ -1,7 +1,7 @@
 //! Actual process-boundary tests of the optional JSON command-line interface.
 #![cfg(feature = "bpe")]
 
-use cigar_context::{ContextSnapshot, O200kTokenizer};
+use hol_cigar::{ContextSnapshot, O200kTokenizer};
 use std::error::Error;
 use std::io::Write;
 use std::process::{Command, Output, Stdio};

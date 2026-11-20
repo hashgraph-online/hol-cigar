@@ -571,10 +571,10 @@ COVERAGE_COLLECTIONS: tuple[dict[str, object], ...] = (
     },
     {
         "id": "cigar-context-bpe-broker-persistence",
-        "scope": "hol-cigar-context",
+        "scope": "hol-cigar",
         "arguments": (
             "--package",
-            "hol-cigar-context",
+            "hol-cigar",
             "--features",
             "bpe,broker-persistence",
             "--all-targets",

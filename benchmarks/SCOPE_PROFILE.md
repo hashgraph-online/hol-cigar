@@ -17,7 +17,7 @@ Build an optimized diagnostic worker with symbols so native samples are useful:
 
 ```sh
 CARGO_PROFILE_RELEASE_STRIP=none CARGO_PROFILE_RELEASE_DEBUG=1 \
-  cargo build --locked --release -p hol-cigar-context \
+  cargo build --locked --release -p hol-cigar \
     --features bpe,broker-persistence --bin cigar-context-worker
 python benchmarks/scope_profile.py \
   --worker /absolute/target/release/cigar-context-worker \

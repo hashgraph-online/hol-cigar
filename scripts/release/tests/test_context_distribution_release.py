@@ -312,7 +312,7 @@ class InstalledEvidenceTests(unittest.TestCase):
         native = {
             "darwin-arm64": [
                 {
-                    "name": "hol-cigar-context",
+                    "name": "hol-cigar",
                     "version": distribution.VERSION,
                     "license": "Apache-2.0",
                     "dependencies": [],

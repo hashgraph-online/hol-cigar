@@ -158,7 +158,7 @@ def main() -> None:
             "-p",
             "hol-cigar-windows-ipc",
             "-p",
-            "hol-cigar-context",
+            "hol-cigar",
             *(["--allow-dirty"] if args.allow_dirty else []),
         ],
     )

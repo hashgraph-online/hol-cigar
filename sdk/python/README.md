@@ -188,7 +188,7 @@ but local graphs require an **explicit trusted absolute** `worker_path`. Build i
 0.14.2 Rust source using Rust 1.92+:
 
 ```sh
-cargo build --locked --release -p hol-cigar-context --features bpe,broker-persistence --bin cigar-context-worker
+cargo build --locked --release -p hol-cigar --features bpe,broker-persistence --bin cigar-context-worker
 ```
 
 Pass the resulting executable to `LocalContextGraph("my-project", worker_path="/absolute/path/to/cigar-context-worker")`.

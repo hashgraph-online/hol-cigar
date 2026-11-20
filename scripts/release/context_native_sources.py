@@ -18,7 +18,7 @@ import tomllib
 
 from release_lib import ReleaseError, canonical_json_bytes, reject_evidence_directory
 
-CONTEXT = "hol-cigar-context"
+CONTEXT = "hol-cigar"
 ADAPTER = "hol-cigar-windows-ipc"
 # Workspace directories keep the historical crate names.
 DIRECTORIES = {CONTEXT: "cigar-context", ADAPTER: "cigar-windows-ipc"}

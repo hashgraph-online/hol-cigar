@@ -2,7 +2,7 @@ name: publish-rust-crates
 
 # Publishes the Rust context library to crates.io. On every push to main that
 # touches either crate, each crate whose version is not on crates.io yet is
-# published (hol-cigar-windows-ipc first, since hol-cigar-context depends on it).
+# published (hol-cigar-windows-ipc first, since hol-cigar depends on it).
 # A manual run with "dry run" packages and checks without publishing.
 on:
   push:
@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   publish:
-    name: package and publish hol-cigar-windows-ipc, then hol-cigar-context
+    name: package and publish hol-cigar-windows-ipc, then hol-cigar
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -51,7 +51,7 @@ jobs:
         id: pending
         run: |
           metadata=$(cargo metadata --locked --no-deps --format-version 1)
-          for crate in hol-cigar-windows-ipc hol-cigar-context; do
+          for crate in hol-cigar-windows-ipc hol-cigar; do
             version=$(jq -r --arg c "$crate" '.packages[] | select(.name == $c) | .version' <<<"$metadata")
             status=$(curl -sS -o /dev/null -w '%{http_code}' \
               -A 'hol-cigar publish workflow (github.com/hashgraph-online/hol-cigar)' \
@@ -65,14 +65,14 @@ jobs:
       - name: Package (dry run)
         run: |
           cargo publish --locked -p hol-cigar-windows-ipc --dry-run
-          cargo package --locked -p hol-cigar-context --no-verify --list > /dev/null
+          cargo package --locked -p hol-cigar --no-verify --list > /dev/null
       - name: Publish hol-cigar-windows-ipc
         if: env.PUBLISH == 'true' && steps.pending.outputs.hol_cigar_windows_ipc != ''
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_API_KEY }}
         run: cargo publish --locked -p hol-cigar-windows-ipc
-      - name: Publish hol-cigar-context
-        if: env.PUBLISH == 'true' && steps.pending.outputs.hol_cigar_context != ''
+      - name: Publish hol-cigar
+        if: env.PUBLISH == 'true' && steps.pending.outputs.hol_cigar != ''
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_API_KEY }}
-        run: cargo publish --locked -p hol-cigar-context
+        run: cargo publish --locked -p hol-cigar

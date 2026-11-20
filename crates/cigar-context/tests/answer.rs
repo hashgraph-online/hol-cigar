@@ -1,5 +1,5 @@
 //! Adversarial claim-review contract tests; oracle verdicts are not model efficacy evidence.
-use cigar_context::{
+use hol_cigar::{
     AnswerClaim, AnswerDecision, AnswerDraft, AnswerPolicy, ClaimIssue, ClaimReview, ClaimVerdict,
     ContextError, ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter,
 };

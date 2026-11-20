@@ -1,4 +1,15 @@
-# cigar-context 0.14.2 release candidate
+# hol-cigar: Context Graphs and Exact Token Budgets for AI Agents in Rust
+
+[![crates.io](https://img.shields.io/crates/v/hol-cigar.svg?logo=rust&logoColor=white&label=crates.io)](https://crates.io/crates/hol-cigar)
+[![docs.rs](https://img.shields.io/docsrs/hol-cigar?logo=docsdotrs&label=docs.rs)](https://docs.rs/hol-cigar)
+[![crates.io downloads](https://img.shields.io/crates/d/hol-cigar.svg?logo=rust&logoColor=white)](https://crates.io/crates/hol-cigar)
+[![PyPI](https://img.shields.io/pypi/v/hol-cigar.svg?logo=pypi&logoColor=white&cacheSeconds=300)](https://pypi.org/project/hol-cigar/)
+[![npm](https://img.shields.io/npm/v/@hol-org/cigar.svg?logo=npm&logoColor=white)](https://www.npmjs.com/package/@hol-org/cigar)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/hashgraph-online/hol-cigar/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/hashgraph-online/hol-cigar?style=social)](https://github.com/hashgraph-online/hol-cigar/stargazers)
+
+| ![HOL whole dark logo](https://hol.org/brand/Logo_Whole_Dark.png) | **Give AI agents the right context, with citations, inside an exact token budget.** `hol-cigar` is the Rust library behind CIGAR (Context Intelligence Graph Agentic Runtime), the open-source context engineering protocol for AI agents from [HOL](https://hol.org).<br><br>[CIGAR on hol.org](https://hol.org/cigar)<br>[API docs on docs.rs](https://docs.rs/hol-cigar)<br>[Source on GitHub](https://github.com/hashgraph-online/hol-cigar)<br>[Report an Issue](https://github.com/hashgraph-online/hol-cigar/issues) |
+| :--- | :--- |
 
 A small offline Rust library for incremental context graphs, bounded retrieval, exact rendered
 token budgets, source citations, and verified context deltas. No daemon, database, model service,
@@ -6,28 +17,35 @@ or external graph builder is required. `ContextViews` provides scoped sharing ov
 `ContextGraph`: a trusted host defines readable/writable source scopes, compiles
 scope-bound snapshots and checks reviews without invalidation from outside-scope
 writes. All existing root methods and their exact freshness semantics remain.
-The source crate is prepared separately from registry publication. Version 0.14
-also adds an opt-in `broker` feature for authenticated independent processes,
+Version 0.14 also adds an opt-in `broker` feature for authenticated independent processes,
 host-owned provenance/admission, bounded scheduling and optional durable recovery.
-The final release qualification is still in progress.
 
-The crate is published on crates.io as `hol-cigar-context`; the library name stays
-`cigar_context`:
+The same engine powers the [Python](https://pypi.org/project/hol-cigar/) and
+[npm](https://www.npmjs.com/package/@hol-org/cigar) CIGAR SDKs.
+
+[Install](#install) · [Quick start](#quick-start) · [Features](#features) · [Token budgets](#token-budgets-and-tokenizers) ·
+[Check answers](#check-answers-before-display) · [Worker](#hosting-the-worker-in-your-own-process) ·
+[FAQ](#frequently-asked-questions)
+
+## Install
+
+Install it from crates.io as `hol-cigar` and import it as `hol_cigar`:
 
 ```toml
 [dependencies]
-hol-cigar-context = "0.14.2"
+hol-cigar = { version = "0.14.2", features = ["bpe"] }
 ```
 
-Views are logical host scopes, not authentication or an OS sandbox. Keep root graph,
-scope definitions and review authority outside agent control. Any readable document
-or edge change, even unselected evidence, requires a fresh review. Revocation and
-redefinition invalidate handles. Views have no durable restart/resume contract;
-use fresh run domains and reviews. The SDK worker still serializes calls. Scheduling,
-durable handoffs and effect execution remain application/HUMIDOR responsibilities.
+| Feature | Adds |
+| --- | --- |
+| `bpe` | Exact o200k_base token counting (`O200kTokenizer`) and the context worker. |
+| `broker` | Authenticated local broker for independent agent processes. |
+| `broker-persistence` | Optional SQLite recovery for broker state. |
+
+## Quick start
 
 ```rust
-use cigar_context::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter};
+use hol_cigar::{ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, Utf8ByteCounter};
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 let mut graph = ContextGraph::new("my-local-project", GraphLimits::default())?;
@@ -43,11 +61,52 @@ println!("{}", snapshot.render());
 # }
 ```
 
+## Features
+
+- **Exact token budgets.** The final rendered context, citations included, is counted with the real tokenizer and never exceeds your budget.
+- **Citations on every line.** Each selected block keeps its source locator and line range.
+- **Complete dependencies.** `Requires` edges keep dependency text whole; `Contradicts` keeps both sides.
+- **Scoped views.** One graph, many agents, each limited to the sources the host allows.
+- **Answer review.** Claims must cite selected evidence and carry a trusted review before release.
+- **Verified deltas.** Send only what changed between snapshots; the result is re-hashed and re-counted.
+- **Local.** No model service, vector database, hosted service or daemon required.
+
+## Scoped views
+
+Views are logical host scopes, not authentication or an OS sandbox. Keep root graph,
+scope definitions and review authority outside agent control. Any readable document
+or edge change, even unselected evidence, requires a fresh review. Revocation and
+redefinition invalidate handles. Views have no durable restart/resume contract;
+use fresh run domains and reviews. The SDK worker still serializes calls. Scheduling,
+durable handoffs and effect execution remain application/HUMIDOR responsibilities.
+
+## Token budgets and tokenizers
+
 `Utf8ByteCounter` measures bytes, not model tokens. Enable feature `bpe` and use
 `O200kTokenizer::new()` for actual o200k_base text tokens; reuse the tokenizer between requests.
 Other tokenizers implement the two-method `TokenCounter` trait. The final rendered context,
 including source references and JSON escaping, must fit `max_tokens - reserve_tokens`. Reserve
 space for the caller's system prompt, chat envelope, previous turns, and desired model output.
+
+`O200kTokenizer` uses an instance-local exact-text cache by default: at most 2,048 entries and
+8 MiB of retained text, plus bounded entry/allocator overhead. Final complete renderings are still
+counted exactly; counts are never estimated or added across blocks. This helps both repeated
+requests and repeated checks within one request. Cold requests still perform BPE work.
+
+Entirely ASCII input uses a small precompiled segmentation table. Unicode input loads the
+complete precompiled Unicode table on first use. Both tables use checked loading before
+search; exact ordinary boundaries, vocabulary, token counts and tokenizer identity are the
+same. These immutable tables retain no caller text and do not widen the cache limits.
+
+`O200kTokenizer::with_cache_limits(TokenCacheLimits { max_entries: 0, max_text_bytes: 0 })`
+disables caching. `cache_stats()` reports hits, misses, entries and retained text bytes;
+`clear_cache()` drops retained strings and resets counters. Keep one tokenizer/cache per privacy
+boundary, clear it when retention policy requires, and do not treat deallocation as zeroization.
+`CachedTokenCounter::new(custom_counter, limits)` provides the same bounded cache for a custom
+immutable tokenizer. Concurrent misses may compute twice; expensive counting does not hold the
+cache lock. There is no global cache or additional dependency.
+
+## Graph edges and dependencies
 
 `Requires` edges retain complete dependency text. `Contradicts` is symmetric and retains both
 sides, including their dependencies. Optional `Supports` and `Related` edges expand search within
@@ -55,6 +114,8 @@ the depth/candidate limit. Hard cycles form one jointly required closure; missin
 hard dependencies make an optional root unavailable and cause required roots to return an error.
 Removing a document keeps incoming edges so withdrawn evidence cannot silently disappear from a
 dependent proof. Use `unlink` explicitly when the application changes the dependency contract.
+
+## Excerpts and prompt views
 
 Full source text is the default. Optional `ExcerptMode::QueryWindows` is extractive and retains neighboring source lines, with omission markers
 and exact source ranges. They are not guaranteed to preserve every implication of the full source.
@@ -70,6 +131,8 @@ The expected snapshot must come from the application's current authorized compil
 This separate rendering never changes the original snapshot, silently truncates source text,
 or omits hard dependencies. Its own exact budget excludes provider framing. Token savings
 depend on citation overhead and are not guaranteed for every input.
+
+## Relevance and semantic candidates
 
 Applications with an embedding index can pass ranked node IDs in `semantic_candidates`. This
 extends retrieval to synonyms and paraphrases without coupling the library to a model, vector
@@ -87,7 +150,12 @@ to fill the available budget.
 Graph edges and semantic leads must come from your application's trusted ingestion/retrieval path;
 the library does not discover factual contradictions automatically.
 
-### Check answers before display
+The lexical index retains complete snake_case/camelCase identifiers alongside their components.
+Named code declarations receive priority over mere mentions when the query names them. This is
+a lexical relevance hint, not a syntax parser or a grant of authority; declarations, like all
+other evidence, must pass the caller's access filter and complete dependency checks.
+
+## Check answers before display
 
 `ContextGraph::check_answer` recompiles the request with current authorization and compares
 the resulting snapshot ID to `AnswerDraft::snapshot_id`. Each proposed atomic claim must have
@@ -111,14 +179,11 @@ The host must authenticate the review path and keep reviews, policy and authoriz
 model control. Do not accept a model-generated `supported` flag as a review. This API does not
 run a semantic judge, detect undeclared conflicts, certify truth, or establish that a draft
 contains every factual assertion. Display only the assessed claims, and recheck on state or
-policy changes. The [offline evaluation suite](../../benches/answer-quality/README.md) measures
+policy changes. The [offline evaluation suite](https://github.com/hashgraph-online/hol-cigar/blob/main/benches/answer-quality/README.md) measures
 this contract and supplies metrics for separately annotated model outputs; its scripted trials
 do not demonstrate real-model hallucination reduction.
 
-The lexical index retains complete snake_case/camelCase identifiers alongside their components.
-Named code declarations receive priority over mere mentions when the query names them. This is
-a lexical relevance hint, not a syntax parser or a grant of authority; declarations, like all
-other evidence, must pass the caller's access filter and complete dependency checks.
+## Source chunks and updates
 
 `document.chunks(80, 8)` splits supplied source text into overlapping line chunks with original
 file offsets in every citation. For existing symbol-aware ingestion, set `Document::start_line`
@@ -133,25 +198,7 @@ capacity violations leave the graph untouched. A changed batch advances revision
 batches do not. Hard edges to removed chunks deliberately remain unavailable until repaired.
 Staging needs additional memory proportional to the replacement source, not a clone of the graph.
 
-### Exact counting and repeated requests
-
-`O200kTokenizer` uses an instance-local exact-text cache by default: at most 2,048 entries and
-8 MiB of retained text, plus bounded entry/allocator overhead. Final complete renderings are still
-counted exactly; counts are never estimated or added across blocks. This helps both repeated
-requests and repeated checks within one request. Cold requests still perform BPE work.
-
-Entirely ASCII input uses a small precompiled segmentation table. Unicode input loads the
-complete precompiled Unicode table on first use. Both tables use checked loading before
-search; exact ordinary boundaries, vocabulary, token counts and tokenizer identity are the
-same. These immutable tables retain no caller text and do not widen the cache limits.
-
-`O200kTokenizer::with_cache_limits(TokenCacheLimits { max_entries: 0, max_text_bytes: 0 })`
-disables caching. `cache_stats()` reports hits, misses, entries and retained text bytes;
-`clear_cache()` drops retained strings and resets counters. Keep one tokenizer/cache per privacy
-boundary, clear it when retention policy requires, and do not treat deallocation as zeroization.
-`CachedTokenCounter::new(custom_counter, limits)` provides the same bounded cache for a custom
-immutable tokenizer. Concurrent misses may compute twice; expensive counting does not hold the
-cache lock. There is no global cache or additional dependency.
+## Access control and deltas
 
 Each graph is local and caller-owned. `allowed` must contain the currently authorized IDs when
 access varies within the graph. A graph relation never authorizes its target. Update
@@ -165,21 +212,16 @@ context; delta reuse alone does not save model prompt tokens. Snapshots/deltas c
 and require the same handling as the source documents. Digests detect corruption, not forgery by
 an adversary able to rewrite and rehash the entire object.
 
-Run `cargo test --locked -p hol-cigar-context --features bpe` and
-`cargo run --locked -p hol-cigar-context --features bpe --example compare` for verification.
-The optional `cigar-context` JSON CLI reads explicit documents from stdin; `--help` describes its
-input. The existing Honey daemon/SDK ABI and release artifacts remain separate from this library.
+## Hosting the worker in your own process
 
-### Hosting the worker in your own process
-
-With the `bpe` feature, `cigar_context::worker` serves the `cigar.context-worker.v1` protocol
+With the `bpe` feature, `hol_cigar::worker` serves the `cigar.context-worker.v1` protocol
 that the `cigar-context-worker` binary speaks. An application that already ships a native
 process can run the worker from that process instead of shipping the separate binary:
 
 ```rust,ignore
 # fn main() -> std::io::Result<()> {
 // In a child process the application starts for CIGAR:
-cigar_context::worker::serve(&mut std::io::stdin().lock(), &mut std::io::stdout().lock())
+hol_cigar::worker::serve(&mut std::io::stdin().lock(), &mut std::io::stdout().lock())
 # }
 ```
 
@@ -187,11 +229,18 @@ cigar_context::worker::serve(&mut std::io::stdin().lock(), &mut std::io::stdout(
 feature). Keep the worker in its own child process, as the binary is: it owns its graph and cache
 for the life of the session, and the caller's timeouts end it by ending the process.
 
+## Command-line tool
+
+Run `cargo test --locked -p hol-cigar --features bpe` and
+`cargo run --locked -p hol-cigar --features bpe --example compare` for verification.
+The optional `cigar-context` JSON CLI reads explicit documents from stdin; `--help` describes its
+input. The existing Honey daemon/SDK ABI and release artifacts remain separate from this library.
+
 From this source checkout:
 
 ```sh
 python3 scripts/dev.py context
-cargo run --locked -p hol-cigar-context --features bpe --bin cigar-context -- --help
+cargo run --locked -p hol-cigar --features bpe --bin cigar-context -- --help
 ```
 
 Example stdin (one object, not a path to be implicitly ingested):
@@ -204,3 +253,39 @@ The CLI rejects duplicate document IDs. For intentional replacements, use `graph
 Rust API. Reuse an in-memory graph and tokenizer across requests; starting the CLI rebuilds both.
 `SelectionStats` reports missing/unauthorized, oversized-closure, and budget-rejected optional
 roots. A small or empty result is not evidence that the query is answerable.
+
+## Frequently Asked Questions
+
+### What is hol-cigar?
+
+`hol-cigar` is the Rust crate for CIGAR, HOL's open-source context engineering protocol for AI
+agents. It builds a local context graph from text you supply and compiles cited context that fits
+an exact token budget.
+
+### Is hol-cigar a RAG or vector database library?
+
+It needs no vector database or embedding model. It uses a lexical index over a graph with explicit
+dependency edges. If you have an embedding index, pass its ranked IDs in `semantic_candidates`.
+
+### Does hol-cigar call a model or the network?
+
+No. The library never opens files or calls a model or remote service on its own; your
+application supplies document text. The optional `broker` feature serves local agent processes
+over authenticated loopback connections.
+
+### Why is the library imported as `hol_cigar` while the binaries are named `cigar-context`?
+
+Cargo turns the package name `hol-cigar` into the library name `hol_cigar`. The command-line tools
+keep their original names, `cigar-context` and `cigar-context-worker`.
+
+## Resources
+
+- [CIGAR on hol.org](https://hol.org/cigar)
+- [CIGAR repository and protocol documentation](https://github.com/hashgraph-online/hol-cigar)
+- [Python SDK on PyPI](https://pypi.org/project/hol-cigar/) · [TypeScript SDK on npm](https://www.npmjs.com/package/@hol-org/cigar)
+- [HOL Guard: open-source antivirus for AI agents](https://github.com/hashgraph-online/hol-guard)
+
+## License
+
+Maintained by [HOL](https://hol.org). Licensed under
+[Apache-2.0](https://github.com/hashgraph-online/hol-cigar/blob/main/LICENSE).

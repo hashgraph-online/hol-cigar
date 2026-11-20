@@ -1,5 +1,5 @@
 //! Authored-corpus comparison with independent full-context and BM25 baselines.
-use cigar_context::{
+use hol_cigar::{
     ContextGraph, ContextRequest, Document, EdgeKind, GraphLimits, O200kTokenizer, TokenCounter,
 };
 use serde::Deserialize;

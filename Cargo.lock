@@ -2065,7 +2065,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hol-cigar-context"
+name = "hol-cigar"
 version = "0.14.2"
 dependencies = [
  "base64",
